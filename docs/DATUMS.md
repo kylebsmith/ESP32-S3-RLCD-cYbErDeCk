@@ -304,24 +304,43 @@ symmetric, so the enclosure is indifferent. Only the label in
 [ASSEMBLY.md](ASSEMBLY.md) is affected.
 *To close*: read the official schematic PDF.
 
-### O-04 — Edge-feature heights disagree with the reference by ~2.5 mm
+### O-04 — Edge-feature heights vs the reference — RESOLVED
+
+*Recorded because it was an open item for most of this design's life, and
+because the resolution is the useful part.*
 
 Waveshare places the button centres at W = −0.70 and the microphones at
 W = −0.50, i.e. 4.45 mm and 4.25 mm below the display glass front. Measuring the
 same apertures in `stl/ata/Caseback.stl` and referencing them to that design's
-bezel underside gives 6.9 mm and 6.55 mm — a consistent ≈2.5 mm offset on both
-features.
+bezel underside gives 6.9 mm and 6.55 mm — a consistent ≈2.4 mm offset on both
+features, which ruled out a one-off error but left the cause unknown.
 
-The offset being *consistent across two independent features* implies a
-systematic cause, most likely that the reference's board sits deeper in its
-pocket than assumed because it retains the 2.75 mm stand base.
+**Cause found.** The reference's board pocket is **13.000 mm deep** while the
+board's actual stack — display glass front to standoff seating plane — is
+**10.75 mm**. Its pocket carries about 2.25 mm of slack, and its apertures are
+cut for a board resting on the pocket *floor*. This design locates the board
+against the *front lip* instead, so the two are measuring from opposite ends of
+a stack with slack in it. The offset is 2.25 mm; the discrepancy was ≈2.4 mm.
 
-*Resolution*: the factory position is used, because it is where the switch
-physically is and because this design does not retain the stand base. The
-apertures are cut 5.4 × 4.4 mm around a 4.553 × 2.203 mm switch body, which
-absorbs about ±1.1 mm of error in either direction.
-*To close*: calipers on a physical board. **This is the first thing to check on
-a test print.**
+A second measurement confirms the reference also discards Waveshare's stand
+base: its pocket is 71.1163 × 94.5193 against a bare PCB of 69.1098 × 92.5098,
+which is **1.0032 / 1.0047 mm per side — symmetric**. Against the 70.10 mm stand
+base the clearance would be an implausibly lopsided 1.01 / 0.508.
+
+*Resolution*: the factory position is used, referenced to the display glass
+front, which is the plane this enclosure locates against. The apertures are
+5.4 × 4.4 mm around a 4.553 × 2.203 mm switch body, absorbing about ±1.1 mm
+either way regardless.
+
+### O-07 — Board mounting-hole diameter, two readings
+
+Two independent passes over Waveshare's CAD package disagree: the STEP `BOARD`
+solid yields Ø4.20 through-holes (24 CIRCLE instances at radius 2.1000), while
+the DXF front view reads as a Ø2.10 hole inside a Ø4.70 pad.
+
+*Mitigation*: it does not matter here. This enclosure puts nothing in those
+holes — the M2.5 screws thread into the SMTSO-M2.5-7ET standoffs, and the back
+plate's own clearance is Ø2.70. Both readings are consistent with M2.5.
 
 ### O-05 — PCB outline tolerance
 
@@ -349,12 +368,14 @@ The design is asserted consistent, not proven against hardware. Nobody has held
 these two parts against a printed chassis. Before committing filament to a final
 build, put calipers on:
 
-1. **Button and microphone heights below the display glass front** — O-04, the
-   one place where two sources genuinely disagree.
-2. **Keyboard outline**, all three axes — O-01, quoted only to 0.1 in.
-3. **PCB outline and the standoff seating plane** — confirms D-02 and D-03 and
+1. **Keyboard outline**, all three axes — O-01, the largest remaining gap; the
+   manufacturer quotes it only to 0.1 in = 2.54 mm.
+2. **PCB outline and the standoff seating plane** — confirms D-02 and D-03 and
    the decision to discard the stand base.
-4. **18650 holder protrusion past the standoff plane** — sets the cowl rise.
+3. **18650 holder protrusion past the standoff plane** — sets the cowl rise.
+4. **Button and microphone heights below the display glass front** — O-04 is
+   resolved on paper but rests on a chain of three inferences; it is cheap to
+   confirm with the board in hand.
 
 `tools/validate.py` proves internal consistency. It cannot prove that the datums
 match reality; only calipers can do that.
