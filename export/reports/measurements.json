@@ -335,12 +335,21 @@
     },
     {
       "ident": "display.active",
-      "name": "display active area (400 x 300 px landscape)",
+      "name": "display active area",
+      "value": "84.80 x 63.60",
+      "unit": "mm",
+      "method": "official-drawing",
+      "source": "Waveshare ESP32-S3-RLCD-4.2 drawing: '84.80+/-0.10 LCD AA'",
+      "note": "pixel pitch 0.2120 mm square; true diagonal 106.00 mm = 4.173 in, NOT 4.2"
+    },
+    {
+      "ident": "display.active.naive",
+      "name": "same, derived from a nominal 4.2 in",
       "value": "85.344 x 64.008",
       "unit": "mm",
       "method": "derived-from-spec",
-      "source": "Waveshare ESP32-S3-RLCD-4.2 datasheet: 4.2 in, 300x400",
-      "note": "pixel pitch 0.21336 mm; diagonal 106.68 mm"
+      "source": "arithmetic on the marketing diagonal",
+      "note": "REJECTED: overstates the panel by 0.544 x 0.408 mm. Recorded to document the trap."
     }
   ]
 }

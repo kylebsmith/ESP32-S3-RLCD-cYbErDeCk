@@ -1,0 +1,194 @@
+# Methodology
+
+How the numbers were obtained, and how to reproduce them.
+
+Two claims are made in this repository. This document explains how each is
+supported, and — as importantly — where each stops.
+
+1. **The datums are right.** Supported by `tools/measure_reference.py`,
+   plus manufacturer CAD, plus cross-derivation.
+2. **The model is consistent with the datums.** Supported by
+   `tools/validate.py`, which is a gate, not a report.
+
+Neither claim is that the parts have been printed and fitted. They have not.
+
+---
+
+## Reproducing everything
+
+```sh
+pip install -r tools/requirements.txt
+git clone --depth 1 https://github.com/nilseuropa/solar_term /tmp/solar_term
+
+python3 tools/measure_reference.py --reference /tmp/solar_term \
+        --json export/reports/measurements.json
+python3 tools/validate.py --json export/reports/validation.json
+```
+
+The first regenerates every `[MEASURED]` datum from the reference artefacts. The
+second renders the parts from source and audits them. Both are run in CI.
+
+---
+
+## Metrology
+
+### Bounding boxes
+
+The coarse envelope of each reference part, via `trimesh`. Useful for
+orientation and sanity, useless for features.
+
+### Planar cross-sectioning
+
+The main instrument. A mesh is sliced at a swept series of levels; each section
+polygon's **interior rings are the pockets, bores and apertures**, and their
+bounds and centroids give position and size directly.
+
+> **The trap that matters.** `trimesh`'s `Path3D.to_2D()` picks an arbitrary
+> in-plane basis, and that basis *drifts from slice to slice*. Sizes survive it;
+> absolute positions do not. An early pass of this work produced a table of
+> plausible, self-consistent, completely wrong coordinates — the outer boundary
+> of a part appeared to move 21 mm across its own thickness. Every section in
+> `measure_reference.py` therefore passes an **explicit world-preserving
+> transform**:
+>
+> ```python
+> _TO_2D = {2: np.eye(4), 1: ..., 0: ...}   # one per slicing axis
+> planar, _ = sec.to_2D(to_2D=_TO_2D[axis])
+> ```
+>
+> If you re-derive any of these numbers with a different tool, check this first.
+
+### Scan-line probing
+
+A pocket that is *open to the exterior* is not a closed interior ring, so
+sectioning cannot find it. The ATA keyboard tray is one: its wall breaks for a
+port notch. Those are measured by intersecting a line with the section's solid
+region and reading the material intervals, which gives wall positions and
+thicknesses directly.
+
+### Ray casting
+
+Depths, floor thicknesses and bore depths come from casting a ray along the
+thickness axis and pairing the hits into solid intervals. This is what
+established the ATA stack-up: 3.0 mm back wall, 13.0 mm board pocket, 4.6 mm
+keyboard tray floor, 11.4 mm tray, 2.0 mm bezel.
+
+Ray casting is also robust to a mesh that is not watertight —
+`Caseback.stl` has four broken faces — where boolean methods are not.
+
+### DXF group-code parsing
+
+`stl/ata/plexiglass.dxf` is a 2D acrylic template: a single closed
+`LWPOLYLINE`, DXF AC1015, `$INSUNITS = 4` (millimetres). A 2D template is an
+exact statement of intent with no interpretation in between, which makes it one
+of the highest-confidence sources available. Parsed with `ezdxf`; bulge values
+are converted to arc radii to recover the corner treatment.
+
+### Manufacturer CAD
+
+The strongest source, and the one that corrected the most. Waveshare publishes a
+Creo STEP assembly, a dimensioned DXF and a dimensioned PDF. Values were taken
+from drawing `DIMENSION` entities and from B-rep bounding boxes of *named*
+solids — `SMTSO-M2_5-7ET`, `SWITCH-TS24CA`, `MIC-4X3X1MM` — so each number is
+attributable to a specific part, not to a silhouette.
+
+The axis mapping between the drawing views and the STEP was **not assumed**. It
+was pinned by matching asymmetric features — the 2×8 header centre, the three
+button centres, the active-area margins — across both. A naive reading mirrors
+the long axis and puts the active area 5.45 mm from the wrong edge.
+
+---
+
+## Corroboration strategy
+
+A single source is a hypothesis. The rule applied here: **every datum that
+drives geometry is established at least twice, by paths that can fail
+independently.**
+
+The mounting-hole pattern is the model case — measured from two unrelated
+enclosure designs by different authors, and read from the factory drawing. Three
+paths, one answer, 0.001 mm apart.
+
+Where corroboration was impossible the datum is marked `[PROVISIONAL]` and
+listed as an open item, and the design is arranged so the gap cannot cause a
+clash — the keyboard pocket is set from measured pockets rather than from the
+vendor's 0.1-inch-rounded figure; the board pocket carries 0.50 mm per side,
+more than PCB routing tolerance.
+
+### Conflict resolution
+
+Where sources disagree, precedence is:
+
+```
+manufacturer drawing / 2D template
+  > manufacturer CAD solid
+  > manufacturer spec text
+  > measured from a reference artefact
+  > peer model
+  > photo-derived
+```
+
+Every conflict actually encountered is recorded in
+[DATUMS.md § Corrections](DATUMS.md#corrections) with the losing value, rather
+than silently overwritten. Four of the five corrections there were beliefs acted
+on before being caught.
+
+---
+
+## Validation
+
+`tools/validate.py` renders the parts **from source** and runs 52 checks in six
+classes: `MESH`, `ENVELOPE`, `FIT`, `INTERFACE`, `PRINT`, `DATUM`. Exit status
+is non-zero unless all pass.
+
+It reads its expected values by parsing `cad/parameters.scad`, so it cannot
+drift from the model.
+
+The `FIT` class is the substantive one. Component mock-ups are built strictly
+from the datums, rendered, and **booleaned against the real parts**; any shared
+volume above 1 mm³ is a failure. The mocks are deliberately drawn as worst-case
+envelopes rather than replicas, so a mock that fits guarantees a real part that
+fits and never the reverse.
+
+### What it actually caught
+
+Not hypothetical. Each of these was in a committed, rendering, plausible-looking
+model:
+
+| Defect | Consequence |
+|---|---|
+| Keyboard bay left a 1.6 mm web where the keeper pad goes | keyboard could not be loaded at all |
+| Side ports cut through the outer wall only | both connectors buried behind 8 mm of plastic |
+| Upper countersink broke out of the back plate edge | two of four fasteners unusable |
+| ISO 4762 head recess consumed the whole plate | no material under the head to take preload |
+| Cowl tapered before reaching the cell | 850 mm³ interference with the battery |
+| Board pocket R3.0 fouled the PCB's R0.5 corners | 0.33 mm interference, all four corners |
+| Cowl cavity R8 fouled the holder's R2.0 corners | 1.39 mm interference, all four corners |
+| Expansion window copied from a *narrower* vendor window | header body would not pass |
+
+Seven of those eight are invisible in a render. That is the argument for
+numerical gating over inspection.
+
+The harness has also had its own bugs, which is worth stating: its parameter
+parser once joined any line ending in `=` onto the next, so every datum
+following a `// =====` section rule vanished and the dependent checks died with
+a `KeyError` instead of reporting a result. A validator that fails loudly is
+fine; one that silently checks nothing is worse than none.
+
+---
+
+## Limits
+
+- **No physical verification.** The largest limit by far.
+- **Mocks are envelopes.** They prove no clash against a conservative solid, not
+  against a real component's every boss and solder joint.
+- **No structural analysis.** The stiffness claims in
+  [DESIGN.md](DESIGN.md) are arguments from section geometry — closed box versus
+  open channel, joint moved out of the peak-bending plane — not FEA, and not
+  drop testing.
+- **No print verification.** Wall thicknesses are checked against nozzle
+  multiples and overhangs against a draft-angle rule, but nothing has been
+  sliced or printed.
+- **`Caseback.stl` is not watertight** (4 broken faces). All measurements on it
+  use ray casting and raw section geometry, which are unaffected, rather than
+  boolean operations, which are not.

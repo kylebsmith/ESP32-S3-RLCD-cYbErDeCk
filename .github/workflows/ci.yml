@@ -1,0 +1,74 @@
+name: validate
+
+# The design gate. STLs are only published from a commit where every check
+# passes, so a geometry regression cannot reach a printer via this repository.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install OpenSCAD and a virtual framebuffer
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends openscad xvfb
+          openscad --version
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install the Python toolchain
+        run: pip install -r tools/requirements.txt
+
+      - name: Render every part
+        run: |
+          mkdir -p export/stl
+          for part in chassis backplate buttons window; do
+            echo "::group::$part"
+            xvfb-run -a openscad -D "part=\"$part\"" \
+                     -o "export/stl/$part.stl" cad/cyberdeck.scad
+            echo "::endgroup::"
+          done
+
+      # The gate. Non-zero exit if any of the 52 checks fails.
+      - name: Design audit
+        run: |
+          mkdir -p export/reports
+          xvfb-run -a python3 tools/validate.py --json export/reports/validation.json
+
+      # Re-derives every [MEASURED] datum from the reference artefacts and
+      # asserts the mounting-pattern cross-check between two unrelated designs.
+      # Non-fatal: it needs a third-party repository that CI does not control.
+      - name: Reference metrology
+        continue-on-error: true
+        run: |
+          git clone --depth 1 https://github.com/nilseuropa/solar_term /tmp/solar_term
+          python3 tools/measure_reference.py --reference /tmp/solar_term \
+                  --json export/reports/measurements.json
+
+      - name: Check the datum sheet has no stale TODOs
+        run: |
+          if grep -rnE '\b(TODO|FIXME|XXX)\b' cad/ docs/ tools/; then
+            echo "::error::unresolved marker in a documented artefact"
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cyberdeck-stl-and-reports
+          path: |
+            export/stl/*.stl
+            export/reports/*.json
+          if-no-files-found: warn

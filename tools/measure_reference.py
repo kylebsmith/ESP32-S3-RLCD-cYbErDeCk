@@ -482,17 +482,40 @@ def measure_dxf(ref: str, rep: Report):
 
 
 def derive_display_active_area(rep: Report):
-    """The panel's active area is fixed by its stated diagonal and pixel matrix.
-    This is arithmetic on a published specification, not a measurement."""
-    print("\n=== 8. DISPLAY ACTIVE AREA (derived from published panel spec) ===")
-    diag_in, px_w, px_h = 4.2, 400, 300
-    diag_mm = diag_in * 25.4
-    pitch = diag_mm / math.hypot(px_w, px_h)
-    w, h = px_w * pitch, px_h * pitch
-    rep.emit("display.active", "display active area (400 x 300 px landscape)",
-             f"{w:.3f} x {h:.3f}", method="derived-from-spec",
-             source="Waveshare ESP32-S3-RLCD-4.2 datasheet: 4.2 in, 300x400",
-             note=f"pixel pitch {pitch:.5f} mm; diagonal {diag_mm:.2f} mm")
+    """Demonstrate, numerically, why the active area must NOT be derived from
+    the panel's nominal diagonal.
+
+    This started life as a derivation. It is kept as a CHECK, because the
+    derivation was wrong and the way it was wrong is instructive: "4.2 inch" is
+    a marketing size, and using it here produced an active area about 0.5 mm too
+    large in each axis - enough for a front-face aperture cut to it to be
+    visibly oversized, and centred when the real one is not.
+    """
+    print("\n=== 8. DISPLAY ACTIVE AREA (derivation vs. the factory drawing) ===")
+    official_w, official_h = 84.80, 63.60      # drawing: "84.80+/-0.10 LCD AA"
+    px_w, px_h = 400, 300
+
+    naive_pitch = (4.2 * 25.4) / math.hypot(px_w, px_h)
+    naive_w, naive_h = px_w * naive_pitch, px_h * naive_pitch
+    true_pitch = official_w / px_w
+    true_diag = math.hypot(official_w, official_h)
+
+    rep.emit("display.active", "display active area",
+             f"{official_w:.2f} x {official_h:.2f}", method="official-drawing",
+             source="Waveshare ESP32-S3-RLCD-4.2 drawing: '84.80+/-0.10 LCD AA'",
+             note=f"pixel pitch {true_pitch:.4f} mm square; true diagonal "
+                  f"{true_diag:.2f} mm = {true_diag/25.4:.3f} in, NOT 4.2")
+    rep.emit("display.active.naive", "same, derived from a nominal 4.2 in",
+             f"{naive_w:.3f} x {naive_h:.3f}", method="derived-from-spec",
+             source="arithmetic on the marketing diagonal",
+             note=f"REJECTED: overstates the panel by {naive_w-official_w:.3f} x "
+                  f"{naive_h-official_h:.3f} mm. Recorded to document the trap.")
+
+    if abs(naive_w - official_w) > 0.2:
+        print(f"  -> nominal-diagonal derivation is off by "
+              f"{naive_w-official_w:.3f} x {naive_h-official_h:.3f} mm; "
+              f"the drawing is authoritative")
+
 
 
 # --------------------------------------------------------------------------
