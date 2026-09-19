@@ -90,3 +90,10 @@ for v in "chassis-front 0 0 380 chassis" "chassis-iso 58 25 430 chassis" \
     echo "color(\"#cfcabf\") import(\"$PWD/export/stl/$part.stl\");" > "$T/$n.scad"
     shot "$n" "$rx" "$rz" "$d" "$T/$n.scad"
 done
+
+# Detail views for visual confirmation of the ports and controls.
+for v in "detail-left-flank 78 -90 300 chassis" "detail-top-edge 78 180 260 chassis"; do
+    read -r n rx rz d part <<<"$v"
+    echo "color(\"#cfcabf\") import(\"$PWD/export/stl/$part.stl\");" > "$T/$n.scad"
+    shot "$n" "$rx" "$rz" "$d" "$T/$n.scad"
+done
