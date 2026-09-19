@@ -75,6 +75,131 @@ Wall thicknesses are integer multiples of a 0.4 mm nozzle (3.2 = 8 extrusions,
 2.4 front = 6, 3.2 back = 8) so every wall prints as solid perimeters with no
 sparse infill anywhere in the load path. `validate.py` asserts this.
 
+## Form language
+
+The brief is Dieter Rams read organically: his discipline and restraint, but
+with the surfaces of something grown rather than extruded. Those two pull in
+opposite directions, and where they conflict the resolution is always the same —
+**the constraint wins and the form is honest about it.**
+
+### Continuous curvature, not fillets
+
+A conventional rounded rectangle is an arc tangent to a line. Position and
+tangent match at the join; **curvature does not** — it jumps from 1/r to zero.
+The eye reads that discontinuity as a hard corner however large the radius is,
+which is why a fillet so often looks applied rather than grown.
+
+Every visible corner here is instead a **superelliptical quadrant** of a larger
+corner size. At `n = 3.2` with a corner size of 11.2 mm the curve tracks an R8
+arc to within 0.2 mm, so the silhouette is unchanged — but the corner now runs
+11.2 mm along each edge instead of 8, with curvature ramping in from zero at the
+tangent point. That is the whole difference between a radius and a form.
+
+A pure Lamé curve over the entire outline was tried first and is wrong at this
+scale: it cuts about 10 mm off each corner, eats the wall, and loses the
+straight edges the design is disciplined by. Straight edges with a continuous
+corner is the Rams reading; a global superellipse is a lozenge.
+
+### Edges roll, they do not chamfer
+
+The previous revision broke the front and back arrises with a 1.0 mm chamfer —
+a 45° cut, which is two more curvature discontinuities. Instead the shell is
+lofted through a **smoothstep roll**: each face is inset 1.2 mm from the widest
+section and arrives there with zero slope, so there is no arris to catch light.
+
+This costs nothing in envelope. The widest section is at mid-thickness and is
+*exactly* `body_w × body_h` — the softening is taken out of the faces inward,
+never added outward — and the middle 44 % of the thickness stays at full wall,
+so nothing is thinned where it carries load. The roll is bounded by the shell's
+thinnest point, at the arris, which measures `wall − edge_soft`. At 1.2 mm that
+leaves 2.0 mm of rim around the back opening, and `validate.py` asserts it.
+
+### The cowl grows out of the panel
+
+The battery swelling is the object's one large organic gesture, so it must not
+look bolted on. It is lofted with a **tangent foot fillet** reached in the first
+20 % of its rise, which removes the base line entirely — there is no edge where
+it meets the back panel for light to break on — and it crowns with the same
+smoothstep as the shell edges, so the whole object shares one curvature law.
+
+The middle band of its rise is deliberately **straight-sided**. That is not
+styling: the cell occupies the lower half of the cavity, and a blob that starts
+crowning immediately narrows faster than what it has to contain. The first
+attempt did exactly that and the cavity punched out through its own wall — the
+back plate rendered as two disconnected bodies. `validate.py` now walks the
+wall thickness along the full rise and asserts it never drops below 4
+extrusions.
+
+### One perforated element
+
+There is exactly one perforated field on the object: the speaker grille, five
+1.2 mm slots on a 2.3125 mm pitch spanning 10.45 mm — which is Waveshare's own
+grille height to 0.00 mm. Finer perforation on a tighter pitch is the Braun
+grille idiom, and confining it to one place is what lets it read as a considered
+detail rather than as venting.
+
+An earlier revision also carried a five-slot vent field, justified as insurance
+for sustained Wi-Fi transmit. **It is removed.** The RLCD has no backlight, so
+the only meaningful dissipation is the ESP32-S3 itself; the reference design — a
+built, working device — has no ventilation beyond its grille and header slot;
+and the field sat at an offset that could not be aligned with anything without
+fouling the cowl. An element that is insurance rather than requirement, and that
+cannot be composed, is the first thing *as little design as possible* removes.
+
+### Controls recessed, not applied
+
+The three buttons sit in **one shallow dish**, 0.9 mm deep with a soft-cornered
+flared rim, rather than in three bare holes. The cluster reads as a single
+element; the caps sit below the surrounding surface so nothing protrudes to
+catch. This is the ET66 keypad move, and it costs 0.9 mm of a 3.2 mm wall.
+
+### Where the language breaks, and why
+
+The **display aperture's corner is smaller than the form wants** — 4.2 mm where
+everything else is 9 to 11.2. It is not a compromise of taste. The aperture
+height is trapped between the active area it must not clip (63.60 mm) and the
+module edge it must still bear on (67.60 mm), leaving exactly 1.0 mm per side. A
+superelliptical corner consumes `blend × 0.1948` of that at 45°, so anything
+above about 4.6 clips the panel's square corner. 4.2 leaves 0.18 mm.
+
+The outward flare opens it to an effective 5.65 mm at the visible face, which
+softens it considerably. But the honest statement is that the panel sets this
+corner, not the designer, and `validate.py` asserts the bound rather than
+letting a later edit quietly violate it.
+
+The **internal cavity** is likewise not given the treatment. A continuous corner
+is tighter at the corner itself than an arc of the same visual line; applied to
+the back opening at the shell's own 11.2 mm it undercuts the keyboard bay by
+10.96 mm² and traps the keyboard. Measured across candidates, 6.0 mm is the
+largest that reaches zero. The cavity is hidden, so it takes 6.0 and the wall
+simply runs thicker at the corners (3.7 mm against 3.2 nominal) — which is where
+a shell wants material anyway.
+
+## Material and finish
+
+The form is only half of biophilic; the surface is the other half, and it is
+chosen at the printer rather than in the CAD.
+
+**Preferred:** a wood-, stone- or hemp-filled PLA, or a matte PETG in a warm
+neutral — bone, oat, clay, moss. These read as material rather than as plastic,
+they hide layer lines, and they age by dulling rather than by scuffing bright.
+
+**Avoid** gloss black and saturated colour. Gloss turns the rolled edges into
+hard specular lines, which undoes the entire edge treatment, and a saturated
+shell fights the display — the RLCD is a reflective monochrome panel whose
+legibility depends on ambient light, so the body should return light to it, not
+absorb it.
+
+**Texture.** Enable the slicer's fuzzy-skin on the *outer walls only*, amplitude
+0.15–0.25 mm, point distance 0.6 mm. On the rolled side walls this produces a
+fine stochastic grain that catches light like a mineral surface, while the front
+face — printed against the bed — stays smooth where the hand and eye actually
+land. It costs nothing and it is the single highest-value finish decision.
+
+**Inserts** should be brass and left visible. Rams never hid a fastener that was
+doing work; four brass rings on the back are honest and they are the only metal
+on the object.
+
 ## Everything loads from the back
 
 The board and the keyboard both drop in from behind and are captured by lips in
@@ -189,8 +314,6 @@ This is a real constraint honestly resolved, not a feature quietly dropped.
   cancellation, and blocking one would break beamforming. Both are at ±32.500 mm,
   a figure that came out of an independent measurement and the factory drawing
   identically.
-- **Ventilation over the ESP32-S3 module.** The RLCD has no backlight so thermal
-  load is low; these are insurance for sustained Wi-Fi transmit.
 - **Expansion header access**, sized from the header body rather than from
   Waveshare's own narrower window, so a SolarLink-class card can mate.
 - **Two presets.** `overbuilt` (3.2 mm walls, default) and `compact` (2.4 mm,

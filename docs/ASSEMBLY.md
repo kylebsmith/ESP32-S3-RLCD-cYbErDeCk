@@ -16,8 +16,8 @@ leverage while fitting a cable, a cell or a printed part.
 
 | Part | Qty | Mass (PLA) | Notes |
 |---|---|---|---|
-| `chassis` | 1 | ~57 g | front face down |
-| `backplate` | 1 | ~72 g | cowl up |
+| `chassis` | 1 | ~51 g | front face down |
+| `backplate` | 1 | ~58 g | cowl up |
 | `buttons` | 1 | ~0.5 g | printed as one sprue |
 | `window` | 0–1 | — | optional; normally laser-cut acrylic |
 
@@ -50,6 +50,14 @@ perimeter count**; that is where the strength is.
 | Perimeters | 4 or more (walls are 8 extrusions thick) |
 | Infill | 25 % gyroid |
 | Material | PETG or ASA preferred; PLA is fine but softens in a hot car |
+| Fuzzy skin | outer walls only, amplitude 0.15-0.25 mm, point distance 0.6 mm |
+
+On finish: use a wood-, stone- or hemp-filled filament, or a matte PETG in a
+warm neutral. Avoid gloss - it turns the rolled edges into hard specular lines
+and undoes the edge treatment entirely. Fuzzy skin on the outer walls gives the
+side surfaces a fine mineral grain while the front face, printed against the
+bed, stays smooth where the hand and eye land. Leave the brass inserts visible.
+See [DESIGN.md](DESIGN.md#material-and-finish).
 
 Orientation:
 

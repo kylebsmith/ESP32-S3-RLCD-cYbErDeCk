@@ -6,14 +6,18 @@ A single-form, overbuilt, minimum-footprint handheld terminal enclosure for the
 Built for live use — musical live coding, control surfaces, and as a portable
 node on a local network — rather than for a desk.
 
+Dieter Rams read organically: one radius system, nothing applied, a single
+perforated element — but with curvature continuity everywhere a surface turns,
+so it reads as grown rather than extruded.
+
 <p align="center">
   <img src="docs/img/chassis-front.png" width="42%" alt="Chassis, front">
   <img src="docs/img/backplate-iso.png" width="42%" alt="Back plate">
 </p>
 
 ```
-116.6 × 139.1 × 16.6 mm   (+ 9.0 mm battery cowl)
-2 printed structural parts · 4 screws · 52 automated checks
+116.6 × 139.1 × 16.6 mm   (+ 10.0 mm battery cowl)
+2 printed structural parts · 4 screws · 68 automated checks
 ```
 
 ---
@@ -32,15 +36,28 @@ depth  = back plate + board stack 11.0 + front face
 `tools/validate.py` asserts each of those three equalities on every run. **The
 enclosure cannot be made smaller without thinning a wall or crushing a part.**
 
-What *is* a design choice is that it reads as one object. The entire front face,
-all four side walls and the inter-bay spine are a single continuous body; the
-joint moves to the back, where a structural plate closes the shell into a
-torsion box. There is no bezel line across the face you touch.
+What *is* a design choice is that it reads as one object, and that every corner
+on it is continuous in curvature rather than merely tangent. A conventional
+fillet is an arc meeting a line: the curvature jumps from 1/r to zero and the
+eye reads a hard corner however large the radius. Every visible corner here is a
+superelliptical quadrant of a larger corner size, tracking the same silhouette
+while ramping curvature in from zero. Edges roll into the faces with zero slope
+instead of being chamfered, and the battery swelling is blended out of the back
+panel with a tangent foot, so it has no base line at all.
+
+The entire front face, all four side walls and the inter-bay spine are a single
+continuous body; the joint moves to the back, where a structural plate closes
+the shell into a torsion box. There is no bezel line across the face you touch.
+
+Where the language breaks it says so. The display aperture's corner is 4.2 mm
+where everything else is 9 to 11.2, because the aperture height is trapped
+between the active area it must not clip and the module edge it must still bear
+on — the panel sets that corner, not taste, and the bound is asserted in CI.
 
 | | Reference design | This design |
 |---|---|---|
 | Envelope | 151.65 × 116.77 × 18.00 | **116.6 × 139.1 × 16.6** |
-| Battery bulge | +12.0 mm, separate clip-on cover | +9.0 mm, integral grip ridge |
+| Battery bulge | +12.0 mm, separate clip-on cover | +10.0 mm, integral grip ridge |
 | Wall | 2.90 mm | **3.20 mm** (8 extrusions, solid perimeters) |
 | Split | bezel screwed onto a tray | monocoque front, joint at the back |
 | Footprint area | 17 708 mm² | **16 218 mm² (−8.4 %)** |
@@ -56,7 +73,7 @@ openscad -D 'part="chassis"'   -o export/stl/chassis.stl   cad/cyberdeck.scad
 openscad -D 'part="backplate"' -o export/stl/backplate.stl cad/cyberdeck.scad
 openscad -D 'part="buttons"'   -o export/stl/buttons.stl   cad/cyberdeck.scad
 
-python3 tools/validate.py          # 52 checks; non-zero exit if any fail
+python3 tools/validate.py          # 68 checks; non-zero exit if any fail
 ```
 
 0.4 mm nozzle, 0.2 mm layers, no supports. Full instructions, BOM and print
@@ -108,7 +125,7 @@ Full record, including every correction and every remaining gap, in
 
 ## What is *not* proven
 
-**Nobody has built this.** It is asserted internally consistent by 52 automated
+**Nobody has built this.** It is asserted internally consistent by 68 automated
 checks; it has not been printed, and the components have not been offered up to
 a physical chassis.
 
@@ -127,7 +144,7 @@ versus open channel, joint moved out of the peak-bending plane — not simulatio
 | | |
 |---|---|
 | **[DATUMS.md](docs/DATUMS.md)** | every dimension, its provenance, five recorded corrections, six open items |
-| **[DESIGN.md](docs/DESIGN.md)** | why it is shaped this way, and what was traded away |
+| **[DESIGN.md](docs/DESIGN.md)** | form language, why it is shaped this way, material and finish |
 | **[METHODOLOGY.md](docs/METHODOLOGY.md)** | how the numbers were obtained and how to reproduce them |
 | **[ASSEMBLY.md](docs/ASSEMBLY.md)** | BOM, print settings, build order |
 | **[PROVENANCE.md](docs/PROVENANCE.md)** | what was taken from whom, and on what basis |

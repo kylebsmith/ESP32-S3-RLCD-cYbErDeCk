@@ -135,8 +135,8 @@ module chassis() {
     difference() {
         union() {
             // --- outer shell -------------------------------------------------
-            rbox_chamfered(body_w, body_h, body_t, corner_r,
-                           ch_bot = edge_chamfer, ch_top = edge_chamfer);
+            rse_soft(body_w, body_h, body_t, corner_blend, form_n,
+                     edge_soft, edge_roll);
 
             // --- fastener bosses, rising from the front face rearward --------
             for (p = boss_positions())
@@ -169,15 +169,32 @@ module chassis() {
         // --- display aperture, with the reference's draft angle --------------
         translate([board_cx + display_off_x, board_bay_cy + display_off_y,
                    z_front_inner - 0.01])
-            flared_aperture(display_aper_w, display_aper_h,
-                            front_t + 0.02, display_aper_draft, r = 2.0);
+            rse_aperture(display_aper_w, display_aper_h, front_t + 0.02,
+                         aper_blend_display, form_n, display_aper_draft);
 
         // --- keyboard aperture ----------------------------------------------
         translate([0, kbd_bay_cy, z_front_inner - 0.01])
-            flared_aperture(kbd_aper_w, kbd_aper_h, front_t + 0.02, 0.6, r = 5.0);
+            rse_aperture(kbd_aper_w, kbd_aper_h, front_t + 0.02,
+                         aper_blend_kbd, form_n, 0.6);
+
+        // --- control cluster recess ------------------------------------------
+        // The three buttons sit in ONE shallow dish rather than in three bare
+        // holes, so the cluster reads as a single considered element instead of
+        // as perforation. Cut from the outer face inward, flaring outward, so
+        // the recess has no hard rim.
+        top_wall_y = body_h/2;
+        if (dish_enable)
+            translate([board_cx, top_wall_y + 0.01,
+                       pcb_back_z + button_w_centre])
+                rotate([90, 0, 0])
+                    mirror([0, 0, 1])
+                        rse_aperture((button_count - 1) * button_pitch
+                                     + button_aper_w + 2 * dish_margin,
+                                     button_aper_h + 2 * dish_margin,
+                                     dish_depth + 0.01, dish_blend, form_n,
+                                     dish_flare);
 
         // --- top-edge apertures: three buttons, two microphones --------------
-        top_wall_y = body_h/2;
         for (i = [0 : button_count - 1]) {
             bx = board_cx + (i - (button_count - 1)/2) * button_pitch;
             translate([bx, top_wall_y - wall/2, pcb_back_z + button_w_centre])
@@ -229,7 +246,8 @@ module chassis() {
         // Everything rearward of the back plate's seating plane is removed,
         // except the bosses and gussets added above.
         translate([0, 0, -0.01])
-            rbox(inner_w, body_h - 2*wall, z_back_inner + 0.01, corner_r - wall);
+            rse_plate(inner_w, body_h - 2*wall, z_back_inner + 0.01,
+                      cavity_blend, form_n);
 
         // --- heat-set insert bores, drilled from the back ---------------------
         for (p = boss_positions())
@@ -250,8 +268,15 @@ module backplate() {
     difference() {
         union() {
             // --- plate ------------------------------------------------------
-            translate([0, 0, 0])
-                rbox(plate_w, plate_h, back_t, corner_r - wall);
+            // A small roll on the perimeter turns the panel seam into a
+            // deliberate shadow gap rather than a tolerance gap.
+            // Same corner size as the cavity, with the plate 2*fit_slide
+            // smaller in each axis. Keeping the blend equal rather than
+            // shrinking it means the gap opens slightly at the corners
+            // (0.42 mm against 0.30 mm on the straight edges) instead of
+            // closing, so the plate can never bind on a corner.
+            rse_soft(plate_w, plate_h, back_t, cavity_blend, form_n,
+                     plate_edge_soft, plate_edge_roll);
 
             // --- keyboard keeper pad ----------------------------------------
             // Holds the keyboard forward against the front face's lip.
@@ -263,8 +288,12 @@ module backplate() {
             // Engages the groove in the chassis bottom wall. Length is set so
             // the tip stops short of the groove's blind end, and so the tongue
             // never reaches the chassis outer face.
-            tongue_len = tongue_depth - 0.4;
-            translate([0, -plate_h/2 - tongue_len/2 + 0.01, tongue_z])
+            // Root the tongue 1.0 mm INSIDE the plate outline. The plate's
+            // perimeter is rolled, so at the tongue's height the edge has
+            // already drawn back ~0.25 mm; a tongue that starts at the nominal
+            // outline floats free of it and the part renders as two bodies.
+            tongue_len = tongue_depth - 0.4 + 1.0;
+            translate([0, -plate_h/2 - tongue_len/2 + 1.0, tongue_z])
                 cube([inner_w - 2*corner_gusset - 2*fit_slide,
                       tongue_len, tongue_t - 2*0.15], center = true);
 
@@ -276,8 +305,11 @@ module backplate() {
             if (batt_cowl_enable)
                 translate([board_cx + batt_off_x, board_cy + batt_off_y, 0])
                     mirror([0, 0, 1])
-                        ridge(batt_cowl_w, batt_cowl_h, batt_cowl_rise,
-                              batt_cowl_cap_r, batt_cowl_base_r);
+                        rse_blob(batt_cowl_w, batt_cowl_h, batt_cowl_rise,
+                                 batt_cowl_base_r, form_n,
+                                 blend = batt_cowl_foot, cap = batt_cowl_cap,
+                                 foot = batt_cowl_foot_f,
+                                 crown = batt_cowl_crown);
 
             // --- stiffening ribs across the keyboard bay ---------------------
             // They run in the plate's weakest direction: the long span between
@@ -306,10 +338,16 @@ module backplate() {
         if (batt_cowl_enable)
             translate([board_cx + batt_off_x, board_cy + batt_off_y, 0.01])
                 mirror([0, 0, 1])
-                    ridge(batt_cowl_w - 2*batt_cowl_wall,
-                          batt_cowl_h - 2*batt_cowl_wall,
-                          batt_cowl_rise - batt_cowl_wall,
-                          batt_cowl_cap_ri, batt_cowl_base_ri);
+                    // The cavity follows the SAME easing law as the outer, one
+                    // wall thickness in. A straight-sided cavity inside a
+                    // crowned outer punches through the wall partway up.
+                    rse_blob(batt_cowl_w - 2*batt_cowl_wall,
+                             batt_cowl_h - 2*batt_cowl_wall,
+                             batt_cowl_rise - batt_cowl_wall,
+                             batt_cowl_base_ri, form_n,
+                             blend = 0.001, cap = batt_cowl_cap,
+                             foot = batt_cowl_foot_f,
+                             crown = batt_cowl_crown);
 
         // --- speaker grille --------------------------------------------------
         translate([board_cx + grille_off_x, board_cy + grille_off_y, -0.01])
@@ -331,11 +369,6 @@ module backplate() {
             cylinder(h = back_t + kbd_keeper_t + 0.02, d1 = kbd_eject_d,
                      d2 = kbd_eject_d_min);
 
-        // --- ventilation over the ESP32-S3 module -----------------------------
-        if (vent_enable)
-            translate([board_cx - 30, board_cy + 20, -0.01])
-                slot_col(vent_slot_w, vent_slot_h, vent_pitch, vent_count,
-                         back_t + 0.02);
 
     }
 }

@@ -143,3 +143,139 @@ module ridge(w, h, rise, cap_r, base_r = 8) {
             }
     }
 }
+
+
+// ===========================================================================
+//  ORGANIC FORM PRIMITIVES
+// ===========================================================================
+//  The form language is a rounded rectangle whose corners are SUPERELLIPTICAL
+//  quadrants rather than circular arcs, lofted through a rolled edge profile.
+//  Both choices are about curvature continuity.
+//
+//  A conventional rounded rectangle is an arc tangent to a line. Position and
+//  tangent match at the join; curvature does not - it jumps from 1/r to zero.
+//  The eye reads that discontinuity as a hard corner however large the radius
+//  is, which is why a fillet can look applied rather than grown. Replacing the
+//  arc with a superelliptical quadrant of a LARGER corner size gives the same
+//  visual roundness while ramping curvature in from zero at the tangent point.
+//
+//  A pure Lame curve over the whole outline was tried first and is wrong here:
+//  at this scale it cuts about 10 mm off each corner, which eats the wall and
+//  loses the straight edges the design is disciplined by. Straight edges with a
+//  continuous corner is the Rams reading; a global superellipse is a lozenge.
+//
+//    n = 2.0   circular arc, the conventional fillet
+//    n = 3.2   used here; with cr = 13 it tracks an R8 arc to within 0.2 mm
+//    n = 5.0   nearly square corner with a long, very soft approach
+
+function _se(v, n) = pow(max(v, 0), 2 / n);
+
+function rse_poly(w, h, cr, n, q) =
+    let (c  = min(cr, w / 2 - 0.01, h / 2 - 0.01),
+         ax = w / 2 - c,
+         ay = h / 2 - c)
+    concat(
+        [ for (i = [0 : q]) let (t = i * 90 / q)
+            [ ax + c * _se(cos(t), n),  ay + c * _se(sin(t), n) ] ],
+        [ for (i = [0 : q]) let (t = i * 90 / q)
+            [ -ax - c * _se(sin(t), n), ay + c * _se(cos(t), n) ] ],
+        [ for (i = [0 : q]) let (t = i * 90 / q)
+            [ -ax - c * _se(cos(t), n), -ay - c * _se(sin(t), n) ] ],
+        [ for (i = [0 : q]) let (t = i * 90 / q)
+            [ ax + c * _se(sin(t), n),  -ay - c * _se(cos(t), n) ] ]);
+
+// A flat plate with continuous-curvature corners.
+module rse_plate(w, h, t, cr, n, q = 16) {
+    linear_extrude(height = max(t, 0.001))
+        polygon(rse_poly(w, h, cr, n, q));
+}
+
+// Smoothstep: value and first derivative both vanish at each end, so a profile
+// built from it leaves a face with zero slope and no visible arris.
+function sstep(x) = x <= 0 ? 0 : (x >= 1 ? 1 : (3 * x * x - 2 * x * x * x));
+
+// Inset fraction at normalised depth u: 1 at both faces, 0 through the middle.
+function roll_f(u, roll) =
+      u < roll     ? 1 - sstep(u / roll)
+    : u > 1 - roll ? 1 - sstep((1 - u) / roll)
+    : 0;
+
+//  A prism whose edges roll off into both faces instead of meeting them at an
+//  arris or a chamfer.
+//
+//  The widest section is at mid-thickness and is EXACTLY (w, h), so the part's
+//  envelope is unchanged by the treatment: the softening is taken out of the
+//  faces inward, never added outward. The middle (1 - 2*roll) of the thickness
+//  stays at full section, so the wall is not thinned where it carries load.
+//
+//  Built as one polyhedron rather than a stack of hull()s - 40 hulls of 64-gons
+//  is minutes of CGAL, a polyhedron is instant.
+module rse_soft(w, h, t, cr, n, soft, roll, nz = 40, q = 16) {
+    na = 4 * (q + 1);
+    pts = [ for (i = [0 : nz], j = [0 : na - 1])
+              let (u = i / nz,
+                   d = 2 * soft * roll_f(u, roll),
+                   p = rse_poly(w - d, h - d, max(cr - d / 2, 0.4), n, q)[j])
+              [p[0], p[1], u * t] ];
+    // OpenSCAD wants each face wound CLOCKWISE seen from OUTSIDE, i.e. the
+    // right-hand-rule normal of the listed order points INTO the solid.
+    sides = [ for (i = [0 : nz - 1], j = [0 : na - 1])
+                [ i * na + j,
+                  (i + 1) * na + j,
+                  (i + 1) * na + (j + 1) % na,
+                  i * na + (j + 1) % na ] ];
+    bottom = [ for (j = [0 : na - 1]) j ];
+    top    = [ for (j = [na - 1 : -1 : 0]) nz * na + j ];
+    polyhedron(points = pts, faces = concat(sides, [bottom], [top]), convexity = 10);
+}
+
+// An aperture that flares outward along +Z, so the frame does not visually clip
+// the panel when the deck is viewed off-axis. Corner language matches the shell.
+module rse_aperture(w, h, t, cr, n, flare, q = 16) {
+    hull() {
+        rse_plate(w, h, 0.001, cr, n, q);
+        translate([0, 0, t - 0.001])
+            rse_plate(w + 2 * flare, h + 2 * flare, cr + flare, n, q);
+    }
+}
+
+//  Section offset for rse_blob() at normalised rise u: positive near the base
+//  (the foot fillet), easing negative toward the cap.
+//  Section offset for rse_blob() at normalised rise u.
+//    u < foot            the base fillet, easing out to the panel
+//    foot <= u < crown   straight sides
+//    u >= crown          the crown, easing in
+//  The straight band in the middle is load-bearing, not styling: a blob that
+//  starts crowning immediately narrows faster than whatever it has to contain,
+//  and the cavity punches straight out through its own wall.
+function blob_prof(u, minor, blend, cap, foot, crown) =
+      u < foot  ? blend * (1 - sstep(u / foot))
+    : u < crown ? 0
+                : -cap * minor * 0.5 * sstep((u - crown) / (1 - crown));
+
+//  A swelling that grows OUT of a flat surface instead of sitting on it.
+//
+//  The foot section is larger than the nominal footprint and is reached within
+//  the first `foot` fraction of the rise, which puts a tangent fillet where the
+//  form meets the panel: there is no base line to catch the eye or the light.
+//  The cap eases in by the same smoothstep as the shell edges, so the whole
+//  object shares one curvature language.
+module rse_blob(w, h, rise, cr, n, blend = 3.0, cap = 0.34, foot = 0.20,
+                crown = 0.50, nz = 32, q = 16) {
+    na = 4 * (q + 1);
+    pts = [ for (i = [0 : nz], j = [0 : na - 1])
+              let (u = i / nz,
+                   d = blob_prof(u, min(w, h), blend, cap, foot, crown),
+                   p = rse_poly(w + 2 * d, h + 2 * d, max(cr + d, 0.4), n, q)[j])
+              [p[0], p[1], u * rise] ];
+    // OpenSCAD wants each face wound CLOCKWISE seen from OUTSIDE, i.e. the
+    // right-hand-rule normal of the listed order points INTO the solid.
+    sides = [ for (i = [0 : nz - 1], j = [0 : na - 1])
+                [ i * na + j,
+                  (i + 1) * na + j,
+                  (i + 1) * na + (j + 1) % na,
+                  i * na + (j + 1) % na ] ];
+    bottom = [ for (j = [0 : na - 1]) j ];
+    top    = [ for (j = [na - 1 : -1 : 0]) nz * na + j ];
+    polyhedron(points = pts, faces = concat(sides, [bottom], [top]), convexity = 10);
+}

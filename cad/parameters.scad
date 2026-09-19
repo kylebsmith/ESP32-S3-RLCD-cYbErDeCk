@@ -225,13 +225,25 @@ cell_dia_max     = 18.6;   // [STANDARD] 18650 worst case (protected cells);
 cell_len_max     = 69.0;   // [STANDARD] protected / button-top worst case
 batt_cowl_enable = true;   // [DESIGN]
 batt_cowl_w      = 83.0;   // [MEASURED] reference Battery_cover.stl footprint
-batt_cowl_h      = 28.0;   // [DESIGN] reference cover is 27.0; widened 1.0 mm
-                           //   so the cavity still clears the holder flange.
-                           //   Costs nothing - the cowl is a bulge on the back
-                           //   and does not touch the device footprint.
+batt_cowl_h      = 30.0;   // [DESIGN] reference cover is 27.0. Widened so the
+                           //   cavity still clears the 22.1 mm holder flange
+                           //   AFTER the crown has begun easing in. Costs
+                           //   nothing in footprint - the cowl is a bulge on
+                           //   the back, not part of the plan form.
 batt_cowl_wall   = 2.0;    // [MEASURED] reference cover wall thickness
 batt_cowl_clear  = 0.5;    // [DESIGN] clearance over the holder
-batt_cowl_cap_r  = 3.0;    // [DESIGN] outer cap radius
+//  The cowl is a swelling BLENDED OUT of the back panel, not a box with a cap
+//  sitting on it. batt_cowl_foot is the tangent fillet where it meets the
+//  panel, which is what removes the base line; batt_cowl_cap is how much the
+//  section eases in toward the crown, as a fraction of the minor axis.
+batt_cowl_foot   = 3.2;    // [DESIGN] foot fillet, blended into the panel
+batt_cowl_foot_f = 0.20;   // [DESIGN] fraction of rise the foot fillet takes
+batt_cowl_cap    = 0.34;   // [DESIGN] crown easing, fraction of the minor axis
+batt_cowl_crown  = 0.50;   // [DESIGN] fraction of rise before the crown starts.
+                           //   Not styling: the cell occupies the lower half of
+                           //   the cavity, so the sides must stay parallel
+                           //   until they are clear of it.
+batt_cowl_cap_r  = 3.0;    // [DESIGN] retained for the cavity's ridge()
 batt_cowl_base_r  = 6.0;   // [DESIGN] outer plan-view corner radius
 batt_cowl_base_ri = 3.0;   // [DESIGN] INNER plan-view corner radius. Same trap
                            //   as board_pocket_r: the holder's corners are
@@ -254,13 +266,23 @@ batt_cowl_cap_ri = 1.5;    // [DESIGN] INNER cap radius. Kept small on purpose:
 //  rise = how far the holder sticks out past the plate, plus clearance, plus
 //  the wall, plus the inner cap radius - because the cavity must still be at
 //  full width when it reaches the holder, and the cap is where it stops being.
-batt_cowl_rise   = (batt_protrusion - back_t) + batt_cowl_clear + batt_cowl_wall + batt_cowl_cap_ri;
+//  ... plus headroom for the crown itself, which the earlier straight-sided
+//  ridge did not need. Without it the crown starts inside the cell's envelope.
+batt_cowl_head   = 2.5;    // [DESIGN] clear rise above the holder for the crown
+batt_cowl_rise   = (batt_protrusion - back_t) + batt_cowl_clear + batt_cowl_wall + batt_cowl_head;
 
 // Onboard speaker grille.
-grille_slot_w  = 16.0;   // [MEASURED] slot length along X
-grille_slot_h  = 1.3;    // [MEASURED] slot width
-grille_pitch   = 3.05;   // [MEASURED]
-grille_count   = 4;      // [MEASURED]
+//  Waveshare's own grille field is 14.70 (U) x 10.45 (V), and the reference
+//  enclosure reproduces the 10.45 with four 1.3 mm slots on a 3.05 pitch. The
+//  acoustic opening is kept inside that same field, but restyled as a finer,
+//  more numerous set: five slots at 1.2 mm on a 2.3125 pitch span exactly the
+//  same 10.45 mm. Finer perforation on a tighter pitch is the Braun grille
+//  idiom, and it is the one perforated element on the object.
+grille_slot_w  = 14.0;    // [DESIGN] within Waveshare's 14.70 field
+grille_slot_h  = 1.2;     // [DESIGN] 3 extrusions
+grille_pitch   = 2.3125;  // [DESIGN] 4 gaps x 2.3125 + 1.2 = 10.45 exactly
+grille_count   = 5;       // [DESIGN]
+grille_field_h = 10.45;   // [VENDOR] Waveshare's grille height, matched exactly
 grille_off_x   =  0.00;  // [VENDOR] Waveshare's own grille centre is U 46.25
 grille_off_y   = 16.00;  // [VENDOR] ... and V 50.55, i.e. +16.00 from centre.
                          //   The four slots above span 3*3.05 + 1.3 = 10.45 mm,
@@ -449,10 +471,87 @@ z_back_inner  = back_t;
 z_front_inner = body_t - front_t;
 z_front_outer = body_t;
 
-// Shell styling.
-corner_r      = 8.0;   // [DESIGN] outer corner radius
-corner_gusset = 6.0;   // [DESIGN] solid corner fillet leg length, inside
-edge_chamfer  = 1.0;   // [DESIGN] breaks the front and back arrises
+// ---------------------------------------------------------------------------
+// FORM LANGUAGE
+// ---------------------------------------------------------------------------
+//  The brief is Rams, read organically: straight edges and a single radius
+//  system, but with curvature continuity everywhere a surface turns.
+//
+//  A conventional fillet is an arc tangent to a line - curvature jumps from
+//  1/r to zero at the join, and the eye reads that as a hard corner however
+//  large r is. Every visible corner here is instead a SUPERELLIPTICAL quadrant
+//  of a larger corner size, which tracks the same visual line while ramping
+//  curvature in from zero. See lib/util.scad.
+form_n        = 3.2;    // [DESIGN] superelliptical exponent. 2.0 would be a
+                        //   plain arc; 3.2 with corner_blend 11.2 tracks an R8
+                        //   arc to within 0.2 mm while being curvature-
+                        //   continuous. Above ~4 it reads as a square corner
+                        //   with a long approach, which is Braun but not
+                        //   biophilic.
+corner_blend  = 11.2;   // [DESIGN] corner SIZE, not a radius: how far along
+                        //   each edge the corner curve runs.
+
+//  Edges roll into the faces instead of meeting them at a chamfer. The widest
+//  section stays exactly body_w x body_h, so this costs nothing in envelope -
+//  the softening is taken out of the faces inward, never added outward - and
+//  the middle (1 - 2*edge_roll) of the thickness stays at full wall.
+edge_soft     = 1.2;    // [DESIGN] face inset from the widest section. Bounded
+                        //   by the wall: the shell is thinnest at the arris,
+                        //   where it measures wall - edge_soft. At 1.2 that
+                        //   leaves 2.0 mm (5 extrusions) of rim around the back
+                        //   opening, which is the real constraint - the front
+                        //   arris is carried by the 2.4 mm face, not the wall.
+edge_roll     = 0.28;   // [DESIGN] fraction of thickness the roll occupies
+
+//  The internal cavity is deliberately NOT given the organic treatment. A
+//  continuous corner is fuller than an arc near the tangent points and tighter
+//  at the corner itself; applied to the back opening it undercuts the keyboard
+//  bay's own corners by ~0.15 mm and traps the keyboard. The cavity is hidden,
+//  so it stays a plain arc, and the wall simply runs thicker at the corners
+//  (3.7 mm against 3.2 mm nominal) - which is where a shell wants material.
+//  The cavity DOES get the continuous corner, but the size is not free: it is
+//  bounded above by the keyboard bay, which is full interior width and runs to
+//  the bottom of the shell, so its own corners sit in the cavity's corners.
+//  Measured by intersecting the two outlines:
+//
+//    plain arc  R6.0   0.000 mm^2 of the bay unreachable
+//    continuous 6.0    0.000     <- used here, the largest that works
+//    continuous 8.0    0.223
+//    continuous 9.8    4.768
+//    continuous 11.2  10.958     (= the shell's own corner blend)
+//
+//  So the cavity cannot simply inherit corner_blend. tools/validate.py asserts
+//  reachability against the rendered mesh, not against this comment.
+cavity_blend  = 6.0;    // [DESIGN] back-opening corner, continuous
+corner_gusset = 6.0;    // [DESIGN] solid corner fillet leg length, inside
+
+//  Aperture corner sizes. Not free: see the asserts in section 6.
+aper_blend_display = 4.2;  // [DESIGN] PANEL-BOUND, not chosen. The aperture
+                           //   height is trapped between the active area it
+                           //   must not clip (63.60) and the module edge it
+                           //   must still bear on (67.60), which leaves 1.0 mm
+                           //   per side. A superelliptical corner eats
+                           //   blend * 0.1947 of that at 45 deg, so anything
+                           //   above ~4.6 clips the panel corner. This is the
+                           //   one place on the object where the corner is
+                           //   smaller than the form language wants, and the
+                           //   reason is the component, not taste. The outward
+                           //   flare opens it to an effective 5.65 at the face,
+                           //   which is what the eye actually sees.
+aper_blend_kbd     = 9.0;  // [DESIGN] bounded above by keyboard corner capture
+
+//  Back-plate outer perimeter. A small roll turns the panel seam into a
+//  deliberate shadow gap rather than a tolerance gap.
+plate_edge_soft = 0.6;  // [DESIGN]
+plate_edge_roll = 0.45; // [DESIGN]
+
+//  Control cluster. The three buttons sit in ONE shallow recess rather than in
+//  three separate holes, so they read as a single considered element.
+dish_enable = true;    // [DESIGN]
+dish_margin = 3.2;     // [DESIGN] recess margin around the aperture group
+dish_depth  = 0.9;     // [DESIGN] leaves 2.3 mm of the 3.2 mm top wall
+dish_blend  = 5.0;     // [DESIGN] recess corner size
+dish_flare  = 0.5;     // [DESIGN] per-side flare at the outer face
 
 
 // ===========================================================================
@@ -484,11 +583,6 @@ accessory_screw_len_rig = 12;   // [DESIGN] with a bracket under the heads
 
 // Ventilation over the ESP32-S3 module. The RLCD has no backlight, so thermal
 // load is low; these are insurance for sustained Wi-Fi TX.
-vent_enable = true;   // [DESIGN]
-vent_slot_w = 1.6;    // [DESIGN] >= 4 x nozzle, so it prints cleanly
-vent_slot_h = 14.0;   // [DESIGN]
-vent_count  = 5;      // [DESIGN]
-vent_pitch  = 3.6;    // [DESIGN]
 
 
 // ===========================================================================
@@ -521,8 +615,24 @@ assert(kbd_aper_h < kbd_pocket_h, "keyboard would fall through the front face");
 assert(display_aper_w >= display_active_w, "front face clips the display");
 assert(display_aper_h >= display_active_h, "front face clips the display");
 assert(body_t >= back_t + board_depth + front_t, "not deep enough for the board");
-assert(vent_slot_w >= 4 * nozzle, "vent slots too narrow to print");
 assert(window_w > 50 && window_h > 50, "acrylic window outline is degenerate");
+assert(form_n > 2.0, "form_n <= 2 is a plain arc, not a continuous corner");
+assert(corner_blend < min(body_w, body_h) / 2, "corner blend larger than the part");
+assert(wall - edge_soft >= 5 * nozzle,
+       "edge roll thins the shell arris below 5 extrusions");
+assert(cavity_blend < corner_blend, "cavity corner is fuller than the shell corner");
+//  The display aperture's corner must not cut into the panel's SQUARE active
+//  area corner. Inset of a superelliptical corner at 45 deg is
+//  blend * (1 - cos(45)^(2/n)).
+assert(display_aper_w/2 - aper_blend_display * (1 - pow(cos(45), 2/form_n))
+       > display_active_w/2,
+       "display aperture corner clips the active area");
+assert(display_aper_h/2 - aper_blend_display * (1 - pow(cos(45), 2/form_n))
+       > display_active_h/2,
+       "display aperture corner clips the active area");
+assert(grille_count * grille_slot_h + (grille_count - 1) * (grille_pitch - grille_slot_h)
+       <= grille_field_h + 0.01,
+       "grille field exceeds the board's own grille opening");
 
 echo(str("cYbErDeCk envelope [", preset, "]: ",
          body_w, " x ", body_h, " x ", body_t, " mm"));

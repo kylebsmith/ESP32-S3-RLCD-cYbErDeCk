@@ -259,6 +259,40 @@ def check_fit(parts, mocks, p):
                 f"holder reaches {need:.2f} mm past the back plate's outer face; "
                 f"cowl gives {have:.2f} mm of internal rise")
 
+    # Cowl wall thickness along the rise. The outer and the cavity ease in by
+    # the same law, but from different footprints and over different rises, so
+    # the wall is NOT constant and can go to zero partway up - which is exactly
+    # what happened when the cavity was left straight-sided inside a crowned
+    # outer: it punched through and the plate rendered as two bodies.
+    def _prof(u, minor, blend, cap, foot, crown):
+        def ss(x):
+            x = min(max(x, 0.0), 1.0)
+            return 3 * x * x - 2 * x ** 3
+        if u < foot:
+            return blend * (1 - ss(u / foot))
+        if u < crown:
+            return 0.0
+        return -cap * minor * 0.5 * ss((u - crown) / (1 - crown))
+
+    rise, wallc = p["batt_cowl_rise"], p["batt_cowl_wall"]
+    worst, worst_d = 1e9, 0.0
+    for k in range(1, 60):
+        d = rise * k / 60.0                      # depth below the panel
+        if d > rise - wallc:
+            break
+        o = p["batt_cowl_h"] + 2 * _prof(d / rise, min(p["batt_cowl_w"], p["batt_cowl_h"]),
+                                         p["batt_cowl_foot"], p["batt_cowl_cap"],
+                                         p["batt_cowl_foot_f"], p["batt_cowl_crown"])
+        ih, iw = p["batt_cowl_h"] - 2 * wallc, p["batt_cowl_w"] - 2 * wallc
+        i = ih + 2 * _prof(d / (rise - wallc), min(iw, ih), 0.001, p["batt_cowl_cap"],
+                           p["batt_cowl_foot_f"], p["batt_cowl_crown"])
+        if (o - i) / 2 < worst:
+            worst, worst_d = (o - i) / 2, d
+    ok &= check("cowl wall stays intact along its rise", "FIT",
+                worst >= 4 * p["nozzle"],
+                f"thinnest {worst:.2f} mm at {worst_d:.1f} mm depth "
+                f"({worst/p['nozzle']:.1f} extrusions)")
+
     ok &= check("front face does not clip the panel", "FIT",
                 p["display_aper_w"] >= p["display_active_w"] and
                 p["display_aper_h"] >= p["display_active_h"],
@@ -291,12 +325,44 @@ def check_interface(parts, p):
         ok &= check("chassis and back plate do not clash", "INTERFACE", vol < 1.0,
                     f"shared volume {vol:.2f} mm^3")
 
+    # Reachability. Both bays load through the back opening, so every part of
+    # each bay must lie inside that opening. A corner treatment on the opening
+    # that is fuller than the bay's own corner undercuts it and traps the
+    # component - which a clash test cannot see, because an undercut is absence
+    # of material, not interference.
+    try:
+        # Both sections return MATERIAL; the openings are its interior rings.
+        # The bay section must be taken below the keyboard service windows and
+        # the side port tunnels, or the bays connect to the exterior and stop
+        # being interior rings at all.
+        opening = unary_union([Polygon(r)
+                               for g in section_polys(ch, p["back_t"] / 2)
+                               for r in g.interiors])
+        voids = unary_union([Polygon(r)
+                             for g in section_polys(ch, p["back_t"] + 0.7)
+                             for r in g.interiors])
+        escaped = voids.difference(opening.buffer(0.02)).area if not voids.is_empty else 0.0
+        ok &= check("both bays are reachable through the back opening",
+                    "INTERFACE", escaped < 0.05,
+                    f"{escaped:.4f} mm^2 of bay area lies outside the opening")
+    except Exception as exc:
+        ok &= check("reachability test ran", "INTERFACE", False, str(exc))
+
     # Fastener bores: count them in the chassis and match against the plate.
     bores = count_bores(ch, p["m3_insert_bore"], z=p["back_t"] + 1.0)
     holes = count_bores(bp, p["m3_clear"], z=p["back_t"] - 0.5)
     ok &= check("fastener count matches", "INTERFACE", bores == holes and bores >= 4,
                 f"{bores} insert bores in the chassis, {holes} clearance holes in the plate")
     return ok
+
+
+def _as_list(g):
+    return list(g.geoms) if g.geom_type.startswith("Multi") else [g]
+
+
+def section_polys(mesh, z):
+    s = mesh.section(plane_origin=[0, 0, z], plane_normal=[0, 0, 1])
+    return [] if s is None else list(s.to_2D(to_2D=np.eye(4))[0].polygons_full)
 
 
 def count_bores(mesh, dia, z, tol=0.45):
@@ -327,8 +393,6 @@ def check_print(parts, p):
                     f"{v:.2f} mm = {mult:.2f} x {noz} mm nozzle")
     ok &= check("wall is at least 4 extrusions", "PRINT", p["wall"] >= 4*noz,
                 f"{p['wall']/noz:.0f} perimeters")
-    ok &= check("vent slots are printable", "PRINT", p["vent_slot_w"] >= 4*noz,
-                f"{p['vent_slot_w']:.2f} mm")
     ok &= check("speaker grille slots are printable", "PRINT",
                 p["grille_slot_h"] >= 2*noz,
                 f"{p['grille_slot_h']:.2f} mm wide, {p['grille_pitch']:.2f} mm pitch")

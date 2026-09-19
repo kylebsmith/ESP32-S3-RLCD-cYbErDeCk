@@ -137,7 +137,7 @@ on before being caught.
 
 ## Validation
 
-`tools/validate.py` renders the parts **from source** and runs 52 checks in six
+`tools/validate.py` renders the parts **from source** and runs 68 checks in six
 classes: `MESH`, `ENVELOPE`, `FIT`, `INTERFACE`, `PRINT`, `DATUM`. Exit status
 is non-zero unless all pass.
 
@@ -165,6 +165,10 @@ model:
 | Board pocket R3.0 fouled the PCB's R0.5 corners | 0.33 mm interference, all four corners |
 | Cowl cavity R8 fouled the holder's R2.0 corners | 1.39 mm interference, all four corners |
 | Expansion window copied from a *narrower* vendor window | header body would not pass |
+| Acrylic window parameters deleted in a rewrite | part rendered 2 x 2 x 1 mm and passed every other check |
+| Back-opening corner fuller than the keyboard bay's own | 10.96 mm2 of bay undercut; keyboard trapped, invisible to a clash test |
+| Cowl cavity straight inside a crowned outer | cavity punched through the wall; plate in two pieces |
+| Tongue rooted on a rolled edge that had drawn back | tongue floated free of the plate |
 
 Seven of those eight are invisible in a render. That is the argument for
 numerical gating over inspection.

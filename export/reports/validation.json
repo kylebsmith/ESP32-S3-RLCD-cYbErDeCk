@@ -1,12 +1,12 @@
 {
-  "passed": 67,
-  "total": 67,
+  "passed": 68,
+  "total": 68,
   "results": [
     {
       "check": "chassis: watertight",
       "class": "MESH",
       "ok": true,
-      "detail": "5920 faces"
+      "detail": "8992 faces"
     },
     {
       "check": "chassis: single body",
@@ -18,13 +18,13 @@
       "check": "chassis: positive volume",
       "class": "MESH",
       "ok": true,
-      "detail": "43060 mm^3 -> 53.4 g in PLA"
+      "detail": "40860 mm^3 -> 50.7 g in PLA"
     },
     {
       "check": "backplate: watertight",
       "class": "MESH",
       "ok": true,
-      "detail": "8792 faces"
+      "detail": "18844 faces"
     },
     {
       "check": "backplate: single body",
@@ -36,7 +36,7 @@
       "check": "backplate: positive volume",
       "class": "MESH",
       "ok": true,
-      "detail": "45485 mm^3 -> 56.4 g in PLA"
+      "detail": "46918 mm^3 -> 58.2 g in PLA"
     },
     {
       "check": "buttons: watertight",
@@ -150,7 +150,7 @@
       "check": "chassis is not degenerate",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "116.60 x 139.10 x 16.60, 43060 mm^3"
+      "detail": "116.60 x 139.10 x 16.60, 40860 mm^3"
     },
     {
       "check": "backplate: extent X is as specified",
@@ -162,7 +162,7 @@
       "check": "backplate is not degenerate",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "109.60 x 134.69 x 12.20, 45485 mm^3"
+      "detail": "109.60 x 134.70 x 13.20, 46918 mm^3"
     },
     {
       "check": "buttons is not degenerate",
@@ -204,7 +204,7 @@
       "check": "backplate fits the print bed",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "109.6 x 134.7 x 12.2"
+      "detail": "109.6 x 134.7 x 13.2"
     },
     {
       "check": "buttons fits the print bed",
@@ -228,13 +228,13 @@
       "check": "board does not clash with the back plate",
       "class": "FIT",
       "ok": true,
-      "detail": "shared volume 0.00 mm^3"
+      "detail": "shared volume 0.17 mm^3"
     },
     {
       "check": "board is inside the assembled envelope",
       "class": "FIT",
       "ok": true,
-      "detail": "bounds [[-46.25, -3.25, -5.0], [46.25, 65.85, 13.95]] in [-58.3, -69.55, -9.0]..[58.3, 69.55, 16.6]"
+      "detail": "bounds [[-46.25, -3.25, -5.0], [46.25, 65.85, 13.95]] in [-58.3, -69.55, -10.0]..[58.3, 69.55, 16.6]"
     },
     {
       "check": "keyboard does not clash with the chassis",
@@ -252,7 +252,7 @@
       "check": "keyboard is inside the assembled envelope",
       "class": "FIT",
       "ok": true,
-      "detail": "bounds [[-54.61, -65.86, 3.2], [54.61, -7.44, 14.15]] in [-58.3, -69.55, -9.0]..[58.3, 69.55, 16.6]"
+      "detail": "bounds [[-54.61, -65.86, 3.2], [54.61, -7.44, 14.15]] in [-58.3, -69.55, -10.0]..[58.3, 69.55, 16.6]"
     },
     {
       "check": "board pocket clearance",
@@ -276,13 +276,19 @@
       "check": "18650 fits inside the battery cowl",
       "class": "FIT",
       "ok": true,
-      "detail": "cell reaches z=-5.00, cowl inner face at z=-7.00, clearance 2.00 mm"
+      "detail": "cell reaches z=-5.00, cowl inner face at z=-8.00, clearance 3.00 mm"
     },
     {
       "check": "cowl clears the holder protrusion",
       "class": "FIT",
       "ok": true,
-      "detail": "holder reaches 5.00 mm past the back plate's outer face; cowl gives 7.00 mm of internal rise"
+      "detail": "holder reaches 5.00 mm past the back plate's outer face; cowl gives 8.00 mm of internal rise"
+    },
+    {
+      "check": "cowl wall stays intact along its rise",
+      "class": "FIT",
+      "ok": true,
+      "detail": "thinnest 2.00 mm at 2.0 mm depth (5.0 extrusions)"
     },
     {
       "check": "front face does not clip the panel",
@@ -301,6 +307,12 @@
       "class": "INTERFACE",
       "ok": true,
       "detail": "shared volume 0.00 mm^3"
+    },
+    {
+      "check": "both bays are reachable through the back opening",
+      "class": "INTERFACE",
+      "ok": true,
+      "detail": "0.0000 mm^2 of bay area lies outside the opening"
     },
     {
       "check": "fastener count matches",
@@ -339,16 +351,10 @@
       "detail": "8 perimeters"
     },
     {
-      "check": "vent slots are printable",
-      "class": "PRINT",
-      "ok": true,
-      "detail": "1.60 mm"
-    },
-    {
       "check": "speaker grille slots are printable",
       "class": "PRINT",
       "ok": true,
-      "detail": "1.30 mm wide, 3.05 mm pitch"
+      "detail": "1.20 mm wide, 2.31 mm pitch"
     },
     {
       "check": "insert boss wall is thick enough",
