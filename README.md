@@ -241,6 +241,7 @@ counted among the audited rows.
 | **[DATUMS.md](docs/DATUMS.md)** | every dimension, its provenance, eleven recorded corrections, seven open items |
 | **[DESIGN.md](docs/DESIGN.md)** | form language, why it is shaped this way, material and finish |
 | **[METHODOLOGY.md](docs/METHODOLOGY.md)** | how the numbers were obtained and how to reproduce them |
+| **[MEASURE.md](docs/MEASURE.md)** | caliper checklist for someone holding the actual hardware |
 | **[ASSEMBLY.md](docs/ASSEMBLY.md)** | BOM, print settings, build order |
 | **[PROVENANCE.md](docs/PROVENANCE.md)** | what was taken from whom, and on what basis |
 
