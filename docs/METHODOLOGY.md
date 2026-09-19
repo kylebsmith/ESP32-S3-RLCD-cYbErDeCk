@@ -138,7 +138,7 @@ number that happened to be right, kept because the lesson generalises.
 
 ## Validation
 
-`tools/validate.py` renders the parts **from source** and runs 70 checks in six
+`tools/validate.py` renders the parts **from source** and runs 71 checks in six
 classes: `MESH`, `ENVELOPE`, `FIT`, `INTERFACE`, `PRINT`, `DATUM`. Exit status
 is non-zero unless all pass.
 
@@ -170,9 +170,17 @@ model:
 | Back-opening corner fuller than the keyboard bay's own | 10.96 mm2 of bay undercut; keyboard trapped, invisible to a clash test |
 | Cowl cavity straight inside a crowned outer | cavity punched through the wall; plate in two pieces |
 | Tongue rooted on a rolled edge that had drawn back | tongue floated free of the plate |
+| Aperture corner squarer than the keyboard's own corner | lip went negative; four open gaps into the pocket, no corner retention |
+| Both component pockets cut `+1` proud instead of `+0.01` | 1 mm off the retaining lip, 1.4 mm of a 2.4 mm panel |
 
-Seven of those eight are invisible in a render. That is the argument for
+Most of those are invisible in a render. That is the argument for
 numerical gating over inspection.
+
+Two of those were found only because a check was rewritten to be
+two-dimensional. The lip test compared `aper_w < pocket_w` and the same in
+height, which measures the flats and never the corners — and the lip fails at
+the corners. **A one-dimensional test of a two-dimensional problem passes
+confidently and proves nothing.**
 
 The harness has also had its own bugs, which is worth stating: its parameter
 parser once joined any line ending in `=` onto the next, so every datum
@@ -193,7 +201,7 @@ fine; one that silently checks nothing is worse than none.
   Bredt's formula on sections cut from the real mesh — but classical section
   analysis gives **ratios and weak-point location**, which depend only on
   geometry, and not absolute stress, which depends on layer adhesion and strain
-  rate. It found one claim overstated: the shell is a closed cell over 8 % of
+  rate. It found one claim overstated: the shell is a closed cell over 10 % of
   its length, not throughout.
 - **No print verification.** Wall thicknesses are checked against nozzle
   multiples and overhangs against a draft-angle rule, but nothing has been

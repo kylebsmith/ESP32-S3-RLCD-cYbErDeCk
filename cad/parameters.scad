@@ -369,6 +369,28 @@ tf_open_h    =  4.5;    // [DESIGN]
 kbd_body_w = 108.5;   // [VENDOR] FCC ID YIZRT-RII518, User Manual exhibit p13
 kbd_body_h =  58.2;   // [VENDOR] as above
 kbd_body_t =  10.2;   // [VENDOR] as above, overall, including keycaps
+
+//  CORNER RADIUS. Measured, because a guess here was hiding a real defect -
+//  see docs/DATUMS.md C-08. Two independent sources agree that this keyboard's
+//  corners are far rounder than the 5.0 mm this project used to assume:
+//
+//    manufacturer drawing, rear view, circle-fit to the silhouette   10.8-11.2
+//    third-party CAD replica STL, circle-fit by section height        9.5-10.6
+//
+//  Neither is a dimensioned callout, so this is [MEASURED] with a real band
+//  rather than [VENDOR]. The band matters in BOTH directions and they are not
+//  the same direction for every check:
+//
+//    pocket clearance  a SQUARER body (small r) is the worst case - its corner
+//                      reaches furthest into the pocket's own rounded corner
+//    lip capture       a ROUNDER body (large r) is the worst case - its corner
+//                      retreats furthest from the aperture it has to cover
+//
+//  So there is no single conservative value, and anything that checks a corner
+//  must say which end of the band it is using.
+kbd_body_corner_r     = 10.0;   // [MEASURED] nominal, two sources
+kbd_body_corner_r_min =  9.5;   // [MEASURED] worst case for pocket clearance
+kbd_body_corner_r_max = 11.2;   // [MEASURED] worst case for lip capture
 kbd_mass_g =  75.0;   // [VENDOR] as-certified 2011 sample
 
 //  CORRECTION - THERE IS NO SECOND CANDIDATE BODY. See docs/DATUMS.md C-07.
@@ -609,7 +631,27 @@ aper_blend_display = 4.2;  // [DESIGN] PANEL-BOUND, not chosen. The aperture
                            //   reason is the component, not taste. The outward
                            //   flare opens it to an effective 5.65 at the face,
                            //   which is what the eye actually sees.
-aper_blend_kbd     = 9.0;  // [DESIGN] bounded above by keyboard corner capture
+//  THE KEYBOARD APERTURE CORNER IS CIRCULAR, NOT SUPERELLIPTICAL, AND IT IS
+//  DERIVED RATHER THAN CHOSEN. This is the second place the form language is
+//  deliberately broken, and like the first (the display aperture) the component
+//  sets it, not taste.
+//
+//  A lip of constant width around an aperture is the component's outline eroded
+//  by the lip width. Eroding a circular corner of radius r by d gives a circular
+//  corner of radius r - d. A superellipse is not the erosion of a circle: at
+//  n = 3.2 it sits up to 1.55 mm PROUD of the circular arc of the same corner
+//  size, biting toward the box corner exactly where the keyboard's own corner is
+//  retreating away from it. Those two effects add, and at the measured corner
+//  radius they cancelled the lip entirely - it went NEGATIVE, meaning the
+//  keyboard no longer covered its own aperture and you could see into the
+//  pocket past all four corners.
+//
+//  Derived from the LARGEST plausible keyboard corner, because that is the
+//  worst case for capture, minus the narrower of the two lip widths.
+kbd_lip_x = (kbd_body_w - kbd_aper_w) / 2;   // [DERIVED] = 1.00
+kbd_lip_y = (kbd_body_h - kbd_aper_h) / 2;   // [DERIVED] = 1.20
+aper_blend_kbd  = kbd_body_corner_r_max - min(kbd_lip_x, kbd_lip_y);  // = 10.2
+aper_n_kbd      = 2.0;    // [DERIVED] circular - see above
 
 //  Back-plate outer perimeter. A small roll turns the panel seam into a
 //  deliberate shadow gap rather than a tolerance gap.

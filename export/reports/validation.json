@@ -1,6 +1,6 @@
 {
-  "passed": 70,
-  "total": 70,
+  "passed": 71,
+  "total": 71,
   "results": [
     {
       "check": "chassis: watertight",
@@ -18,7 +18,7 @@
       "check": "chassis: positive volume",
       "class": "MESH",
       "ok": true,
-      "detail": "40860 mm^3 -> 50.7 g in PLA"
+      "detail": "42211 mm^3 -> 52.3 g in PLA"
     },
     {
       "check": "backplate: watertight",
@@ -108,7 +108,7 @@
       "check": "keyboard: positive volume",
       "class": "MESH",
       "ok": true,
-      "detail": "71544 mm^3 -> 88.7 g in PLA"
+      "detail": "70814 mm^3 -> 87.8 g in PLA"
     },
     {
       "check": "width is component-bound",
@@ -150,7 +150,7 @@
       "check": "chassis is not degenerate",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "116.60 x 139.10 x 16.60, 40860 mm^3"
+      "detail": "116.60 x 139.10 x 16.60, 42211 mm^3"
     },
     {
       "check": "backplate: extent X is as specified",
@@ -265,6 +265,12 @@
       "class": "FIT",
       "ok": true,
       "detail": "lip 1.85 / 1.80 mm per side"
+    },
+    {
+      "check": "keyboard covers the aperture at the corners too",
+      "class": "FIT",
+      "ok": true,
+      "detail": "narrowest lip 0.98 mm, at the corners, against a keyboard corner radius of 11.2 mm (the worst case for capture); on the flats it is 1.00; nominal corner r 10.0 gives 0.99"
     },
     {
       "check": "board is captured by the front lip",

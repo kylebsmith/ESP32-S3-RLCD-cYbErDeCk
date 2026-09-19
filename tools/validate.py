@@ -212,6 +212,21 @@ def check_fit(parts, mocks, p):
                 p["kbd_aper_w"] < p["kbd_pocket_w"] and p["kbd_aper_h"] < p["kbd_pocket_h"],
                 f"lip {(p['kbd_pocket_w']-p['kbd_aper_w'])/2:.2f} / "
                 f"{(p['kbd_pocket_h']-p['kbd_aper_h'])/2:.2f} mm per side")
+
+    # THE CHECK ABOVE IS ONE-DIMENSIONAL AND THAT IS WHY IT MISSED A REAL BUG.
+    # Comparing widths and heights only ever tests the flats. The lip is a 2-D
+    # ring, and it is at the CORNERS that it disappears - where the keyboard's
+    # own rounded corner retreats inward while a squarer aperture corner bites
+    # outward. Measured at the worst end of the corner band, from the mesh.
+    lip_min, lip_at = _corner_lip(parts["chassis"], p)
+    ok &= check("keyboard covers the aperture at the corners too", "FIT",
+                lip_min >= 0.40,
+                f"narrowest lip {lip_min:.2f} mm, at the corners, against a "
+                f"keyboard corner radius of {p['kbd_body_corner_r_max']:.1f} mm "
+                f"(the worst case for capture); on the flats it is "
+                f"{min(p['kbd_lip_x'], p['kbd_lip_y']):.2f}"
+                + (f"; nominal corner r {p['kbd_body_corner_r']:.1f} gives "
+                   f"{lip_at:.2f}" if lip_at is not None else ""))
     ok &= check("board is captured by the front lip", "FIT",
                 p["display_aper_w"] < p["board_pocket_w"],
                 f"lip {(p['board_pocket_w']-p['display_aper_w'])/2:.2f} mm per side")
@@ -270,6 +285,60 @@ def check_fit(parts, mocks, p):
                 f"reveal {(p['display_aper_w']-p['display_active_w'])/2:.2f} / "
                 f"{(p['display_aper_h']-p['display_active_h'])/2:.2f} mm per side")
     return ok
+
+
+def _rounded(w, h, c, n, q=400):
+    """Rounded rectangle with a superelliptical corner. n = 2 is a circle."""
+    from shapely.geometry import Polygon
+    c = min(c, w / 2 - 0.01, h / 2 - 0.01)
+    ax, ay = w / 2 - c, h / 2 - c
+    t = np.linspace(0, 90, q)
+    e = 2.0 / n
+    ct = np.power(np.clip(np.cos(np.radians(t)), 0, None), e)
+    st = np.power(np.clip(np.sin(np.radians(t)), 0, None), e)
+    return Polygon(np.vstack([np.c_[ax + c*ct,  ay + c*st],
+                              np.c_[-ax - c*st, ay + c*ct],
+                              np.c_[-ax - c*ct, -ay - c*st],
+                              np.c_[ax + c*st,  -ay - c*ct]]))
+
+
+def _corner_lip(chassis, p):
+    """Narrowest overlap between the keyboard body and the front-face lip.
+
+    The aperture outline is taken FROM THE RENDERED MESH rather than rebuilt
+    from parameters, so this measures the part that would actually be printed.
+    Negative means the keyboard does not reach the aperture edge there - you
+    would see into the pocket past the corner, and nothing retains it.
+    """
+    from shapely.geometry import Point
+    kcy = -p["body_h"] / 2 + p["wall"] + p["kbd_pocket_h"] / 2
+    # The BEARING plane, not mid-thickness: the keyboard is pushed forward onto
+    # the inner face of the front panel, and that is where the aperture is at
+    # its smallest and the lip at its widest. Sectioning higher measures the
+    # flare, which is draft and visual relief, not the surface that retains it.
+    z = p["body_t"] - p["front_t"] + 0.05
+    ring = None
+    for g in section_polys(chassis, z):
+        for r in g.interiors:
+            from shapely.geometry import Polygon as _P
+            q = _P(r); b = q.bounds
+            if abs((b[1] + b[3]) / 2 - kcy) < 8 and (b[2] - b[0]) > 60:
+                ring = q
+    if ring is None:
+        return -99.0, None
+    xy = np.array(ring.exterior.coords)
+    xy[:, 1] -= kcy                              # into keyboard-centred coords
+
+    def narrowest(rb):
+        body = _rounded(p["kbd_body_w"], p["kbd_body_h"], rb, 2.0)
+        out = []
+        for x, y in xy:
+            pt = Point(x, y)
+            d = pt.distance(body.exterior)
+            out.append(d if body.contains(pt) else -d)
+        return min(out)
+
+    return narrowest(p["kbd_body_corner_r_max"]), narrowest(p["kbd_body_corner_r"])
 
 
 def check_interface(parts, p):

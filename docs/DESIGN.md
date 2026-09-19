@@ -82,29 +82,29 @@ and says nothing about absolute stress.
 
 | | reference deck | this design |
 |---|---|---|
-| mean second moment `I` | 9 553 mm⁴ | **18 791 mm⁴** |
-| mean section modulus `Z` | 891 mm³ | **1 559 mm³** |
-| worst-section `Z` | 212 mm³ | **294 mm³** |
+| mean second moment `I` | 9 553 mm⁴ | **19 780 mm⁴** |
+| mean section modulus `Z` | 891 mm³ | **1 657 mm³** |
+| worst-section `Z` | 212 mm³ | **332 mm³** |
 
-**1.97× the mean bending stiffness and 1.38× at the worst section, in a
-smaller envelope.** Fitting the back plate is worth 3.41× on its own, which is
+**2.07× the mean bending stiffness and 1.56× at the worst section, in a
+smaller envelope.** Fitting the back plate is worth 3.47× on its own, which is
 the monocoque argument in one number.
 
 Moving the joint to the back is worth more than expected. At a typical station
-the closed section's neutral axis sits at z = 2.22 mm and the joint plane at
-z = 3.20 — 0.98 mm from the neutral axis, against 14.38 mm for the front face.
+the closed section's neutral axis sits at z = 2.35 mm and the joint plane at
+z = 3.20 — 0.85 mm from the neutral axis, against 14.25 mm for the front face.
 Bending stress varies with distance from the neutral axis, so **the joint at the
-back carries about 93 % less bending stress than the same joint across the
+back carries about 94 % less bending stress than the same joint across the
 face.** That was reasoned qualitatively before it was computed; the computation
 made it stronger, not weaker.
 
 The claim it *contradicts* is the "closed torsion box" one, and the correction
-is worth stating plainly. Only **7 of 90 stations enclose a genuine cell — 8 %
+is worth stating plainly. Only **9 of 90 stations enclose a genuine cell — 10 %
 of the length.** Everywhere else the front face is absent, because that is what
 an aperture is, and the section is a U closed only by the back plate. The deck
 is not a torsion box with two holes in it; it is two open channels joined by one
-short closed cell at the spine. Bredt's formula at that cell gives J = 54 381 mm⁴
-against roughly 2 910 mm⁴ for the same outline left open — about **19×**.
+short closed cell at the spine. Bredt's formula at that cell gives J = 36 492 mm⁴
+against roughly 2 910 mm⁴ for the same outline left open — about **13×**.
 
 So the spine is not merely *a* shear web, it is the only closed cell in the
 device, and it is carrying the torsional stiffness of the whole deck. That is a
@@ -115,16 +115,16 @@ its cross-section suggests.
 ### The weak point, named
 
 The worst section is at **Y = −36.4 mm, mid-keyboard-bay** — 31 mm from the
-spine, which does not cover it. `Z` there is 294 mm³ against a mean of 1 559.
+spine, which does not cover it. `Z` there is 332 mm³ against a mean of 1 657.
 
 The cause is not an oversight and cannot be designed out: the keyboard aperture
 is 106.5 mm across a 116.6 mm body, so there is almost no front face left over
 that bay — about 5 mm each side. Any material added there covers keys. The board
 bay does not have the problem, because the display aperture is 86.8 mm wide and
-leaves ~15 mm of face on each flank; its `Z` runs 1 300–3 200.
+leaves ~15 mm of face on each flank; its `Z` runs 1 400–3 300.
 
 The reference deck is weakest in the same place for the same reason (212 mm³),
-which is what makes the comparison like for like. This design is 38 % better at
+which is what makes the comparison like for like. This design is 56 % better at
 the point that governs. **If this deck fails in a drop, that is where, and the
 honest answer is that the keyboard's own width sets it.**
 
@@ -223,6 +223,27 @@ The outward flare opens it to an effective 5.65 mm at the visible face, which
 softens it considerably. But the honest statement is that the panel sets this
 corner, not the designer, and `validate.py` asserts the bound rather than
 letting a later edit quietly violate it.
+
+The **keyboard aperture's corner is circular, not superelliptical**, and it is
+derived rather than chosen. This one was found the hard way.
+
+A lip of constant width around an aperture is the component's outline eroded by
+the lip width, and eroding a circular corner of radius `r` by `d` gives a
+circular corner of radius `r − d`. A superellipse is not the erosion of a
+circle: at `n = 3.2` it sits up to **1.55 mm proud** of the circular arc of the
+same corner size, biting toward the box corner — exactly where a rounded
+component's corner is retreating away from it. The two effects add.
+
+The Rii 518BT's corner radius is about **10 mm**, measured from the
+manufacturer's drawing and from a third-party CAD replica. Against a 9.0 mm
+superelliptical aperture corner the lip did not merely get thin, it went
+**negative**: the keyboard stopped covering its own aperture, and you would have
+seen into the pocket past all four corners with nothing retaining them.
+
+So the corner is `kbd_body_corner_r_max − min(lip_x, lip_y)` = 10.2 mm,
+circular, and `validate.py` measures the narrowest lip **around the whole ring**
+from the rendered mesh rather than comparing widths. It now reads 0.98 mm at the
+corners against 1.00 mm on the flats — constant, which is the point.
 
 The **internal cavity** is likewise not given the treatment. A continuous corner
 is tighter at the corner itself than an arc of the same visual line; applied to
@@ -378,7 +399,7 @@ This is a real constraint honestly resolved, not a feature quietly dropped.
 
 ## What is not proven
 
-Internal consistency is asserted by 70 automated checks, and the structural
+Internal consistency is asserted by 71 automated checks, and the structural
 claims by classical section analysis in `tools/structure.py`. **Fit against
 physical hardware is not, and neither is drop survival** — section analysis
 gives ratios, not absolute stress, and nothing here models layer adhesion,

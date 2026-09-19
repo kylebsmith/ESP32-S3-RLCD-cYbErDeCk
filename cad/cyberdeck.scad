@@ -154,7 +154,11 @@ module chassis() {
 
         // --- board bay ------------------------------------------------------
         translate([board_cx, board_bay_cy, z_front_inner - board_depth])
-            rbox(board_pocket_w, board_pocket_h, board_depth + 1, board_pocket_r);
+            // +0.01, not +1. Both pockets used to overshoot a whole millimetre
+            // into the front panel, which is not an epsilon - it is 1 mm off the
+            // thickness of the retaining lip the component bears on, leaving
+            // 1.4 mm of a 2.4 mm panel. See docs/DATUMS.md C-08.
+            rbox(board_pocket_w, board_pocket_h, board_depth + 0.01, board_pocket_r);
 
         // --- keyboard bay ---------------------------------------------------
         // Cut clear through to the back-plate seating plane, NOT merely to
@@ -164,7 +168,7 @@ module chassis() {
         // keeper pad, not the chassis, is what sets the keyboard's depth.
         translate([0, kbd_bay_cy, z_back_inner])
             rbox(kbd_pocket_w, kbd_pocket_h,
-                 z_front_inner - z_back_inner + 1, kbd_pocket_corner_r);
+                 z_front_inner - z_back_inner + 0.01, kbd_pocket_corner_r);
 
         // --- display aperture, with the reference's draft angle --------------
         translate([board_cx + display_off_x, board_bay_cy + display_off_y,
@@ -175,7 +179,7 @@ module chassis() {
         // --- keyboard aperture ----------------------------------------------
         translate([0, kbd_bay_cy, z_front_inner - 0.01])
             rse_aperture(kbd_aper_w, kbd_aper_h, front_t + 0.02,
-                         aper_blend_kbd, form_n, 0.6);
+                         aper_blend_kbd, aper_n_kbd, 0.6);
 
         // --- control cluster recess ------------------------------------------
         // The three buttons sit in ONE shallow dish rather than in three bare

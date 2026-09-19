@@ -96,7 +96,9 @@ function board_mount_points() =
 //  body that fits. Seated so its DECK (its widest plane) is against the
 //  front-face lip.
 module mock_keyboard() {
-    body_r = 5.0;           // [PROVISIONAL] visible corner radius
+    //  Was 5.0 [PROVISIONAL] - a guess, and it hid a real defect by reporting
+    //  a healthy lip where the real keyboard has none. Now measured.
+    body_r = kbd_body_corner_r;
     union() {
         rbox(kbd_body_w_max, kbd_body_h_max, kbd_body_t_max, body_r);
         // the key field that shows through the front aperture

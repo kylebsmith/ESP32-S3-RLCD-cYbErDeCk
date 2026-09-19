@@ -319,6 +319,50 @@ a wider recess behind it. This back plate is 3.2 mm thick and the header stands
 8.603 mm off the PCB back — **1.60 mm proud of the standoff plane** — so the
 body itself must pass through. The window here is sized from the body.
 
+### C-08 — A guessed corner radius hid a defect that a 1-D check could not see
+
+`mock_keyboard()` carried `body_r = 5.0` tagged `[PROVISIONAL]` — a guess, never
+measured, and the only description this project had of the keyboard's corners.
+
+The real radius is about **10 mm**. Two independent sources agree:
+
+| Source | Method | Result |
+|---|---|---|
+| Riitek product drawing, rear view | circle fit to the silhouette, scaled on the printed 108.5 mm | 10.8 – 11.2 mm |
+| Third-party CAD replica STL | circle fit by section height | 9.5 – 10.6 mm |
+
+Neither is a dimensioned callout, so it is `[MEASURED]` with a band rather than
+`[VENDOR]`. **The band matters in both directions, and they are not the same
+direction for every check** — a squarer body is the worst case for getting into
+the pocket, a rounder one is the worst case for the lip holding it. Anything
+checking a corner has to say which end it is using.
+
+**What the guess was hiding.** At 5.0 mm the keyboard's corner stayed well
+inside the aperture and every check passed with a healthy 1.00 mm lip. At the
+real 10 mm the corner retreats far enough that the superelliptical aperture
+corner — which bulges *toward* the box corner — no longer covered it. The lip
+went **negative: −0.84 mm at nominal, −1.34 mm at the top of the band.** Four
+open gaps into the pocket, and no retention at any corner.
+
+**Why nothing caught it.** The lip check compared `kbd_aper_w < kbd_pocket_w`
+and the same in height. That is a one-dimensional test of a two-dimensional
+problem: widths and heights only ever measure the flats, and the lip fails at
+the corners. It is replaced by one that walks the whole aperture ring, taken
+from the rendered mesh, against the body at the worst end of the corner band.
+
+**A second defect surfaced while measuring it.** Both component pockets were cut
+`+ 1` proud instead of `+ 0.01` — the only two epsilons in the file that were not
+0.01. That is not an epsilon, it is a millimetre taken off the thickness of the
+retaining lip, leaving 1.4 mm of a 2.4 mm panel, and it put the bearing plane
+inside the aperture's draft flare where the opening has already widened. Fixed
+to 0.01. It also moved the structure: the weakest section improved from 294 to
+332 mm³ and mean bending stiffness from 1.97× to 2.07× the reference, because
+the material came back exactly at the weakest station.
+
+The lesson is the one this file keeps relearning, in a new costume: a
+`[PROVISIONAL]` value that gates a check does not fail loudly. It passes,
+against itself.
+
 ### C-07 — The "retail body" at 109.22 mm was this project's own round trip
 
 For one day this file carried two rival keyboard bodies: the drawing/manual

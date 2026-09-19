@@ -22,7 +22,7 @@ so it reads as grown rather than extruded.
 
 ```
 116.6 × 139.1 × 16.6 mm   (+ 10.0 mm battery cowl)
-2 printed structural parts · 4 screws · 70 automated checks
+2 printed structural parts · 4 screws · 71 automated checks
 ```
 
 ---
@@ -78,7 +78,7 @@ openscad -D 'part="chassis"'   -o export/stl/chassis.stl   cad/cyberdeck.scad
 openscad -D 'part="backplate"' -o export/stl/backplate.stl cad/cyberdeck.scad
 openscad -D 'part="buttons"'   -o export/stl/buttons.stl   cad/cyberdeck.scad
 
-python3 tools/validate.py          # 70 checks; non-zero exit if any fail
+python3 tools/validate.py          # 71 checks; non-zero exit if any fail
 ```
 
 0.4 mm nozzle, 0.2 mm layers, no supports. Full instructions, BOM and print
@@ -132,7 +132,7 @@ Full record, including every correction and every remaining gap, in
 
 ## What is *not* proven
 
-**Nobody has built this.** It is asserted internally consistent by 70 automated
+**Nobody has built this.** It is asserted internally consistent by 71 automated
 checks; it has not been printed, and the components have not been offered up to
 a physical chassis.
 
@@ -171,23 +171,23 @@ not FEA: good for **ratios and weak-point location**, silent on absolute stress.
 
 | | reference deck | this design |
 |---|---|---|
-| mean second moment `I` | 9 553 mm⁴ | **18 791 mm⁴** |
-| mean section modulus `Z` | 891 mm³ | **1 559 mm³** |
-| worst-section `Z` | 212 mm³ | **294 mm³** |
+| mean second moment `I` | 9 553 mm⁴ | **19 780 mm⁴** |
+| mean section modulus `Z` | 891 mm³ | **1 657 mm³** |
+| worst-section `Z` | 212 mm³ | **332 mm³** |
 
-**1.97× the mean bending stiffness, 1.38× at the worst section, in a smaller
-envelope.** Fitting the back plate is worth 3.41× on its own. Putting the joint
-at the back rather than across the face puts it 0.98 mm from the neutral axis
-instead of 14.38 mm, so it carries about **93 % less bending stress**.
+**2.07× the mean bending stiffness and 1.56× at the worst section, in a smaller
+envelope.** Fitting the back plate is worth 3.47× on its own. Putting the joint
+at the back rather than across the face puts it 0.85 mm from the neutral axis
+instead of 14.25 mm, so it carries about **94 % less bending stress**.
 
 It also corrected one of this project's own claims. The shell was described as a
-closed torsion box; it is one over **8 % of its length**. Everywhere else the
+closed torsion box; it is one over **10 % of its length**. Everywhere else the
 front face is absent — that is what an aperture is — and the section is a U
 closed only by the back plate. The deck is two open channels joined by one short
-closed cell at the spine, and that cell is worth 19× in torsion. The spine is
+closed cell at the spine, and that cell is worth 13× in torsion. The spine is
 not merely a shear web, it is the only closed cell in the device.
 
-The weak point is named rather than hidden: **mid-keyboard-bay, `Z` = 294 mm³**,
+The weak point is named rather than hidden: **mid-keyboard-bay, `Z` = 332 mm³**,
 because the keyboard aperture is 106.5 mm across a 116.6 mm body and leaves
 about 5 mm of face each side. Nothing can be added there without covering keys.
 The reference is weakest in the same place for the same reason. If this deck
@@ -215,7 +215,7 @@ author had, 3.2 mm walls instead of 2.9.
 
 | | |
 |---|---|
-| **[DATUMS.md](docs/DATUMS.md)** | every dimension, its provenance, six recorded corrections, seven open items |
+| **[DATUMS.md](docs/DATUMS.md)** | every dimension, its provenance, eight recorded corrections, seven open items |
 | **[DESIGN.md](docs/DESIGN.md)** | form language, why it is shaped this way, material and finish |
 | **[METHODOLOGY.md](docs/METHODOLOGY.md)** | how the numbers were obtained and how to reproduce them |
 | **[ASSEMBLY.md](docs/ASSEMBLY.md)** | BOM, print settings, build order |
@@ -227,7 +227,7 @@ author had, 3.2 mm walls instead of 2.9.
 |---|---|
 | `tools/params.py` | the single reader for `parameters.scad`; every other tool goes through it |
 | `tools/measure_reference.py` | metrology harness — regenerates every measured datum |
-| `tools/validate.py` | 70-check design audit — the build gate |
+| `tools/validate.py` | 71-check design audit — the build gate |
 | `tools/audit_reference.py` | component-facing accuracy against the reference |
 | `tools/structure.py` | section properties from the mesh; stiffness against the reference |
 | `tools/drawing.py` | dimensioned GA sheets, measured from the mesh |
@@ -245,7 +245,7 @@ cad/
 tools/
   params.py             the single reader for parameters.scad
   measure_reference.py  metrology harness — regenerates every measured datum
-  validate.py           70-check design audit — the build gate
+  validate.py           71-check design audit — the build gate
   audit_reference.py    component-facing accuracy against the reference
   structure.py          section properties, stiffness, weak-point location
   drawing.py            dimensioned GA sheets, measured from the mesh
