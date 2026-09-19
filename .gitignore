@@ -19,3 +19,8 @@ export/stl/*.3mf
 # here: one was committed by a `git add -A` during a research pass.
 *.html
 !docs/**/*.html
+
+# Scratch SCAD files tools write to echo parameter values. One of these was
+# swept into a commit by a blanket "git add -A"; it is not part of the design.
+_echo_tmp.scad
+_*.scad
