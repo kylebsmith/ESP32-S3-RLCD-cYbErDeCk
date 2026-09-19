@@ -69,6 +69,18 @@ on — the panel sets that corner, not taste, and the bound is asserted in CI.
 
 12.55 mm shorter, 1.4 mm thinner, *and* thicker-walled.
 
+## Print it
+
+The four printable parts are committed in
+**[`export/stl/`](export/stl/)** — chassis, back plate, button sprue and an
+optional printed screen protector — with per-part orientations and print
+settings in [`export/stl/README.md`](export/stl/README.md).
+
+0.4 mm nozzle, 0.2 mm layers, no supports on any part.
+
+> **Print the chassis alone first** and offer the board and keyboard up to it
+> before committing to a full set. Nothing here has been printed yet.
+
 ## Build it
 
 ```sh
