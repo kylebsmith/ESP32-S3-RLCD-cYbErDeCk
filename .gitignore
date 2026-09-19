@@ -5,3 +5,8 @@ export/stl/*.stl
 export/stl/*.3mf
 !export/stl/.gitkeep
 *.bak
+
+# Scratch. Scraped pages and exploratory dumps belong in a temp directory, not
+# here: one was committed by a `git add -A` during a research pass.
+*.html
+!docs/**/*.html
