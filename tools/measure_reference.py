@@ -370,7 +370,11 @@ def measure_bezel(ref: str, rep: Report):
     rep.emit("ref.ata.bezel.thickness", "bezel thickness", f"{y1-y0:.3f}",
              source="stl/ata/Bezel.stl")
 
-    for tag, y in (("inner", y0 + 0.05), ("outer", y1 - 0.05)):
+    #  The 0.05 inset is not free on a drafted aperture. On the reference bezel
+    #  the flare is 45 degrees, so sectioning 0.05 below the outer face shrinks
+    #  the opening by exactly 0.05 per side and the derived draft came out 1.45
+    #  where the part is 1.50. Section as close to each face as the mesh allows.
+    for tag, y in (("inner", y0 + 0.002), ("outer", y1 - 0.002)):
         aperture, bores = None, []
         for p in section_polygons(m, 1, y):
             for ring in p.interiors:

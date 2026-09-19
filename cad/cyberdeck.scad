@@ -92,8 +92,8 @@ port_cut_lo = board_cy + min(usbc_off_y - usbc_open_w/2, tf_off_y - tf_open_w/2)
 plate_half_h = (body_h - 2*wall - 2*fit_slide) / 2;
 plate_edge_margin = 0.8;        // [DESIGN] material left outboard of a countersink
 
-boss_rows = [ board_bay_cy - board_pocket_h/2 + m3_boss_d/2,
-              plate_half_h - m3_cs_head_d/2 - plate_edge_margin ];
+boss_rows = [ board_bay_cy - board_pocket_h/2 + shell_screw_boss_d/2,
+              plate_half_h - shell_screw_cs_head_d/2 - plate_edge_margin ];
 
 function boss_positions() = [ for (sx = [-1, 1], cy = boss_rows) [sx * boss_cx, cy] ];
 
@@ -101,28 +101,40 @@ function boss_positions() = [ for (sx = [-1, 1], cy = boss_rows) [sx * boss_cx, 
 // are the deck's rigging points - see parameters.scad section 5.
 function accessory_pattern() = boss_positions();
 
-assert(boss_rows[0] + m3_boss_d/2 <= port_cut_lo - 0.8,
+assert(boss_rows[0] + shell_screw_boss_d/2 <= port_cut_lo - 0.8,
        "lower fastener row fouls the USB-C tunnel");
-assert(boss_rows[1] - m3_boss_d/2 >= port_cut_hi + 0.8,
-       "upper fastener row fouls the microSD tunnel: shrink tf_open_w or m3_boss_wall");
-assert(boss_rows[1] + m3_cs_head_d/2 <= plate_half_h - 0.5,
+assert(boss_rows[1] - shell_screw_boss_d/2 >= port_cut_hi + 0.8,
+       "upper fastener row fouls the microSD tunnel: shrink tf_open_w or shell_screw_boss_wall");
+assert(boss_rows[1] + shell_screw_cs_head_d/2 <= plate_half_h - 0.5,
        "upper fastener countersink breaks out of the back plate edge");
-assert(abs(boss_rows[0]) + m3_cs_head_d/2 <= plate_half_h - 0.5,
+assert(abs(boss_rows[0]) + shell_screw_cs_head_d/2 <= plate_half_h - 0.5,
        "lower fastener countersink breaks out of the back plate edge");
 
 // Bottom-edge tongue and groove. The back plate's bottom lip slides into a
 // groove in the chassis bottom wall, so the plate is mechanically captured on
 // its bottom edge and only needs screws along the top.
 tongue_t     = 1.6;                  // [DESIGN] 4 extrusions
-tongue_depth = 3.0;                  // [DESIGN] engagement length
-tongue_z     = back_t / 2 - tongue_t / 2;
+//  tongue_depth is how far the groove eats into the bottom wall, so the wall
+//  left outboard of it is back_t - tongue_depth. At 3.0 that was 0.20 mm -
+//  half an extrusion - and the groove effectively broke out of the bottom
+//  face. 1.6 leaves 1.6 mm, four extrusions, and still gives 1.2 mm of
+//  engagement. See docs/DATUMS.md C-14.
+tongue_depth = 1.6;                  // [DESIGN] groove depth into the bottom wall
+//  tongue_z is the groove's CENTRE, not its base: both the groove and the
+//  tongue are cube(..., center = true), which centres in Z as well as X and Y.
+//  Reading it as a base put the groove at z 0.000..1.600 - open to the
+//  chassis's outer face, with no lip under it at all, so the tongue was not
+//  captured in Z and the bottom edge of the plate could simply lift away. At
+//  back_t/2 the groove sits 0.800..2.400 with 0.8 mm of chassis above and
+//  below it, which is the joint the comment above describes.
+tongue_z     = back_t / 2;
 
 // The keyboard bay is shallower than the board bay. The back plate carries a
 // raised pad over the keyboard so the keyboard is held forward against the
 // front face's retaining lip. Derived, not chosen.
-kbd_keeper_t = board_depth - kbd_depth;      // = 1.6 mm
+kbd_keeper_t = board_depth - kbd_depth;      // = 0.25 mm
 
-assert(boss_flank >= m3_boss_d - 1.0,
+assert(boss_flank >= shell_screw_boss_d - 1.0,
        "no room beside the board pocket for the back-plate bosses");
 assert(kbd_keeper_t >= 0, "keyboard bay deeper than the board bay");
 
@@ -141,7 +153,7 @@ module chassis() {
             // --- fastener bosses, rising from the front face rearward --------
             for (p = boss_positions())
                 translate([p[0], p[1], z_back_inner])
-                    cylinder(h = z_front_inner - z_back_inner, d = m3_boss_d);
+                    cylinder(h = z_front_inner - z_back_inner, d = shell_screw_boss_d);
 
             // --- interior corner gussets -------------------------------------
             // Solid fillets tying the side walls to the front face. These are
@@ -249,9 +261,15 @@ module chassis() {
         // in either way round.
         kbd_floor   = z_front_inner - kbd_depth;
         kbd_top_edge = kbd_bay_cy + kbd_pocket_h/2;
+        //  The two windows were NOT mirrored: both sat the same distance from
+        //  the SPINE-side edge, so a keyboard turned end-for-end put its port
+        //  where there is no window, and the deck was asymmetric for no reason.
+        //  The second is now the first reflected about the bay centreline.
+        //  See docs/DATUMS.md C-15.
+        kbd_access_cy = kbd_top_edge - kbd_access_from_edge - kbd_access_w/2;
         for (sx = (kbd_access_both_sides ? [-1, 1] : [1]))
             translate([sx * (kbd_pocket_w/2 - 1),
-                       kbd_top_edge - kbd_access_from_edge - kbd_access_w/2,
+                       sx > 0 ? kbd_access_cy : 2*kbd_bay_cy - kbd_access_cy,
                        kbd_floor + kbd_access_above_floor + kbd_access_h/2])
                 rotate([0, sx * 90, 0])
                     rbox(kbd_access_h, kbd_access_w, wall + 3, 1.5);
@@ -271,7 +289,7 @@ module chassis() {
         // --- heat-set insert bores, drilled from the back ---------------------
         for (p = boss_positions())
             translate([p[0], p[1], z_back_inner - 0.01])
-                cylinder(h = m3_bore_depth, d = m3_insert_bore);
+                cylinder(h = shell_screw_bore_depth, d = shell_screw_insert_bore);
     }
 }
 
@@ -342,13 +360,19 @@ module backplate() {
         // --- back-plate fastener holes, countersunk -------------------------
         for (p = boss_positions())
             translate([p[0], p[1], 0])
-                countersunk_hole(m3_clear, m3_cs_head_d, m3_cs_head_h, back_t);
+                countersunk_hole(shell_screw_clear, shell_screw_cs_head_d, shell_screw_cs_head_h, back_t);
 
-        // --- board mounting holes, M2.5, counterbored from outside ----------
+        // --- board mounting holes, M2.5, COUNTERSUNK from outside ----------
+        // The screws supplied with the board have a sloped head, and this was
+        // cutting a flat-bottomed counterbore. A countersunk head in a
+        // counterbore lands on the shoulder edge instead of on a cone: it does
+        // not seat, it sits proud, and it wedges the bore open. ISO 10642.
+        // See docs/DATUMS.md C-12.
         for (sx = [-1, 1], sy = [-1, 1])
             translate([board_cx + sx * board_mount_pitch_x/2,
                        board_cy + sy * board_mount_pitch_y/2, 0])
-                counterbored_hole(board_screw_clear, 4.6, 1.6, back_t);
+                countersunk_hole(board_screw_clear, board_cs_head_d,
+                                 board_cs_head_h, back_t);
 
         // --- 18650 bay: through the plate, and hollowed inside the cowl -----
         translate([board_cx + batt_off_x, board_cy + batt_off_y, -0.01])

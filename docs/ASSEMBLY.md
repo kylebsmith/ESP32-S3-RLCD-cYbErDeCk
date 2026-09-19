@@ -29,8 +29,8 @@ leverage while fitting a cable, a cell or a printed part.
 | 18650 lithium cell | 1 | flat-top or protected, up to Ø18.6 × 69.0 |
 | microSD card | 0–1 | FAT32 |
 | Speaker with the MX1.25 2-pin lead supplied with the board | 1 | |
-| M3 × 5 brass heat-set insert, Ø4.0 OD | 4 | |
-| M3 × 8 countersunk screw, ISO 10642 | 4 | M3 × 12 if rigging a bracket |
+| M2 × 5 brass heat-set insert, Ø4.0 OD | 4 | |
+| M2 × 8 countersunk screw, ISO 10642 | 4 | M2 × 12 if rigging a bracket |
 | M2.5 screw, supplied with the board | 4 | into the board's own standoffs |
 | Adhesive foam gasket, 0.5 mm | 1 strip | around the display aperture |
 
@@ -81,7 +81,7 @@ otherwise be. Keep the parts — they are how you use the board on a desk again.
 
 ### 2. Heat-set the inserts
 
-Four M3 inserts into the chassis bosses, driven from the **back**. Keep them
+Four M2 inserts into the chassis bosses, driven from the **back**. Keep them
 straight and flush. The bosses are Ø7.4 around a Ø4.0 bore; let the insert melt
 in under its own weight rather than forcing it, or the boss will split.
 
@@ -132,7 +132,7 @@ keyboard and the cowl should clear the cell.
 If it does not sit flush, **stop** and find out why rather than pulling it down
 with the screws.
 
-Fit the four M3 × 8 countersunk screws and tighten evenly, just until the plate
+Fit the four M2 × 8 countersunk screws and tighten evenly, just until the plate
 is seated.
 
 ### 9. Check before power-on
@@ -148,10 +148,10 @@ firmware you prefer.
 
 ## Rigging
 
-The four M3 back-plate screws are the accessory mounting points. They thread
+The four M2 back-plate screws are the accessory mounting points. They thread
 into brass, not plastic, so they are the strongest anchors on the device.
 
-Fit **M3 × 12** in place of M3 × 8 and clamp a bracket, strap yoke or stand
+Fit **M2 × 12** in place of M2 × 8 and clamp a bracket, strap yoke or stand
 clamp under the heads. `accessory_pattern()` in `cad/cyberdeck.scad` prints the
 hole pattern to drill a bracket to match.
 

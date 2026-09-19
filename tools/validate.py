@@ -529,11 +529,72 @@ def check_interface(parts, p):
     except Exception as exc:
         ok &= check("reachability test ran", "INTERFACE", False, str(exc))
 
+    # The bottom tongue must be CAPTURED: chassis material above it and below
+    # it. Both the groove and the tongue are cube(..., center = true), which
+    # centres in Z as well, and reading tongue_z as a base rather than a centre
+    # put the groove at z 0.000..1.600 - open to the chassis outer face, with no
+    # lip beneath. The parts still rendered, still did not clash, and the joint
+    # simply did not hold. See docs/DATUMS.md C-14.
+    try:
+        yb = -p["body_h"] / 2 + p["wall"] - 0.6        # inside the groove
+        col = np.array([[0.0, yb, z] for z in np.arange(0.1, p["back_t"], 0.1)])
+        inC = ch.contains(col)
+        inP = bp.contains(col)
+        zs = col[:, 2]
+        tongue = zs[inP]
+        below = zs[inC & (zs < (tongue.min() if len(tongue) else 0))]
+        above = zs[inC & (zs > (tongue.max() if len(tongue) else 0))]
+        ok &= check("bottom tongue is captured in Z by the groove", "INTERFACE",
+                    len(tongue) > 0 and len(below) > 0 and len(above) > 0,
+                    (f"tongue z {tongue.min():.2f}..{tongue.max():.2f}, chassis "
+                     f"below {len(below)>0}, chassis above {len(above)>0}")
+                    if len(tongue) else "no tongue found in the groove")
+        # And the groove must not eat the bottom wall. tongue_depth is declared
+        # in cyberdeck.scad rather than parameters.scad, so read it from there -
+        # defaulting it away turned this into a check that never ran.
+        src = open(SCAD).read()
+        mt = re.search(r"^\s*tongue_depth\s*=\s*([0-9.]+)", src, re.M)
+        assert mt, "tongue_depth not found in cyberdeck.scad"
+        left = p["wall"] - float(mt.group(1))
+        ok &= check("groove leaves a printable bottom wall", "INTERFACE",
+                    left >= 4 * p["nozzle"],
+                    f"{left:.2f} mm of wall outboard of a "
+                    f"{float(mt.group(1)):.2f} mm groove "
+                    f"({left/p['nozzle']:.1f} extrusions; it was 0.20 mm at "
+                    f"tongue_depth 3.0)")
+    except Exception as exc:
+        ok &= check("tongue capture test ran", "INTERFACE", False, str(exc))
+
     # Fastener bores: count them in the chassis and match against the plate.
-    bores = count_bores(ch, p["m3_insert_bore"], z=p["back_t"] + 1.0)
-    holes = count_bores(bp, p["m3_clear"], z=p["back_t"] - 0.5)
+    # Positions come from the same expression the model uses, so the count is
+    # anchored to where the fasteners are meant to be rather than to a diameter
+    # that another fastener now shares.
+    inner_w = p["body_w"] - 2 * p["wall"]
+    boss_flank = (inner_w - p["board_pocket_w"]) / 2
+    boss_cx = p["board_pocket_w"] / 2 + boss_flank / 2 + 0.4
+    board_bay_cy = p["body_h"] / 2 - p["wall"] - p["board_pocket_h"] / 2
+    plate_half_h = (p["body_h"] - 2 * p["wall"] - 2 * p["fit_slide"]) / 2
+    rows = [board_bay_cy - p["board_pocket_h"] / 2 + p["shell_screw_boss_d"] / 2,
+            plate_half_h - p["shell_screw_cs_head_d"] / 2 - 0.8]
+    where = [(sx * boss_cx, cy) for sx in (-1, 1) for cy in rows]
+    bores = count_bores(ch, p["shell_screw_insert_bore"], z=p["back_t"] + 1.0,
+                        near=where)
+    holes = count_bores(bp, p["shell_screw_clear"], z=p["back_t"] - 0.5,
+                        near=where)
     ok &= check("fastener count matches", "INTERFACE", bores == holes and bores >= 4,
-                f"{bores} insert bores in the chassis, {holes} clearance holes in the plate")
+                f"{bores} insert bores in the chassis, {holes} clearance holes in "
+                f"the plate, counted at the four boss positions")
+    # The board screws are a DIFFERENT size and must not be confused with them.
+    bhs = count_bores(bp, p["board_screw_clear"], z=p["back_t"] - 0.5,
+                      near=[(sx * p["board_mount_pitch_x"] / 2,
+                             board_bay_cy + sy * p["board_mount_pitch_y"] / 2)
+                            for sx in (-1, 1) for sy in (-1, 1)], radius=4.0)
+    ok &= check("board mounting holes are present and distinct", "INTERFACE",
+                bhs == 4,
+                f"{bhs} M2.5 clearance holes at the 85.50 x 62.10 pattern "
+                f"(shell screws are M2 at {p['shell_screw_clear']:.1f}, only "
+                f"{abs(p['board_screw_clear']-p['shell_screw_clear']):.1f} mm "
+                f"away, so these are counted by position)")
     return ok
 
 
@@ -546,7 +607,16 @@ def section_polys(mesh, z):
     return [] if s is None else list(s.to_2D(to_2D=np.eye(4))[0].polygons_full)
 
 
-def count_bores(mesh, dia, z, tol=0.45):
+def count_bores(mesh, dia, z, tol=0.45, near=None, radius=6.0):
+    """Count circular bores of a given diameter in a horizontal section.
+
+    `near` restricts the count to bores within `radius` of one of the given
+    (x, y) positions. That matters once two fastener sizes are close: the shell
+    screws went M3 -> M2, so their 2.4 mm clearance now sits only 0.3 mm from
+    the board screws' 2.7 mm and a diameter-only count picks up both sets.
+    Filtering by where the bores actually are is unambiguous; widening the
+    tolerance would only have hidden the collision.
+    """
     s = mesh.section(plane_origin=[0, 0, z], plane_normal=[0, 0, 1])
     if s is None:
         return 0
@@ -557,8 +627,13 @@ def count_bores(mesh, dia, z, tol=0.45):
             rp = Polygon(ring)
             b = rp.bounds
             w, h = b[2] - b[0], b[3] - b[1]
-            if abs(w - dia) < tol and abs(h - dia) < tol:
-                n += 1
+            if not (abs(w - dia) < tol and abs(h - dia) < tol):
+                continue
+            if near is not None:
+                c = rp.centroid
+                if not any(math.hypot(c.x - qx, c.y - qy) < radius for qx, qy in near):
+                    continue
+            n += 1
     return n
 
 
@@ -578,8 +653,8 @@ def check_print(parts, p):
                 p["grille_slot_h"] >= 2*noz,
                 f"{p['grille_slot_h']:.2f} mm wide, {p['grille_pitch']:.2f} mm pitch")
     ok &= check("insert boss wall is thick enough", "PRINT",
-                (p["m3_boss_d"] - p["m3_insert_bore"]) / 2 >= 1.6,
-                f"{(p['m3_boss_d']-p['m3_insert_bore'])/2:.2f} mm around the insert")
+                (p["shell_screw_boss_d"] - p["shell_screw_insert_bore"]) / 2 >= 1.6,
+                f"{(p['shell_screw_boss_d']-p['shell_screw_insert_bore'])/2:.2f} mm around the insert")
     # The chassis prints face-down: the only overhang of consequence is the
     # aperture draft, which is a chamfer, not a bridge.
     ok &= check("front apertures are drafted, not bridged", "PRINT",

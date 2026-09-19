@@ -319,6 +319,118 @@ a wider recess behind it. This back plate is 3.2 mm thick and the header stands
 8.603 mm off the PCB back — **1.60 mm proud of the standoff plane** — so the
 body itself must pass through. The window here is sized from the body.
 
+### C-20 — There are two keyboard revisions, and the corner is not an arc
+
+**The charge port.** The owner's unit is **Type-C**. The drawing this project
+works from labels "USB Charging Port" and draws a mini-USB connector. Both
+sheets are otherwise identical — same layout, same `108.5mm/4.3inch`,
+`58.2mm/2.3inch`, `10.2mm/0.4inch` callouts, same 68-key field, same model
+number 518BT.
+
+So there **are** two revisions, and [C-07](#corrections) was wrong to say the
+"revised to USB-C" claim was false — it was right, and the mini-USB drawing is
+simply the older sheet. What C-07 got right stands: **the outline did not
+change across the revision**, which is the part the geometry depends on. The
+Type-C sheet could not be sourced at full resolution; the analysis below uses
+the mini-USB sheet, whose body silhouette is the same rendering.
+
+Nothing in the model moves. The service window is 34 × 8 mm on both short
+edges and clears either connector.
+
+**The corner is not a constant radius.** A sub-pixel trace of the rear view
+gives a circle-fit radius that depends on how much of the corner is included:
+
+| span | circle R | rms |
+|---|---|---|
+| ±5 mm | 5.87 | 0.034 |
+| ±11 mm | 7.30 | 0.164 |
+
+A true arc does not do that. The four corners agree with **each other** to
+0.08 mm, so the moulding is uniform corner to corner — what it is not is
+circular. A symmetric superellipse fits the two uncorrupted corners at
+n ≈ 1.74, but that sits *below* 2, meaning more cut away than an arc, which is
+also exactly what a lit render's shading would produce at 45°.
+
+**So the honest limit: this is a marketing render, not an orthographic
+projection.** Its silhouette carries the edge roll and its own shading, and no
+amount of curve fitting separates moulding shape from rendering artefact. The
+dimension callouts are authoritative; the outline is not.
+
+The band therefore stays set by the two **authored** CAD sources — a Shapr3D
+STEP with `CIRCLE` entities of exactly 6.5, and the replica's exact tangency at
+7.000 — and the design does not depend on resolving it further: the retaining
+lip holds a full 1.00 mm for any real corner from 4.0 to 7.0, 0.98 at 7.3, and
+degrades only past 8.0.
+
+### C-12 to C-19 — the measured-hardware pass, and a full re-derivation
+
+The owner put calipers on a real board, and a 24-agent re-derivation went back
+to Waveshare's own DXF, STEP and drawing, the FCC exhibits and the reference
+meshes: **212 findings, 50 disputed, 14 upheld** after adversarial refutation.
+
+**C-12 · The board screws were getting a counterbore, not a countersink.**
+The screws supplied with the board have a sloped head; the back plate was
+cutting a flat-bottomed 4.6 mm recess. A countersunk head in a counterbore
+lands on the shoulder edge instead of on a cone: it does not seat, it sits
+proud, and it wedges the bore. Now ISO 10642, 5.0 × 1.50. The stock screw is
+4.90 mm overall, which through a 3.20 mm plate leaves **1.70 mm biting the
+standoff — 0.68 × diameter** where 1 × is the usual minimum, so the BOM now
+specifies M2.5 × 8 countersunk instead.
+
+**C-13 · Shell fasteners M3 → M2.** On the owner's instruction, and the better
+fit for the space: the flank strip is 8.35 mm and an M3 boss at 7.4 nearly
+filled it where an M2 boss at 6.6 leaves room. Every `m3_*` name was renamed
+`shell_screw_*` rather than left holding M2 values under an M3 name. The trade
+is recorded: four M2 screws close a 110 g shell easily but are a weaker
+accessory anchor, so DESIGN.md no longer advertises them as rigging points.
+
+**C-14 · The bottom tongue-and-groove did not hold — blocking.**
+Both the groove and the tongue are `cube(..., center = true)`, which centres in
+**Z** as well as X and Y. `tongue_z` was written as if it were the groove's
+base, so the groove sat at z 0.000–1.600 — open to the chassis's outer face,
+with no lip beneath it. The tongue was not captured in Z at all and the plate's
+bottom edge could simply lift away. Separately `tongue_depth = 3.0` left
+**0.20 mm** of bottom wall outboard of the groove, half an extrusion.
+
+Now `tongue_z = back_t/2` (groove 0.800–2.400, 0.8 mm of chassis above and
+below) and `tongue_depth = 1.6` (1.6 mm of wall, four extrusions, 1.2 mm of
+engagement). Two new checks assert the tongue has chassis material **above and
+below** it and that the wall survives; both fail on the old geometry.
+
+**C-15 · The two service windows were not mirrored.** Both sat the same
+distance from the spine-side edge, so a keyboard turned end-for-end met solid
+wall, and the deck was asymmetric for no reason. The second is now the first
+reflected about the bay centreline.
+
+**C-16 · `display_aper_draft` 1.45 → 1.50.** `measure_reference.py` sectioned
+0.05 mm below the bezel's outer face. On a 45° draft that inset shrinks the
+opening by exactly 0.05 per side, so a 1.50 flare read as 1.45. The tool was
+sectioning inside the very feature it was measuring.
+
+**C-17 · The "physically excluded" argument is withdrawn.** C-07 claimed a
+109.22 mm body could not enter the reference's 109.200 mm pocket. It does not
+follow — 0.02 mm is inside injection tolerance and a pocket is not a gauge. The
+unit-conversion argument stands without it.
+
+**C-18 · The battery bay is disputed, and the calipers win.** The STEP says the
+holder body is 21.10 along V; the owner measured a real board and confirmed
+22.10. Both are recorded, because they may be measuring different things (body
+versus footprint including the skirt) and because 22.10 is conservative in
+**both** roles it plays — it makes the clearance cut larger and the component
+mock larger.
+
+**C-19 · Two values kept, their justifications deleted.** `kbd_keycap_tol` was
+justified by a replica that is a featureless envelope, not a measurement of a
+keyboard. `kbd_access_w/h` were tagged `[MEASURED]` when they are a chosen
+envelope *containing* the reference notch, not a reading of it — retagged
+`[DESIGN]`.
+
+**And one the audit got wrong**, recorded because it nearly moved a datum: that
+the reference tray's R6.100 sets a hard *upper* bound of 6.1 mm on the
+keyboard's corner. It sets a **lower** bound. A rounder body has *more* corner
+clearance, not less — its corner retreats further from the box corner than the
+pocket's does. Brute-forced to 4.66 mm before anything was changed.
+
 ### C-11 — The keyboard corner radius was an artefact of the fitting window
 
 [C-08](#c-08--a-guessed-corner-radius-hid-a-defect-that-a-1-d-check-could-not-see)
@@ -607,8 +719,10 @@ face or to the keycap crowns. A third-party CAD replica of this keyboard
 measures 10.600 mm overall, which is where the assumed +0.40 mm band comes from.
 
 The 75 g / 64.8 g mass discrepancy between the 2011 sample and current retail is
-real but does not touch the outline, and the charge port is mini-USB in both
-(an earlier note here claiming USB-C was wrong — [C-07](#corrections)).
+real but does not touch the outline. The charge port **does** differ between
+revisions — the owner's unit is Type-C, the drawing on file is mini-USB — see
+[C-20](#corrections). It drives no geometry: the service window is 34 × 8 mm on
+both short edges and clears either connector.
 
 *Mitigation*: the pocket clears an assumed ±0.30 mm in plane and +0.40 mm on
 thickness, and the service window is 34 × 8 mm on **both** short edges, so the

@@ -138,7 +138,7 @@ number that happened to be right, kept because the lesson generalises.
 
 ## Validation
 
-`tools/validate.py` renders the parts **from source** and runs 73 checks in six
+`tools/validate.py` renders the parts **from source** and runs 76 checks in six
 classes: `MESH`, `ENVELOPE`, `FIT`, `INTERFACE`, `PRINT`, `DATUM`. Exit status
 is non-zero unless all pass.
 

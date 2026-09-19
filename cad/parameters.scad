@@ -113,13 +113,26 @@ board_w_battery_end   = -15.20;  // [VENDOR] 18650 holder, the deepest feature
 
 // Clear depth the enclosure must provide between the front-face lip and the
 // back plate's inner face: display front down to the standoff seating plane.
-board_stack     = board_w_display_front - board_w_standoff_end;   // = 10.75
-board_depth     = 11.0;   // [DESIGN] board_stack + 0.25, taken up by a 0.5 mm
+//  MEASURED ON THE HARDWARE and it is NOT what the vendor CAD implies. Calipers
+//  on a real board, glass front to the back of the metal standoffs at the
+//  corners, give 11.00 mm against the 10.75 this derives from Waveshare's own
+//  W coordinates. The 0.25 difference is the whole gasket squeeze, so taking
+//  the CAD value would have seated the display hard against the front panel
+//  with no compliance at all. The measurement wins; see docs/DATUMS.md D-03.
+board_stack_cad = board_w_display_front - board_w_standoff_end;   // = 10.75
+board_stack     = 11.00;  // [MEASURED] calipers, corners, glass front to standoff back
+board_depth     = 11.25;  // [DESIGN] board_stack + 0.25, taken up by a 0.5 mm
                           //   adhesive foam gasket round the display aperture
 // How far the battery holder reaches past the standoff plane - this, not the
 // cell diameter, is what the cowl actually has to swallow.
 batt_protrusion = board_w_standoff_end - board_w_battery_end;     // = 8.20
 
+//  A real board measures 92.7 x 69.1 against the drawing's 92.50 x 69.10. The
+//  height is exact; the width is +0.20, which is ordinary PCB routing tolerance
+//  (open item O-05) rather than a wrong datum, so the VENDOR nominal is kept
+//  and the pocket is asserted against the measured figure instead.
+board_w_measured = 92.70;  // [MEASURED] calipers on a real board
+board_h_measured = 69.10;  // [MEASURED] exact agreement with the drawing
 board_pocket_w = board_w + 1.0;   // [DESIGN] 0.5 mm per side
 board_pocket_h = board_h + 1.0;   // [DESIGN] 0.5 mm per side
 //  The pocket's corner radius is NOT free. The PCB's corners are R0.50, so a
@@ -140,6 +153,18 @@ board_mount_pitch_y = 62.10;  //   every PCB edge. Independently re-derived from
                               //   agreeing to 0.001 mm - see docs/DATUMS.md D-01.
 board_screw         = 2.5;    // [VENDOR] M2.5 into the standoff's female thread
 board_screw_clear   = 2.7;    // [STANDARD] ISO 273 close fit for M2.5
+//  The screws supplied with the board are COUNTERSUNK - a sloped head, not a
+//  flat one - and the back plate was cutting a flat-bottomed counterbore for
+//  them. A countersunk head in a counterbore does not seat: it lands on the
+//  shoulder edge instead of on a cone. ISO 10642 M2.5. See DATUMS.md C-12.
+board_cs_head_d     = 5.0;    // [STANDARD] ISO 10642 M2.5 head diameter
+board_cs_head_h     = 1.50;   // [STANDARD] ISO 10642 M2.5 head depth, 90 deg
+//  The stock screw is 4.90 mm overall. Countersunk heads sink flush, so through
+//  a 3.20 mm plate that leaves only 1.70 mm biting the standoff - 0.68 x
+//  diameter, where 1 x diameter is the usual minimum. It will hold a light
+//  part; it is not what should carry the board plus an 18650 through a drop.
+board_screw_len_stock = 4.90;  // [MEASURED] the screws supplied with the board
+board_screw_len_spec  = 8.00;  // [DESIGN] M2.5 x 8 countersunk, the BOM part
 board_standoff_d    = 5.50;   // [VENDOR] SMTSO body OD
 board_standoff_h    = 7.00;   // [VENDOR] SMTSO height
 
@@ -155,7 +180,12 @@ display_active_h  = 63.60;   // [VENDOR] "63.60+/-0.10 LCD AA"
 
 display_aper_w    = 86.8;    // [MEASURED] reference bezel aperture: a 1.00 mm
 display_aper_h    = 65.6;    // [MEASURED] reveal per side round the active area
-display_aper_draft = 1.45;   // [MEASURED] per-side flare across the front face
+display_aper_draft = 1.50;   // [MEASURED] the reference bezel's per-side 45 deg
+                             //   flare, 1.500 over 1.500 of depth. Read as 1.45
+                             //   until measure_reference.py stopped sectioning
+                             //   0.05 below the outer face - on a 45 deg draft
+                             //   that inset shrinks the opening by exactly the
+                             //   same 0.05 per side. See docs/DATUMS.md C-16.
 
 //  The active area is NOT centred on the PCB along U. Its margins are 2.25 mm
 //  from the U=0 edge and 5.45 mm from the U=92.50 (USB-C) edge, so its centre
@@ -211,7 +241,17 @@ mic_w_centre = -0.50;  // [VENDOR] mic body W 0 to -1.00
 
 // 18650 holder, on the PCB back face, running ACROSS the device.
 batt_bay_w = 77.80;    // [VENDOR] holder body along U
-batt_bay_h = 22.10;    // [VENDOR] mounting flange along V (the wider of the two)
+//  DISPUTED, AND THE CALIPERS WIN. A re-derivation from Waveshare's own STEP
+//  says the holder BODY is 21.10 along V (20.65 through the mid-body), and that
+//  22.10 is not a holder feature. The owner then measured a real board and
+//  confirmed the holder as drawn here. Both readings are kept because they may
+//  be measuring different things - body versus footprint including the skirt -
+//  and because 22.10 is the conservative value in BOTH roles it plays: it makes
+//  the back plate's clearance cut larger, and it makes the component mock
+//  larger. A pocket that is 1 mm too generous costs nothing; one that is 1 mm
+//  too tight does not close. See docs/DATUMS.md C-18.
+batt_bay_h      = 22.10;  // [MEASURED] confirmed on hardware with calipers
+batt_bay_h_step = 21.10;  // [VENDOR] holder body along V, from the Creo STEP
 batt_off_x =   0.00;   // [VENDOR] centre U 46.25 = PCB centre
 batt_off_y = -19.40;   // [VENDOR] centre V 15.15, i.e. 19.40 toward V=0.
                        //   Independently measured from BOTH reference designs
@@ -411,6 +451,24 @@ kbd_body_t =  10.2;   // [VENDOR] as above, overall, including keycaps
 //
 //  So there is no single conservative value, and anything that checks a corner
 //  must say which end of the band it is using.
+//  AND IT IS NOT A CONSTANT RADIUS. A sub-pixel trace of the drawing's rear
+//  view gives a circle-fit radius that depends on how much of the corner you
+//  include - 5.87 over a +/-5 mm span, 7.30 over +/-11 - with an rms of
+//  0.16 mm either way. A true arc does not behave like that. The four corners
+//  agree with each other to 0.08 mm, so the moulding is uniform corner to
+//  corner; what it is not is circular.
+//
+//  That drawing is a marketing RENDER, not an orthographic projection, so its
+//  silhouette includes the edge roll and its own shading and cannot separate
+//  "genuinely non-circular" from "rendering artefact". The dimension callouts
+//  on it are authoritative; the outline is not. The two AUTHORED CAD sources
+//  are what set the band: a Shapr3D STEP carrying CIRCLE entities of exactly
+//  6.5, and the replica's exact tangency at 7.000.
+//
+//  The design does not depend on resolving it. The aperture corner derives
+//  from the top of the band, and the retaining lip holds a full 1.00 mm for
+//  any real corner from 4.0 to 7.0, 0.98 at 7.3, and only degrades past 8.0.
+//  See docs/DATUMS.md C-20.
 kbd_body_corner_r     = 6.5;   // [MEASURED] authored CIRCLE value, mid-band
 kbd_body_corner_r_min = 5.9;   // [MEASURED] worst case for pocket clearance
 kbd_body_corner_r_max = 7.0;   // [MEASURED] worst case for lip capture
@@ -429,9 +487,13 @@ kbd_mass_g =  75.0;   // [VENDOR] as-certified 2011 sample
 //  4.3 in is 109.22 mm, not 108.5, so the millimetre figure cannot be a
 //  conversion of the inch figure - the inch figure must be the conversion of
 //  the millimetre one. 109.22 was this project's own round trip through 0.1 in
-//  granularity, and nothing else. It is also physically excluded: the reference
-//  ATA tray is a BUILT, WORKING device with a 109.200 mm pocket, and a 109.22 mm
-//  body does not enter it.
+//  granularity, and nothing else.
+//
+//  A previous version of this paragraph went further and claimed 109.22 was
+//  "physically excluded" because the reference ATA tray's pocket is 109.200.
+//  That does not follow: 0.02 mm is inside injection tolerance, and a pocket
+//  is not a hard gauge. The unit-conversion argument above stands on its own
+//  and does not need it. Withdrawn - see docs/DATUMS.md C-17.
 //
 //  The same drawing settles two other things this file had wrong. It is the
 //  CURRENT product page, and it shows a MINI-USB charging port, so the
@@ -442,6 +504,12 @@ kbd_mass_g =  75.0;   // [VENDOR] as-certified 2011 sample
 //  What remains is ordinary moulding tolerance on a ~110 mm shell. Neither
 //  document states one, so it is assumed here and tagged as an assumption.
 kbd_mould_tol  = 0.30;   // [DESIGN] assumed injection tolerance, L and W
+//  NOTE on the 0.40: an earlier version justified it with "a third-party CAD
+//  replica measures 10.600 overall". That replica is a featureless envelope -
+//  its entire key face is one flat plateau - so it is a print-clearance model,
+//  not a measurement of the keyboard, and it cannot corroborate a keycap
+//  height. The value is kept as what it always really was: an assumption
+//  covering an ambiguity the drawing does not resolve. See DATUMS.md C-19.
 kbd_keycap_tol = 0.40;   // [DESIGN] thickness only, and ONE-SIDED: the drawing
                          //   does not say whether 10.2 is to the moulding's top
                          //   face or to the keycap crowns. A third-party CAD
@@ -513,8 +581,12 @@ kbd_aper_h = 55.8;    // [MEASURED] ref.  55.802
 //  floor), which is the envelope that both proven designs agree covers the
 //  switch and the port.
 kbd_access_both_sides = true;   // [DESIGN]
-kbd_access_w          = 34.0;   // [MEASURED] along the keyboard's short axis
-kbd_access_h          = 8.0;    // [MEASURED] along the deck's thickness
+//  RETAGGED [MEASURED] -> [DESIGN]. Neither of these is a measured value: the
+//  window is an outward-rounded ENVELOPE that CONTAINS the reference notch
+//  (32.074 x 7.596), not a reading of it. Calling a chosen envelope a
+//  measurement is exactly the conflation this file keeps correcting.
+kbd_access_w          = 34.0;   // [DESIGN] along the keyboard's short axis
+kbd_access_h          = 8.0;    // [DESIGN] along the deck's thickness
 kbd_access_from_edge  = 9.5;    // [MEASURED] near edge of the window, measured
                                 //   from the keyboard's display-side long edge
 kbd_access_above_floor = 1.4;   // [MEASURED] above the keyboard's bottom face
@@ -530,21 +602,29 @@ kbd_eject_off_y  = 0.0;    // [DESIGN] centred on the bay's short axis
 // 3. FASTENERS AND FITS
 // ===========================================================================
 
-m3_clear        = 3.2;   // [STANDARD] ISO 273 close fit for M3
-m3_head_d       = 5.5;   // [STANDARD] ISO 4762 socket-cap head diameter
-m3_head_h       = 3.0;   // [STANDARD] ISO 4762 head height
+//  CHASSIS <-> BACK PLATE FASTENERS ARE M2, not M3. Changed on the owner's
+//  instruction after handling the parts. It is also the better fit for the
+//  space: the flank strip either side of the board pocket is 8.35 mm and an M3
+//  boss at 7.4 mm very nearly filled it, where an M2 boss at 6.6 leaves room.
+//  The trade is real and is recorded rather than buried - four M2 screws in
+//  brass inserts are ample to close a 110 g shell, but they are a weaker
+//  accessory anchor than four M3 were, so DESIGN.md no longer advertises them
+//  as general-purpose rigging points. See docs/DATUMS.md C-13.
+shell_screw_clear        = 2.4;   // [STANDARD] ISO 273 close fit for M2
+shell_screw_head_d       = 3.8;   // [STANDARD] ISO 4762 M2 socket-cap head diameter
+shell_screw_head_h       = 2.0;   // [STANDARD] ISO 4762 M2 head height
 //  The back plate uses COUNTERSUNK screws, not socket caps. An ISO 4762 cap
 //  head is 3.0 mm tall, which is the entire back-plate thickness: counterboring
 //  for it leaves no material under the head to take the preload. An ISO 10642
 //  countersunk head is 1.86 mm deep and bears on a cone, leaving 1.34 mm of
 //  plate and spreading the load instead of concentrating it on a thin annulus.
-m3_cs_head_d    = 6.0;   // [STANDARD] ISO 10642 head diameter
-m3_cs_head_h    = 1.86;  // [STANDARD] ISO 10642 head depth, 90 deg
-m3_insert_bore  = 4.0;   // [MEASURED] the reference bore; also the standard
+shell_screw_cs_head_d    = 4.0;   // [STANDARD] ISO 10642 M2 head diameter
+shell_screw_cs_head_h    = 1.20;  // [STANDARD] ISO 10642 M2 head depth, 90 deg
+shell_screw_insert_bore  = 3.2;   // [STANDARD] bore for a standard M2 brass heat-set insert
                          //   recommendation for a 4.0 mm OD brass heat-set
                          //   insert in PLA/PETG
-m3_insert_len   = 5.0;   // [STANDARD] common M3 short insert
-m3_boss_wall    = 1.7;   // [DESIGN] material around an insert. 1.6 mm is the
+shell_screw_insert_len   = 4.0;   // [STANDARD] common M2 short insert
+shell_screw_boss_wall    = 1.7;   // [DESIGN] material around an insert. 1.6 mm is the
                          //   usual minimum to stop the boss splitting as the
                          //   insert is driven; 1.7 is used because the flank
                          //   strip the bosses live in is shared with the port
@@ -552,8 +632,8 @@ m3_boss_wall    = 1.7;   // [DESIGN] material around an insert. 1.6 mm is the
                          //   straight off that clearance. Each boss also merges
                          //   into the side wall, so its outboard side is much
                          //   thicker than this figure suggests.
-m3_boss_d       = m3_insert_bore + 2 * m3_boss_wall;   // = 8.0
-m3_bore_depth   = 8.1;   // [MEASURED] reference bore depth: insert length plus
+shell_screw_boss_d       = shell_screw_insert_bore + 2 * shell_screw_boss_wall;   // = 8.0
+shell_screw_bore_depth   = 6.5;   // [DESIGN] insert length plus clearance for swarf
                          //   ~3 mm of screw-tip relief
 
 // Print fits.
@@ -728,7 +808,7 @@ accessory_screw_len_rig = 12;   // [DESIGN] with a bracket under the heads
 //  set, including the ones that need geometry.
 
 assert(wall >= 4 * nozzle, "wall must be at least 4 extrusions wide");
-assert(m3_boss_d > m3_insert_bore + 2, "insert boss wall too thin");
+assert(shell_screw_boss_d > shell_screw_insert_bore + 2, "insert boss wall too thin");
 //  Largest pocket radius that still clears a board corner of radius
 //  board_corner_r with c mm of per-side clearance:  r <= (c + (sqrt(2)-1)*
 //  (board_corner_r + c)) / (sqrt(2)-1) ... solved numerically below for the
@@ -752,7 +832,7 @@ assert(kbd_pocket_w >= kbd_pocket_w_ata + 0.6,
        "keyboard pocket tighter than a tray known to accept a real unit");
 assert(batt_cowl_rise >= batt_protrusion - back_t + batt_cowl_wall,
        "battery cowl too shallow for the holder protrusion");
-assert(m3_cs_head_h < back_t - 1.0, "countersink leaves too little plate under the head");
+assert(shell_screw_cs_head_h < back_t - 1.0, "countersink leaves too little plate under the head");
 assert(kbd_aper_w < kbd_pocket_w, "keyboard would fall through the front face");
 assert(kbd_aper_h < kbd_pocket_h, "keyboard would fall through the front face");
 assert(display_aper_w >= display_active_w, "front face clips the display");

@@ -231,7 +231,11 @@ def measure_reference(ref):
     to_c = np.c_[CX - cen[:, 0], CZ - cen[:, 2]]
     to_c /= (np.linalg.norm(to_c, axis=1, keepdims=True) + 1e-9)
     sel = ((np.abs(nrm[:, 1]) < 0.15)                       # vertical wall
-           & (cen[:, 1] > -8.0) & (cen[:, 1] < 2.6)          # between floor and rim
+           #  Above the floor cove, not from the floor up. The tray wall is
+           #  prismatic only above y ~= -1.5; below that it rolls into the
+           #  6.6 mm floor fillet, where the local radius falls toward 3.0 and
+           #  drags a corner fit down. This read 6.064 for a 6.100 corner.
+           & (cen[:, 1] > -1.0) & (cen[:, 1] < 2.6)
            & (cen[:, 0] > -102.0) & (cen[:, 0] < -41.7)      # tray footprint
            & (np.abs(cen[:, 2] - CZ) < 56.0)
            & ((nrm[:, 0] * to_c[:, 0] + nrm[:, 2] * to_c[:, 1]) > 0.5))
@@ -243,11 +247,16 @@ def measure_reference(ref):
         r["kbd_pocket_w_tray"] = round(z1 - z0, 3)
         rr = []
         for (X, Z) in ((x0, z0), (x0, z1), (x1, z0), (x1, z1)):
-            q = Q[(np.abs(Q[:, 0] - X) < 7.5) & (np.abs(Q[:, 1] - Z) < 7.5)]
+            #  5.0, not 7.5. On a 6.100 corner a 7.5 window reaches past the
+            #  tangent points and starts fitting the flats, which inflates the
+            #  radius and balloons the residual: 6.1000 (rms 0.00000) at any
+            #  window from 4.0 to 6.5, 6.1058 at 7.0, 6.1253 at 7.5. This is
+            #  the same error that produced a wrong keyboard corner in C-11.
+            q = Q[(np.abs(Q[:, 0] - X) < 5.0) & (np.abs(Q[:, 1] - Z) < 5.0)]
             if len(q) < 6:
                 continue
-            guess = [X + (7.0 if X < CX else -7.0),
-                     Z + (7.0 if Z < CZ else -7.0), 6.0]
+            guess = [X + (4.5 if X < CX else -4.5),
+                     Z + (4.5 if Z < CZ else -4.5), 6.0]
             sol = least_squares(
                 lambda pp: np.hypot(q[:, 0] - pp[0], q[:, 1] - pp[1]) - pp[2], guess)
             # One corner is cut by the port notch and will not fit a circle.
