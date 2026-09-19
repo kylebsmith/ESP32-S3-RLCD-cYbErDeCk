@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.venv/
+export/stl/*.stl
+export/stl/*.3mf
+!export/stl/.gitkeep
+*.bak

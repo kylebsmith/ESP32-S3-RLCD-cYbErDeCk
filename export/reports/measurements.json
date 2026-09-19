@@ -1,0 +1,346 @@
+{
+  "datums": [
+    {
+      "ident": "ref.ata.caseback.envelope",
+      "name": "Caseback.stl bounding box",
+      "value": "151.650 x 18.000 x 116.770",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/ata/Caseback.stl",
+      "note": "watertight=False faces=14364 bounds=[[-104.1, -13.0, -55.909], [47.55, 5.0, 60.86]]"
+    },
+    {
+      "ident": "ref.ata.caseback_left.envelope",
+      "name": "Caseback_left.stl bounding box",
+      "value": "151.668 x 18.000 x 116.740",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/ata/Caseback_left.stl",
+      "note": "watertight=False faces=8038 bounds=[[-104.1, -13.0, -57.644], [47.568, 5.0, 59.096]]"
+    },
+    {
+      "ident": "ref.ata.bezel.envelope",
+      "name": "Bezel.stl bounding box",
+      "value": "88.212 x 2.000 x 110.954",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/ata/Bezel.stl",
+      "note": "watertight=True faces=1772 bounds=[[-44.5, 3.0, -53.855], [43.712, 5.0, 57.1]]"
+    },
+    {
+      "ident": "ref.ata.buttons.envelope",
+      "name": "Buttons.stl bounding box",
+      "value": "4.001 x 5.200 x 26.200",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/ata/Buttons.stl",
+      "note": "watertight=True faces=1972 bounds=[[34.548, -6.5, -11.5], [38.549, -1.3, 14.7]]"
+    },
+    {
+      "ident": "ref.ata.battery_cover.envelope",
+      "name": "Battery_cover.stl bounding box",
+      "value": "27.000 x 83.000 x 18.000",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/ata/Battery_cover.stl",
+      "note": "watertight=True faces=18756 bounds=[[-13.5, -41.5, -6.0], [13.5, 41.5, 12.0]]"
+    },
+    {
+      "ident": "ref.ata.screensaver.envelope",
+      "name": "screensaver.stl bounding box",
+      "value": "70.716 x 2.275 x 94.119",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/ata/screensaver.stl",
+      "note": "watertight=True faces=1084 bounds=[[-35.36, 0.725, -45.46], [35.357, 3.0, 48.66]]"
+    },
+    {
+      "ident": "ref.poc.bottom.envelope",
+      "name": "poc_bottom.stl bounding box",
+      "value": "142.100 x 112.500 x 3.500",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/poc_bottom.stl",
+      "note": "watertight=True faces=3024 bounds=[[-10.0, -10.0, -0.0], [132.1, 102.5, 3.5]]"
+    },
+    {
+      "ident": "ref.poc.top.envelope",
+      "name": "poc_top.stl bounding box",
+      "value": "142.100 x 112.500 x 11.748",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/poc_top.stl",
+      "note": "watertight=True faces=2038 bounds=[[-10.002, -10.0, 102.0], [132.098, 102.5, 113.748]]"
+    },
+    {
+      "ident": "ref.poc.button.envelope",
+      "name": "poc_button.stl bounding box",
+      "value": "10.000 x 5.000 x 5.000",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/poc_button.stl",
+      "note": "watertight=True faces=188 bounds=[[14.0, 54.71, 105.5], [24.0, 59.71, 110.5]]"
+    },
+    {
+      "ident": "board.mount.pattern.A",
+      "name": "mount pattern (derivation A: poc_bottom)",
+      "value": "62.100 x 85.500",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/poc_bottom.stl",
+      "note": "4 x bore dia 2.7 at [(3.5, 4.5, 2.7), (3.5, 90.0, 2.7), (65.6, 4.5, 2.7), (65.6, 90.0, 2.7)]"
+    },
+    {
+      "ident": "board.mount.pattern.B",
+      "name": "mount pattern (derivation B: ATA Caseback)",
+      "value": "62.100 x 85.500",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/ata/Caseback.stl",
+      "note": "4 x bore dia 2.7 at [(-31.05, -41.15, 2.7), (-31.05, 44.35, 2.7), (31.05, -41.15, 2.7), (31.05, 44.35, 2.7)]"
+    },
+    {
+      "ident": "board.mount.pattern",
+      "name": "AGREED mounting-hole pattern",
+      "value": "85.500 x 62.100",
+      "unit": "mm",
+      "method": "computed-from-mesh (2 independent sources)",
+      "source": "poc_bottom.stl + ata/Caseback.stl",
+      "note": "cross-check PASS: A=(62.1, 85.5) B=(62.1, 85.5)"
+    },
+    {
+      "ident": "board.pocket",
+      "name": "board pocket (ATA) U x V",
+      "value": "71.116 x 94.519",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/ata/Caseback.stl",
+      "note": "centroid=(-0.161,1.601) bounds=[-35.56, -45.66, 35.557, 48.86]"
+    },
+    {
+      "ident": "ref.ata.board_back_wall",
+      "name": "board back wall (A)",
+      "value": "3.000",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/ata/Caseback.stl",
+      "note": "solid intervals along Y at (x=25.0, z=-30.0): [(-13.0, -10.0)]"
+    },
+    {
+      "ident": "ref.ata.board_back_wall",
+      "name": "board back wall (B)",
+      "value": "3.000",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/ata/Caseback.stl",
+      "note": "solid intervals along Y at (x=-32.0, z=-30.0): [(-13.0, -10.0)]"
+    },
+    {
+      "ident": "ref.ata.board_back_wall",
+      "name": "board back wall (C)",
+      "value": "3.000",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/ata/Caseback.stl",
+      "note": "solid intervals along Y at (x=30.0, z=30.0): [(-13.0, -10.0)]"
+    },
+    {
+      "ident": "ref.ata.keyboard_tray_floor",
+      "name": "keyboard tray floor",
+      "value": "4.600",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/ata/Caseback.stl",
+      "note": "solid intervals along Y at (x=-70.0, z=0.0): [(-13.0, -8.4)]"
+    },
+    {
+      "ident": "ref.ata.keyboard_tray_floor",
+      "name": "keyboard tray floor (2)",
+      "value": "4.600",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/ata/Caseback.stl",
+      "note": "solid intervals along Y at (x=-70.0, z=45.0): [(-13.0, -8.4)]"
+    },
+    {
+      "ident": "ref.ata.divider_wall",
+      "name": "divider wall",
+      "value": "16.000",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/ata/Caseback.stl",
+      "note": "solid intervals along Y at (x=-38.5, z=0.0): [(-13.0, 3.0)]"
+    },
+    {
+      "ident": "kbd.pocket.A",
+      "name": "keyboard tray (derivation A: ATA Caseback)",
+      "value": "59.200 x 109.200",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/ata/Caseback.stl",
+      "note": "h-scan v=0 -> [(-104.094, -101.194), (-41.994, -35.556), (34.548, 36.548)]; v-scan u=-95 -> [(-55.909, -53.009), (56.191, 59.091)]; wall=2.9"
+    },
+    {
+      "ident": "ref.ata.wall",
+      "name": "ATA outer wall thickness",
+      "value": "2.900",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/ata/Caseback.stl",
+      "note": ""
+    },
+    {
+      "ident": "kbd.pocket.B",
+      "name": "keyboard cavity (derivation B: poc_top)",
+      "value": "60.600 x 110.498",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/poc_top.stl",
+      "note": "bounds=[70.5, -9.0, 131.1, 101.498]"
+    },
+    {
+      "ident": "ref.poc.board_cavity",
+      "name": "board cavity (poc_top)",
+      "value": "78.498 x 110.498",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/poc_top.stl",
+      "note": ""
+    },
+    {
+      "ident": "ref.poc.divider",
+      "name": "PoC divider wall between the two bays",
+      "value": "1.002",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/poc_top.stl",
+      "note": ""
+    },
+    {
+      "ident": "display.aperture.poc",
+      "name": "display aperture (poc_top outer face)",
+      "value": "63.600 x 84.800",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/poc_top.stl",
+      "note": "centre=(34.564,45.646)"
+    },
+    {
+      "ident": "kbd.aperture.poc",
+      "name": "keyboard retention aperture (poc_top outer face)",
+      "value": "55.802 x 106.502",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/poc_top.stl",
+      "note": "centre=(101.163,46.317)"
+    },
+    {
+      "ident": "layout.bay_gap.poc",
+      "name": "clear gap between display and keyboard apertures",
+      "value": "6.934",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/poc_top.stl",
+      "note": "measured along the device's long axis"
+    },
+    {
+      "ident": "ref.ata.bezel.thickness",
+      "name": "bezel thickness",
+      "value": "2.000",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/ata/Bezel.stl",
+      "note": ""
+    },
+    {
+      "ident": "display.aperture.inner",
+      "name": "display aperture (inner face)",
+      "value": "65.600 x 86.800",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/ata/Bezel.stl",
+      "note": "centre=(0.000,-0.000)"
+    },
+    {
+      "ident": "ref.ata.fastener.pattern",
+      "name": "M3 fastener positions (bezel clearance bores)",
+      "value": "4 x dia 3.200",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/ata/Bezel.stl",
+      "note": "positions (u,v) = [(-25.285, 53.0), (-25.278, -49.755), (39.612, -19.62), (39.612, 23.38)]"
+    },
+    {
+      "ident": "display.aperture.outer",
+      "name": "display aperture (outer face)",
+      "value": "68.500 x 89.700",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/ata/Bezel.stl",
+      "note": "centre=(0.000,0.000)"
+    },
+    {
+      "ident": "ref.ata.insert.bore",
+      "name": "M3 heat-set insert bore diameter",
+      "value": "4.000",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/ata/Caseback.stl",
+      "note": "4 bores at [(-25.285, 53.0), (-25.278, -49.755), (39.612, -19.62), (39.612, 23.38)]"
+    },
+    {
+      "ident": "ref.ata.insert.boss",
+      "name": "insert boss solid interval along thickness",
+      "value": "[(-10.281, -5.1)]",
+      "unit": "",
+      "method": "computed-from-mesh",
+      "source": "stl/ata/Caseback.stl",
+      "note": ""
+    },
+    {
+      "ident": "batt.bay",
+      "name": "18650 holder cutout in back wall",
+      "value": "22.100 x 79.000",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/ata/Caseback.stl",
+      "note": "centre=(-19.4,1.6)"
+    },
+    {
+      "ident": "audio.grille",
+      "name": "speaker grille slots",
+      "value": "4 x 1.300 x 16.000",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/ata/Caseback.stl",
+      "note": "pitch=3.05"
+    },
+    {
+      "ident": "batt.bay.crosscheck",
+      "name": "18650 holder cutout (PoC cross-check)",
+      "value": "22.100 x 79.000",
+      "unit": "mm",
+      "method": "computed-from-mesh",
+      "source": "stl/poc_bottom.stl",
+      "note": ""
+    },
+    {
+      "ident": "window.outline",
+      "name": "acrylic display window outline",
+      "value": "70.8163 x 94.2193",
+      "unit": "mm",
+      "method": "computed-from-dxf",
+      "source": "stl/ata/plexiglass.dxf",
+      "note": "DXF AC1015, $INSUNITS=4 (millimetres), 26 vertices, 0 arc segments, bbox X[-35.4065,35.4097] Y[-45.5096,48.7097]"
+    },
+    {
+      "ident": "display.active",
+      "name": "display active area (400 x 300 px landscape)",
+      "value": "85.344 x 64.008",
+      "unit": "mm",
+      "method": "derived-from-spec",
+      "source": "Waveshare ESP32-S3-RLCD-4.2 datasheet: 4.2 in, 300x400",
+      "note": "pixel pitch 0.21336 mm; diagonal 106.68 mm"
+    }
+  ]
+}
