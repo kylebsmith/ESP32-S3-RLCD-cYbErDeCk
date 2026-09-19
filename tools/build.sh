@@ -31,9 +31,24 @@ rm -f export/stl/assembly.stl
 echo
 $RUN python3 tools/validate.py --json export/reports/validation.json
 
+# The reference comparisons need a clone of a third-party repository. When it
+# is absent they are skipped rather than failing the gate: they audit this
+# design against someone else's, which is valuable but not a precondition for
+# the design being internally sound.
+REFDIR=${SOLAR_TERM:-/tmp/solar_term}
 echo
-$RUN python3 tools/audit_reference.py
+if [ -d "$REFDIR" ]; then
+    $RUN python3 tools/audit_reference.py --reference "$REFDIR"
+else
+    echo "  no reference clone at $REFDIR - skipping the component-facing audit"
+    echo "  (git clone --depth 1 https://github.com/nilseuropa/solar_term $REFDIR)"
+fi
 
 echo
 mkdir -p export/drawings
 $RUN python3 tools/drawing.py
+
+echo
+REF=""
+[ -d "$REFDIR" ] && REF="--reference $REFDIR"
+$RUN python3 tools/structure.py --stations 90 --plot $REF

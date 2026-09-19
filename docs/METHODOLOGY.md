@@ -187,10 +187,14 @@ fine; one that silently checks nothing is worse than none.
 - **No physical verification.** The largest limit by far.
 - **Mocks are envelopes.** They prove no clash against a conservative solid, not
   against a real component's every boss and solder joint.
-- **No structural analysis.** The stiffness claims in
-  [DESIGN.md](DESIGN.md) are arguments from section geometry — closed box versus
-  open channel, joint moved out of the peak-bending plane — not FEA, and not
-  drop testing.
+- **No FEA and no drop testing.** The stiffness claims in
+  [DESIGN.md](DESIGN.md) are now computed rather than argued —
+  `tools/structure.py` evaluates second moment of area, section modulus and
+  Bredt's formula on sections cut from the real mesh — but classical section
+  analysis gives **ratios and weak-point location**, which depend only on
+  geometry, and not absolute stress, which depends on layer adhesion and strain
+  rate. It found one claim overstated: the shell is a closed cell over 8 % of
+  its length, not throughout.
 - **No print verification.** Wall thicknesses are checked against nozzle
   multiples and overhangs against a draft-angle rule, but nothing has been
   sliced or printed.

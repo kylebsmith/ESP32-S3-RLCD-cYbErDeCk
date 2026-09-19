@@ -66,12 +66,67 @@ back. Three things follow:
 - **The face the user touches has no joint across it.** There is no bezel line,
   no step, and no fastener heads on the front.
 - **The assembled shell is a closed section.** Front face, walls and back plate
-  form a torsion box; the reference's open tray is a channel, which is an order
-  of magnitude less stiff in twist for the same wall.
+  form a torsion box; the reference's open tray is a channel.
 - **The spine is a shear web.** The 3.2 mm rib between the two bays runs the
   full depth and the full width, right across the middle — which is where a
   device of this aspect ratio wants to fold. The reference's equivalent region
   is a 6.44 mm partition that stops short of the bezel.
+
+### The numbers, and the one they contradict
+
+`tools/structure.py` computes section properties from the rendered mesh — second
+moment of area, section modulus, and Bredt's formula for the closed cell — at
+90 stations along the axis the device folds about. It is classical section
+analysis, not FEA, so it is trustworthy for **ratios and weak-point location**
+and says nothing about absolute stress.
+
+| | reference deck | this design |
+|---|---|---|
+| mean second moment `I` | 9 553 mm⁴ | **18 791 mm⁴** |
+| mean section modulus `Z` | 891 mm³ | **1 559 mm³** |
+| worst-section `Z` | 212 mm³ | **294 mm³** |
+
+**1.97× the mean bending stiffness and 1.38× at the worst section, in a
+smaller envelope.** Fitting the back plate is worth 3.41× on its own, which is
+the monocoque argument in one number.
+
+Moving the joint to the back is worth more than expected. At a typical station
+the closed section's neutral axis sits at z = 2.22 mm and the joint plane at
+z = 3.20 — 0.98 mm from the neutral axis, against 14.38 mm for the front face.
+Bending stress varies with distance from the neutral axis, so **the joint at the
+back carries about 93 % less bending stress than the same joint across the
+face.** That was reasoned qualitatively before it was computed; the computation
+made it stronger, not weaker.
+
+The claim it *contradicts* is the "closed torsion box" one, and the correction
+is worth stating plainly. Only **7 of 90 stations enclose a genuine cell — 8 %
+of the length.** Everywhere else the front face is absent, because that is what
+an aperture is, and the section is a U closed only by the back plate. The deck
+is not a torsion box with two holes in it; it is two open channels joined by one
+short closed cell at the spine. Bredt's formula at that cell gives J = 54 381 mm⁴
+against roughly 2 910 mm⁴ for the same outline left open — about **19×**.
+
+So the spine is not merely *a* shear web, it is the only closed cell in the
+device, and it is carrying the torsional stiffness of the whole deck. That is a
+better argument for it than the one originally made, and it is also a warning:
+thinning the spine or opening it up for cable routing would cost far more than
+its cross-section suggests.
+
+### The weak point, named
+
+The worst section is at **Y = −36.4 mm, mid-keyboard-bay** — 31 mm from the
+spine, which does not cover it. `Z` there is 294 mm³ against a mean of 1 559.
+
+The cause is not an oversight and cannot be designed out: the keyboard aperture
+is 106.5 mm across a 116.6 mm body, so there is almost no front face left over
+that bay — about 5 mm each side. Any material added there covers keys. The board
+bay does not have the problem, because the display aperture is 86.8 mm wide and
+leaves ~15 mm of face on each flank; its `Z` runs 1 300–3 200.
+
+The reference deck is weakest in the same place for the same reason (212 mm³),
+which is what makes the comparison like for like. This design is 38 % better at
+the point that governs. **If this deck fails in a drop, that is where, and the
+honest answer is that the keyboard's own width sets it.**
 
 Wall thicknesses are integer multiples of a 0.4 mm nozzle (3.2 = 8 extrusions,
 2.4 front = 6, 3.2 back = 8) so every wall prints as solid perimeters with no
@@ -323,8 +378,11 @@ This is a real constraint honestly resolved, not a feature quietly dropped.
 
 ## What is not proven
 
-Internal consistency is asserted by 52 automated checks. **Fit against physical
-hardware is not.** Nobody has held these two components against a printed
+Internal consistency is asserted by 70 automated checks, and the structural
+claims by classical section analysis in `tools/structure.py`. **Fit against
+physical hardware is not, and neither is drop survival** — section analysis
+gives ratios, not absolute stress, and nothing here models layer adhesion,
+strain rate or impact. There is no FEA and no drop test. Nobody has held these two components against a printed
 chassis. [DATUMS.md](DATUMS.md#measure-these-before-a-final-print) lists the four
 measurements to take first, and O-04 — a ~2.5 mm disagreement between the
 factory drawing and the reference on button height — is the one to check before

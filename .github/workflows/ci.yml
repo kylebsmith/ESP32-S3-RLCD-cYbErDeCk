@@ -31,29 +31,29 @@ jobs:
       - name: Install the Python toolchain
         run: pip install -r tools/requirements.txt
 
+      # Cloned BEFORE the gate so the reference-facing audit and the structural
+      # comparison inside build.sh actually run. Non-fatal: it is a third-party
+      # repository CI does not control, and build.sh skips those steps without
+      # it rather than failing.
+      - name: Fetch the reference design
+        continue-on-error: true
+        run: git clone --depth 1 https://github.com/nilseuropa/solar_term /tmp/solar_term
+
       # Renders every part and fails on an OpenSCAD "unknown variable" warning.
       # A deleted parameter does not stop a render - OpenSCAD substitutes undef
-      # and quietly produces something small and wrong.
-      - name: Render every part
+      # and quietly produces something small and wrong. Then validates, audits
+      # against the reference, and regenerates the drawings and the section
+      # analysis.
+      - name: Render, validate, audit and draw
         run: ./tools/build.sh
 
-      # Re-derives every [MEASURED] datum from the reference artefacts, asserts
-      # the mounting-pattern cross-check between two unrelated designs, and
-      # compares every component-facing dimension against that reference.
-      # Non-fatal: they need a third-party repository CI does not control.
+      # Re-derives every [MEASURED] datum from the reference artefacts and
+      # asserts the mounting-pattern cross-check between two unrelated designs.
       - name: Reference metrology
         continue-on-error: true
         run: |
-          git clone --depth 1 https://github.com/nilseuropa/solar_term /tmp/solar_term
           python3 tools/measure_reference.py --reference /tmp/solar_term \
                   --json export/reports/measurements.json
-
-      - name: Component-facing accuracy audit
-        continue-on-error: true
-        run: python3 tools/audit_reference.py --reference /tmp/solar_term
-
-      - name: Dimensioned general-arrangement drawings
-        run: xvfb-run -a python3 tools/drawing.py
 
       - name: Check the datum sheet has no stale TODOs
         run: |

@@ -157,6 +157,38 @@ measures the mesh cannot.
 | [2 — back plate](export/drawings/sheet2-backplate.png) | rear elevation, section through the battery cowl |
 | [3 — assembly](export/drawings/sheet3-assembly.png) | horizontal sections through both bays, **components in place**, clearances called out |
 | [4 — components](export/drawings/sheet4-components.png) | schedule of every component-facing dimension with its provenance |
+| [5 — structure](export/drawings/sheet5-structure.png) | section modulus along the folding axis, open vs closed |
+
+## How robust it actually is
+
+`tools/structure.py` computes section properties from the rendered mesh at 90
+stations along the axis the device folds about — second moment of area, section
+modulus, and Bredt's formula for the closed cell. Classical section analysis,
+not FEA: good for **ratios and weak-point location**, silent on absolute stress.
+
+| | reference deck | this design |
+|---|---|---|
+| mean second moment `I` | 9 553 mm⁴ | **18 791 mm⁴** |
+| mean section modulus `Z` | 891 mm³ | **1 559 mm³** |
+| worst-section `Z` | 212 mm³ | **294 mm³** |
+
+**1.97× the mean bending stiffness, 1.38× at the worst section, in a smaller
+envelope.** Fitting the back plate is worth 3.41× on its own. Putting the joint
+at the back rather than across the face puts it 0.98 mm from the neutral axis
+instead of 14.38 mm, so it carries about **93 % less bending stress**.
+
+It also corrected one of this project's own claims. The shell was described as a
+closed torsion box; it is one over **8 % of its length**. Everywhere else the
+front face is absent — that is what an aperture is — and the section is a U
+closed only by the back plate. The deck is two open channels joined by one short
+closed cell at the spine, and that cell is worth 19× in torsion. The spine is
+not merely a shear web, it is the only closed cell in the device.
+
+The weak point is named rather than hidden: **mid-keyboard-bay, `Z` = 294 mm³**,
+because the keyboard aperture is 106.5 mm across a 116.6 mm body and leaves
+about 5 mm of face each side. Nothing can be added there without covering keys.
+The reference is weakest in the same place for the same reason. If this deck
+fails in a drop, that is where.
 
 ## Accuracy against the original
 
@@ -194,6 +226,7 @@ author had, 3.2 mm walls instead of 2.9.
 | `tools/measure_reference.py` | metrology harness — regenerates every measured datum |
 | `tools/validate.py` | 70-check design audit — the build gate |
 | `tools/audit_reference.py` | component-facing accuracy against the reference |
+| `tools/structure.py` | section properties from the mesh; stiffness against the reference |
 | `tools/drawing.py` | dimensioned GA sheets, measured from the mesh |
 | `tools/render.sh` | every published view, with its camera stated in the script |
 | `tools/build.sh` | render everything and gate; what CI runs |
@@ -211,6 +244,7 @@ tools/
   measure_reference.py  metrology harness — regenerates every measured datum
   validate.py           70-check design audit — the build gate
   audit_reference.py    component-facing accuracy against the reference
+  structure.py          section properties, stiffness, weak-point location
   drawing.py            dimensioned GA sheets, measured from the mesh
   render.sh             every published view, cameras stated in the script
 docs/                 datum sheet, design rationale, methodology, assembly
