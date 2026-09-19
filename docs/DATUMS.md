@@ -155,16 +155,44 @@ than dressed up as measurements.
 
 ## D-05 — Keyboard pocket
 
-**110.2 × 59.4 × 11.0 mm** `[DESIGN]` — stated, not derived from the body plus a
+**109.85 × 59.15 × 11.0 mm** `[DESIGN]` — stated, not derived from the body plus a
 clearance, so the envelope does not move every time a tolerance assumption is
 revisited. What it must satisfy is asserted instead.
 
 | Clears | per side, in plane | depth |
 |---|---|---|
-| nominal body 108.5 × 58.2 × 10.2 | 0.85 / 0.60 | +0.80 |
-| body at tolerance 108.8 × 58.5 × 10.6 | 0.70 / 0.45 | +0.40 |
-| ATA tray, a working device, 109.200 × 59.200 | 0.50 / 0.10 | — |
-| grip case, measured, 109.406 × 59.005 | 0.40 / 0.20 | — |
+| nominal body 108.5 × 58.2 × 10.2 | 0.675 / 0.475 | +0.80 |
+| body at tolerance 108.8 × 58.5 × 10.6 | 0.525 / 0.325 | +0.40 |
+| ATA tray, a working device, 109.200 × 59.200 | +0.325 / −0.025 | — |
+| grip case, measured, 109.406 × 59.005 | +0.222 / +0.073 | — |
+
+The pocket was **110.2 × 59.4** until the front lip was checked with the
+keyboard anywhere other than centred, and went negative at a corner — see
+[O-09](#o-09--the-keyboard-lip-goes-negative-at-a-corner--closed). Tightening
+it to the floor both assertions allow recovered about two thirds of that; the
+rest came from **eight half-round locating ribs**, four on the long walls at
+±X and four on the short walls at ±Y.
+
+| | bare pocket | ribbed | largest body | smallest body |
+|---|---|---|---|---|
+| width | 109.85 | 108.95 | 108.80 → +0.075/side | 108.20 → ±0.375 travel |
+| height | 59.15 | 58.65 | 58.50 → +0.075/side | 57.90 → ±0.375 travel |
+
+Each rib is a cylinder centred **on** the wall plane, so half of it is buried
+in material already there and only the inboard half is new — it fuses to the
+wall with no seam to delaminate — and each is tapered over its first 1.6 mm at
+the entry end, because the keyboard loads from behind. They are only 2*r wide,
+so they clear both the service window and the corner blends easily. The ribs
+are load-bearing for the lip guarantee, so `validate.py` measures the ribbed
+span **from the rendered chassis** rather than trusting the parameters: a rib
+that was specified and not built fails the lip check exactly as a bare pocket
+does.
+
+The height row against the ATA tray is **0.025 mm negative**, and that is
+deliberate. The tray's own clearance over the 58.2 body is 0.50 per side; this
+pocket's is 0.475. The 0.6 mm margin this design asserts against a working
+reference is applied to the width, where the certified body is 108.5 and the
+tray's 109.200 is the only physical evidence of what a real unit needs.
 
 The depth sits **exactly** on its assertion at the top of the thickness band:
 11.0 mm against 10.6 + 0.4. That is the one axis with no slack left, and it is
@@ -319,6 +347,102 @@ a wider recess behind it. This back plate is 3.2 mm thick and the header stands
 8.603 mm off the PCB back — **1.60 mm proud of the standoff plane** — so the
 body itself must pass through. The window here is sized from the body.
 
+### C-27 — The back plate's stiffening ribs were not there
+
+`backplate()` added three 3.0 mm ribs across the keyboard bay, with a comment
+saying they "run in the plate's weakest direction: the long span between the
+bottom tongue and the spine". They contributed **nothing**.
+
+`cube(..., center = true)` centres in Z as well as X and Y — the same reading
+error as C-14's tongue and groove. At a z-centre of
+`back_t + kbd_keeper_t/2 - 0.01` and a height of `kbd_keeper_t` they occupied
+z 3.19…3.44, entirely inside the keeper pad at z 3.19…3.45. Sectioning the
+rendered plate at z = 3.30 and z = 3.44 gives 6275.2 and 6280.2 mm², identical
+to a bare pad, and deleting the ribs changes the part's volume by
+**0.000000 mm³**.
+
+Nor could they have worked as written: `kbd_keeper_t` is
+`board_depth - kbd_depth` = **0.25 mm**, so any rib standing proud of the pad
+would be a fraction of a millimetre tall and would come out of the keyboard's
+0.40 mm of float. Deleted rather than rescued. `tools/structure.py` measures
+section properties from the mesh, so none of its published figures move.
+
+This one was harmless — it wasted no filament and trapped nothing. It is
+recorded because a feature that claims structure it does not provide is how a
+design stops being checkable.
+
+### C-25 — The cowl was lying on top of two screws and a window
+
+Every check in the suite asked whether a hole had been **cut**. None asked
+whether anything was **lying on it**. Both classes of defect below passed 76
+checks, and both are the same mistake: the battery cowl's plan form was copied
+from the reference's separate clip-on cover — which sits on a blank panel — and
+this cowl is integral to a back plate that is already crowded.
+
+`batt_cowl_w/h` were 83.0 × 30.0 and `batt_cowl_foot` was 3.2. `blend` in
+`rse_blob()` is an outward offset of the **whole section**, so the cowl's
+footprint **at the panel** was 89.4 × 36.4, not 83 × 30. It covered:
+
+| Feature | Position | What was over it |
+|---|---|---|
+| lower M2.5 board screws | (±42.75, +0.25) | **1.11 mm** of cowl foot across the whole Ø5.0 countersink — measured 17/17 probes blocked |
+| expansion-header window | y 26.50 … 34.70 | **3.60 mm** of its 8.20 mm height, up to **5.84 mm** deep; clear mouth 4.70 mm against a 6.60 mm header body |
+
+Consequence: two of the four screws that carry the board and the cell could not
+be inserted at all, and the expansion header could not be mated. Measured by
+ray-casting along +Z through the rendered plate, which is the method the fix is
+asserted with.
+
+**The geometry is over-constrained and no single number fixes it.** The holder
+is 77.80 wide and the countersink rim reaches x = 40.25, leaving 1.35 mm for a
+clearance plus a wall that together need at least 1.9 — so the cowl *must*
+overlap the screws in plan unless its corner retreats off them. The resolution
+is four coupled changes, all now derived rather than chosen:
+
+- **`batt_cowl_w/h` derived** from `batt_bay_w/h + 2*(clear + wall)`:
+  82.80 × 27.10 instead of 83.0 × 30.0. The height was the accidental part —
+  the cavity had 1.95 mm per side over the holder in V where the design's own
+  declared `batt_cowl_clear` is 0.50. It is now 0.50, as declared.
+- **`batt_cowl_foot` 3.2 → 0.6.** It was never a tangent fillet: 3.2 mm of
+  flare decayed over `foot_f` = 0.20 of a 10 mm rise, i.e. 2.0 mm of height.
+  The bound is the expansion window's lower edge.
+- **`batt_cowl_base_r` 6.0 → 12.6.** This is what pulls the cowl's lower flank
+  off the screws: on an R6 corner the footprint still reaches x = 41.61 at
+  y = +0.25, which is 1.36 mm inside the countersink. At 12.6 it reaches 39.36
+  and clears the rim by 0.89 mm.
+- **`batt_cowl_base_ri` 3.0 → 2.2.** Shrinking the cavity re-opened the
+  `board_pocket_r` trap: at 3.0 the holder's square corner at (38.90, 11.05)
+  fell 0.98 **outside** the cavity outline. At 2.2 it is 0.88 inside.
+
+`batt_cowl_crown` was wrong at the same time and for an unrelated reason — see
+[C-26](#c-26--the-crown-started-a-millimetre-above-the-holder).
+
+New check class **OBSTRUCTION** in `tools/validate.py` now probes every
+fastener head footprint and every window in the plate along its access axis.
+New check class **STACK** measures the cowl cavity as a *section* at the
+holder's deepest plane rather than as a depth.
+
+### C-26 — The crown started a millimetre above the holder
+
+`batt_cowl_crown` was 0.50 with a comment that already stated the right rule —
+"the sides must stay parallel until they are clear of it". They did not. The
+holder reaches `batt_protrusion - back_t` = 5.00 mm below the panel and the
+cavity's rise is 8.00, so 0.50 began the crown at 4.00 mm, a **millimetre too
+early**. Measured on the rendered plate the cavity closed to **77.592 mm** at
+the holder's deepest plane against a **77.80 mm** holder — 0.104 mm of
+interference per side, which is also the 0.17 mm³ that the clash test reported
+and passed, because its threshold is 1.0 mm³ for mesh-faceting noise.
+
+The check that covered it was one-dimensional: *"the cell reaches z = −5.00,
+the cowl inner face is at z = −8.00, clearance 3.00 mm"*. That is a depth. The
+crown closes the **section**, and a depth cannot see a section.
+
+`batt_cowl_crown` is now derived from the holder's own protrusion. Measured
+after the fix, the cavity holds 78.800 × 23.100 at every height down to the
+holder's deepest plane: +0.500 mm per side in both axes, exactly the declared
+`batt_cowl_clear`, and the board-to-plate clash volume went from 0.17 mm³
+to 0.00.
+
 ### C-21 — Three values whose stated reasons were wrong
 
 All three survived adversarial refutation in the re-derivation pass. Two keep
@@ -329,7 +453,8 @@ their value and lose their justification; one moves.
   lead + 0.100 seating below the PCB back plane. **The bbox of a part in
   isolation is not where the assembly puts it** — and the dependent figure,
   how far it stands proud of the standoff plane, was 1.60 and is 1.70.
-- **`batt_cowl_base_ri` stays 3.0, for a different reason.** It was justified
+- **`batt_cowl_base_ri` stayed 3.0, for a different reason** (it is now 2.2 —
+  see [C-25](#c-25--the-cowl-was-lying-on-top-of-two-screws-and-a-window)). It was justified
   by "the holder's corners are R2.0". They are not: in the STEP the holder's
   plan form is exactly square at every height through the body — 0.0000 mm
   deviation from its bounding rectangle, 504 of 576 edges straight, every
@@ -826,6 +951,88 @@ and the proof-of-concept has none, so the two references disagree.
 
 *Mitigation*: the pocket corner radius is 6.0 and the pocket is 0.49 mm per side
 larger than the keyboard, so a smaller real radius only adds clearance.
+
+---
+
+### O-08 — The button sprue did not fit behind the wall — CLOSED
+
+Measured inward from the chassis's top outer face, on the rendered parts:
+
+| Plane | Distance in | Space behind the wall |
+|---|---|---|
+| outer face | 0.00 | |
+| control-dish floor | 0.90 | |
+| top wall, inner face | 3.20 | 0.00 |
+| PCB top edge (pocket clearance 0.50/side) | 3.70 | **0.50** |
+| switch actuator face (0.19 inside the PCB edge) | 3.89 | **0.69** |
+
+A flange behind the wall has to live in that 0.50 mm, and something has to
+reach 0.69 mm to press the switch. **Both cannot be satisfied at once**, and
+the sprue failed it from both directions before it was fixed:
+
+- **Too long.** The original was 6.59 mm overall — cap 3.80, flange 1.20, post
+  1.60 — needing 3.39 mm behind the wall. Seated with its flange on the wall
+  the flange ran 0.70 mm into the PCB's edge and the post a further 1.60 mm
+  through it; seated with its post on the switch, all three caps stood 2.70 mm
+  proud and held PWR, BOOT and KEY permanently pressed.
+- **Too short.** Cut back to cap + a 0.40 mm flange it fitted, with its deepest
+  feature 0.35 mm behind the wall — and **0.34 mm short of the actuator**. The
+  caps rattled and never reached the switches.
+
+The 0.40 mm flange is measured from the reference enclosure, whose board pocket
+carries **1.00 mm per side**. This one carries 0.50. The retention scheme did
+not come across with the number.
+
+**Resolved by moving the flange inside the wall.** A 1.00 mm counterbore behind
+the apertures — one continuous slot, so the sprue's connecting webs recess with
+the flanges — takes the flange, so at rest nothing protrudes past the wall's
+inner face and the whole 0.50 mm is left for the plunger. The flange is 0.40
+thick, so the counterbore also supplies **0.60 mm of free travel**, bought from
+the wall's own thickness instead of from the board's clearance. The plunger is
+offset in Y to −0.20 on the button axis, spanning −1.00 to +0.60 inside the
+switch body's ±1.10 band, so it lands on the switch and misses the PCB's edge
+entirely.
+
+**And then the depth was still wrong, for a third reason.** 0.690 mm is where
+the actuator is if the board is exactly where the drawing says. It is not: the
+board is located by four M2.5 screws in ISO 273 close-fit 2.7 mm holes, so it
+floats ±0.10 mm and the actuator is anywhere in **0.590 to 0.790**. A plunger
+cut to 0.690 would hold a switch permanently pressed on any build that floated
+toward the wall. The plunger is therefore cut to **0.540** — the near end of
+the band, less a 0.05 mm margin — so the gap at rest is 0.05 to 0.25 mm and is
+never zero, and the 0.60 mm of travel crosses the worst gap and still delivers
+the switch's 0.25 mm throw with 0.10 mm to spare.
+
+That last error was found by a different instrument than the ones that found
+the first two: putting the sprue where the assembly puts it and intersecting it
+with the chassis as a solid. The depth arithmetic was self-consistent and still
+wrong, because it had no opinion about the board's mounting float. `validate.py`
+now runs that boolean at rest, mid-travel and fully pressed.
+
+**Why neither version was caught for so long.** `buttons` is a separate part,
+exported laid flat for printing, and it was never placed in assembly space by
+a fit check — only its bounding box was measured, and a bounding box was never
+going to say whether 6.59 mm of anything can exist in 3.89 mm of space. The
+`STACK` class now measures the sprue against the two planes above.
+
+### O-09 — The keyboard lip goes negative at a corner — CLOSED
+
+`_corner_lip()` measured the front-face lip with the keyboard **centred**.
+Nothing centred it. With the body at its low tolerance (108.20 × 57.90) pushed
+hard into a corner of what was then a 110.20 × 59.40 pocket — ±1.00 in X and
+±0.75 in Y — the narrowest lip was **−0.361 mm** at that corner against
+**+0.985 mm** centred. You would have seen a sliver into the pocket past one
+corner. The keyboard was never at risk of escaping: every edge and the other
+three corners held ≥ 1 mm against a 106.5 × 55.8 aperture.
+
+Closed by taking the play out rather than by moving the aperture: the pocket is
+now 109.85 × 59.15 with locating ribs, and the same worst case measures
+**+0.368 mm**. `tools/validate.py` asserts it from the rendered chassis over
+the body's whole tolerance band *and* every position the pocket allows.
+
+This was trap 5 from the project's own list — *a part's bounding box in
+isolation is not where the assembly puts it* — applied to the header
+(`expansion_body_h`, C-21) and not to the keyboard.
 
 ---
 

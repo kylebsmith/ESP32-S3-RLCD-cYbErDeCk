@@ -3,10 +3,10 @@
 Read this before printing. The RLCD panel is fragile and must never be used as
 leverage while fitting a cable, a cell or a printed part.
 
-> **This design has not been built.** It is asserted internally consistent by 52
-> automated checks, but no one has held these components against a printed
-> chassis. Print the **chassis alone** first, offer the board and keyboard up to
-> it, and check the four measurements in
+> **This design has not been built.** All **92** automated checks pass, but
+> nobody has held these components against a printed chassis. Print the
+> **chassis alone** first, offer the board and keyboard up to it, and check the
+> four measurements in
 > [DATUMS.md](DATUMS.md#measure-these-before-a-final-print) before committing to
 > a full set.
 
@@ -17,7 +17,7 @@ leverage while fitting a cable, a cell or a printed part.
 | Part | Qty | Mass (PLA) | Notes |
 |---|---|---|---|
 | `chassis` | 1 | ~53 g | front face down |
-| `backplate` | 1 | ~60 g | cowl up |
+| `backplate` | 1 | ~58 g | cowl up |
 | `buttons` | 1 | ~0.5 g | printed as one sprue |
 
 ### Hardware
@@ -30,7 +30,7 @@ leverage while fitting a cable, a cell or a printed part.
 | microSD card | 0–1 | FAT32 |
 | Speaker with the MX1.25 2-pin lead supplied with the board | 1 | |
 | M2 × 4 brass heat-set insert, Ø3.2 OD | 4 | Ø3.2 is the bore; a Ø4.0 insert is M3 |
-| M2 × 6 countersunk screw, ISO 10642 | 4 | see the note below — **not** M2 × 8 |
+| M2 × 6 countersunk screw, ISO 10642 | 4 | chassis ↔ back plate. See the note below — **not** M2 × 8 |
 | M2.5 × 8 countersunk screw, ISO 10642 | 4 | into the board's own standoffs |
 
 **On the two screw lengths.** Both are worked from the stack, not chosen:
@@ -95,13 +95,21 @@ otherwise be. Keep the parts — they are how you use the board on a desk again.
 ### 2. Heat-set the inserts
 
 Four M2 inserts into the chassis bosses, driven from the **back**. Keep them
-straight and flush. The bosses are Ø7.4 around a Ø4.0 bore; let the insert melt
-in under its own weight rather than forcing it, or the boss will split.
+straight and flush. The bosses are **Ø6.6 around a Ø3.2 bore, 6.5 mm deep** —
+the Ø7.4/Ø4.0 figures this step used to give were the M3 revision's and were
+never updated. Let the insert melt in under its own weight rather than forcing
+it, or the boss will split.
 
 ### 3. Fit the button sprue
 
 Drop the three caps into the top-edge apertures from inside. The retaining
-flange sits behind the wall; the caps cannot fall out once the board is in.
+flange seats in the counterbore behind each aperture, so nothing stands proud
+of the wall's inner face, and the board stops them falling in once it is
+fitted. Only the plungers go past the wall, and they are offset so they land on
+the switch bodies and miss the PCB's edge entirely. The free travel — **0.60
+mm** — comes from the counterbore being 1.00 mm deep and the flange 0.40 thick,
+not from the 0.50 mm the board leaves behind the wall. See
+[DATUMS.md O-08](DATUMS.md#o-08--the-button-sprue-did-not-fit-behind-the-wall--closed) for why it is that tight.
 
 The three switches are PWR, BOOT and KEY. **Which is which is not established** —
 see [DATUMS.md O-03](DATUMS.md#o-03--which-switch-is-pwr-which-is-boot-which-is-key).
@@ -122,9 +130,16 @@ three buttons and both microphone ports line up with their apertures.
 Drop the keyboard into the lower bay from behind, key side forward. It is
 captured by the front-face lip on all four edges.
 
-Check that the power switch and the charging port fall within a side service
-window. There is one on **each** side, so if they do not, take the keyboard out
-and turn it round.
+It will feel tight, and it is meant to. Eight half-round locating ribs — four
+on the long walls, four on the short ones — take the play out of the pocket so
+the keyboard cannot slide and the front lip stays even all the way round. They
+are tapered at the entry end; push the keyboard in square and it will seat.
+
+The power switch and the charging port must fall within the service window on
+the **left** side, as you look at the front of the device. There is only one
+window, because everything that needs reaching is on that one short edge and
+the keys only read one way up. If they end up on the right, the keyboard is in
+upside down.
 
 ### 6. Connect the speaker
 
@@ -142,13 +157,32 @@ Lower the back plate bottom-edge first so the tongue enters the groove in the
 chassis bottom wall, then swing the top down. The keeper pad should meet the
 keyboard and the cowl should clear the cell.
 
+The tilt is not optional and it is not large. Searched as a rigid-body motion
+against the rendered chassis — rotation about X plus translation in Y and Z,
+every configuration checked on fourteen cross-sections — the plate needs about
+**1.5°** of tilt and a **1.0 mm** slide along −Y to get the tongue under the
+groove's lip; flat-on it is 0.70 mm too tall for the opening. With the board and
+the keyboard already in the chassis the clearance path needs up to **7.5°**,
+because the cowl has to swing over the 18650. Removal is the same path
+reversed, and the board, cell and plate do come out as one bolted module.
+
 If it does not sit flush, **stop** and find out why rather than pulling it down
 with the screws.
 
-Fit the four M2 × 8 countersunk screws and tighten evenly, just until the plate
-is seated.
+Fit the four **M2 × 6** countersunk screws and tighten evenly, just until the
+plate is seated. (This step read M2 × 8 while the bill of materials read M2 × 6
+and explained why; 6 is the right one.)
 
-### 9. Check before power-on
+### 9. Bolt the board to the plate
+
+Four **M2.5 × 8** countersunk screws, from outside the back plate, up into the
+board's own SMTSO standoffs. They are what carries the board and the cell, and
+they are the reason the board, cell and plate come out as one module.
+
+Drive the two nearest the cowl first: they sit 0.60 mm below the 18650 holder
+and are the tightest pair on the plate.
+
+### 10. Check before power-on
 
 - all three buttons move freely and spring back
 - no cable is trapped
@@ -164,8 +198,10 @@ firmware you prefer.
 The four M2 back-plate screws are the accessory mounting points. They thread
 into brass, not plastic, so they are the strongest anchors on the device.
 
-Fit **M2 × 12** in place of M2 × 8 and clamp a bracket, strap yoke or stand
-clamp under the heads. `accessory_pattern()` in `cad/cyberdeck.scad` prints the
+Fit **M2 × 12** in place of M2 × 6 and clamp a bracket, strap yoke or stand
+clamp under the heads. The bracket has to be at least **2.3 mm** thick: the
+insert bore is 6.5 mm deep under a 3.2 mm plate, so a 12 mm screw with nothing
+under its head bottoms in the bore before it is tight. `accessory_pattern()` in `cad/cyberdeck.scad` prints the
 hole pattern to drill a bracket to match.
 
 There is deliberately no 1/4"-20 socket. The reason is in
@@ -174,7 +210,16 @@ There is deliberately no 1/4"-20 socket. The reason is in
 ## Servicing
 
 Four screws release the back plate, and the board, cell and plate come out as a
-module. Push the keyboard out through the finger hole in the back plate.
+module — verified as a rigid-body path, not merely as a clearance.
+
+**The keyboard comes out of the open bay, not through the finger hole.** The
+Ø19 → Ø13 hole in the back plate is inherited from the reference, where it
+pushes a keyboard out of a separate tray. Here it cannot eject anything: with
+the plate on, the keyboard is captured by the front-face lip on all four edges
+and pushing it forward does nothing; with the plate off, the hole has left with
+the plate. It survives as finger access to break the keyboard free of its
+pocket once the plate is off, and that is all it does. Lift or tip the keyboard
+out of the open bay.
 
 Changing the cell means removing the back plate — the cowl is integral. That is
 a deliberate trade for robustness; see

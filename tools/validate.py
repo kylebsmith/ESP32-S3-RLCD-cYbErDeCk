@@ -13,6 +13,10 @@ CHECK CLASSES
               and it fits the declared print volume.
   FIT         each component mock is fully contained in its bay, with the
               declared clearance, and does not intersect any shell material.
+  OBSTRUCTION nothing LIES OVER a hole, a head recess or a window. A hole that
+              was cut is not the same as a hole that is open.
+  STACK       depth stacks a bounding box cannot see: a part that is the right
+              length for a space that does not exist.
   INTERFACE   the two printed parts mate: the back plate fits the opening, the
               tongue engages the groove, fastener bores line up.
   PRINT       wall thicknesses are integer multiples of the nozzle width,
@@ -482,6 +486,361 @@ def check_openings(parts, p):
     return ok
 
 
+
+def _covered(mesh, x, y, outside=-40.0, face=-0.005):
+    """Is anything lying OVER the point (x, y) on a part's z = 0 outer face?
+
+    Cast along +Z from well outside and report every surface crossed before the
+    face is reached. A hole that was cut is not the same as a hole that is open:
+    something can be sitting on top of it. Returns the crossings, so a caller
+    can report how thick the thing in the way is.
+    """
+    loc, _, _ = mesh.ray.intersects_location(np.array([[x, y, outside]], float),
+                                             np.array([[0.0, 0.0, 1.0]], float))
+    return sorted(float(q[2]) for q in loc if q[2] < face)
+
+
+def check_obstruction(parts, p):
+    """Nothing may lie over a hole, a head recess or a window.
+
+    THIS CLASS EXISTS BECAUSE IT WAS ABSENT, and it is the same shape of blind
+    spot as check_openings(). Those checks ask whether a hole was CUT. These ask
+    whether anything is lying on top of one. The battery cowl's foot flare -
+    3.2 mm of outward offset applied to the whole section at the panel - covered
+    the two lower M2.5 board-screw countersinks with 1.11 mm of plastic, and
+    buried 3.60 mm of the 8.20 mm expansion window up to 5.84 mm deep. Both
+    holes existed. Both were counted. Neither could be used, and 76 checks
+    passed. See docs/DATUMS.md C-25.
+    """
+    print("\n-- OBSTRUCTION --")
+    ok = True
+    bp = parts["backplate"]
+
+    def sweep(cx, cy, dia, n_ang=16):
+        """Every probe across a circular footprint, centre and rim included."""
+        worst = []
+        for r in (0.0, dia / 4.0, dia / 2.0):
+            angles = [0.0] if r == 0.0 else np.linspace(0, 360, n_ang, endpoint=False)
+            for a in angles:
+                px = cx + r * math.cos(math.radians(a))
+                py = cy + r * math.sin(math.radians(a))
+                c = _covered(bp, px, py)
+                if c:
+                    worst.append((abs(min(c)), px, py))
+        return worst
+
+    board_cy = p["board_bay_cy"]
+    # --- every fastener head, both patterns -------------------------------
+    for nm, cx, cy, head in [
+            (f"M2.5 board screw at x={sx * p['board_mount_pitch_x'] / 2:+.2f}, "
+             f"y={board_cy + sy * p['board_mount_pitch_y'] / 2:+.2f}",
+             sx * p["board_mount_pitch_x"] / 2,
+             board_cy + sy * p["board_mount_pitch_y"] / 2,
+             p["board_cs_head_d"])
+            for sy in (-1, 1) for sx in (-1, 1)]:
+        hits = sweep(cx, cy, head)
+        ok &= check(f"{nm} head recess is reachable", "OBSTRUCTION", not hits,
+                    "nothing over the "
+                    f"{head:.1f} mm head footprint"
+                    if not hits else
+                    f"{len(hits)} probe(s) covered, up to "
+                    f"{max(h[0] for h in hits):.2f} mm of material over the countersink")
+
+    # --- every window and grille in the plate ------------------------------
+    wins = [("expansion-header window",
+             p["expansion_win_x"], board_cy + p["expansion_win_y"],
+             p["expansion_win_w"] + 2 * p["fit_slide"],
+             p["expansion_win_h"] + 2 * p["fit_slide"]),
+            ("speaker grille field",
+             p["grille_off_x"], board_cy + p["grille_off_y"],
+             p["grille_slot_w"], p["grille_field_h"])]
+    for nm, cx, cy, w, h in wins:
+        blocked = []
+        for yy in np.linspace(cy - h / 2 + 0.1, cy + h / 2 - 0.1, 11):
+            for xx in np.linspace(cx - w / 2 + 0.1, cx + w / 2 - 0.1, 11):
+                c = _covered(bp, xx, yy)
+                if c:
+                    blocked.append(abs(min(c)))
+        # The grille is a row of slots, so most probes legitimately land on the
+        # webs between them; what matters is material OUTSIDE the plate face.
+        ok &= check(f"{nm} is not overhung by the cowl", "OBSTRUCTION",
+                    not blocked,
+                    "clear across the full opening" if not blocked else
+                    f"{len(blocked)}/121 probes overhung, up to "
+                    f"{max(blocked):.2f} mm deep")
+    return ok
+
+
+def check_stacks(parts, mocks, p):
+    """Depth stacks that a bounding box cannot see.
+
+    An extent check says a part is 6.59 mm long. It does not say whether 6.59 mm
+    of anything can exist between the face it enters and the component it has to
+    reach.
+    """
+    print("\n-- STACK --")
+    ok = True
+
+    # --- the button sprue -------------------------------------------------
+    # Depths behind the top wall's INNER face:
+    #   0.00   inner face
+    #   0.50   the PCB's edge      (board_pocket_h - board_h) / 2
+    #   0.69   the switch's actuator face
+    #
+    # The flange does NOT start at the inner face - it bears on a counterbore
+    # shoulder btn_cb_depth outboard of it - so the sprue's own step is not the
+    # datum. Getting that wrong is how this check first passed a sprue that was
+    # 0.34 mm short of ever touching a switch.
+    btn = parts["buttons"]
+    pocket_gap = (p["board_pocket_h"] - p["board_h"]) / 2
+    to_actuator = pocket_gap + 0.19
+
+    # The shoulder is the step where the section first grows past the cap.
+    lo, hi = float(btn.bounds[0][2]), float(btn.bounds[1][2])
+    z_shoulder, deepest_in_pcb_band, plunger_y = None, 0.0, []
+    for z in np.arange(lo + 0.02, hi, 0.02):
+        sec = btn.section(plane_origin=[0, 0, float(z)], plane_normal=[0, 0, 1])
+        if sec is None:
+            continue
+        v = sec.vertices
+        mid = v[np.abs(v[:, 0]) < p["button_pitch"] / 2 - 0.5]
+        if len(mid) == 0:
+            continue
+        if z_shoulder is None and mid[:, 0].max() > p["button_cap_w"] / 2 + 0.05:
+            z_shoulder = float(z)
+        if z_shoulder is None:
+            continue
+        depth = float(z) - (z_shoulder + p["btn_cb_depth"])   # behind the INNER face
+        if depth > pocket_gap + 0.01:
+            plunger_y.append((float(mid[:, 1].min()), float(mid[:, 1].max())))
+            if mid[:, 1].max() > p["btn_band_hi"] + 0.02:
+                deepest_in_pcb_band = max(deepest_in_pcb_band, depth)
+    if z_shoulder is None:
+        z_shoulder = lo
+    reach = hi - (z_shoulder + p["btn_cb_depth"])
+
+    # The actuator is in a BAND, not at a depth: the board is located by M2.5
+    # screws in 2.7 mm holes, so it floats +-board_mount_float. The plunger has
+    # to stop short of the NEAR end of that band (or it preloads a switch on a
+    # board that floated toward the wall) and the free travel has to reach the
+    # FAR end (or the button does nothing on a board that floated away).
+    f_float = p["board_mount_float"]
+    near, far = to_actuator - f_float, to_actuator + f_float
+    ok &= check("button plunger never preloads a switch", "STACK",
+                reach <= near - 0.01,
+                f"plunger ends {reach:.3f} mm behind the wall's inner face; the "
+                f"nearest the actuator can be is {near:.3f}, so the gap at rest "
+                f"is {near - reach:.3f} mm at worst"
+                + ("" if reach <= near - 0.01 else
+                   " - the switch would be held pressed"))
+    ok &= check("button free travel reaches the far end of the board's float",
+                "STACK",
+                reach + p["btn_travel"] >= far + p["btn_switch_throw"] - 0.01,
+                f"{p['btn_travel']:.2f} mm of travel from {reach:.3f} reaches "
+                f"{reach + p['btn_travel']:.3f}; the furthest actuator is at "
+                f"{far:.3f} and needs {p['btn_switch_throw']:.2f} mm of throw "
+                f"({far + p['btn_switch_throw']:.3f})")
+    ok &= check("button plunger misses the PCB on its way to the switch", "STACK",
+                deepest_in_pcb_band <= 0.0,
+                "nothing past the PCB's edge plane sits in the PCB's own "
+                f"thickness band (above {p['btn_band_hi']:+.3f} on the button axis)"
+                if deepest_in_pcb_band <= 0.0 else
+                f"material {deepest_in_pcb_band:.2f} mm past the edge plane is in "
+                "the PCB's thickness band")
+    lows = [q[0] for q in plunger_y]
+    ok &= check("button plunger bears on the switch body, not past its edge",
+                "STACK",
+                bool(lows) and min(lows) >= p["btn_band_lo"] - 0.02,
+                f"plunger's lower edge {min(lows):+.3f} against the switch body's "
+                f"{p['btn_band_lo']:+.3f}" if lows else "no plunger found at all")
+
+    # The counterbore is what buys the travel, so verify it in the CHASSIS.
+    ch = parts["chassis"]
+    # pcb_back_z and board_cx are defined in cyberdeck.scad, not in
+    # parameters.scad, so they are rebuilt here from their own definitions
+    # rather than read - same expression, same source values.
+    cbx = p.get("board_cx", 0.0)
+    cbz = (p["z_front_inner"] - p["board_w_display_front"]) + p["button_w_centre"]
+    inner_y = p["body_h"] / 2 - p["wall"]
+    # Probe just off the cap's corner, inside the flange's footprint: material
+    # there means the shoulder exists; a hit at the counterbore floor means it
+    # is the right depth.
+    probe = [cbx + p["button_cap_w"] / 2 + p["button_flange"] / 2,
+             inner_y - 1.0, cbz + p["button_cap_h"] / 2 + p["button_flange"] / 2]
+    loc, _, _ = ch.ray.intersects_location(np.array([probe], float),
+                                           np.array([[0.0, 1.0, 0.0]], float))
+    floor_y = float(np.min([q[1] for q in loc])) if len(loc) else None
+    got = None if floor_y is None else floor_y - inner_y
+    ok &= check("button flange counterbore is cut to depth", "STACK",
+                got is not None and abs(got - p["btn_cb_depth"]) < 0.05,
+                f"counterbore floor {got:.3f} mm outboard of the wall's inner "
+                f"face, asked {p['btn_cb_depth']:.2f}; flange is "
+                f"{p['btn_flange_t']:.2f} thick, leaving {p['btn_travel']:.2f} mm "
+                f"of free travel" if got is not None else
+                "no counterbore shoulder found in the top wall")
+
+    # --- the sprue as a SOLID, seated and pressed --------------------------
+    # The checks above reason about depths. This one puts the part where the
+    # assembly puts it and asks the mesh. It is a different instrument, and it
+    # is the one that caught a plunger cut to the nominal actuator depth: the
+    # depth arithmetic was self-consistent and still wrong, because it had no
+    # opinion about the board's mounting float.
+    #
+    # The chassis is the only thing it can be asked about. mock-board.stl is the
+    # board's coarse OUTER ENVELOPE - it is inflated for clearance checking and
+    # models no switches at all - so the plunger overlaps it by construction and
+    # an intersection with it would mean nothing either way.
+    seat = btn.copy()
+    seat.apply_transform(trimesh.transformations.rotation_matrix(np.radians(90),
+                                                                [1, 0, 0]))
+    seat.apply_translation([p.get("board_cx", 0.0),
+                            p["body_h"] / 2 - p["dish_depth"] + 0.6 - 0.01,
+                            (p["z_front_inner"] - p["board_w_display_front"])
+                            + p["button_w_centre"]])
+    worst_v, worst_at = 0.0, 0.0
+    for press in (0.0, p["btn_travel"] / 2, p["btn_travel"]):
+        moved = seat.copy()
+        moved.apply_translation([0.0, -press, 0.0])
+        inter = parts["chassis"].intersection(moved)
+        v = float(inter.volume) if inter is not None and len(inter.faces) else 0.0
+        if v > worst_v:
+            worst_v, worst_at = v, press
+    ok &= check("button sprue clears the chassis through its whole travel",
+                "STACK", worst_v <= 0.01,
+                f"seated and pressed to {p['btn_travel']:.2f} mm, the worst "
+                f"overlap with the chassis is {worst_v:.4f} mm^3"
+                + ("" if worst_v <= 0.01 else f" at {worst_at:.2f} mm of press"))
+
+    # --- the cowl cavity, as a SECTION at the holder's deepest plane -------
+    # "the cell reaches z = -5.00 and the floor is at -8.00" is a depth, and a
+    # depth says nothing about width. The crown used to start a millimetre
+    # above the holder and closed the cavity to 77.59 against a 77.80 holder.
+    bp = parts["backplate"]
+    cx = p["batt_off_x"]
+    cy = p["board_bay_cy"] + p["batt_off_y"]
+    deepest = -(p["batt_protrusion"] - p["back_t"])
+    worst, worst_z, sec = 1e9, 0.0, (0.0, 0.0)
+    for z in np.linspace(-0.2, deepest, 25):
+        span = []
+        for d in ([1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0]):
+            loc, _, _ = bp.ray.intersects_location(np.array([[cx, cy, z]], float),
+                                                   np.array([d], float))
+            if len(loc) == 0:
+                span.append(np.nan)
+            else:
+                span.append(float(np.min(np.linalg.norm(loc - np.array([cx, cy, z]),
+                                                        axis=1))))
+        w, h = span[0] + span[1], span[2] + span[3]
+        m = min(w - p["batt_bay_w"], h - p["batt_bay_h"]) / 2
+        if m < worst:
+            worst, worst_z, sec = m, z, (w, h)
+    ok &= check("cowl cavity is at full section where the holder is deepest",
+                "STACK", worst >= p["batt_cowl_clear"] - 0.02,
+                f"narrowest cavity section {sec[0]:.3f} x {sec[1]:.3f} at "
+                f"z = {worst_z:.2f} against a {p['batt_bay_w']:.2f} x "
+                f"{p['batt_bay_h']:.2f} holder: {worst:+.3f} mm per side, "
+                f"declared clearance {p['batt_cowl_clear']:.2f}")
+
+    # --- the keyboard, WHERE THE ASSEMBLY CAN ACTUALLY PUT IT --------------
+    # _corner_lip() measures the lip with the keyboard centred. It is not
+    # centred: nothing locates it in the pocket, so it can sit hard against one
+    # corner, and the lip is narrowest at a corner of the body at its LOW
+    # tolerance, because a smaller body both retreats from the aperture and has
+    # further to travel. Trap 5 - a part's bounding box is not where the
+    # assembly puts it.
+    lip, at = _corner_lip_with_play(parts["chassis"], p)
+    fw, fh = _kbd_free_span(parts["chassis"], p)
+    ok &= check("keyboard still covers its aperture with the pocket play taken up",
+                "STACK", lip >= 0.0,
+                f"narrowest lip {lip:+.3f} mm at a corner with the body at "
+                f"{p['kbd_body_w'] - p['kbd_mould_tol']:.2f} x "
+                f"{p['kbd_body_h'] - p['kbd_mould_tol']:.2f} pushed to "
+                f"({at[0]:+.2f}, {at[1]:+.2f}); centred it is "
+                f"{_corner_lip(parts['chassis'], p)[0]:.3f}")
+
+    # The ribs are what make that lip a guarantee, so they get their own check
+    # from BOTH ends: tall enough to take the play out, short enough that the
+    # largest credible body still goes in.
+    big_w, big_h = p["kbd_body_w"] + p["kbd_mould_tol"], p["kbd_body_h"] + p["kbd_mould_tol"]
+    ok &= check("keyboard locating ribs admit the largest credible body",
+                "STACK", fw >= big_w and fh >= big_h,
+                f"ribbed span {fw:.3f} x {fh:.3f} against a {big_w:.2f} x {big_h:.2f} "
+                f"body: {(fw - big_w) / 2:+.3f} / {(fh - big_h) / 2:+.3f} mm per side")
+    small_w, small_h = p["kbd_body_w"] - p["kbd_mould_tol"], p["kbd_body_h"] - p["kbd_mould_tol"]
+    ok &= check("keyboard locating ribs take the play out of the bare pocket",
+                "STACK",
+                fw <= p["kbd_pocket_w"] - 0.4 and fh <= p["kbd_pocket_h"] - 0.2,
+                f"bare pocket {p['kbd_pocket_w']:.2f} x {p['kbd_pocket_h']:.2f} closed to "
+                f"{fw:.3f} x {fh:.3f}; travel on the smallest body falls to "
+                f"+-{(fw - small_w) / 2:.3f} / +-{(fh - small_h) / 2:.3f} mm")
+    return ok
+
+
+def _kbd_free_span(chassis, p):
+    """The span the keyboard is ACTUALLY free to move in, measured from the
+    mesh at the locating ribs - not the bare pocket, and not the parameters.
+
+    A rib that was specified but not built would leave this equal to the bare
+    pocket, and the lip check below would fail exactly as it did before the ribs
+    existed. That is the point: the ribs are load-bearing for the lip guarantee,
+    so the check has to see them.
+    """
+    cy = p["kbd_bay_cy"]
+    z = p["z_front_inner"] - p["kbd_depth"] * 0.4      # mid rib, full radius
+    def span(origin, a, b):
+        out = 0.0
+        for d in (a, b):
+            loc, _, _ = chassis.ray.intersects_location(
+                np.array([origin], float), np.array([d], float))
+            if len(loc) == 0:
+                return None
+            out += float(np.min(np.linalg.norm(loc - np.array(origin), axis=1)))
+        return out
+    xs = [span([0.0, cy + dy, z], [-1, 0, 0], [1, 0, 0]) for dy in p["kbd_rib_dy"]]
+    ys = [span([dx, cy, z], [0, -1, 0], [0, 1, 0]) for dx in p["kbd_rib_dx"]]
+    xs = [q for q in xs if q] or [p["kbd_pocket_w"]]
+    ys = [q for q in ys if q] or [p["kbd_pocket_h"]]
+    return min(xs), min(ys)
+
+
+def _corner_lip_with_play(chassis, p):
+    """Narrowest lip over the keyboard aperture, over the body's tolerance band
+    AND over every position the RIBBED pocket allows. Returns (lip, (dx, dy))."""
+    from shapely.geometry import Point, box
+    import shapely.affinity as aff
+    kbd_cy = -p["body_h"] / 2 + p["wall"] + p["kbd_pocket_h"] / 2
+    z = p["body_t"] - p["front_t"] + 0.05
+    ring = None
+    for g in section_polys(chassis, z):
+        for r in g.interiors:
+            cand = Polygon(r); b = cand.bounds
+            if abs((b[1] + b[3]) / 2 - kbd_cy) < 8 and (b[2] - b[0]) > 60:
+                ring = cand
+    if ring is None:
+        return -99.0, (0.0, 0.0)
+    pts = np.array(ring.exterior.coords)
+    free_w, free_h = _kbd_free_span(chassis, p)
+    best, at = 1e9, (0.0, 0.0)
+    for w, h in ((p["kbd_body_w"] - p["kbd_mould_tol"], p["kbd_body_h"] - p["kbd_mould_tol"]),
+                 (p["kbd_body_w"], p["kbd_body_h"]),
+                 (p["kbd_body_w"] + p["kbd_mould_tol"], p["kbd_body_h"] + p["kbd_mould_tol"])):
+        px, py = max(0.0, (free_w - w) / 2), max(0.0, (free_h - h) / 2)
+        for r in (p["kbd_body_corner_r_min"], p["kbd_body_corner_r"],
+                  p["kbd_body_corner_r_max"]):
+            body = box(-w / 2, -h / 2, w / 2, h / 2)
+            body = body.buffer(-r, join_style=1, quad_segs=64).buffer(
+                r, join_style=1, quad_segs=64)
+            for dx in (-px, 0.0, px):
+                for dy in (-py, 0.0, py):
+                    k = aff.translate(body, dx, kbd_cy + dy)
+                    edge = k.exterior
+                    m = min((edge.distance(Point(q)) if k.contains(Point(q))
+                             else -edge.distance(Point(q))) for q in pts)
+                    if m < best:
+                        best, at = m, (dx, dy)
+    return best, at
+
+
 def check_interface(parts, p):
     print("\n-- INTERFACE --")
     ok = True
@@ -762,6 +1121,8 @@ def main():
         ok &= check_envelope(parts, p)
         ok &= check_fit(parts, mocks, p)
         ok &= check_openings(parts, p)
+        ok &= check_obstruction(parts, p)
+        ok &= check_stacks(parts, mocks, p)
         ok &= check_interface(parts, p)
         ok &= check_print(parts, p)
         ok &= check_datums(p)

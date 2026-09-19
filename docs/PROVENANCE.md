@@ -54,7 +54,7 @@ file. The architecture is deliberately different:
 | Board mounting | into the enclosure | into the board's own SMTSO standoffs |
 | Stand base | retained | discarded |
 | Battery cover | separate, clipped | integral cowl |
-| Envelope | 151.65 × 116.77 × 18.00 | 116.6 × 139.1 × 16.6 |
+| Envelope | 151.65 × 116.77 × 18.00 | 116.25 × 138.85 × 16.85 |
 
 The reference solves the same problem in a different way. That is what makes it
 useful as a cross-check.

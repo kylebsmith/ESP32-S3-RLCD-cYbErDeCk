@@ -1,12 +1,12 @@
 {
-  "passed": 76,
-  "total": 76,
+  "passed": 92,
+  "total": 92,
   "results": [
     {
       "check": "chassis: watertight",
       "class": "MESH",
       "ok": true,
-      "detail": "9416 faces"
+      "detail": "12088 faces"
     },
     {
       "check": "chassis: single body",
@@ -18,13 +18,13 @@
       "check": "chassis: positive volume",
       "class": "MESH",
       "ok": true,
-      "detail": "42870 mm^3 -> 53.2 g in PLA"
+      "detail": "43098 mm^3 -> 53.4 g in PLA"
     },
     {
       "check": "backplate: watertight",
       "class": "MESH",
       "ok": true,
-      "detail": "18740 faces"
+      "detail": "17420 faces"
     },
     {
       "check": "backplate: single body",
@@ -36,13 +36,13 @@
       "check": "backplate: positive volume",
       "class": "MESH",
       "ok": true,
-      "detail": "48392 mm^3 -> 60.0 g in PLA"
+      "detail": "46866 mm^3 -> 58.1 g in PLA"
     },
     {
       "check": "buttons: watertight",
       "class": "MESH",
       "ok": true,
-      "detail": "2428 faces"
+      "detail": "2496 faces"
     },
     {
       "check": "buttons: single body",
@@ -54,7 +54,7 @@
       "check": "buttons: positive volume",
       "class": "MESH",
       "ok": true,
-      "detail": "377 mm^3 -> 0.5 g in PLA"
+      "detail": "174 mm^3 -> 0.2 g in PLA"
     },
     {
       "check": "board: watertight",
@@ -96,13 +96,13 @@
       "check": "width is component-bound",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "116.60 mm, minimum possible with 3.2 mm walls = 116.60 mm"
+      "detail": "116.25 mm, minimum possible with 3.2 mm walls = 116.25 mm"
     },
     {
       "check": "height is component-bound",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "139.10 mm, minimum possible = 139.10 mm"
+      "detail": "138.85 mm, minimum possible = 138.85 mm"
     },
     {
       "check": "thickness is component-bound",
@@ -114,13 +114,13 @@
       "check": "chassis: extent X is as specified",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "116.60 mm, expected 116.60"
+      "detail": "116.25 mm, expected 116.25"
     },
     {
       "check": "chassis: extent Y is as specified",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "139.10 mm, expected 139.10"
+      "detail": "138.85 mm, expected 138.85"
     },
     {
       "check": "chassis: extent Z is as specified",
@@ -132,43 +132,43 @@
       "check": "chassis is not degenerate",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "116.60 x 139.10 x 16.85, 42870 mm^3"
+      "detail": "116.25 x 138.85 x 16.85, 43098 mm^3"
     },
     {
       "check": "backplate: extent X is as specified",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "109.60 mm, expected 109.60"
+      "detail": "109.25 mm, expected 109.25"
     },
     {
       "check": "backplate is not degenerate",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "109.60 x 133.30 x 13.45, 48392 mm^3"
+      "detail": "109.25 x 133.05 x 13.45, 46866 mm^3"
     },
     {
       "check": "buttons is not degenerate",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "26.00 x 4.80 x 6.59, 377 mm^3"
+      "detail": "26.00 x 4.80 x 3.44, 174 mm^3"
     },
     {
       "check": "chassis fits the print bed",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "116.6 x 139.1 x 16.9"
+      "detail": "116.2 x 138.8 x 16.9"
     },
     {
       "check": "backplate fits the print bed",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "109.6 x 133.3 x 13.4"
+      "detail": "109.2 x 133.1 x 13.4"
     },
     {
       "check": "buttons fits the print bed",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "26.0 x 4.8 x 6.6"
+      "detail": "26.0 x 4.8 x 3.4"
     },
     {
       "check": "board does not clash with the chassis",
@@ -180,13 +180,13 @@
       "check": "board does not clash with the back plate",
       "class": "FIT",
       "ok": true,
-      "detail": "shared volume 0.17 mm^3"
+      "detail": "shared volume 0.00 mm^3"
     },
     {
       "check": "board is inside the assembled envelope",
       "class": "FIT",
       "ok": true,
-      "detail": "bounds [[-46.25, -3.25, -5.0], [46.25, 65.85, 14.2]] in [-58.3, -69.55, -10.0]..[58.3, 69.55, 16.85]"
+      "detail": "bounds [[-46.25, -3.38, -5.0], [46.25, 65.72, 14.2]] in [-58.12, -69.42, -10.0]..[58.12, 69.42, 16.85]"
     },
     {
       "check": "keyboard does not clash with the chassis",
@@ -204,7 +204,7 @@
       "check": "keyboard is inside the assembled envelope",
       "class": "FIT",
       "ok": true,
-      "detail": "bounds [[-54.4, -65.9, 3.45], [54.4, -7.4, 14.84]] in [-58.3, -69.55, -10.0]..[58.3, 69.55, 16.85]"
+      "detail": "bounds [[-54.4, -65.9, 3.45], [54.4, -7.4, 14.84]] in [-58.12, -69.42, -10.0]..[58.12, 69.42, 16.85]"
     },
     {
       "check": "board pocket clearance",
@@ -216,7 +216,7 @@
       "check": "keyboard is captured by the front lip",
       "class": "FIT",
       "ok": true,
-      "detail": "lip 1.85 / 1.80 mm per side"
+      "detail": "lip 1.67 / 1.68 mm per side"
     },
     {
       "check": "keyboard covers the aperture at the corners too",
@@ -315,10 +315,106 @@
       "detail": "0 crossing(s) between the outer wall and the board pocket (0 = open tunnel)"
     },
     {
+      "check": "M2.5 board screw at x=-42.75, y=+0.12 head recess is reachable",
+      "class": "OBSTRUCTION",
+      "ok": true,
+      "detail": "nothing over the 5.0 mm head footprint"
+    },
+    {
+      "check": "M2.5 board screw at x=+42.75, y=+0.12 head recess is reachable",
+      "class": "OBSTRUCTION",
+      "ok": true,
+      "detail": "nothing over the 5.0 mm head footprint"
+    },
+    {
+      "check": "M2.5 board screw at x=-42.75, y=+62.22 head recess is reachable",
+      "class": "OBSTRUCTION",
+      "ok": true,
+      "detail": "nothing over the 5.0 mm head footprint"
+    },
+    {
+      "check": "M2.5 board screw at x=+42.75, y=+62.22 head recess is reachable",
+      "class": "OBSTRUCTION",
+      "ok": true,
+      "detail": "nothing over the 5.0 mm head footprint"
+    },
+    {
+      "check": "expansion-header window is not overhung by the cowl",
+      "class": "OBSTRUCTION",
+      "ok": true,
+      "detail": "clear across the full opening"
+    },
+    {
+      "check": "speaker grille field is not overhung by the cowl",
+      "class": "OBSTRUCTION",
+      "ok": true,
+      "detail": "clear across the full opening"
+    },
+    {
+      "check": "button plunger never preloads a switch",
+      "class": "STACK",
+      "ok": true,
+      "detail": "plunger ends 0.540 mm behind the wall's inner face; the nearest the actuator can be is 0.590, so the gap at rest is 0.050 mm at worst"
+    },
+    {
+      "check": "button free travel reaches the far end of the board's float",
+      "class": "STACK",
+      "ok": true,
+      "detail": "0.60 mm of travel from 0.540 reaches 1.140; the furthest actuator is at 0.790 and needs 0.25 mm of throw (1.040)"
+    },
+    {
+      "check": "button plunger misses the PCB on its way to the switch",
+      "class": "STACK",
+      "ok": true,
+      "detail": "nothing past the PCB's edge plane sits in the PCB's own thickness band (above +0.700 on the button axis)"
+    },
+    {
+      "check": "button plunger bears on the switch body, not past its edge",
+      "class": "STACK",
+      "ok": true,
+      "detail": "plunger's lower edge -1.001 against the switch body's -1.101"
+    },
+    {
+      "check": "button flange counterbore is cut to depth",
+      "class": "STACK",
+      "ok": true,
+      "detail": "counterbore floor 1.000 mm outboard of the wall's inner face, asked 1.00; flange is 0.40 thick, leaving 0.60 mm of free travel"
+    },
+    {
+      "check": "button sprue clears the chassis through its whole travel",
+      "class": "STACK",
+      "ok": true,
+      "detail": "seated and pressed to 0.60 mm, the worst overlap with the chassis is 0.0000 mm^3"
+    },
+    {
+      "check": "cowl cavity is at full section where the holder is deepest",
+      "class": "STACK",
+      "ok": true,
+      "detail": "narrowest cavity section 78.800 x 23.100 at z = -1.60 against a 77.80 x 22.10 holder: +0.500 mm per side, declared clearance 0.50"
+    },
+    {
+      "check": "keyboard still covers its aperture with the pocket play taken up",
+      "class": "STACK",
+      "ok": true,
+      "detail": "narrowest lip +0.368 mm at a corner with the body at 108.20 x 57.90 pushed to (+0.38, +0.37); centred it is 0.985"
+    },
+    {
+      "check": "keyboard locating ribs admit the largest credible body",
+      "class": "STACK",
+      "ok": true,
+      "detail": "ribbed span 108.950 x 58.650 against a 108.80 x 58.50 body: +0.075 / +0.075 mm per side"
+    },
+    {
+      "check": "keyboard locating ribs take the play out of the bare pocket",
+      "class": "STACK",
+      "ok": true,
+      "detail": "bare pocket 109.85 x 59.15 closed to 108.950 x 58.650; travel on the smallest body falls to +-0.375 / +-0.375 mm"
+    },
+    {
       "check": "back plate fits the chassis opening",
       "class": "INTERFACE",
       "ok": true,
-      "detail": "plate 109.60 mm into a 110.20 mm opening"
+      "detail": "plate 109.25 mm into a 109.85 mm opening"
     },
     {
       "check": "chassis and back plate do not clash",
@@ -426,7 +522,7 @@
       "check": "keyboard pocket clears the body at tolerance",
       "class": "DATUM",
       "ok": true,
-      "detail": "pocket 110.2 x 59.4 x 11.0 over 108.80 x 58.50 x 10.60 (nominal 108.5 x 58.2 x 10.2 plus assumed tolerance)"
+      "detail": "pocket 109.8 x 59.1 x 11.0 over 108.80 x 58.50 x 10.60 (nominal 108.5 x 58.2 x 10.2 plus assumed tolerance)"
     },
     {
       "check": "keyboard fit is checked at tolerance, not nominal",

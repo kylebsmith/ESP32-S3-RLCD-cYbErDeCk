@@ -66,7 +66,8 @@ Measure the holder's footprint on the PCB back face, across the mounting flange
 > document states.
 
 Measure **across the flats**, not corner to corner, at three places per axis.
-The pocket is 110.20 × 59.40, so anything up to 109.0 × 58.8 is fine.
+The pocket is 109.85 × 59.15 with locating ribs closing it to 108.95 × 58.65,
+so anything up to 108.80 × 58.50 is fine.
 
 ## 6 · Keyboard corner radius
 

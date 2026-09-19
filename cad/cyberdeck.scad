@@ -117,8 +117,16 @@ tongue_t     = 1.6;                  // [DESIGN] 4 extrusions
 //  tongue_depth is how far the groove eats into the bottom wall, so the wall
 //  left outboard of it is back_t - tongue_depth. At 3.0 that was 0.20 mm -
 //  half an extrusion - and the groove effectively broke out of the bottom
-//  face. 1.6 leaves 1.6 mm, four extrusions, and still gives 1.2 mm of
-//  engagement. See docs/DATUMS.md C-14.
+//  face. 1.6 leaves 1.6 mm, four extrusions.
+//
+//  ENGAGEMENT IS 0.90 mm, NOT THE 1.2 THIS COMMENT USED TO CLAIM. 1.2 is the
+//  groove's own depth measured from its blind end; what actually holds the
+//  plate is how far the tongue reaches past the plane where the chassis has
+//  material both above and below it. Measured on the rendered parts: the
+//  tongue tip is at y = -67.25 and that plane is at -66.35, so 0.90 mm is
+//  captured, with 0.15 mm of clearance above and below the tongue in a 1.6 mm
+//  groove. It holds - but the figure is the one to check against, not 1.2.
+//  See docs/DATUMS.md C-14.
 tongue_depth = 1.6;                  // [DESIGN] groove depth into the bottom wall
 //  tongue_z is the groove's CENTRE, not its base: both the groove and the
 //  tongue are cube(..., center = true), which centres in Z as well as X and Y.
@@ -232,6 +240,19 @@ module chassis() {
                 rotate([90, 0, 0])
                     rbox(button_aper_w, button_aper_h, wall + 2, 1.0);
         }
+        //  Flange counterbore: ONE continuous slot, not three pockets, because
+        //  the sprue is a single part and its connecting webs have to recess
+        //  with the flanges. Cut from the inner face outward, so it never
+        //  breaks the outer skin; wall - dish_depth - btn_cb_depth = 1.50 mm of
+        //  material is left outboard of it, and that shoulder is what the
+        //  flanges bear on.
+        translate([board_cx, top_wall_y - wall + btn_cb_depth,
+                   pcb_back_z + button_w_centre])
+            rotate([90, 0, 0])
+                rbox(2 * button_pitch + button_cap_w + 2 * button_flange + 0.4,
+                     button_cap_h + 2 * button_flange + 0.4,
+                     btn_cb_depth + 0.01, 1.2);
+
         for (sx = [-1, 1])
             translate([board_cx + sx * mic_offset_x, top_wall_y + 1.0,
                        pcb_back_z + mic_w_centre])
@@ -247,13 +268,25 @@ module chassis() {
         // Both connectors are mid-mount: the body straddles a cut-out in the
         // PCB and sits partly behind the PCB back face, which is why each
         // opening is positioned in W rather than centred on the board.
+        //  Each port is a straight tunnel with a FLARED MOUTH at the outer
+        //  face. Without the flare the opening is a square-edged slot and only
+        //  a slim cable will seat: a normal USB-C plug's overmould lands on the
+        //  outside of the shell and holds the plug proud, so the contacts never
+        //  fully engage. The flare gives the overmould somewhere to sit.
         for (prt = [[usbc_off_y, usbc_open_w, usbc_open_h, usbc_w_centre],
-                    [tf_off_y,   tf_open_w,   tf_open_h,   tf_w_centre]])
+                    [tf_off_y,   tf_open_w,   tf_open_h,   tf_w_centre]]) {
             translate([board_pocket_w/2 - 1,
                        board_cy + prt[0],
                        pcb_back_z + prt[3]])
                 rotate([0, 90, 0])
                     rbox(prt[2], prt[1], body_w/2 - board_pocket_w/2 + 2, 1.2);
+            translate([body_w/2 - port_mouth_d,
+                       board_cy + prt[0],
+                       pcb_back_z + prt[3]])
+                rotate([0, 90, 0])
+                    flared_aperture(prt[2], prt[1], port_mouth_d + 0.5,
+                                    port_mouth, 1.2);
+        }
 
         // --- keyboard service access windows ---------------------------------
         // Reaches the keyboard's power slide switch and its charging port,
@@ -261,15 +294,25 @@ module chassis() {
         // in either way round.
         kbd_floor   = z_front_inner - kbd_depth;
         kbd_top_edge = kbd_bay_cy + kbd_pocket_h/2;
-        //  The two windows were NOT mirrored: both sat the same distance from
-        //  the SPINE-side edge, so a keyboard turned end-for-end put its port
-        //  where there is no window, and the deck was asymmetric for no reason.
-        //  The second is now the first reflected about the bay centreline.
-        //  See docs/DATUMS.md C-15.
+        //  ONE window, on the LEFT as the device is used, positioned from the
+        //  TOP of the keyboard. Measured on the real unit: the slide switch
+        //  starts 10.4 mm from the keyboard's top edge and the USB-C receptacle
+        //  starts 29.6 mm, so both features live in a band roughly 10.4 to 38.6
+        //  down one short edge. There is nothing on the other edge.
+        //
+        //  Two corrections at once, see docs/DATUMS.md C-22. A previous version
+        //  cut BOTH flanks "so the keyboard can go in either way round", which
+        //  it cannot - the keys only read one way up. Worse, mirroring the
+        //  second window about the bay centreline put the LEFT one, the only
+        //  one that matters, at 15.4..49.4 from the keyboard's top: 5 mm clear
+        //  of the slide switch it exists to reach.
+        //
+        //  In this frame +X is right and +Y is up when looking at the front
+        //  face, so left-as-used is sx = -1.
         kbd_access_cy = kbd_top_edge - kbd_access_from_edge - kbd_access_w/2;
-        for (sx = (kbd_access_both_sides ? [-1, 1] : [1]))
+        for (sx = (kbd_access_both_sides ? [-1, 1] : [-1]))
             translate([sx * (kbd_pocket_w/2 - 1),
-                       sx > 0 ? kbd_access_cy : 2*kbd_bay_cy - kbd_access_cy,
+                       kbd_access_cy,
                        kbd_floor + kbd_access_above_floor + kbd_access_h/2])
                 rotate([0, sx * 90, 0])
                     rbox(kbd_access_h, kbd_access_w, wall + 3, 1.5);
@@ -291,12 +334,45 @@ module chassis() {
             translate([p[0], p[1], z_back_inner - 0.01])
                 cylinder(h = shell_screw_bore_depth, d = shell_screw_insert_bore);
     }
+
+    //  --- keyboard locating ribs -------------------------------------------
+    //  UNIONED, so they come after the difference above closes. Nothing bonds
+    //  or clamps the keyboard in X and Y: it is a drop-in part held only by the
+    //  front lip and the keeper pad behind it. With a bare pocket it sits
+    //  wherever it lands, and at one extreme the front lip went negative at a
+    //  corner. These four pairs take the play out and make the lip a
+    //  guarantee. See docs/DATUMS.md C-24.
+    kbd_locating_ribs();
 }
 
 
 // ===========================================================================
 //  BACK PLATE
 // ===========================================================================
+
+//  Half-round fins on the pocket walls, tapered at the entry end because the
+//  keyboard loads from BEHIND (-Z). Each cylinder is centred ON the wall plane,
+//  so half of it is buried in wall material already there and only the inboard
+//  half is new: the rib fuses to the wall with no seam to delaminate.
+module kbd_rib(r) {
+    union() {
+        cylinder(r1 = 0.05, r2 = r, h = kbd_rib_lead);
+        translate([0, 0, kbd_rib_lead - 0.001])
+            cylinder(r = r, h = kbd_depth - kbd_rib_lead + 0.001);
+    }
+}
+
+module kbd_locating_ribs() {
+    //  The ribs start exactly at the keeper pad's top face, which is where the
+    //  keyboard's own back face begins, and run the full pocket depth.
+    kfloor = z_front_inner - kbd_depth;
+    for (sx = [-1, 1], dy = kbd_rib_dy)        // long axis, +-X walls
+        translate([sx * kbd_pocket_w / 2, kbd_bay_cy + dy, kfloor])
+            kbd_rib(kbd_rib_r_x);
+    for (sy = [-1, 1], dx = kbd_rib_dx)        // short axis, +-Y walls
+        translate([dx, kbd_bay_cy + sy * kbd_pocket_h / 2, kfloor])
+            kbd_rib(kbd_rib_r_y);
+}
 
 module backplate() {
     plate_w = inner_w - 2 * fit_slide;
@@ -348,12 +424,23 @@ module backplate() {
                                  foot = batt_cowl_foot_f,
                                  crown = batt_cowl_crown);
 
-            // --- stiffening ribs across the keyboard bay ---------------------
-            // They run in the plate's weakest direction: the long span between
-            // the bottom tongue and the spine.
-            for (i = [-1, 0, 1])
-                translate([i * 34, kbd_bay_cy, back_t + kbd_keeper_t/2 - 0.01])
-                    cube([3.0, kbd_pocket_h - 8, kbd_keeper_t], center = true);
+            // --- stiffening ribs across the keyboard bay: DELETED -------------
+            // Three 3.0 mm ribs used to be added here, described as running
+            // "in the plate's weakest direction". They added exactly nothing.
+            // cube(..., center = true) centres in Z, so at a z-centre of
+            // back_t + kbd_keeper_t/2 - 0.01 and a height of kbd_keeper_t they
+            // occupied z 3.19..3.44 - entirely INSIDE the keeper pad, which is
+            // 3.19..3.45. Sectioning the rendered plate at z = 3.30 and 3.44
+            // gives 6275.2 and 6280.2 mm^2 against a bare pad of the same area:
+            // zero added material, and deleting them changes the part's volume
+            // by 0.0 mm^3.
+            //
+            // They could not have worked as written either: kbd_keeper_t is
+            // board_depth - kbd_depth = 0.25 mm, so a rib standing proud of the
+            // pad would be a fraction of a millimetre tall and would come
+            // straight out of the keyboard's 0.40 mm of float. The plate is
+            // stiffened by being 3.2 mm of solid PETG, not by ribs that are one
+            // layer high. See docs/DATUMS.md C-27.
 
         }
 
@@ -426,77 +513,44 @@ module backplate() {
 //  sit behind the wall and do not bind.
 
 module buttons() {
-    span = (button_count - 1) * button_pitch;
-    web_t = 0.8;
+    //  THE STACK, in part coordinates with z = 0 at the cap's outer tip:
+    //      0.00                cap tip, 0.6 proud of the dish floor
+    //      0.60                dish floor
+    //      2.90                the top wall's INNER face
+    //      3.44                the plunger's face, btn_reach behind it
+    //      3.49 .. 3.69        where the actuator actually is, once the
+    //                          board's +-0.10 mm mounting float is allowed for
+    //  and the flange does NOT sit at 2.90. It sits in a counterbore cut back
+    //  to 2.10, so the 0.50 mm the board leaves behind the wall stays free for
+    //  the plunger and for travel. See cad/parameters.scad and DATUMS.md C-23.
+    cap_len   = 0.6 + (wall - dish_depth) - btn_cb_depth;
+    face_z    = 0.6 + (wall - dish_depth);            // the wall's inner face
+    post_len  = face_z + btn_reach - (cap_len + btn_flange_t);
+
     for (i = [0 : button_count - 1]) {
         x = (i - (button_count - 1)/2) * button_pitch;
         translate([x, 0, 0]) {
-            // outer cap, passes through the aperture
-            rbox(button_cap_w, button_cap_h, wall + 0.6, 0.8);
-            // retaining flange, sits behind the wall
-            translate([0, 0, wall + 0.6 - 0.01])
-                rbox(button_cap_w + 2*button_flange,
-                     button_cap_h + 2*button_flange, 1.2, 1.0);
-            // actuator post, reaches the switch
-            translate([0, 0, wall + 1.8 - 0.01])
-                cylinder(h = 1.6, d = 3.0);
+            // cap: through the aperture, standing 0.6 proud of the dish floor
+            rbox(button_cap_w, button_cap_h, cap_len, 0.8);
+            // flange: bears on the counterbore shoulder, retains the cap
+            translate([0, 0, cap_len - 0.01])
+                rbox(button_cap_w + 2 * button_flange,
+                     button_cap_h + 2 * button_flange, btn_flange_t, 1.0);
+            // plunger: the only thing that goes behind the wall. Offset in Y so
+            // it lands on the switch body and misses the PCB's edge entirely.
+            translate([0, btn_post_dy, cap_len + btn_flange_t - 0.01])
+                rbox(btn_post_w, btn_post_h, post_len + 0.01, 0.6);
         }
     }
-    // connecting webs
+    //  Connecting webs, COPLANAR with the flanges so they recess into the same
+    //  counterbore. They are also the springs: at 0.4 mm thick over a 10 mm
+    //  span they bend far enough for one cap to travel while its neighbours
+    //  stay put, which is what lets three caps share one sprue.
     for (i = [0 : button_count - 2]) {
         x = (i - (button_count - 1)/2 + 0.5) * button_pitch;
-        translate([x, 0, wall + 0.6 + 0.6])
-            cube([button_pitch, 2.0, web_t], center = true);
+        translate([x, 0, cap_len - 0.01 + btn_flange_t/2])
+            cube([button_pitch, 2.0, btn_flange_t], center = true);
     }
-}
-
-
-// ===========================================================================
-//  OPTIONAL ACRYLIC WINDOW  (reference outline, for laser cutting)
-// ===========================================================================
-
-//  The acrylic window was REMOVED as a part. See docs/DATUMS.md C-09. Its
-//  outline lives on in parameters.scad as a measurement of the reference's own
-//  DXF, which is still useful as provenance, but it is not a part of this
-//  design: this deck's board pocket is 11.0 mm (board 10.75 + a 0.25 gasket
-//  squeeze) where the reference's is 13.0 mm (board + 2.0 acrylic + 0.25), so
-//  there is nowhere for a 2 mm sheet to go. It was also 0.72 mm WIDER than
-//  this pocket in both axes, so it could not have been fitted even flat.
-
-
-// ===========================================================================
-//  ASSEMBLY AND PLATE VIEWS
-// ===========================================================================
-
-//  Component colours are deliberately flat and unsaturated: these views exist
-//  to show fit and arrangement, not to sell anything.
-module assembly(explode = 0) {
-    e = explode;
-    color("#cfcabf")                      chassis();
-    color("#b6b0a4") translate([0, 0, -e * 3.0])  backplate();
-    translate([board_cx, board_cy, z_front_inner - board_depth - e * 1.8]) {
-        color("#2f6b45") mock_board();
-        // COSMETIC ONLY, and only for the interactive preview - the PUBLISHED
-        // views are built by tools/render.sh from the exported STLs, for the
-        // reason given in cad/render_assembly.scad. The fit mock above is one
-        // solid envelope, which is what the clash tests need, but it makes the
-        // PCB read as the screen. This is the active area drawn as glass.
-        // Floated 0.05 clear of the envelope rather than flush or overlapping:
-        // coplanar faces z-fight and interpenetrating solids stripe. It sits
-        // outside the envelope already tested, so it cannot affect a fit test.
-        color("#14171a")
-            translate([display_off_x, 0, board_stack + 0.05])
-                rbox(display_active_w, display_active_h, 0.4, 0.5);
-    }
-    color("#2b2e33")
-        translate([0, kbd_bay_cy, z_front_inner - kbd_depth - e * 0.9])
-            mock_keyboard();
-    color("#a8342b")
-        for (i = [0 : button_count - 1])
-            translate([board_cx + (i - (button_count - 1)/2) * button_pitch,
-                       body_h/2 + 0.3 + e * 0.5,
-                       pcb_back_z + button_w_centre])
-                rotate([90, 0, 0]) buttons_single();
 }
 
 module buttons_single() {

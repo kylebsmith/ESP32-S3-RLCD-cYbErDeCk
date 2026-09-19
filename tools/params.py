@@ -35,12 +35,25 @@ _TERNARY = re.compile(r"^(?P<c>[^?]+)\?(?P<a>[^:]+):(?P<b>.+)$", re.S)
 
 
 def _evaluate(expr, scope):
-    expr = expr.strip()
+    # Collapse the statement onto one line FIRST. A SCAD expression may be
+    # wrapped across lines for readability; Python only tolerates that inside
+    # brackets, so `a + b\n    + c` was a SyntaxError, the value was silently
+    # dropped, and the check that needed it died with a KeyError several
+    # hundred lines away. Whitespace carries no meaning in either language.
+    expr = " ".join(expr.split())
     m = _TERNARY.match(expr)
     if m:
         expr = f"({m.group('a')}) if ({m.group('c')}) else ({m.group('b')})"
     expr = expr.replace("&&", " and ").replace("||", " or ")
-    return float(eval(expr, {"__builtins__": {}}, scope))
+    v = eval(expr, {"__builtins__": {}}, scope)
+    # A SCAD vector is a Python list already. float() cannot take one, so every
+    # list-valued parameter used to raise here and be dropped WITHOUT A WORD -
+    # the same silent-drop failure the line-joining bug had. Keep vectors as
+    # lists of floats; everything else is still coerced, so a stray string or
+    # bool is still rejected.
+    if isinstance(v, (list, tuple)):
+        return [float(q) for q in v]
+    return float(v)
 
 
 def load(path=PARAMS, seeds=None):

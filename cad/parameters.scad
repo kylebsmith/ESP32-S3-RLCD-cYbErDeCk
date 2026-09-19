@@ -231,6 +231,64 @@ button_cap_h   = 4.0;    // [MEASURED]
 button_flange  = 0.4;    // [MEASURED] per-side retaining flange behind the wall
 button_w_centre = -0.70; // [VENDOR] switch centre in W: (-1.802 + 0.402)/2
 
+//  THE BUTTON STACK. Everything here follows from one sentence above: the
+//  switch body stops 0.19 mm INSIDE the PCB edge. So a cap alone cannot work -
+//  it needs a plunger - and the plunger has to get past the board's edge plane
+//  without touching the board.
+//
+//  Depths behind the top wall's INNER face:
+//      0.000   inner face
+//      0.500   the PCB's own edge          (board_pocket_h - board_h) / 2
+//      0.690   the switch's actuator face  = 0.500 + 0.19
+//
+//  Half a millimetre is not enough for a retaining flange AND the switch's
+//  travel, which is what made the first two attempts fail in opposite
+//  directions: a 1.2 mm flange plus a 1.6 mm post was 0.7 mm into the PCB, and
+//  cutting back to a bare 0.4 mm flange left the caps 0.34 mm short of ever
+//  touching a switch. Neither could be made to work behind the wall, because
+//  the space behind the wall belongs to the board.
+//
+//  So the flange does not live behind the wall. It lives IN it, in a
+//  counterbore cut from the inner face, and only the plunger goes past. That
+//  buys the travel from the wall's own thickness instead of from the board's
+//  clearance. See docs/DATUMS.md C-23.
+btn_cb_depth = 1.00;   // [DESIGN] flange counterbore, from the wall's inner face
+btn_flange_t = 0.40;   // [DESIGN] flange thickness; travel is the difference
+btn_travel   = btn_cb_depth - btn_flange_t;   // [DERIVED] = 0.60 mm of free travel
+
+//  HOW DEEP THE PLUNGER ACTUALLY GOES - and why it is NOT 0.690.
+//
+//  The board is located by its four M2.5 screws, not by the pocket, and an M2.5
+//  screw in an ISO 273 close-fit 2.7 mm hole can sit anywhere in +-0.10 mm. So
+//  the actuator is not at a depth, it is in a BAND: 0.590 to 0.790 behind the
+//  wall's inner face. A plunger cut to the nominal 0.690 would hold a switch
+//  permanently pressed on any build that floated toward the wall - a button
+//  that never releases, which is worse than one that never presses.
+//
+//  So the plunger is cut to the SHALLOW end of that band, less a margin, and
+//  the counterbore supplies enough free travel to cross the resulting gap and
+//  still work the switch at the far end of the band.
+board_screw_d     = 2.50;   // [STANDARD] M2.5 nominal
+board_mount_float = (board_screw_clear - board_screw_d) / 2;   // [DERIVED] = 0.10
+btn_switch_throw  = 0.25;   // [VENDOR] SWITCH-TS24CA actuation travel
+btn_rest_clear    = 0.05;   // [DESIGN] guaranteed gap at rest, worst case
+btn_reach = (board_pocket_h - board_h) / 2 + 0.19
+            - board_mount_float - btn_rest_clear;   // [DERIVED] = 0.540
+//    gap at rest      0.05 .. 0.25    (never zero, so nothing is preloaded)
+//    press to actuate 0.30 .. 0.50    (against 0.60 mm of free travel)
+
+//  The plunger's cross-section has to land on the SWITCH and miss the BOARD.
+//  Measured from the button axis, the switch body runs +-button_body_h/2 =
+//  +-1.1015, and the PCB's back face is at +0.70 (it is -button_w_centre above
+//  the axis, since the axis is set button_w_centre below the board's back).
+//  The usable band is therefore -1.1015 .. +0.700: 1.8015 mm tall, centred
+//  0.2008 below the axis.
+btn_band_lo  = -button_body_h / 2;        // [DERIVED] = -1.1015, the switch's edge
+btn_band_hi  = -button_w_centre;          // [DERIVED] = +0.7000, the PCB's back face
+btn_post_h   = 1.60;   // [DESIGN] inside a 1.8015 band, 0.10 clear top and bottom
+btn_post_w   = 3.60;   // [DESIGN] inside the switch body's 4.553 along U
+btn_post_dy  = (btn_band_lo + btn_band_hi) / 2;   // [DERIVED] = -0.2008
+
 // Dual microphone array, also on the V = 69.10 edge, at U 13.75 and 78.75.
 mic_offset_x = 32.50;  // [VENDOR] +/-32.500 from the PCB centre. Independently
                        //   measured from the reference caseback as exactly
@@ -271,27 +329,75 @@ cell_dia_max     = 18.6;   // [STANDARD] 18650 worst case (protected cells);
                            //   bare flat-tops are 18.4
 cell_len_max     = 69.0;   // [STANDARD] protected / button-top worst case
 batt_cowl_enable = true;   // [DESIGN]
-batt_cowl_w      = 83.0;   // [MEASURED] reference Battery_cover.stl footprint
-batt_cowl_h      = 30.0;   // [DESIGN] reference cover is 27.0. Widened so the
-                           //   cavity still clears the 22.1 mm holder flange
-                           //   AFTER the crown has begun easing in. Costs
-                           //   nothing in footprint - the cowl is a bulge on
-                           //   the back, not part of the plan form.
 batt_cowl_wall   = 2.0;    // [MEASURED] reference cover wall thickness
 batt_cowl_clear  = 0.5;    // [DESIGN] clearance over the holder
+//  Declared here, out of narrative order, because batt_cowl_crown below is
+//  derived from the cavity's rise. The reasoning behind both numbers is given
+//  at the end of this block, where the rise used to be defined.
+batt_cowl_head   = 2.5;    // [DESIGN] clear rise above the holder for the crown
+batt_cowl_rise   = (batt_protrusion - back_t) + batt_cowl_clear + batt_cowl_wall
+                   + batt_cowl_head;
+//  THE COWL'S PLAN FORM IS NOT FREE, AND IT USED TO BE TREATED AS IF IT WERE.
+//  83.0 x 30.0 was taken from the reference's separate clip-on cover, which
+//  sits on a blank panel. This cowl does not: it is integral to the back
+//  plate, and the back plate already carries the two LOWER M2.5 board screws
+//  at (+/-42.75, +0.25) and the expansion-header window whose lower edge is at
+//  y = +26.50. At 83.0 x 30.0 with a 3.2 mm foot flare the cowl's footprint AT
+//  THE PANEL is 89.4 x 36.4, and it covered BOTH of them:
+//
+//    lower board screws   1.11 mm of cowl foot lying over the mouth of each
+//                         countersink - the screws could not be inserted at
+//                         all, and the board was left hanging on the two
+//                         upper screws at the end away from the cell
+//    expansion window     3.60 mm of its 8.20 mm height buried, 5.84 mm deep
+//                         at the worst point; the clear mouth was 4.70 mm
+//                         against a 6.60 mm header body
+//
+//  Both passed every check in the suite, because the suite counted holes and
+//  never asked whether anything was lying on top of one. See DATUMS.md C-25.
+//
+//  The footprint is therefore DERIVED from the holder, not copied, and the
+//  foot flare and the base corner are sized so the footprint stays clear of
+//  both. The slack that is spent doing it was accidental, not designed: the
+//  cavity had 1.95 mm per side over the holder in V where the design's own
+//  declared clearance is batt_cowl_clear = 0.50.
+batt_cowl_w      = batt_bay_w + 2 * (batt_cowl_clear + batt_cowl_wall);  // = 82.80
+batt_cowl_h      = batt_bay_h + 2 * (batt_cowl_clear + batt_cowl_wall);  // = 27.10
+batt_cowl_w_ref  = 83.0;   // [MEASURED] reference Battery_cover.stl footprint,
+batt_cowl_h_ref  = 27.0;   //   kept for the audit; neither is a part here
 //  The cowl is a swelling BLENDED OUT of the back panel, not a box with a cap
 //  sitting on it. batt_cowl_foot is the tangent fillet where it meets the
 //  panel, which is what removes the base line; batt_cowl_cap is how much the
 //  section eases in toward the crown, as a fraction of the minor axis.
-batt_cowl_foot   = 3.2;    // [DESIGN] foot fillet, blended into the panel
+//  0.60, not 3.2. `blend` is an outward offset of the WHOLE section at the
+//  panel, so it grows the footprint by 2*blend in both axes - 3.2 added 6.4 mm
+//  of plan form that nothing accounted for, and it was never a tangent fillet
+//  anyway: it decayed over batt_cowl_foot_f = 0.20 of a 10 mm rise, i.e. a
+//  3.2 mm flare spread over 2.0 mm of height. The bound is the expansion
+//  window: the cowl's footprint top is (batt_cowl_h/2 + blend) above the
+//  holder centre and must stay below the window's lower edge.
+batt_cowl_foot   = 0.6;    // [DESIGN] foot fillet, blended into the panel
 batt_cowl_foot_f = 0.20;   // [DESIGN] fraction of rise the foot fillet takes
 batt_cowl_cap    = 0.34;   // [DESIGN] crown easing, fraction of the minor axis
-batt_cowl_crown  = 0.50;   // [DESIGN] fraction of rise before the crown starts.
-                           //   Not styling: the cell occupies the lower half of
-                           //   the cavity, so the sides must stay parallel
-                           //   until they are clear of it.
+//  DERIVED, and it used to be 0.50, which was wrong by a whole millimetre of
+//  depth. The comment already said the sides must stay parallel until they are
+//  clear of the holder - but the holder reaches (batt_protrusion - back_t) =
+//  5.00 mm below the panel and the cavity's rise is only 8.00, so 0.50 started
+//  the crown at 4.00 mm, a millimetre TOO EARLY. Measured on the rendered
+//  plate, the cavity closed to 77.592 mm at the holder's deepest plane against
+//  a 77.80 mm holder: 0.104 mm of interference per side. A one-dimensional
+//  depth check ("the cell reaches z = -5.00, the cowl floor is at -8.00") saw
+//  nothing, because the section is not one-dimensional.
+batt_cowl_crown  = (batt_protrusion - back_t + batt_cowl_clear + 0.1)
+                   / (batt_cowl_rise - batt_cowl_wall);   // = 0.700
 batt_cowl_cap_r  = 3.0;    // [DESIGN] retained for the cavity's ridge()
-batt_cowl_base_r  = 6.0;   // [DESIGN] outer plan-view corner radius
+//  12.6, not 6.0, and the reason is the two lower board screws. With the
+//  footprint derived above the cowl still reaches x = 41.61 at y = +0.25 on a
+//  R6 corner, which is 1.36 mm inside the Oe5.0 countersink there. A fuller
+//  corner is what pulls the cowl's lower flank back off them: at 12.6 the
+//  footprint reaches x = 39.36, clearing the countersink rim by 0.89 mm.
+//  Asserted from the rendered plate, not from this arithmetic.
+batt_cowl_base_r  = 12.6;  // [DESIGN] outer plan-view corner radius
 //  CORRECTED RATIONALE. This used to say "the holder's corners are R2.0".
 //  They are not: in Waveshare's STEP the holder's plan form is exactly square
 //  at every height through the body - 0.0000 mm deviation from its bounding
@@ -300,7 +406,12 @@ batt_cowl_base_r  = 6.0;   // [DESIGN] outer plan-view corner radius
 //  cavity corner must stay small enough not to bite into a square-cornered
 //  body sitting inside it. The number stands; the reason it was given for did
 //  not. See docs/DATUMS.md C-21.
-batt_cowl_base_ri = 3.0;   // [DESIGN] INNER plan-view corner radius. Same trap
+//  2.2, down from 3.0. The cavity is now 78.80 x 23.10 rather than
+//  79.00 x 26.00, so its corner sits much closer to the holder's SQUARE
+//  corner at (38.90, 11.05). At n = 3.2 a corner size of 3.0 puts that point
+//  0.98 outside the cavity outline; 2.2 leaves it 0.88 inside. This is the
+//  board_pocket_r trap, and shrinking the cavity re-opened it.
+batt_cowl_base_ri = 2.2;   // [DESIGN] INNER plan-view corner radius. Same trap
                            //   as board_pocket_r: the holder's corners are
                            //   R2.0, so a generously rounded cavity corner
                            //   leaves material exactly where they want to be.
@@ -323,8 +434,10 @@ batt_cowl_cap_ri = 1.5;    // [DESIGN] INNER cap radius. Kept small on purpose:
 //  full width when it reaches the holder, and the cap is where it stops being.
 //  ... plus headroom for the crown itself, which the earlier straight-sided
 //  ridge did not need. Without it the crown starts inside the cell's envelope.
-batt_cowl_head   = 2.5;    // [DESIGN] clear rise above the holder for the crown
-batt_cowl_rise   = (batt_protrusion - back_t) + batt_cowl_clear + batt_cowl_wall + batt_cowl_head;
+//  batt_cowl_head and batt_cowl_rise are declared ABOVE, with batt_cowl_clear,
+//  because batt_cowl_crown is derived from the cavity's rise and OpenSCAD does
+//  not forward-reference: a use before the definition is silently `undef` and
+//  the whole expression collapses. The rationale for the two values is here.
 
 // Onboard speaker grille.
 //  Waveshare's own grille field is 14.70 (U) x 10.45 (V), and the reference
@@ -338,6 +451,14 @@ grille_slot_h  = 1.2;     // [DESIGN] 3 extrusions
 grille_pitch   = 2.3125;  // [DESIGN] 4 gaps x 2.3125 + 1.2 = 10.45 exactly
 grille_count   = 5;       // [DESIGN]
 grille_field_h = 10.45;   // [VENDOR] Waveshare's grille height, matched exactly
+//  PORT MOUTHS. A square-edged slot only accepts a slim cable: a normal USB-C
+//  plug's overmould lands on the outside of the shell and holds the plug proud
+//  so the contacts never fully seat. Flaring the mouth gives the overmould
+//  somewhere to sit. 1.5 per side over 2.0 of depth opens the USB-C mouth to
+//  15.5 x 9.5 at the face, which takes an ordinary moulded cable end.
+port_mouth   = 1.5;   // [DESIGN] per-side flare at the outer face
+port_mouth_d = 2.0;   // [DESIGN] depth of the flare into the flank
+
 grille_off_x   =  0.00;  // [VENDOR] Waveshare's own grille centre is U 46.25
 grille_off_y   = 16.00;  // [VENDOR] ... and V 50.55, i.e. +16.00 from centre.
                          //   The four slots above span 3*3.05 + 1.3 = 10.45 mm,
@@ -539,8 +660,15 @@ kbd_keycap_tol = 0.40;   // [DESIGN] thickness only, and ONE-SIDED: the drawing
 //  It also clears all three measured third-party pockets, the widest of which
 //  (the reference ATA tray, 109.200 x 59.200) belongs to a built, working
 //  device and is therefore a hard physical ceiling on any real unit.
-kbd_pocket_w = 110.2;   // [DESIGN]
-kbd_pocket_h =  59.4;   // [DESIGN]
+//  TIGHTENED to the floor both asserts allow, and then RIBBED. At 110.2 x 59.4
+//  the pocket gave a min-tolerance body 1.00 mm of travel in X, and the front
+//  lip is only 0.85 mm per side on that body: slid hard over, the aperture
+//  edge cleared the keyboard by 0.05 mm on the long side and went 0.36 mm
+//  NEGATIVE at a corner - a visible sliver into the pocket. Nothing bonds the
+//  keyboard, so that is where it actually sits, not a worst case on paper.
+//  See docs/DATUMS.md C-24.
+kbd_pocket_w = 109.85;  // [DESIGN] floor is kbd_pocket_w_ata + 0.6 = 109.80
+kbd_pocket_h =  59.15;  // [DESIGN] floor is kbd_body_h_max  + 0.6 =  59.10
 kbd_depth    =  11.0;   // [DESIGN]
 
 //  WORST-CASE BODY, for fit checking. The mock-ups in lib/components.scad are
@@ -571,6 +699,27 @@ kbd_body_t_max = kbd_body_t + kbd_keycap_tol;   // [DERIVED] =  10.60
 
 kbd_pocket_corner_r = 6.0;   // [DESIGN] bay corner radius
 
+//  LOCATING RIBS. Half-round fins standing off the pocket walls, sized so the
+//  LARGEST credible body still enters without interference and the SMALLEST is
+//  still held central. They are what makes the front lip a guarantee rather
+//  than an average, and they stop a free-floating keyboard rattling in a
+//  handheld. Each is only 2*r wide, so it takes almost no wall length and
+//  clears the service window and the pocket corners easily.
+//
+//    per-side gap, X:  body_max 0.525   nominal 0.675   body_min 0.825
+//    per-side gap, Y:  body_max 0.325   nominal 0.475   body_min 0.625
+//
+//  Rib heights are set just under the body_max gap, so worst case they kiss;
+//  a half-round in PLA deflects or shaves that last few hundredths.
+kbd_rib_r_x   = 0.45;   // [DESIGN] < 0.525, the body_max gap in X
+kbd_rib_r_y   = 0.25;   // [DESIGN] < 0.325, the body_max gap in Y
+kbd_rib_lead  = 1.6;    // [DESIGN] taper at the entry end, keyboard loads from behind
+//  Rib stations, relative to the keyboard-bay centre. The X pair straddles the
+//  service window, which spans about -12.9 .. +21.1 on the left wall; the Y
+//  pair sits well inboard of the corner blends.
+kbd_rib_dy    = [-18.0, 22.5];   // [DESIGN] on the long (+-X) walls
+kbd_rib_dx    = [-35.0, 35.0];   // [DESIGN] on the short (+-Y) walls
+
 // Cross-checks, kept for audit. Both measured; neither is used. Clearances are
 // restated against the real 108.5 x 58.2 body.
 kbd_pocket_w_ata = 109.200;  // [MEASURED] +0.70 mm clearance
@@ -593,14 +742,22 @@ kbd_aper_h = 55.8;    // [MEASURED] ref.  55.802
 //  (ATA 39.75 x 11.40 full-depth, PoC 32.25 x 7.55 starting 1.45 above the
 //  floor), which is the envelope that both proven designs agree covers the
 //  switch and the port.
-kbd_access_both_sides = true;   // [DESIGN]
+//  FALSE. The keyboard's charge port and slide switch share ONE short edge -
+//  the left as the device is used - and the keys only read one way up, so it
+//  cannot be fitted the other way round. A second window on the right flank
+//  reached nothing and was a hole for the sake of symmetry.
+kbd_access_both_sides = false;  // [DESIGN] left flank only
 //  RETAGGED [MEASURED] -> [DESIGN]. Neither of these is a measured value: the
 //  window is an outward-rounded ENVELOPE that CONTAINS the reference notch
 //  (32.074 x 7.596), not a reading of it. Calling a chosen envelope a
 //  measurement is exactly the conflation this file keeps correcting.
 kbd_access_w          = 34.0;   // [DESIGN] along the keyboard's short axis
 kbd_access_h          = 8.0;    // [DESIGN] along the deck's thickness
-kbd_access_from_edge  = 9.5;    // [MEASURED] near edge of the window, measured
+//  8.5 from the pocket edge = 8.0 from the keyboard's own top edge, since the
+//  keyboard sits 0.5 down in a 59.4 pocket. The window then spans 8.0..42.0
+//  from the keyboard top, against features measured on the real unit at 10.4
+//  (slide switch) and 29.6..38.6 (USB-C): 2.4 mm of margin above, 3.4 below.
+kbd_access_from_edge  = 8.5;    // [MEASURED] near edge of the window, measured
                                 //   from the keyboard's display-side long edge
 kbd_access_above_floor = 1.4;   // [MEASURED] above the keyboard's bottom face
 
@@ -766,7 +923,7 @@ aper_blend_display = 4.2;  // [DESIGN] PANEL-BOUND, not chosen. The aperture
 //  worst case for capture, minus the narrower of the two lip widths.
 kbd_lip_x = (kbd_body_w - kbd_aper_w) / 2;   // [DERIVED] = 1.00
 kbd_lip_y = (kbd_body_h - kbd_aper_h) / 2;   // [DERIVED] = 1.20
-aper_blend_kbd  = kbd_body_corner_r_max - min(kbd_lip_x, kbd_lip_y);  // = 10.2
+aper_blend_kbd  = kbd_body_corner_r_max - min(kbd_lip_x, kbd_lip_y);  // = 6.00
 aper_n_kbd      = 2.0;    // [DERIVED] circular - see above
 
 //  Back-plate outer perimeter. A small roll turns the panel seam into a
@@ -802,13 +959,21 @@ dish_flare  = 0.5;     // [DESIGN] per-side flare at the outer face
 //      only corner material is the gusset, and a 12 mm webbing slot does not
 //      fit inside a 6 mm fillet without breaking into the keyboard bay.
 //
-//  Instead the four M3 back-plate screws ARE the accessory mounting points.
+//  Instead the four M2 back-plate screws ARE the accessory mounting points.
 //  They thread into brass inserts in the chassis, not into plastic, so they
-//  are the strongest anchors on the device. Fit M3 x 12 in place of the
-//  standard M3 x 8 and sandwich a bracket, strap yoke or stand clamp under the
+//  are the strongest anchors on the device. Fit M2 x 12 in place of the
+//  standard M2 x 6 and sandwich a bracket, strap yoke or stand clamp under the
 //  heads. The pattern is given by accessory_pattern() in cyberdeck.scad.
-accessory_screw_len_std = 8;    // [DESIGN] normal build
+//  THE LENGTHS WERE STALE. They still read 8 and 12 from the M3 revision while
+//  ASSEMBLY.md's own arithmetic had settled on M2 x 6 - the plate is 3.20 and
+//  the insert 4.00, so 6 engages 2.80 mm and 8 spins its last 0.80 in the
+//  relief below the insert. The rig length is bounded from the other side:
+//  shell_screw_bore_depth is 6.5, so a 12 mm screw needs at least
+//  12 - back_t - shell_screw_bore_depth = 2.30 mm of bracket under its head or
+//  it bottoms in the bore before it is tight.
+accessory_screw_len_std = 6;    // [DESIGN] normal build
 accessory_screw_len_rig = 12;   // [DESIGN] with a bracket under the heads
+accessory_bracket_min_t = accessory_screw_len_rig - back_t - shell_screw_bore_depth;  // = 2.30
 
 // Ventilation over the ESP32-S3 module. The RLCD has no backlight, so thermal
 // load is low; these are insurance for sustained Wi-Fi TX.
@@ -843,8 +1008,87 @@ assert(kbd_depth >= kbd_body_t + 0.4 && kbd_depth >= kbd_body_t_max + 0.4,
 //  ... and it must clear the upper bound set by a working reference enclosure.
 assert(kbd_pocket_w >= kbd_pocket_w_ata + 0.6,
        "keyboard pocket tighter than a tray known to accept a real unit");
+//  A locating rib that stands taller than the gap to the LARGEST body stops
+//  that body entering at all, and one that strays into a corner blend or the
+//  service window bears on nothing.
+//  The plunger must clear the board and land on the switch, and the flange must
+//  fit its counterbore with travel left over.
+assert(btn_post_dy + btn_post_h / 2 <= btn_band_hi,
+       "button plunger reaches into the PCB's own thickness");
+assert(btn_post_dy - btn_post_h / 2 >= btn_band_lo,
+       "button plunger overhangs the switch body and would press nothing");
+assert(btn_post_w <= button_body_w,
+       "button plunger is wider than the switch body it presses");
+assert(btn_travel >= 2 * board_mount_float + btn_rest_clear + btn_switch_throw,
+       "button cannot cross the board's mounting float and still work the switch");
+assert(btn_reach < (board_pocket_h - board_h) / 2 + 0.19 - board_mount_float,
+       "button plunger would preload a switch on a board floated toward the wall");
+assert(btn_cb_depth <= wall - dish_depth - 1.2,
+       "button flange counterbore leaves too little wall outboard of it");
+assert(kbd_rib_r_x < (kbd_pocket_w - kbd_body_w_max) / 2,
+       "keyboard X locating rib is taller than the gap to the largest body");
+assert(kbd_rib_r_y < (kbd_pocket_h - kbd_body_h_max) / 2,
+       "keyboard Y locating rib is taller than the gap to the largest body");
+assert(max([for (d = kbd_rib_dy) abs(d) + kbd_rib_r_x])
+           <= kbd_pocket_h / 2 - kbd_pocket_corner_r,
+       "keyboard X locating rib runs into a pocket corner blend");
+assert(max([for (d = kbd_rib_dx) abs(d) + kbd_rib_r_y])
+           <= kbd_pocket_w / 2 - kbd_pocket_corner_r,
+       "keyboard Y locating rib runs into a pocket corner blend");
 assert(batt_cowl_rise >= batt_protrusion - back_t + batt_cowl_wall,
        "battery cowl too shallow for the holder protrusion");
+
+//  ---- THE COWL IS NOT ALONE ON THE BACK PLATE -------------------------------
+//  Everything below exists because the cowl once lay on top of two fastener
+//  countersinks and an access window and nothing noticed. A hole is not open
+//  just because it was cut; something can be sitting on it. See DATUMS.md C-25.
+//
+//  x-extent of a superelliptical outline at a given offset from its centreline.
+//  Corner points are (ax + c*cos(t)^(2/n), ay + c*sin(t)^(2/n)), so eliminating
+//  t gives x = ax + c*(1 - (v/c)^n)^(1/n) with v the offset into the corner.
+function rse_x_at(w, h, cr, n, y) =
+    let (c  = min(cr, w/2 - 0.01, h/2 - 0.01),
+         ax = w/2 - c,
+         ay = h/2 - c,
+         v  = abs(y) - ay)
+    v <= 0 ? w/2
+  : v >= c ? ax
+           : ax + c * pow(1 - pow(v / c, n), 1 / n);
+
+//  The cowl's footprint is widest AT THE PANEL, where the foot flare is at full
+//  size - that is the section that has to miss everything else on the plate.
+cowl_foot_w = batt_cowl_w + 2 * batt_cowl_foot;
+cowl_foot_h = batt_cowl_h + 2 * batt_cowl_foot;
+cowl_foot_c = batt_cowl_base_r + batt_cowl_foot;
+
+//  1. the two LOWER M2.5 board screws, in the cowl's own frame
+cowl_screw_dy = -board_mount_pitch_y/2 - batt_off_y;              // = -11.65
+cowl_screw_dx = board_mount_pitch_x/2;                            // =  42.75
+assert(rse_x_at(cowl_foot_w, cowl_foot_h, cowl_foot_c, form_n, cowl_screw_dy)
+       <= cowl_screw_dx - board_cs_head_d/2 - 0.5,
+       "battery cowl lies over the lower board-screw countersinks: they cannot be driven");
+
+//  2. the expansion-header window, whose lower edge is the cowl's ceiling
+cowl_win_lo = expansion_win_y - (expansion_win_h + 2*fit_slide)/2 - batt_off_y;
+assert(cowl_foot_h/2 <= cowl_win_lo - 0.4,
+       "battery cowl foot buries the expansion-header window");
+
+//  3. the cavity must still be at FULL SECTION where the holder is deepest -
+//     not merely deeper than it. This is the check the depth-only one replaced.
+assert(batt_cowl_crown * (batt_cowl_rise - batt_cowl_wall)
+       >= batt_protrusion - back_t + batt_cowl_clear,
+       "cowl crown starts before the cavity has cleared the holder");
+
+//  4. the holder's plan form is exactly SQUARE (DATUMS C-21), so the cavity's
+//     rounded corner must not bite into the holder's corner point.
+cowl_cav_w = batt_cowl_w - 2*batt_cowl_wall;
+cowl_cav_h = batt_cowl_h - 2*batt_cowl_wall;
+assert(pow((batt_bay_w/2 - (cowl_cav_w/2 - batt_cowl_base_ri)) / batt_cowl_base_ri, form_n)
+     + pow((batt_bay_h/2 - (cowl_cav_h/2 - batt_cowl_base_ri)) / batt_cowl_base_ri, form_n)
+       <= 1.0,
+       "cowl cavity corner bites the holder's square corner");
+assert(batt_cowl_base_r + batt_cowl_foot <= min(cowl_foot_w, cowl_foot_h)/2 - 0.05,
+       "cowl base corner is larger than the cowl: rse_poly would silently clamp it");
 assert(shell_screw_cs_head_h < back_t - 1.0, "countersink leaves too little plate under the head");
 assert(kbd_aper_w < kbd_pocket_w, "keyboard would fall through the front face");
 assert(kbd_aper_h < kbd_pocket_h, "keyboard would fall through the front face");

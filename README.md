@@ -21,8 +21,8 @@ so it reads as grown rather than extruded.
 </p>
 
 ```
-116.6 × 139.1 × 16.85 mm   (+ 10.0 mm battery cowl)
-2 printed structural parts · 4 screws · 76 automated checks
+116.25 × 138.85 × 16.85 mm   (+ 10.0 mm battery cowl)
+2 printed structural parts · 8 screws · 92 automated checks
 ```
 
 ---
@@ -33,8 +33,8 @@ Two rigid rectangles have to sit side by side, so most of the size of this thing
 is arithmetic, not taste:
 
 ```
-width  = wall + max(keyboard 110.2, board 93.5) + wall
-height = wall + keyboard 59.4 + spine + board 70.1 + wall
+width  = wall + max(keyboard 109.85, board 93.5) + wall
+height = wall + keyboard 59.15 + spine + board 70.1 + wall
 depth  = back plate + board stack 11.0 + front face
 ```
 
@@ -61,7 +61,7 @@ on — the panel sets that corner, not taste, and the bound is asserted in CI.
 
 | | Reference design | This design |
 |---|---|---|
-| Envelope | 151.65 × 116.77 × 18.00 | **116.6 × 139.1 × 16.85** |
+| Envelope | 151.65 × 116.77 × 18.00 | **116.25 × 138.85 × 16.85** |
 | Battery bulge | +12.0 mm, separate clip-on cover | +10.0 mm, integral grip ridge |
 | Wall | 2.90 mm | **3.20 mm** (8 extrusions, solid perimeters) |
 | Split | bezel screwed onto a tray | monocoque front, joint at the back |
@@ -90,7 +90,7 @@ openscad -D 'part="chassis"'   -o export/stl/chassis.stl   cad/cyberdeck.scad
 openscad -D 'part="backplate"' -o export/stl/backplate.stl cad/cyberdeck.scad
 openscad -D 'part="buttons"'   -o export/stl/buttons.stl   cad/cyberdeck.scad
 
-python3 tools/validate.py          # 76 checks; non-zero exit if any fail
+python3 tools/validate.py          # 92 checks; non-zero exit if any fail
 ```
 
 0.4 mm nozzle, 0.2 mm layers, no supports. Full instructions, BOM and print
@@ -144,9 +144,10 @@ Full record, including every correction and every remaining gap, in
 
 ## What is *not* proven
 
-**Nobody has built this.** It is asserted internally consistent by 76 automated
-checks; it has not been printed, and the components have not been offered up to
-a physical chassis.
+**Nobody has built this.** All 90 of `tools/validate.py`'s checks pass and the
+structural claims are computed from the rendered meshes rather than argued, but
+internal consistency is not the same as fit. It has not been printed, and the
+components have not been offered up to a physical chassis.
 
 Before committing to a full set, print the chassis alone and check the four
 measurements listed in
@@ -251,7 +252,7 @@ counted among the audited rows.
 |---|---|
 | `tools/params.py` | the single reader for `parameters.scad`; every other tool goes through it |
 | `tools/measure_reference.py` | metrology harness — regenerates every measured datum |
-| `tools/validate.py` | 76-check design audit — the build gate |
+| `tools/validate.py` | 90-check design audit — the build gate |
 | `tools/audit_reference.py` | component-facing accuracy against the reference |
 | `tools/test_primitives.py` | unit tests for the geometry helpers; catches a primitive that lies |
 | `tools/structure.py` | section properties from the mesh; stiffness against the reference |
@@ -270,7 +271,7 @@ cad/
 tools/
   params.py             the single reader for parameters.scad
   measure_reference.py  metrology harness — regenerates every measured datum
-  validate.py           76-check design audit — the build gate
+  validate.py           90-check design audit — the build gate
   audit_reference.py    component-facing accuracy against the reference
   test_primitives.py    unit tests for the geometry helpers
   structure.py          section properties, stiffness, weak-point location

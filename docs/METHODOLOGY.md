@@ -138,9 +138,23 @@ number that happened to be right, kept because the lesson generalises.
 
 ## Validation
 
-`tools/validate.py` renders the parts **from source** and runs 76 checks in six
-classes: `MESH`, `ENVELOPE`, `FIT`, `INTERFACE`, `PRINT`, `DATUM`. Exit status
-is non-zero unless all pass.
+`tools/validate.py` renders the parts **from source** and runs 92 checks in
+nine classes: `MESH`, `ENVELOPE`, `FIT`, `OPENING`, `OBSTRUCTION`, `STACK`,
+`INTERFACE`, `PRINT`, `DATUM`. Exit status is non-zero unless all pass.
+
+Two of those classes exist because they were absent, and both are about the
+same blind spot in different directions:
+
+- `OPENING` asks whether a hole was **cut**. It was added after three side
+  buttons and two microphones turned out to have no opening at all.
+- `OBSTRUCTION` asks whether anything is **lying on** a hole that was cut. It
+  was added after the battery cowl's foot flare was found covering two of the
+  four board-screw countersinks and 3.6 mm of the expansion window — holes that
+  existed, were counted, and could not be used.
+- `STACK` measures a depth stack against the space that actually exists between
+  the face a part enters and the component it has to reach. An extent check
+  says the button sprue is 6.59 mm long; it does not say that only 3.89 mm of
+  anything can exist there.
 
 It reads its expected values by parsing `cad/parameters.scad`, so it cannot
 drift from the model.

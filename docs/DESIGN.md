@@ -20,12 +20,12 @@ The honest headline first: **most of the size of this thing is not a design
 choice.** Two rigid rectangles have to sit side by side.
 
 ```
-width  = wall + max(keyboard 110.2, board 93.5) + wall
-height = wall + keyboard 59.4 + spine + board 70.1 + wall
+width  = wall + max(keyboard 109.85, board 93.5) + wall
+height = wall + keyboard 59.15 + spine + board 70.1 + wall
 depth  = back plate + board stack 11.0 + front face
 ```
 
-With 3.2 mm walls that is **116.6 × 139.1 × 16.85 mm**, and
+With 3.2 mm walls that is **116.25 × 138.85 × 16.85 mm**, and
 `tools/validate.py` asserts each of those three equalities on every run. The
 enclosure cannot be made smaller without thinning a wall or crushing a part.
 
@@ -33,7 +33,7 @@ Against the reference:
 
 | | Reference (ATA) | This design | Δ |
 |---|---|---|---|
-| Height | 151.65 | 139.10 | **−12.55** |
+| Height | 151.65 | 138.85 | **−12.80** |
 | Width | 116.77 | 116.85 | −0.17 |
 | Thickness | 18.00 | 16.85 | **−1.40** |
 | Battery bulge | +12.0 | +9.0 | −3.0 |
@@ -45,7 +45,7 @@ from deleting the reference's top rail; the thickness comes from discarding
 Waveshare's stand base.
 
 Where the width is concerned there is nothing left to take: the keyboard pocket
-is 110.2 mm — wide enough to clear both the certified 108.5 mm body and the
+is 109.85 mm — wide enough to clear both the certified 108.5 mm body and the
 rounded retail figure, since the vendor has revised the unit at least once
 without publishing new dimensions — and the walls are 3.2 mm, so 116.85 mm is the
 floor. The board is 17 mm narrower than the keyboard pocket, and that mismatch is the single biggest
@@ -56,7 +56,7 @@ constraint in the design — it is also, usefully, the only free space in it.
 The reference splits along the **front face**: a bezel screws onto a tray. That
 is the worst available plane for the joint. A drop onto a corner loads the shell
 in bending, bending stress peaks at the outer fibres, and the outer fibre on the
-display side is exactly where the joint is. Four M3 screws end up carrying it in
+display side is exactly where the joint is. Four screws end up carrying it in
 shear.
 
 Here the shell is a **monocoque**: the entire front face, all four side walls
@@ -346,18 +346,22 @@ mechanically where there is no room for screws.
 
 ## Fasteners
 
-Four M3 into brass heat-set inserts, countersunk.
+Four **M2 × 6** ISO 10642 countersunk into brass heat-set inserts. They were
+M3 until the parts were handled; this section was not updated with them and
+described an M3 stack that no longer existed anywhere in the CAD.
 
-Socket caps were the first choice and were wrong: an ISO 4762 M3 head is 3.0 mm
-tall, which was the entire back plate thickness, so counterboring left *no*
-material under the head to take preload. The plate went to 3.2 mm (8 extrusions,
-matching the wall) and the screws to ISO 10642 countersunk — 1.86 mm deep,
-bearing on a cone rather than a thin annulus, and flush.
+Socket caps were the first choice and were wrong: an ISO 4762 head is 2.0 mm
+tall at M2 and 3.0 at M3, against a 3.2 mm plate, so counterboring left almost
+no material under the head to take preload. The plate stayed at 3.2 mm
+(8 extrusions, matching the wall) and the screws went to ISO 10642 countersunk —
+1.20 mm deep at M2, bearing on a cone rather than a thin annulus, and flush.
 
-Insert bosses are Ø7.4 around a Ø4.0 bore. 1.7 mm of wall is thinner than the
-usual 2.0 mm guidance, chosen deliberately because every 0.1 mm of boss diameter
-comes straight off the port clearance above — and because each boss merges into
-the side wall, so its outboard side is far thicker than that figure suggests.
+Insert bosses are **Ø6.6 around a Ø3.2 bore**, 6.5 mm deep, for a 4.0 mm M2
+insert. The nominal boss wall is 1.7 mm, but that figure understates the part:
+the flank strip the bosses sit in is solid from the seating plane to the front
+face, so measured on the rendered chassis there is **2.98 mm** of material
+between the bore and the nearest free surface, which is the board pocket wall.
+The Ø6.6 cylinder is really only a name for a bore in a slab.
 
 ## Accessory mounting: the four screws are the rig points
 
@@ -373,10 +377,13 @@ cutting into a component bay:
   corner material is the gusset, and a 12 mm webbing slot does not fit inside a
   6 mm fillet without breaking into the keyboard bay.
 
-Instead the four M3 back-plate screws **are** the accessory mounting points.
+Instead the four M2 back-plate screws **are** the accessory mounting points.
 They thread into brass, not plastic, which makes them the strongest anchors on
-the device. Fit M3 × 12 in place of M3 × 8 and clamp a bracket, strap yoke or
-stand clamp under the heads. `accessory_pattern()` in `cyberdeck.scad` publishes
+the device — though four M2 are a weaker anchor than four M3 were, and this is
+not a rigging point for anything heavy. Fit M2 × 12 in place of M2 × 6 and clamp
+a bracket, strap yoke or stand clamp under the heads. The bracket must be at
+least **2.3 mm** thick: the insert bore is 6.5 mm deep below a 3.2 mm plate, so
+a 12 mm screw with nothing under its head bottoms out before it is tight. `accessory_pattern()` in `cyberdeck.scad` publishes
 the hole pattern so a bracket can be drilled to match.
 
 This is a real constraint honestly resolved, not a feature quietly dropped.
@@ -399,7 +406,7 @@ This is a real constraint honestly resolved, not a feature quietly dropped.
 
 ## What is not proven
 
-Internal consistency is asserted by 76 automated checks, and the structural
+Internal consistency is asserted by 92 automated checks, and the structural
 claims by classical section analysis in `tools/structure.py`. **Fit against
 physical hardware is not, and neither is drop survival** — section analysis
 gives ratios, not absolute stress, and nothing here models layer adhesion,
