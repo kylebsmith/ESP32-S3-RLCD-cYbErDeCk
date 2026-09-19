@@ -110,51 +110,65 @@ rasterised. Any full-text search of these exhibits returns the confident, wrong
 answer that they carry no dimensions — which is exactly what an earlier pass of
 this project concluded.
 
-### The retail body may not be the certified body
+### Corroborated by the manufacturer's own drawing
 
-| | Manual (2011, certified) | riitek.com (current) |
-|---|---|---|
-| Size | 108.5 × 58.2 × 10.2 | 4.3 × 2.3 × 0.4 in (109.22 × 58.42 × 10.16) |
-| Mass | 75 g | 64.8 g |
-| Charge port | mini-USB (FCC photos) | reported USB-C |
+Riitek's current product page carries a dimensioned product-overview image which
+prints **both units on every axis, in one string per dimension**:
 
-Two of those three disagree, so there has been at least one revision and its
-dimensions are unpublished. The pocket is therefore sized to clear **both**
-candidates — see [D-05](#d-05--keyboard-pocket).
+> `108.5mm/4.3inch`   `58.2mm/2.3inch`   `10.2mm/0.4inch`
 
-A useful physical bound on the revision: the reference ATA tray is
-109.200 × 59.200 and is a **built, working device**, so whatever body its author
-had cannot exceed that.
+That is decisive on the direction of the conversion. 4.3 in is 109.22 mm, not
+108.5, so the millimetre figure cannot be derived from the inch figure — the
+inch figure must be derived from the millimetre one. The drawing also labels the
+**mini-USB charging port** and the **power switch**, both on the same short
+edge, and shows a 68-key field with no pointing device.
+
+So two independent manufacturer documents twelve years apart — the 2011 FCC
+manual and the current drawing — give the same outline to the digit. Whatever
+changed between the 75 g and 64.8 g samples, **the outline did not.**
+
+What is left is ordinary moulding tolerance. Neither document states one, so the
+design assumes ±0.30 mm in plane and +0.40 / −0.00 mm on thickness, the latter
+because the drawing does not say whether 10.2 mm is to the moulding's top face
+or to the keycap crowns. Both are tagged `[DESIGN]` in `parameters.scad` rather
+than dressed up as measurements.
 
 ### Traps, all confirmed from primary sources
 
+- **109.22 × 58.42 × 10.16 is not a body.** It is this project's own round trip
+  through 0.1-inch granularity — see [C-07](#corrections).
 - **150 × 100 × 20 mm / 120 g is the retail box.** 38 % longer and 72 % wider
   than the certified body; the 120 g includes the cable and printed manual.
 - **The Rii K18 is not this keyboard, and neither is the RT518/RT518S.** The
   RT518 manual gives 317.2 × 123.6 × 18.3 mm, 342 g — three times the length,
   with a touchpad.
-- **`4.09 × 2.28 × 0.43 in` circulates on review sites.** Traced to a single
-  article which cites no source, contradicts its own specification table two
-  paragraphs later, and gives a length of 103.9 mm — physically impossible,
-  since both measured reference pockets are larger than that.
+- **`4.09 × 2.28 × 0.43 in` circulates widely.** Now traced: it is Amazon's own
+  structured *Product Dimensions* field on ASIN B0B46F8RS6, which contradicts
+  the *Keyboard Description* field on the same page (`4.3*2.3*0.4in`). Its
+  length of 103.9 mm is physically impossible — all three measured third-party
+  pockets are larger. Rii's own storefront ships the sentence *"Keyboard
+  measures"* with the value **missing**, in both the rendered HTML and its
+  JSON-LD; that empty slot is the likely thing a third party back-filled.
 - **riimall.com's own storefront claims an integrated touchpad.** The FCC
   external and internal photographs show there is none. Marketing copy for this
   model is unreliable even from the brand's own shop.
 
 ## D-05 — Keyboard pocket
 
-**110.2 × 59.4 × 11.0 mm** `[DESIGN]` — stated, not derived.
-
-Deriving it from the rounded retail figure would be sizing for a phantom:
-109.22 mm is 108.5 rounded to 0.1 in and converted back, not a body anyone has
-measured. Stating the pocket and asserting the clearance against both candidates
-is the honest form, and `parameters.scad` does exactly that.
+**110.2 × 59.4 × 11.0 mm** `[DESIGN]` — stated, not derived from the body plus a
+clearance, so the envelope does not move every time a tolerance assumption is
+revisited. What it must satisfy is asserted instead.
 
 | Clears | per side, in plane | depth |
 |---|---|---|
-| FCC body 108.5 × 58.2 × 10.2 | 0.85 / 0.60 | +0.80 |
-| riitek rounded 109.22 × 58.42 × 10.16 | 0.49 / 0.49 | +0.84 |
-| ATA tray upper bound 109.200 × 59.200 | 0.50 / 0.10 | — |
+| nominal body 108.5 × 58.2 × 10.2 | 0.85 / 0.60 | +0.80 |
+| body at tolerance 108.8 × 58.5 × 10.6 | 0.70 / 0.45 | +0.40 |
+| ATA tray, a working device, 109.200 × 59.200 | 0.50 / 0.10 | — |
+| grip case, measured, 109.406 × 59.005 | 0.40 / 0.20 | — |
+
+The depth sits **exactly** on its assertion at the top of the thickness band:
+11.0 mm against 10.6 + 0.4. That is the one axis with no slack left, and it is
+also the axis whose nominal is least certain.
 
 Because this design's pocket is open front-to-back — the keyboard loads from
 behind and is held forward by a pad on the back plate — there is no internal
@@ -305,6 +319,41 @@ a wider recess behind it. This back plate is 3.2 mm thick and the header stands
 8.603 mm off the PCB back — **1.60 mm proud of the standoff plane** — so the
 body itself must pass through. The window here is sized from the body.
 
+### C-07 — The "retail body" at 109.22 mm was this project's own round trip
+
+For one day this file carried two rival keyboard bodies: the drawing/manual
+figure 108.5 × 58.2 × 10.2, and a "current retail" body at
+109.22 × 58.42 × 10.16 taken from riitek.com's `4.3 × 2.3 × 0.4 in`. The fit
+mocks were built from the **larger of the two**, on the reasoning that a
+correction must never loosen a safety margin.
+
+The reasoning was right. The second body was not real.
+
+The manufacturer's own product drawing prints both units on every axis in a
+single string — `108.5mm/4.3inch` — which fixes the direction of the
+conversion. 4.3 in is 109.22 mm, so the millimetre figure cannot come from the
+inch figure; the inch figure comes from the millimetre one. **109.22 was this
+project converting 108.5 to 0.1-inch granularity and back, then treating the
+result as evidence.** It is also physically excluded: the reference ATA tray is
+a built, working device with a 109.200 mm pocket, and a 109.22 mm body does not
+go into it.
+
+Two further claims fell with it. The drawing is the *current* product page and
+labels a **mini-USB** charging port, so "revised to USB-C" was false. And the
+2011 manual and the current drawing agree to the digit, so whatever explains the
+mass discrepancy, it is not a change of outline.
+
+Nothing in the geometry moved: the pocket was stated, not derived, and it clears
+the corrected body by more than it cleared the phantom. What changed is that a
+fabricated datum is gone, and the worst case is now an *assumed tolerance*,
+tagged as an assumption, rather than a number dressed as a vendor figure.
+
+This is the third correction to this one datum — [C-06](#c-06--the-ata-tray-is-not-a-press-fit-and-the-002-mm-agreement-was-luck)
+withdrew a press fit, O-01 withdrew a rounding band — and the pattern is worth
+naming: **every one came from treating a derived or rounded restatement as an
+independent source.** Two numbers agreeing is not corroboration until you know
+which of them came first.
+
 ### C-06 — The ATA tray is not a press fit, and the 0.02 mm agreement was luck
 
 For most of this project's life D-04 argued that the reference ATA tray's
@@ -345,20 +394,25 @@ pocket corner radius much above `r + c/(√2 − 1)` will interfere.
 Gaps that remain. Each is stated with what it would take to close it, and with
 how the design is shaped so the gap cannot cause a clash.
 
-### O-01 — Keyboard rounding — CLOSED, but the retail revision is not
+### O-01 — Keyboard outline — CLOSED. Its tolerance is not.
 
-The vendor's 0.1-inch rounding is closed by the FCC user-manual exhibit; see
-[D-04](#d-04--keyboard-outline). **108.5 × 58.2 × 10.2 mm.**
+The outline is settled by two independent manufacturer documents twelve years
+apart; see [D-04](#d-04--keyboard-outline). **108.5 × 58.2 × 10.2 mm.**
 
-What remains open is narrower and real: the certified 2011 body and the current
-retail body differ in mass (75 g against 64.8 g) and charge port (mini-USB
-against a reported USB-C), so there has been a revision whose dimensions are
-unpublished.
+What remains open is narrower. Neither document states a **moulding tolerance**,
+and neither says whether the 10.2 mm thickness is measured to the moulding's top
+face or to the keycap crowns. A third-party CAD replica of this keyboard
+measures 10.600 mm overall, which is where the assumed +0.40 mm band comes from.
 
-*Mitigation*: the pocket clears both candidates and the working-device upper
-bound. The service window is 34 × 8 mm on both sides, so the connector type does
-not drive geometry either way.
-*To close*: calipers on the unit actually in hand.
+The 75 g / 64.8 g mass discrepancy between the 2011 sample and current retail is
+real but does not touch the outline, and the charge port is mini-USB in both
+(an earlier note here claiming USB-C was wrong — [C-07](#corrections)).
+
+*Mitigation*: the pocket clears an assumed ±0.30 mm in plane and +0.40 mm on
+thickness, and the service window is 34 × 8 mm on **both** short edges, so the
+port edge does not drive geometry.
+*To close*: calipers. **Thickness first** — it is the only axis with no slack
+left against its assertion.
 
 ### O-02 — Keyboard charging-port connector type
 
@@ -444,8 +498,9 @@ The design is asserted consistent, not proven against hardware. Nobody has held
 these two parts against a printed chassis. Before committing filament to a final
 build, put calipers on:
 
-1. **Keyboard outline**, all three axes — O-01, the largest remaining gap; the
-   manufacturer quotes it only to 0.1 in = 2.54 mm.
+1. **Keyboard THICKNESS** — O-01. The outline is settled, but 11.0 mm of pocket
+   sits exactly on its assertion against a 10.6 mm upper band, and the drawing
+   does not say whether its 10.2 mm includes the keycaps.
 2. **PCB outline and the standoff seating plane** — confirms D-02 and D-03 and
    the decision to discard the stand base.
 3. **18650 holder protrusion past the standoff plane** — sets the cowl rise.

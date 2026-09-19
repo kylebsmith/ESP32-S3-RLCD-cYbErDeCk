@@ -93,9 +93,10 @@ estimated, and nothing is traced off a picture.
 
 - **Board geometry** comes from Waveshare's own published CAD package — Creo
   STEP assembly, dimensioned DXF, dimensioned PDF.
-- **Keyboard geometry** comes from the manufacturer's own user manual, filed as
-  an exhibit under FCC ID `YIZRT-RII518` — `108.5 × 58.2 × 10.2 mm` — cross-checked
-  against Riitek's published inch figure and two independent third-party enclosures.
+- **Keyboard geometry** — `108.5 × 58.2 × 10.2 mm` — comes from two independent
+  manufacturer documents twelve years apart: the user manual filed as an exhibit
+  under FCC ID `YIZRT-RII518`, and Riitek's current dimensioned product drawing.
+  Cross-checked against three measured third-party enclosure pockets.
 - **`tools/measure_reference.py`** re-derives every measured datum numerically
   from reference artefacts: planar sectioning with explicit world-preserving
   transforms, scan-line wall probing, ray-cast depth profiling, DXF group-code

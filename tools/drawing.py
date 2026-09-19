@@ -389,7 +389,7 @@ def sheet_assembly(parts, mocks, p, path):
         pw = p["board_pocket_w"] if row == 0 else p["kbd_pocket_w"]
         # The component width is MEASURED from the mock that is actually drawn
         # above, not read from a parameter. Reading a parameter is how a sheet
-        # comes to annotate 108.50 beside an envelope drawn at 109.22.
+        # comes to annotate a nominal beside an envelope drawn at tolerance.
         cb = mocks[key].bounds
         cw = cb[1][0] - cb[0][0]
         tag = "component" if row == 0 else "component, worst case"
@@ -453,10 +453,10 @@ def sheet_components(parts, mocks, p, path):
         ("  holder protrusion", f"{p['batt_protrusion']:.2f}", "past the standoff plane"),
         ("", "", ""),
         ("Rii 518BT", "", ""),
-        ("  outline, certified", f"{p['kbd_body_w']:.2f} x {p['kbd_body_h']:.2f} x {p['kbd_body_t']:.2f}",
-         "FCC YIZRT-RII518 manual"),
-        ("  outline, retail", f"{p['kbd_body_w_retail']:.2f} x {p['kbd_body_h_retail']:.2f}"
-         f" x {p['kbd_body_t_retail']:.2f}", "riitek.com, 0.1 in rounded"),
+        ("  outline, nominal", f"{p['kbd_body_w']:.2f} x {p['kbd_body_h']:.2f} x {p['kbd_body_t']:.2f}",
+         "Riitek drawing + FCC manual"),
+        ("  outline, at tolerance", f"{p['kbd_body_w_max']:.2f} x {p['kbd_body_h_max']:.2f}"
+         f" x {p['kbd_body_t_max']:.2f}", "assumed mould + keycap band"),
         ("  pocket", f"{p['kbd_pocket_w']:.2f} x {p['kbd_pocket_h']:.2f} x {p['kbd_depth']:.2f}",
          f"{(p['kbd_pocket_w']-p['kbd_body_w_max'])/2:.2f} / "
          f"{(p['kbd_pocket_h']-p['kbd_body_h_max'])/2:.2f} per side, worst case"),

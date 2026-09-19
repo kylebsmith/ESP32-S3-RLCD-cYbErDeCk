@@ -91,11 +91,10 @@ function board_mount_points() =
 // Origin: centre of the keyboard, on its REAR face.
 // ---------------------------------------------------------------------------
 
-//  Drawn at the WORST CASE of the two candidate bodies on every axis - the
-//  certified FCC outline 108.5 x 58.2 x 10.2 and the rounded retail figure
-//  109.22 x 58.42 x 10.16 - i.e. 109.22 x 58.42 x 10.20. No real unit can
-//  exceed this on any axis, so a mock that fits guarantees a body that fits.
-//  Seated so its DECK (its widest plane) is against the front-face lip.
+//  Drawn at the body's UPPER TOLERANCE on every axis - 108.80 x 58.50 x 10.60
+//  against a nominal 108.5 x 58.2 x 10.2 - so a mock that fits guarantees a
+//  body that fits. Seated so its DECK (its widest plane) is against the
+//  front-face lip.
 module mock_keyboard() {
     body_r = 5.0;           // [PROVISIONAL] visible corner radius
     union() {

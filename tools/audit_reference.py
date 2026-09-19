@@ -250,8 +250,8 @@ def audit(p, r):
 
     g = "KEYBOARD"
     cmp(g, "pocket width", p["kbd_pocket_w"], r.get("kbd_pocket_w"),
-        reason="sized to clear BOTH candidate bodies (FCC 108.5, retail-rounded "
-               "109.22); the reference clears only the one its author had")
+        reason="sized to clear the body at assumed tolerance, 108.80; the "
+               "reference tray is 0.40 tighter and is a working device")
     cmp(g, "pocket height", p["kbd_pocket_h"], r.get("kbd_pocket_h"),
         reason="as above")
     cmp(g, "pocket depth", p["kbd_depth"], r.get("kbd_depth"),

@@ -108,7 +108,7 @@
       "check": "keyboard: positive volume",
       "class": "MESH",
       "ok": true,
-      "detail": "69169 mm^3 -> 85.8 g in PLA"
+      "detail": "71544 mm^3 -> 88.7 g in PLA"
     },
     {
       "check": "width is component-bound",
@@ -252,7 +252,7 @@
       "check": "keyboard is inside the assembled envelope",
       "class": "FIT",
       "ok": true,
-      "detail": "bounds [[-54.61, -65.86, 3.2], [54.61, -7.44, 14.19]] in [-58.3, -69.55, -10.0]..[58.3, 69.55, 16.6]"
+      "detail": "bounds [[-54.4, -65.9, 3.2], [54.4, -7.4, 14.59]] in [-58.3, -69.55, -10.0]..[58.3, 69.55, 16.6]"
     },
     {
       "check": "board pocket clearance",
@@ -387,16 +387,16 @@
       "detail": "the active area sits 1.60 mm toward the U=0 edge of the PCB"
     },
     {
-      "check": "keyboard pocket clears both candidate bodies",
+      "check": "keyboard pocket clears the body at tolerance",
       "class": "DATUM",
       "ok": true,
-      "detail": "pocket 110.2 x 59.4 x 11.0 over the worst case 109.22 x 58.42 x 10.20, i.e. certified 108.5 vs rounded retail 109.22"
+      "detail": "pocket 110.2 x 59.4 x 11.0 over 108.80 x 58.50 x 10.60 (nominal 108.5 x 58.2 x 10.2 plus assumed tolerance)"
     },
     {
-      "check": "keyboard fit is checked against the worst-case body",
+      "check": "keyboard fit is checked at tolerance, not nominal",
       "class": "DATUM",
       "ok": true,
-      "detail": "mock-ups use the per-axis maximum of both candidates, never the smaller, so a mock that fits guarantees a body that fits"
+      "detail": "mocks are built at +0.30 in plane and +0.40 in thickness, so a mock that fits guarantees a body that fits"
     },
     {
       "check": "keyboard outline is vendor-stated, not inferred",

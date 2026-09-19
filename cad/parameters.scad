@@ -371,39 +371,58 @@ kbd_body_h =  58.2;   // [VENDOR] as above
 kbd_body_t =  10.2;   // [VENDOR] as above, overall, including keycaps
 kbd_mass_g =  75.0;   // [VENDOR] as-certified 2011 sample
 
-//  The retail body may not be the certified body. riitek.com currently states
-//  64.8 g against the manual's 75 g, and the 2011 certified sample has a
-//  MINI-USB charge port while the current retail unit is reported to be USB-C -
-//  so there has been at least one revision. Its dimensions are unpublished.
-//  The pocket below is therefore sized from the WORST CASE of both candidate
-//  bodies rather than from either alone.
-kbd_body_w_retail = 109.22;  // [VENDOR] riitek.com 4.3 in, rounded
-kbd_body_h_retail =  58.42;  // [VENDOR] riitek.com 2.3 in, rounded
-kbd_body_t_retail =  10.16;  // [VENDOR] riitek.com 0.4 in, rounded
+//  CORRECTION - THERE IS NO SECOND CANDIDATE BODY. See docs/DATUMS.md C-07.
+//
+//  A previous revision of this file carried 109.22 x 58.42 x 10.16 as a rival
+//  "retail" body, reasoning that riitek.com's 4.3 x 2.3 x 0.4 in might describe
+//  a later, larger revision, and sized the fit mocks to the larger of the two.
+//  That body does not exist. The manufacturer's own product drawing prints BOTH
+//  units on every axis, in one string per dimension:
+//
+//      108.5mm/4.3inch     58.2mm/2.3inch     10.2mm/0.4inch
+//
+//  4.3 in is 109.22 mm, not 108.5, so the millimetre figure cannot be a
+//  conversion of the inch figure - the inch figure must be the conversion of
+//  the millimetre one. 109.22 was this project's own round trip through 0.1 in
+//  granularity, and nothing else. It is also physically excluded: the reference
+//  ATA tray is a BUILT, WORKING device with a 109.200 mm pocket, and a 109.22 mm
+//  body does not enter it.
+//
+//  The same drawing settles two other things this file had wrong. It is the
+//  CURRENT product page, and it shows a MINI-USB charging port, so the
+//  "revised to USB-C" claim was false. And the 2011 FCC manual and the 2023
+//  drawing give identical dimensions twelve years apart, so whatever changed
+//  between the 75 g and 64.8 g samples, the outline did not.
+//
+//  What remains is ordinary moulding tolerance on a ~110 mm shell. Neither
+//  document states one, so it is assumed here and tagged as an assumption.
+kbd_mould_tol  = 0.30;   // [DESIGN] assumed injection tolerance, L and W
+kbd_keycap_tol = 0.40;   // [DESIGN] thickness only, and ONE-SIDED: the drawing
+                         //   does not say whether 10.2 is to the moulding's top
+                         //   face or to the keycap crowns. A third-party CAD
+                         //   replica of this keyboard measures 10.600 overall,
+                         //   which is the upper end of that ambiguity.
 
-//  The pocket is stated, not derived, because deriving it from the rounded
-//  retail figure would be sizing for a phantom: 109.22 is 108.5 rounded to
-//  0.1 in and converted back, not a body anyone has measured. Stating it and
-//  asserting the clearance against BOTH candidates is the honest form.
+//  The pocket is stated, not derived from the body plus a clearance, so that
+//  the envelope does not move every time a tolerance assumption is revisited.
+//  What it must satisfy is asserted below instead.
 //
-//    against the FCC body     108.5  x 58.2  x 10.2    0.85 / 0.60 per side
-//    against riitek rounded   109.22 x 58.42 x 10.16   0.49 / 0.49 per side
+//    against the drawing body   108.5 x 58.2 x 10.2     0.85 / 0.60 per side
+//    against body + tolerance   108.8 x 58.5 x 10.6     0.70 / 0.45 per side
 //
-//  A useful physical bound on the retail revision: the reference ATA tray is
-//  109.200 x 59.200 and is a BUILT, WORKING device, so whatever body its author
-//  had cannot exceed that. This pocket clears 109.200 by 0.50 per side.
+//  It also clears all three measured third-party pockets, the widest of which
+//  (the reference ATA tray, 109.200 x 59.200) belongs to a built, working
+//  device and is therefore a hard physical ceiling on any real unit.
 kbd_pocket_w = 110.2;   // [DESIGN]
 kbd_pocket_h =  59.4;   // [DESIGN]
 kbd_depth    =  11.0;   // [DESIGN]
 
-//  WORST-CASE BODY. Fit checking must never be run against the smaller of two
-//  candidate bodies: correcting kbd_body_* downward from 109.22 to the true
-//  108.5 would otherwise have made every clearance check LOOSER, which is the
-//  wrong direction for a correction to move a safety margin. The component
-//  mock-ups in lib/components.scad are built from these, not from kbd_body_*.
-kbd_body_w_max = max(kbd_body_w, kbd_body_w_retail);   // [DERIVED] = 109.22
-kbd_body_h_max = max(kbd_body_h, kbd_body_h_retail);   // [DERIVED] =  58.42
-kbd_body_t_max = max(kbd_body_t, kbd_body_t_retail);   // [DERIVED] =  10.20
+//  WORST-CASE BODY, for fit checking. The mock-ups in lib/components.scad are
+//  built from these rather than from the nominal, so a clearance check is never
+//  run against the smallest plausible part.
+kbd_body_w_max = kbd_body_w + kbd_mould_tol;    // [DERIVED] = 108.80
+kbd_body_h_max = kbd_body_h + kbd_mould_tol;    // [DERIVED] =  58.50
+kbd_body_t_max = kbd_body_t + kbd_keycap_tol;   // [DERIVED] =  10.60
 
 //  FCC ID YIZRT-RII518 (Shenzhen Riitek), granted 2011-05-23, covers this body
 //  under ten retail model names including "Rii518" and "Rii mini 518BT". The
@@ -657,11 +676,11 @@ assert(expansion_win_h > 6.603, "expansion window will not clear the header body
 assert(board_pocket_w >= board_w, "board pocket narrower than the board");
 assert(board_pocket_h >= board_h, "board pocket shorter than the board");
 //  The pocket must clear BOTH candidate bodies, not just the primary one.
-assert(kbd_pocket_w >= kbd_body_w + 0.6 && kbd_pocket_w >= kbd_body_w_retail + 0.6,
+assert(kbd_pocket_w >= kbd_body_w + 0.6 && kbd_pocket_w >= kbd_body_w_max + 0.6,
        "keyboard pocket does not clear both candidate bodies in width");
-assert(kbd_pocket_h >= kbd_body_h + 0.6 && kbd_pocket_h >= kbd_body_h_retail + 0.6,
+assert(kbd_pocket_h >= kbd_body_h + 0.6 && kbd_pocket_h >= kbd_body_h_max + 0.6,
        "keyboard pocket does not clear both candidate bodies in height");
-assert(kbd_depth >= kbd_body_t + 0.4 && kbd_depth >= kbd_body_t_retail + 0.4,
+assert(kbd_depth >= kbd_body_t + 0.4 && kbd_depth >= kbd_body_t_max + 0.4,
        "keyboard pocket does not clear both candidate bodies in depth");
 //  ... and it must clear the upper bound set by a working reference enclosure.
 assert(kbd_pocket_w >= kbd_pocket_w_ata + 0.6,
