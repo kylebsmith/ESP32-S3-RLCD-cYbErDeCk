@@ -20,7 +20,7 @@ so it reads as grown rather than extruded.
 
 ```
 116.6 × 139.1 × 16.6 mm   (+ 10.0 mm battery cowl)
-2 printed structural parts · 4 screws · 68 automated checks
+2 printed structural parts · 4 screws · 70 automated checks
 ```
 
 ---
@@ -76,7 +76,7 @@ openscad -D 'part="chassis"'   -o export/stl/chassis.stl   cad/cyberdeck.scad
 openscad -D 'part="backplate"' -o export/stl/backplate.stl cad/cyberdeck.scad
 openscad -D 'part="buttons"'   -o export/stl/buttons.stl   cad/cyberdeck.scad
 
-python3 tools/validate.py          # 68 checks; non-zero exit if any fail
+python3 tools/validate.py          # 70 checks; non-zero exit if any fail
 ```
 
 0.4 mm nozzle, 0.2 mm layers, no supports. Full instructions, BOM and print
@@ -91,8 +91,9 @@ estimated, and nothing is traced off a picture.
 
 - **Board geometry** comes from Waveshare's own published CAD package — Creo
   STEP assembly, dimensioned DXF, dimensioned PDF.
-- **Keyboard geometry** comes from Riitek's product spec and FCC ID
-  `YIZRT-RII518`, cross-checked against two independent third-party enclosures.
+- **Keyboard geometry** comes from the manufacturer's own user manual, filed as
+  an exhibit under FCC ID `YIZRT-RII518` — `108.5 × 58.2 × 10.2 mm` — cross-checked
+  against Riitek's published inch figure and two independent third-party enclosures.
 - **`tools/measure_reference.py`** re-derives every measured datum numerically
   from reference artefacts: planar sectioning with explicit world-preserving
   transforms, scan-line wall probing, ray-cast depth profiling, DXF group-code
@@ -128,7 +129,7 @@ Full record, including every correction and every remaining gap, in
 
 ## What is *not* proven
 
-**Nobody has built this.** It is asserted internally consistent by 68 automated
+**Nobody has built this.** It is asserted internally consistent by 70 automated
 checks; it has not been printed, and the components have not been offered up to
 a physical chassis.
 
@@ -172,13 +173,14 @@ Exact agreement (±0.000 mm) on the mounting pattern, the display aperture, the
 button pitch and apertures, the microphone span and apertures, and the speaker
 grille field. The twelve differences are each a recorded decision — the pocket
 cut to the bare PCB rather than to the discarded stand base, the keyboard pocket
-placed between a press fit and a loose one, 3.2 mm walls instead of 2.9.
+sized to clear both candidate keyboard bodies rather than only the one its
+author had, 3.2 mm walls instead of 2.9.
 
 ## Documentation
 
 | | |
 |---|---|
-| **[DATUMS.md](docs/DATUMS.md)** | every dimension, its provenance, five recorded corrections, six open items |
+| **[DATUMS.md](docs/DATUMS.md)** | every dimension, its provenance, six recorded corrections, seven open items |
 | **[DESIGN.md](docs/DESIGN.md)** | form language, why it is shaped this way, material and finish |
 | **[METHODOLOGY.md](docs/METHODOLOGY.md)** | how the numbers were obtained and how to reproduce them |
 | **[ASSEMBLY.md](docs/ASSEMBLY.md)** | BOM, print settings, build order |
@@ -190,9 +192,10 @@ placed between a press fit and a loose one, 3.2 mm walls instead of 2.9.
 |---|---|
 | `tools/params.py` | the single reader for `parameters.scad`; every other tool goes through it |
 | `tools/measure_reference.py` | metrology harness — regenerates every measured datum |
-| `tools/validate.py` | 68-check design audit — the build gate |
+| `tools/validate.py` | 70-check design audit — the build gate |
 | `tools/audit_reference.py` | component-facing accuracy against the reference |
 | `tools/drawing.py` | dimensioned GA sheets, measured from the mesh |
+| `tools/render.sh` | every published view, with its camera stated in the script |
 | `tools/build.sh` | render everything and gate; what CI runs |
 
 ## Repository layout
@@ -206,9 +209,10 @@ cad/
 tools/
   params.py             the single reader for parameters.scad
   measure_reference.py  metrology harness — regenerates every measured datum
-  validate.py           68-check design audit — the build gate
+  validate.py           70-check design audit — the build gate
   audit_reference.py    component-facing accuracy against the reference
   drawing.py            dimensioned GA sheets, measured from the mesh
+  render.sh             every published view, cameras stated in the script
 docs/                 datum sheet, design rationale, methodology, assembly
 export/reports/       machine-readable measurement and validation output
 ```
@@ -222,8 +226,9 @@ This design measures, but does not copy,
 **[nilseuropa/solar_term](https://github.com/nilseuropa/solar_term)** — the
 SolarTerm enclosure and the [SolarOS](https://github.com/nilseuropa/solar_os)
 project it houses. Their work is what got these two components living together
-in the first place, and their keyboard tray is machined tightly enough
-(−0.02 mm) that reading it out validated the manufacturer's own figure.
+in the first place, and because their deck is a built, working device, its
+pockets serve as hard physical bounds on components whose vendors round their
+own figures.
 
 No geometry from that project is used here, and it carries no licence of its
 own. See [PROVENANCE.md](docs/PROVENANCE.md).

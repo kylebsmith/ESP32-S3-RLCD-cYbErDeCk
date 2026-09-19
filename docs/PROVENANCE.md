@@ -73,9 +73,15 @@ and it will be corrected.
 
 The SolarTerm authors did the original work of getting these two components to
 live together, and did it well enough that their pockets could be used as
-instruments. The −0.02 mm keyboard press fit in particular is a deliberate,
-careful piece of work, and reading it out is what validated the manufacturer's
-keyboard dimension.
+instruments.
+
+An earlier revision of this file credited their keyboard tray as a deliberate
+−0.02 mm press fit. That reading was wrong — it compared their tray against a
+rounded vendor figure rather than the real body, and the tray is an ordinary
++0.70 mm clearance fit (see [DATUMS.md C-06](DATUMS.md#corrections)). The credit
+stands on better grounds: because their deck is *built and working*, its pockets
+are hard physical bounds on a component whose vendor rounds its own figures, and
+that is worth more than a coincidence.
 
 ## Waveshare
 

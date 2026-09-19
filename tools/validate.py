@@ -398,9 +398,31 @@ def check_datums(p):
     ok &= check("display aperture is offset, not centred", "DATUM",
                 abs(p["display_off_x"] + 1.60) < 0.01,
                 "the active area sits 1.60 mm toward the U=0 edge of the PCB")
-    ok &= check("keyboard pocket is measured, not inferred", "DATUM",
-                "kbd_pocket_w" not in prov and "kbd_pocket_h" not in prov,
-                "pocket comes from two independent reference designs")
+    # The vendor has revised this keyboard at least once (mass and charge port
+    # both changed) without publishing new dimensions, so there are two
+    # candidate bodies and the pocket has to clear whichever one turns up.
+    kw, kh, kt = p["kbd_body_w_max"], p["kbd_body_h_max"], p["kbd_body_t_max"]
+    ok &= check("keyboard pocket clears both candidate bodies", "DATUM",
+                p["kbd_pocket_w"] >= kw + 0.6 and p["kbd_pocket_h"] >= kh + 0.6
+                and p["kbd_depth"] >= kt + 0.4,
+                f"pocket {p['kbd_pocket_w']:.1f} x {p['kbd_pocket_h']:.1f} x "
+                f"{p['kbd_depth']:.1f} over the worst case {kw:.2f} x {kh:.2f} x "
+                f"{kt:.2f}, i.e. certified 108.5 vs rounded retail 109.22")
+    # Correcting the body DOWNWARD from 109.22 to the true 108.5 must not be
+    # allowed to loosen a clearance check. The mocks are built from the max.
+    ok &= check("keyboard fit is checked against the worst-case body", "DATUM",
+                abs(kw - max(p["kbd_body_w"], p["kbd_body_w_retail"])) < 1e-9
+                and abs(kh - max(p["kbd_body_h"], p["kbd_body_h_retail"])) < 1e-9
+                and abs(kt - max(p["kbd_body_t"], p["kbd_body_t_retail"])) < 1e-9
+                and kw >= p["kbd_body_w"] and kt >= p["kbd_body_t"],
+                "mock-ups use the per-axis maximum of both candidates, never "
+                "the smaller, so a mock that fits guarantees a body that fits")
+    ok &= check("keyboard outline is vendor-stated, not inferred", "DATUM",
+                "kbd_body_w" not in prov and "kbd_body_h" not in prov
+                and "kbd_body_t" not in prov,
+                f"{p['kbd_body_w']:.1f} x {p['kbd_body_h']:.1f} x "
+                f"{p['kbd_body_t']:.1f} from the manufacturer's user manual, "
+                "filed as an exhibit under FCC ID YIZRT-RII518")
     ok &= check("mount pattern is not provisional", "DATUM",
                 "board_mount_pitch_x" not in prov and "board_mount_pitch_y" not in prov,
                 f"{p['board_mount_pitch_x']:.1f} x {p['board_mount_pitch_y']:.1f} mm, "

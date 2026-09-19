@@ -250,12 +250,13 @@ def audit(p, r):
 
     g = "KEYBOARD"
     cmp(g, "pocket width", p["kbd_pocket_w"], r.get("kbd_pocket_w"),
-        reason="reference is a -0.02 press fit at exactly 4.3 in; this sits "
-               "between it and the looser proof-of-concept")
+        reason="sized to clear BOTH candidate bodies (FCC 108.5, retail-rounded "
+               "109.22); the reference clears only the one its author had")
     cmp(g, "pocket height", p["kbd_pocket_h"], r.get("kbd_pocket_h"),
         reason="as above")
     cmp(g, "pocket depth", p["kbd_depth"], r.get("kbd_depth"),
-        reason="reference leaves 1.24 of vertical float; this leaves 0.84")
+        reason="reference leaves 1.20 of vertical float over the 10.2 body; "
+               "this leaves 0.80")
 
     g = "SHELL"
     cmp(g, "wall thickness", p["wall"], r.get("wall"),

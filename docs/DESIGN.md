@@ -44,9 +44,11 @@ Shorter, marginally narrower, thinner, *and* thicker-walled. The height comes
 from deleting the reference's top rail; the thickness comes from discarding
 Waveshare's stand base.
 
-Where the width is concerned there is nothing left to take: the keyboard is
-109.22 mm wide and the walls are 3.2 mm, so 116.6 mm is the floor. The board is
-23 mm narrower than the keyboard, and that mismatch is the single biggest
+Where the width is concerned there is nothing left to take: the keyboard pocket
+is 110.2 mm — wide enough to clear both the certified 108.5 mm body and the
+rounded retail figure, since the vendor has revised the unit at least once
+without publishing new dimensions — and the walls are 3.2 mm, so 116.6 mm is the
+floor. The board is 17 mm narrower than the keyboard pocket, and that mismatch is the single biggest
 constraint in the design — it is also, usefully, the only free space in it.
 
 ## One form, not two cases

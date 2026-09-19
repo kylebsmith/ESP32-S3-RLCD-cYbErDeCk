@@ -1,6 +1,6 @@
 {
-  "passed": 68,
-  "total": 68,
+  "passed": 70,
+  "total": 70,
   "results": [
     {
       "check": "chassis: watertight",
@@ -108,7 +108,7 @@
       "check": "keyboard: positive volume",
       "class": "MESH",
       "ok": true,
-      "detail": "68914 mm^3 -> 85.5 g in PLA"
+      "detail": "69169 mm^3 -> 85.8 g in PLA"
     },
     {
       "check": "width is component-bound",
@@ -252,7 +252,7 @@
       "check": "keyboard is inside the assembled envelope",
       "class": "FIT",
       "ok": true,
-      "detail": "bounds [[-54.61, -65.86, 3.2], [54.61, -7.44, 14.15]] in [-58.3, -69.55, -10.0]..[58.3, 69.55, 16.6]"
+      "detail": "bounds [[-54.61, -65.86, 3.2], [54.61, -7.44, 14.19]] in [-58.3, -69.55, -10.0]..[58.3, 69.55, 16.6]"
     },
     {
       "check": "board pocket clearance",
@@ -387,10 +387,22 @@
       "detail": "the active area sits 1.60 mm toward the U=0 edge of the PCB"
     },
     {
-      "check": "keyboard pocket is measured, not inferred",
+      "check": "keyboard pocket clears both candidate bodies",
       "class": "DATUM",
       "ok": true,
-      "detail": "pocket comes from two independent reference designs"
+      "detail": "pocket 110.2 x 59.4 x 11.0 over the worst case 109.22 x 58.42 x 10.20, i.e. certified 108.5 vs rounded retail 109.22"
+    },
+    {
+      "check": "keyboard fit is checked against the worst-case body",
+      "class": "DATUM",
+      "ok": true,
+      "detail": "mock-ups use the per-axis maximum of both candidates, never the smaller, so a mock that fits guarantees a body that fits"
+    },
+    {
+      "check": "keyboard outline is vendor-stated, not inferred",
+      "class": "DATUM",
+      "ok": true,
+      "detail": "108.5 x 58.2 x 10.2 from the manufacturer's user manual, filed as an exhibit under FCC ID YIZRT-RII518"
     },
     {
       "check": "mount pattern is not provisional",

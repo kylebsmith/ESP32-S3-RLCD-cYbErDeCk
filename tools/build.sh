@@ -30,3 +30,10 @@ rm -f export/stl/assembly.stl
 
 echo
 $RUN python3 tools/validate.py --json export/reports/validation.json
+
+echo
+$RUN python3 tools/audit_reference.py
+
+echo
+mkdir -p export/drawings
+$RUN python3 tools/drawing.py

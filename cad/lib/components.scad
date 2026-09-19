@@ -91,14 +91,17 @@ function board_mount_points() =
 // Origin: centre of the keyboard, on its REAR face.
 // ---------------------------------------------------------------------------
 
-//  Drawn at the manufacturer's stated outline, 109.22 x 58.42 x 10.16 mm, and
-//  seated so its DECK (its widest plane) is against the front-face lip.
+//  Drawn at the WORST CASE of the two candidate bodies on every axis - the
+//  certified FCC outline 108.5 x 58.2 x 10.2 and the rounded retail figure
+//  109.22 x 58.42 x 10.16 - i.e. 109.22 x 58.42 x 10.20. No real unit can
+//  exceed this on any axis, so a mock that fits guarantees a body that fits.
+//  Seated so its DECK (its widest plane) is against the front-face lip.
 module mock_keyboard() {
     body_r = 5.0;           // [PROVISIONAL] visible corner radius
     union() {
-        rbox(kbd_body_w, kbd_body_h, kbd_body_t, body_r);
+        rbox(kbd_body_w_max, kbd_body_h_max, kbd_body_t_max, body_r);
         // the key field that shows through the front aperture
-        translate([0, 0, kbd_body_t - 0.01])
+        translate([0, 0, kbd_body_t_max - 0.01])
             rbox(kbd_aper_w - 3.0, kbd_aper_h - 3.0, 0.8, body_r - 1);
     }
 }

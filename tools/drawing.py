@@ -387,10 +387,15 @@ def sheet_assembly(parts, mocks, p, path):
         b = ch.bounds
         dim_h(ax, b[0][0], b[1][0], b[1][2] + 7, f"{b[1][0]-b[0][0]:.2f}")
         pw = p["board_pocket_w"] if row == 0 else p["kbd_pocket_w"]
-        cw = p["board_w"] if row == 0 else p["kbd_body_w"]
+        # The component width is MEASURED from the mock that is actually drawn
+        # above, not read from a parameter. Reading a parameter is how a sheet
+        # comes to annotate 108.50 beside an envelope drawn at 109.22.
+        cb = mocks[key].bounds
+        cw = cb[1][0] - cb[0][0]
+        tag = "component" if row == 0 else "component, worst case"
         dim_h(ax, -pw / 2, pw / 2, b[0][2] - 6, f"{pw:.2f}  pocket", above=False)
-        dim_h(ax, -cw / 2, cw / 2, b[0][2] - 14,
-              f"{cw:.2f}  component     clearance {(pw-cw)/2:.2f} per side", above=False)
+        dim_h(ax, cb[0][0], cb[1][0], b[0][2] - 14,
+              f"{cw:.2f}  {tag}     clearance {(pw-cw)/2:.2f} per side", above=False)
         dim_v(ax, b[0][2], b[1][2], b[1][0] + 8, f"{b[1][2]-b[0][2]:.2f}")
         ax.set_xlim(b[0][0] - 20, b[1][0] + 30)
         ax.set_ylim(b[0][2] - 22, b[1][2] + 16)
@@ -421,9 +426,12 @@ def sheet_components(parts, mocks, p, path):
           bcy + p["board_mount_pitch_y"] / 2 + 6, f"{p['board_mount_pitch_x']:.2f}")
     dim_v(ax, bcy - p["board_mount_pitch_y"] / 2, bcy + p["board_mount_pitch_y"] / 2,
           p["board_mount_pitch_x"] / 2 + 6, f"{p['board_mount_pitch_y']:.2f}")
-    dim_h(ax, -p["kbd_body_w"] / 2, p["kbd_body_w"] / 2, kcy, f"{p['kbd_body_w']:.2f}")
-    dim_v(ax, kcy - p["kbd_body_h"] / 2, kcy + p["kbd_body_h"] / 2, 0,
-          f"{p['kbd_body_h']:.2f}")
+    kb = mocks["keyboard"].bounds        # measured, for the same reason as above
+    kw, kh = kb[1][0] - kb[0][0], kb[1][1] - kb[0][1]
+    # Placed clear of each other and of the outline: a centred pair crosses at
+    # the keyboard's midpoint and the two labels land on top of one another.
+    dim_h(ax, kb[0][0], kb[1][0], kcy - kh / 2 - 7, f"{kw:.2f}", above=False)
+    dim_v(ax, kcy - kh / 2, kcy + kh / 2, kb[1][0] + 8, f"{kh:.2f}")
     b = ch.bounds
     ax.set_xlim(b[0][0] - 22, b[1][0] + 22); ax.set_ylim(b[0][1] - 18, b[1][1] + 18)
 
@@ -445,11 +453,13 @@ def sheet_components(parts, mocks, p, path):
         ("  holder protrusion", f"{p['batt_protrusion']:.2f}", "past the standoff plane"),
         ("", "", ""),
         ("Rii 518BT", "", ""),
-        ("  outline", f"{p['kbd_body_w']:.2f} x {p['kbd_body_h']:.2f} x {p['kbd_body_t']:.2f}",
-         "vendor, 0.1 in rounded"),
+        ("  outline, certified", f"{p['kbd_body_w']:.2f} x {p['kbd_body_h']:.2f} x {p['kbd_body_t']:.2f}",
+         "FCC YIZRT-RII518 manual"),
+        ("  outline, retail", f"{p['kbd_body_w_retail']:.2f} x {p['kbd_body_h_retail']:.2f}"
+         f" x {p['kbd_body_t_retail']:.2f}", "riitek.com, 0.1 in rounded"),
         ("  pocket", f"{p['kbd_pocket_w']:.2f} x {p['kbd_pocket_h']:.2f} x {p['kbd_depth']:.2f}",
-         f"{(p['kbd_pocket_w']-p['kbd_body_w'])/2:.2f} / "
-         f"{(p['kbd_pocket_h']-p['kbd_body_h'])/2:.2f} per side"),
+         f"{(p['kbd_pocket_w']-p['kbd_body_w_max'])/2:.2f} / "
+         f"{(p['kbd_pocket_h']-p['kbd_body_h_max'])/2:.2f} per side, worst case"),
         ("  retention aperture", f"{p['kbd_aper_w']:.2f} x {p['kbd_aper_h']:.2f}",
          f"lip {(p['kbd_pocket_w']-p['kbd_aper_w'])/2:.2f} / "
          f"{(p['kbd_pocket_h']-p['kbd_aper_h'])/2:.2f}"),
@@ -457,10 +467,10 @@ def sheet_components(parts, mocks, p, path):
          "both sides"),
         ("", "", ""),
         ("REFERENCE BRACKETS (measured)", "", ""),
-        ("  ATA tray", "109.200 x 59.200 x 11.400", "press fit, -0.02"),
-        ("  PoC bay", "110.498 x 60.600 x 10.750", "loose, +1.28"),
+        ("  ATA tray", "109.200 x 59.200 x 11.400", "+0.70 on the 108.5 body"),
+        ("  PoC bay", "110.498 x 60.600 x 10.750", "+2.00 on the 108.5 body"),
         ("  this design", f"{p['kbd_pocket_w']:.3f} x {p['kbd_pocket_h']:.3f}"
-         f" x {p['kbd_depth']:.3f}", "between the two"),
+         f" x {p['kbd_depth']:.3f}", "clears both candidates"),
     ]
     for i, (a, bb, c) in enumerate(rows):
         y = 0.98 - i * 0.049

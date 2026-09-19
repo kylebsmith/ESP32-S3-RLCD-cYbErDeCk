@@ -427,9 +427,17 @@ module assembly(explode = 0) {
     e = explode;
     color("#cfcabf")                      chassis();
     color("#b6b0a4") translate([0, 0, -e * 1.6])  backplate();
-    color("#2f6b45", 0.95)
-        translate([board_cx, board_cy, z_front_inner - board_depth - e * 0.9])
-            mock_board();
+    translate([board_cx, board_cy, z_front_inner - board_depth - e * 0.9]) {
+        color("#2f6b45", 0.95) mock_board();
+        // COSMETIC ONLY. The fit mock above is one solid envelope, which is
+        // what the clash tests need, but it makes the PCB read as the screen
+        // in a render. This is the active area drawn as glass so the assembly
+        // views show what the face actually looks like. It is inside the
+        // envelope already tested, so it cannot affect any fit result.
+        color("#14171a")
+            translate([display_off_x, 0, board_stack - 0.01])
+                rbox(display_active_w, display_active_h, 0.35, 0.5);
+    }
     color("#2b2e33", 0.95)
         translate([0, kbd_bay_cy, z_front_inner - kbd_depth - e * 0.55])
             mock_keyboard();

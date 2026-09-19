@@ -346,40 +346,92 @@ tf_open_h    =  4.5;    // [DESIGN]
 //  The nominal outline below is therefore derived FROM the pocket, not the
 //  other way round, and is used only for the fit-check mock-up.
 
-//  The keyboard's own outline is now a VENDOR datum, corroborated four ways
-//  (see docs/DATUMS.md D-04). Earlier revisions of this file derived the
-//  keyboard from the pocket; that is no longer necessary.
-kbd_body_w = 109.22;   // [VENDOR] riitek.com/product/259.html: 4.3 in x 25.4
-kbd_body_h = 58.42;    // [VENDOR] 2.3 in x 25.4
-kbd_body_t = 10.16;    // [VENDOR] 0.4 in x 25.4, overall, including keycaps
-kbd_mass_g = 64.8;     // [VENDOR] bare product, not packed
-//  FCC ID YIZRT-RII518 (Shenzhen Riitek), granted 2011-05-23, covers this body
-//  under ten retail model names including "Rii518" and "Rii mini 518BT".
+//  PRIMARY SOURCE: the manufacturer's own user manual, filed as the User Manual
+//  exhibit (attachment 1470433) of FCC ID YIZRT-RII518, page 13, section
+//  "6. Technical Specifications":
 //
-//  TRAPS, both confirmed and both avoided here:
-//    * 150 x 100 x 20 mm / 120 g is the RETAIL BOX, repeated by many
-//      marketplace listings as if it were the product.
-//    * The Rii K18 is NOT this keyboard. It is 325 x 122 x 18.3 mm with a
-//      trackpad - three times the length.
-//    * Retailer titles containing "Touchpad" are wrong for the 518BT. It has
-//      no touchpad; mouse control is Fn + key. Do not allocate pocket area.
+//      Dimension: 108.5mm x 58.2mm x 10.2mm
+//      Weight: 75g
+//
+//  That closes the +/-2.54 mm rounding band this project carried for a long
+//  time. 108.5 x 58.2 x 10.2 is 4.272 x 2.291 x 0.402 in, every axis of which
+//  rounds correctly to riitek.com's published "4.3*2.3*0.4in" - so the vendor's
+//  inch figure is a rounded restatement of this same value, not a second
+//  independent source.
+//
+//  Why it took so long to find: the manual's text is converted to vector
+//  outlines (the PDF title contains "转曲", Chinese for "convert to curves").
+//  pdftotext returns 2 139 characters from the 14-page file - only the FCC
+//  boilerplate pages have a text layer. The specification table is invisible to
+//  any full-text search and appears only when the page is rasterised. Grepping
+//  these exhibits gives the confident, wrong answer that they carry no
+//  dimensions.
+kbd_body_w = 108.5;   // [VENDOR] FCC ID YIZRT-RII518, User Manual exhibit p13
+kbd_body_h =  58.2;   // [VENDOR] as above
+kbd_body_t =  10.2;   // [VENDOR] as above, overall, including keycaps
+kbd_mass_g =  75.0;   // [VENDOR] as-certified 2011 sample
 
-// Pocket. The reference ATA tray is 109.200 mm - that is 4.3 in to within
-// 0.02 mm, i.e. a ZERO-clearance press fit, and its own build guide hedges
-// with "if the print tolerance permits it". The earlier proof-of-concept went
-// to 110.498 and rattles enough that its guide tells you to shim with tape.
-// This design sits deliberately between the two.
-kbd_pocket_w = 110.2;   // [DESIGN] kbd_body_w + 0.98 => 0.49 mm per side
-kbd_pocket_h = 59.4;    // [DESIGN] kbd_body_h + 0.98 => 0.49 mm per side
-kbd_depth    = 11.0;    // [DESIGN] kbd_body_t + 0.84
+//  The retail body may not be the certified body. riitek.com currently states
+//  64.8 g against the manual's 75 g, and the 2011 certified sample has a
+//  MINI-USB charge port while the current retail unit is reported to be USB-C -
+//  so there has been at least one revision. Its dimensions are unpublished.
+//  The pocket below is therefore sized from the WORST CASE of both candidate
+//  bodies rather than from either alone.
+kbd_body_w_retail = 109.22;  // [VENDOR] riitek.com 4.3 in, rounded
+kbd_body_h_retail =  58.42;  // [VENDOR] riitek.com 2.3 in, rounded
+kbd_body_t_retail =  10.16;  // [VENDOR] riitek.com 0.4 in, rounded
+
+//  The pocket is stated, not derived, because deriving it from the rounded
+//  retail figure would be sizing for a phantom: 109.22 is 108.5 rounded to
+//  0.1 in and converted back, not a body anyone has measured. Stating it and
+//  asserting the clearance against BOTH candidates is the honest form.
+//
+//    against the FCC body     108.5  x 58.2  x 10.2    0.85 / 0.60 per side
+//    against riitek rounded   109.22 x 58.42 x 10.16   0.49 / 0.49 per side
+//
+//  A useful physical bound on the retail revision: the reference ATA tray is
+//  109.200 x 59.200 and is a BUILT, WORKING device, so whatever body its author
+//  had cannot exceed that. This pocket clears 109.200 by 0.50 per side.
+kbd_pocket_w = 110.2;   // [DESIGN]
+kbd_pocket_h =  59.4;   // [DESIGN]
+kbd_depth    =  11.0;   // [DESIGN]
+
+//  WORST-CASE BODY. Fit checking must never be run against the smaller of two
+//  candidate bodies: correcting kbd_body_* downward from 109.22 to the true
+//  108.5 would otherwise have made every clearance check LOOSER, which is the
+//  wrong direction for a correction to move a safety margin. The component
+//  mock-ups in lib/components.scad are built from these, not from kbd_body_*.
+kbd_body_w_max = max(kbd_body_w, kbd_body_w_retail);   // [DERIVED] = 109.22
+kbd_body_h_max = max(kbd_body_h, kbd_body_h_retail);   // [DERIVED] =  58.42
+kbd_body_t_max = max(kbd_body_t, kbd_body_t_retail);   // [DERIVED] =  10.20
+
+//  FCC ID YIZRT-RII518 (Shenzhen Riitek), granted 2011-05-23, covers this body
+//  under ten retail model names including "Rii518" and "Rii mini 518BT". The
+//  FCC external and internal photos show a 68-key field with NO pointing
+//  device of any kind.
+//
+//  TRAPS, all confirmed from primary sources and all avoided here:
+//    * 150 x 100 x 20 mm / 120 g is the RETAIL BOX. It is 38% longer and 72%
+//      wider than the certified body and cannot be the product.
+//    * The Rii K18 is NOT this keyboard, and neither is the RT518 / RT518S:
+//      the RT518 manual gives 317.2 x 123.6 x 18.3 mm, 342 g - three times the
+//      length, with a touchpad.
+//    * "4.09 x 2.28 x 0.43 in" circulates on review sites. Traced to a single
+//      article that cites no source, contradicts its own specification table
+//      two paragraphs later, and gives a length of 103.9 mm - physically
+//      impossible, since both measured reference pockets are larger than that.
+//    * riimall.com's own storefront copy claims an integrated touchpad. The
+//      FCC photographs show there is none. Marketing copy for this model is
+//      unreliable even from the brand's own shop.
 
 kbd_pocket_corner_r = 6.0;   // [DESIGN] bay corner radius
 
-// Cross-checks, kept for audit. Both are measured; neither is used.
-kbd_pocket_w_ata = 109.200;  // [MEASURED] press fit,  -0.02 mm clearance
-kbd_pocket_h_ata =  59.200;  // [MEASURED]            +0.78 mm
-kbd_pocket_w_poc = 110.498;  // [MEASURED] loose fit, +1.28 mm
-kbd_pocket_h_poc =  60.600;  // [MEASURED]            +2.18 mm
+// Cross-checks, kept for audit. Both measured; neither is used. Clearances are
+// restated against the real 108.5 x 58.2 body.
+kbd_pocket_w_ata = 109.200;  // [MEASURED] +0.70 mm clearance
+kbd_pocket_h_ata =  59.200;  // [MEASURED] +1.00 mm
+kbd_pocket_w_poc = 110.498;  // [MEASURED] +2.00 mm
+kbd_pocket_h_poc =  60.600;  // [MEASURED] +2.40 mm
 
 // Front-face retention aperture. Captures the keyboard's outer lip so it
 // cannot fall forward; it is pushed out from behind instead.
@@ -604,9 +656,16 @@ assert(board_pocket_r <= 2.2,
 assert(expansion_win_h > 6.603, "expansion window will not clear the header body");
 assert(board_pocket_w >= board_w, "board pocket narrower than the board");
 assert(board_pocket_h >= board_h, "board pocket shorter than the board");
-assert(kbd_pocket_w >= kbd_body_w, "keyboard pocket narrower than the keyboard");
-assert(kbd_pocket_h >= kbd_body_h, "keyboard pocket shorter than the keyboard");
-assert(kbd_depth >= kbd_body_t, "keyboard pocket shallower than the keyboard");
+//  The pocket must clear BOTH candidate bodies, not just the primary one.
+assert(kbd_pocket_w >= kbd_body_w + 0.6 && kbd_pocket_w >= kbd_body_w_retail + 0.6,
+       "keyboard pocket does not clear both candidate bodies in width");
+assert(kbd_pocket_h >= kbd_body_h + 0.6 && kbd_pocket_h >= kbd_body_h_retail + 0.6,
+       "keyboard pocket does not clear both candidate bodies in height");
+assert(kbd_depth >= kbd_body_t + 0.4 && kbd_depth >= kbd_body_t_retail + 0.4,
+       "keyboard pocket does not clear both candidate bodies in depth");
+//  ... and it must clear the upper bound set by a working reference enclosure.
+assert(kbd_pocket_w >= kbd_pocket_w_ata + 0.6,
+       "keyboard pocket tighter than a tray known to accept a real unit");
 assert(batt_cowl_rise >= batt_protrusion - back_t + batt_cowl_wall,
        "battery cowl too shallow for the holder protrusion");
 assert(m3_cs_head_h < back_t - 1.0, "countersink leaves too little plate under the head");

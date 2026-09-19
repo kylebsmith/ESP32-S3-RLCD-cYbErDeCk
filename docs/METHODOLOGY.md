@@ -111,9 +111,9 @@ paths, one answer, 0.001 mm apart.
 
 Where corroboration was impossible the datum is marked `[PROVISIONAL]` and
 listed as an open item, and the design is arranged so the gap cannot cause a
-clash — the keyboard pocket is set from measured pockets rather than from the
-vendor's 0.1-inch-rounded figure; the board pocket carries 0.50 mm per side,
-more than PCB routing tolerance.
+clash — the keyboard pocket clears both
+candidate bodies rather than assuming the vendor's rounded figure is the real
+one; the board pocket carries 0.50 mm per side, more than PCB routing tolerance.
 
 ### Conflict resolution
 
@@ -130,14 +130,15 @@ manufacturer drawing / 2D template
 
 Every conflict actually encountered is recorded in
 [DATUMS.md § Corrections](DATUMS.md#corrections) with the losing value, rather
-than silently overwritten. Four of the five corrections there were beliefs acted
-on before being caught.
+than silently overwritten. Five of the six corrections there were beliefs acted
+on before being caught, and the sixth is worse: a *reasoning* error behind a
+number that happened to be right, kept because the lesson generalises.
 
 ---
 
 ## Validation
 
-`tools/validate.py` renders the parts **from source** and runs 68 checks in six
+`tools/validate.py` renders the parts **from source** and runs 70 checks in six
 classes: `MESH`, `ENVELOPE`, `FIT`, `INTERFACE`, `PRINT`, `DATUM`. Exit status
 is non-zero unless all pass.
 
