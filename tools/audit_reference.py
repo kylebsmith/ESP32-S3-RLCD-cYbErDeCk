@@ -187,6 +187,75 @@ def measure_reference(ref):
             r["mic_span"] = round(c[1] - c[0], 3)
             r["mic_aper_w"] = round(mic[0].bounds[3] - mic[0].bounds[1], 3)
             r["mic_aper_h"] = round(mic[0].bounds[2] - mic[0].bounds[0], 3)
+    # --- keyboard-facing features -----------------------------------------
+    # The ATA has NO keyboard aperture: its bezel covers the display only and
+    # the keyboard sits in an open tray. The front lip over the keyboard comes
+    # from the proof-of-concept top, poc_top.stl, so that is where the aperture
+    # and the eject port have to be read from. Recording this explicitly
+    # because auditing the aperture against the ATA would silently find nothing.
+    poc = os.path.join(ref, "stl/poc_top.stl")
+    if os.path.exists(poc):
+        pt = trimesh.load(poc, force="mesh")
+        for z, key in ((113.70, "aper"), (102.05, "bay")):
+            for rg in rings(sect_z(pt, z)):
+                b = rg.bounds
+                w, h = b[2] - b[0], b[3] - b[1]
+                lo, hi = min(w, h), max(w, h)
+                if key == "aper" and 104 < hi < 109 and 53 < lo < 58:
+                    r["kbd_aper_w"], r["kbd_aper_h"] = round(hi, 3), round(lo, 3)
+                if key == "bay" and 108 < hi < 113 and 58 < lo < 63:
+                    r["kbd_pocket_w_poc"] = round(hi, 3)
+                    r["kbd_pocket_h_poc"] = round(lo, 3)
+    # Eject port: the finger cut-out that pushes the keyboard back out. It is a
+    # TAPER, so a single section gives whichever diameter that depth happens to
+    # have. Sweep it and take both ends.
+    dia = []
+    for y in np.arange(-13.0, -9.0, 0.15):
+        for rg in rings(sect_y(cb, y)):
+            b = rg.bounds
+            w, h = b[2] - b[0], b[3] - b[1]
+            if 10 < w < 24 and 10 < h < 24 and abs(w - h) < 1.0:
+                dia.append((w + h) / 2)
+    if dia:
+        r["kbd_eject_d"] = round(max(dia), 3)
+        r["kbd_eject_d_min"] = round(min(dia), 3)
+
+    # Keyboard tray corner radius. The tray is OPEN to the exterior at the port
+    # notch, so it never forms a closed section ring and cannot be measured the
+    # way every other pocket here is. Take the inner wall faces directly: the
+    # wall triangles whose normals point INTO the tray, which excludes the
+    # outer skin, the floor and the rim, then least-squares a circle per corner.
+    from scipy.optimize import least_squares
+    nrm, cen = cb.face_normals, cb.triangles_center
+    CX, CZ = -71.85, 1.2                       # tray centre in the ref frame
+    to_c = np.c_[CX - cen[:, 0], CZ - cen[:, 2]]
+    to_c /= (np.linalg.norm(to_c, axis=1, keepdims=True) + 1e-9)
+    sel = ((np.abs(nrm[:, 1]) < 0.15)                       # vertical wall
+           & (cen[:, 1] > -8.0) & (cen[:, 1] < 2.6)          # between floor and rim
+           & (cen[:, 0] > -102.0) & (cen[:, 0] < -41.7)      # tray footprint
+           & (np.abs(cen[:, 2] - CZ) < 56.0)
+           & ((nrm[:, 0] * to_c[:, 0] + nrm[:, 2] * to_c[:, 1]) > 0.5))
+    if sel.sum() > 50:
+        Q = np.unique(cb.triangles[sel].reshape(-1, 3)[:, [0, 2]], axis=0)
+        x0, x1 = Q[:, 0].min(), Q[:, 0].max()
+        z0, z1 = Q[:, 1].min(), Q[:, 1].max()
+        r["kbd_pocket_h_tray"] = round(x1 - x0, 3)
+        r["kbd_pocket_w_tray"] = round(z1 - z0, 3)
+        rr = []
+        for (X, Z) in ((x0, z0), (x0, z1), (x1, z0), (x1, z1)):
+            q = Q[(np.abs(Q[:, 0] - X) < 7.5) & (np.abs(Q[:, 1] - Z) < 7.5)]
+            if len(q) < 6:
+                continue
+            guess = [X + (7.0 if X < CX else -7.0),
+                     Z + (7.0 if Z < CZ else -7.0), 6.0]
+            sol = least_squares(
+                lambda pp: np.hypot(q[:, 0] - pp[0], q[:, 1] - pp[1]) - pp[2], guess)
+            # One corner is cut by the port notch and will not fit a circle.
+            # Keep only clean fits rather than averaging a bad one in.
+            if np.sqrt((sol.fun ** 2).mean()) < 0.05:
+                rr.append(float(sol.x[2]))
+        if rr:
+            r["kbd_pocket_corner_r"] = round(float(np.median(rr)), 3)
     return r
 
 
@@ -257,6 +326,33 @@ def audit(p, r):
     cmp(g, "pocket depth", p["kbd_depth"], r.get("kbd_depth"),
         reason="reference leaves 1.20 of vertical float over the 10.2 body; "
                "this leaves 0.80")
+    # The aperture is the surface that actually shows and retains, so it is the
+    # one that most needs confirming against a design known to work. It comes
+    # from poc_top.stl, NOT the ATA - the ATA bezel has no keyboard aperture.
+    cmp(g, "front aperture width", p["kbd_aper_w"], r.get("kbd_aper_w"))
+    cmp(g, "front aperture height", p["kbd_aper_h"], r.get("kbd_aper_h"))
+    cmp(g, "pocket corner radius", p["kbd_pocket_corner_r"],
+        r.get("kbd_pocket_corner_r"), tol=0.15,
+        reason="within a tenth of the reference tray; both clear the "
+               "keyboard's own corner by a wide margin")
+    cmp(g, "eject port diameter", p["kbd_eject_d"], r.get("kbd_eject_d"),
+        reason="rounded up from the reference's 18.99 to a whole 19.0")
+    cmp(g, "eject port minimum diameter", p["kbd_eject_d_min"],
+        r.get("kbd_eject_d_min"),
+        reason="rounded up from the reference's 12.99 to a whole 13.0")
+    cmp(g, "tray width, inner-wall fit", p["kbd_pocket_w"],
+        r.get("kbd_pocket_w_tray"),
+        reason="as for pocket width; this row cross-checks the tray by a second "
+               "method (inner wall faces) against the scan-line measurement")
+    # Cross-check the proof-of-concept bay as well as the ATA tray: two
+    # independent pockets by the same author, and this design must sit sensibly
+    # against both rather than matching one and drifting from the other.
+    cmp(g, "pocket width vs the PoC bay", p["kbd_pocket_w"],
+        r.get("kbd_pocket_w_poc"),
+        reason="0.30 tighter than the loosest reference pocket and 1.00 looser "
+               "than the tightest; both are built, working parts")
+    cmp(g, "pocket height vs the PoC bay", p["kbd_pocket_h"],
+        r.get("kbd_pocket_h_poc"), reason="as above")
 
     g = "SHELL"
     cmp(g, "wall thickness", p["wall"], r.get("wall"),

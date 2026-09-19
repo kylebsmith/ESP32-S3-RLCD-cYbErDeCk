@@ -190,6 +190,38 @@ fine; one that silently checks nothing is worse than none.
 
 ---
 
+## What the reference audit covers
+
+`tools/audit_reference.py` re-derives the reference's own geometry from its
+meshes on every run and compares it feature by feature. For the keyboard — the
+component whose geometry this project has least independent access to — that is
+eleven dimensions: pocket width, height and depth against both the ATA tray and
+the proof-of-concept bay, the front aperture in both axes, the pocket corner
+radius, both ends of the eject-port taper, and a second, independent
+cross-check of the tray width.
+
+Two of those deserve a note on method, because the obvious approach fails:
+
+- **The tray never forms a closed section ring.** It is open to the exterior at
+  the port notch, so the sectioning that measures every other pocket here
+  returns nothing. The corner radius is taken instead from the wall triangles
+  whose normals point *into* the tray — which excludes the outer skin, the floor
+  and the rim — and a circle is least-squared through each corner. Three of the
+  four fit to an RMS under 0.05 mm; the fourth is cut by the notch and is
+  discarded rather than averaged in. That method reads the tray as
+  109.205 mm wide against the scan-line method's 109.200, so the two agree to
+  0.005 mm.
+- **The eject port is a taper**, so any single section returns whichever
+  diameter that depth happens to have. It is swept and both ends are recorded.
+
+**And one that is not audited.** The keyboard's service window is measured once
+and recorded, not re-derived each run: the tray is open along that same edge and
+the notch could not be separated reliably from the surrounding opening. It is
+marked as such rather than left to look like an audited row. This design puts a
+window on *both* short edges, so the datum does not gate anything — the
+manufacturer's drawing now confirms the port and switch share one edge, and
+either window serves it.
+
 ## Limits
 
 - **No physical verification.** The largest limit by far.

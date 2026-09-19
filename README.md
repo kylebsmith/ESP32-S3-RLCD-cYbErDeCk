@@ -202,15 +202,25 @@ one that is known to work. It is a gate, not a report: anything that differs
 without a recorded reason exits non-zero.
 
 ```
-14 match   12 intended difference   0 to review
+19 match   15 intended difference   0 to review
 ```
 
 Exact agreement (±0.000 mm) on the mounting pattern, the display aperture, the
 button pitch and apertures, the microphone span and apertures, and the speaker
-grille field. The twelve differences are each a recorded decision — the pocket
-cut to the bare PCB rather than to the discarded stand base, the keyboard pocket
-sized to clear both candidate keyboard bodies rather than only the one its
-author had, 3.2 mm walls instead of 2.9.
+grille field. On the keyboard specifically: the front aperture matches to
+**0.002 mm**, the pocket corner to 0.064, and the eject port to 0.010.
+
+The fifteen differences are each a recorded decision — the board pocket cut to
+the bare PCB rather than to the discarded stand base, the keyboard pocket sized
+to clear the body at its assumed tolerance rather than to one author's sample,
+3.2 mm walls instead of 2.9.
+
+**What is audited, and what is not.** Eleven keyboard-facing dimensions are
+re-derived from the reference meshes on every run. The keyboard's service window
+is not — it is measured once and recorded, because the tray is open at that edge
+and the notch could not be isolated reliably from the surrounding opening. It is
+listed in [DATUMS.md](docs/DATUMS.md) as measured-once rather than quietly
+counted among the audited rows.
 
 ## Documentation
 

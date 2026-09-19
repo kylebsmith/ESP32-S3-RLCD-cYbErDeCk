@@ -438,6 +438,23 @@ pocket corner radius much above `r + c/(√2 − 1)` will interfere.
 Gaps that remain. Each is stated with what it would take to close it, and with
 how the design is shaped so the gap cannot cause a clash.
 
+### Measured once, not re-audited
+
+Every keyboard-facing dimension in this file is re-derived from the reference
+meshes by `tools/audit_reference.py` on each run — **except the service
+window** (`kbd_access_*`). The reference tray is open to the exterior along the
+same short edge that carries the notch, so the notch cannot be separated
+reliably from the surrounding opening; an extraction that looked like it worked
+returned the 37–43 mm open edge rather than the 34 mm window.
+
+It is recorded here as measured-once rather than counted among the audited rows,
+because a datum that silently stops being checked is how the other corrections
+in this file happened.
+
+It gates nothing: this design puts a 34 × 8 mm window on **both** short edges,
+and the manufacturer's drawing confirms the charge port and power switch share
+one edge, so either window serves whichever way the keyboard is fitted.
+
 ### O-01 — Keyboard outline — CLOSED. Its tolerance is not.
 
 The outline is settled by two independent manufacturer documents twelve years
