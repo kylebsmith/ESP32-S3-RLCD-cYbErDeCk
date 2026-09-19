@@ -169,7 +169,15 @@ strongest evidence in this document.
 | Pixel pitch | 0.2120 mm square, 400 × 300 | `[DERIVED]` |
 | True diagonal | 106.00 mm = 4.173 in | `[DERIVED]` |
 | Active-area offset from PCB centre | **−1.60 mm along U**, centred along V | `[VENDOR]` S1 |
+| ... independently measured | −1.604 mm along U | `[MEASURED]` S5 `poc_top.stl` |
 | Aperture used here | 86.8 × 65.6 | `[MEASURED]` S5 — a 1.00 mm reveal per side |
+
+The offset is confirmed independently: the proof-of-concept enclosure's display
+aperture centre sits at (34.5640, 45.6460) against a mounting-pattern centre of
+(34.550, 47.250) — an offset of **−1.604 mm** along the same axis. That design's
+aperture is also *exactly* 63.600 × 84.800, i.e. the active area itself with
+zero reveal; the 1.00 mm per-side reveal used here comes from the later ATA
+bezel and is the more forgiving of the two.
 
 See [C-02](#c-02--the-active-area-is-not-42-inches-and-is-not-centred).
 
@@ -220,6 +228,20 @@ A pocket cut to 70.1 leaves a 1 mm gap on one long edge. Consequence here: this
 design discards the stand base and kickstand entirely, which removes the 70.1
 dimension, saves 2.75 mm of thickness and 1.0 mm of width, and costs nothing
 mechanically because the standoffs are on the PCB.
+
+**The drawing can be read either way, and one reading is a trap.** Chaining the
+hole offsets gives `4.50 + 62.10 + 3.50 = 70.10`, which appears to confirm the
+70.1 figure — and a second, independent pass over the same drawing reached
+exactly that conclusion. It is wrong: the 4.50 is dimensioned from the **stand
+base** edge while the 3.50 is dimensioned from the **PCB** edge, so the chain
+mixes two datums. Removing the base's 1.00 mm overhang gives the self-consistent
+`3.50 + 62.10 + 3.50 = 69.10`, which matches the front view's own `69.1 PCB OD`
+annotation and the 3.50 mm inset quoted on all four sides.
+
+A third line settles it independently of the drawing: the reference enclosure's
+board pocket is 71.1163 × 94.5193 against a bare PCB of 69.1098 × 92.5098 —
+**1.0032 / 1.0047 mm per side, symmetric**. Against a 70.10 mm base the same
+pocket gives a lopsided 1.01 / 0.508.
 
 ### C-02 — The active area is not 4.2 inches, and is not centred
 
