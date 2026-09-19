@@ -421,21 +421,24 @@ module window() {
 //  ASSEMBLY AND PLATE VIEWS
 // ===========================================================================
 
-module assembly() {
-    color("DimGray", 0.85) chassis();
-    color("SlateGray", 0.9) translate([0, 0, 0]) backplate();
-    color("Crimson") for (i = [0 : button_count - 1]) {
-        bx = board_cx + (i - (button_count - 1)/2) * button_pitch;
-        translate([bx, body_h/2 + 0.3, pcb_back_z + button_w_centre])
-            rotate([90, 0, 0]) buttons_single();
-    }
-    // component mock-ups, for visual fit checking only
-    color("ForestGreen", 0.55)
-        translate([board_cx, board_cy, z_front_inner - board_depth])
+//  Component colours are deliberately flat and unsaturated: these views exist
+//  to show fit and arrangement, not to sell anything.
+module assembly(explode = 0) {
+    e = explode;
+    color("#cfcabf")                      chassis();
+    color("#b6b0a4") translate([0, 0, -e * 1.6])  backplate();
+    color("#2f6b45", 0.95)
+        translate([board_cx, board_cy, z_front_inner - board_depth - e * 0.9])
             mock_board();
-    color("Black", 0.7)
-        translate([0, kbd_bay_cy, z_front_inner - kbd_depth])
+    color("#2b2e33", 0.95)
+        translate([0, kbd_bay_cy, z_front_inner - kbd_depth - e * 0.55])
             mock_keyboard();
+    color("#a8342b")
+        for (i = [0 : button_count - 1])
+            translate([board_cx + (i - (button_count - 1)/2) * button_pitch,
+                       body_h/2 + 0.3 + e * 0.5,
+                       pcb_back_z + button_w_centre])
+                rotate([90, 0, 0]) buttons_single();
 }
 
 module buttons_single() {
@@ -459,4 +462,5 @@ else if (part == "backplate") backplate();
 else if (part == "buttons")   buttons();
 else if (part == "window")    window();
 else if (part == "plate")     plate();
+else if (part == "exploded")  assembly(explode = 14);
 else                          assembly();

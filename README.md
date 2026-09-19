@@ -11,8 +11,11 @@ perforated element — but with curvature continuity everywhere a surface turns,
 so it reads as grown rather than extruded.
 
 <p align="center">
-  <img src="docs/img/chassis-front.png" width="42%" alt="Chassis, front">
-  <img src="docs/img/backplate-iso.png" width="42%" alt="Back plate">
+  <img src="docs/img/render-exploded.png" width="84%" alt="Exploded assembly">
+</p>
+<p align="center">
+  <img src="docs/img/chassis-front.png" width="41%" alt="Chassis, front">
+  <img src="docs/img/backplate-iso.png" width="41%" alt="Back plate">
 </p>
 
 ```
@@ -139,6 +142,38 @@ There is also no FEA and no drop testing. The stiffness argument in
 [docs/DESIGN.md](docs/DESIGN.md) is reasoning from section geometry — closed box
 versus open channel, joint moved out of the peak-bending plane — not simulation.
 
+## Drawings
+
+Four dimensioned general-arrangement sheets in [`export/drawings/`](export/drawings/),
+regenerated in CI. **Every dimension on them is measured from the rendered
+mesh**, not typed in and not read from `parameters.scad` — a drawing annotated
+by hand drifts from the model the first time anyone edits the model; one that
+measures the mesh cannot.
+
+| Sheet | |
+|---|---|
+| [1 — chassis](export/drawings/sheet1-chassis.png) | front elevation, vertical section, envelope derivation with PASS/FAIL |
+| [2 — back plate](export/drawings/sheet2-backplate.png) | rear elevation, section through the battery cowl |
+| [3 — assembly](export/drawings/sheet3-assembly.png) | horizontal sections through both bays, **components in place**, clearances called out |
+| [4 — components](export/drawings/sheet4-components.png) | schedule of every component-facing dimension with its provenance |
+
+## Accuracy against the original
+
+`tools/audit_reference.py` compares every surface that locates, retains or gives
+access to a component against the reference design this project measured — the
+one that is known to work. It is a gate, not a report: anything that differs
+without a recorded reason exits non-zero.
+
+```
+14 match   12 intended difference   0 to review
+```
+
+Exact agreement (±0.000 mm) on the mounting pattern, the display aperture, the
+button pitch and apertures, the microphone span and apertures, and the speaker
+grille field. The twelve differences are each a recorded decision — the pocket
+cut to the bare PCB rather than to the discarded stand base, the keyboard pocket
+placed between a press fit and a loose one, 3.2 mm walls instead of 2.9.
+
 ## Documentation
 
 | | |
@@ -149,6 +184,17 @@ versus open channel, joint moved out of the peak-bending plane — not simulatio
 | **[ASSEMBLY.md](docs/ASSEMBLY.md)** | BOM, print settings, build order |
 | **[PROVENANCE.md](docs/PROVENANCE.md)** | what was taken from whom, and on what basis |
 
+## Tooling
+
+| | |
+|---|---|
+| `tools/params.py` | the single reader for `parameters.scad`; every other tool goes through it |
+| `tools/measure_reference.py` | metrology harness — regenerates every measured datum |
+| `tools/validate.py` | 68-check design audit — the build gate |
+| `tools/audit_reference.py` | component-facing accuracy against the reference |
+| `tools/drawing.py` | dimensioned GA sheets, measured from the mesh |
+| `tools/build.sh` | render everything and gate; what CI runs |
+
 ## Repository layout
 
 ```
@@ -158,8 +204,11 @@ cad/
   lib/util.scad       geometry helpers
   lib/components.scad worst-case component envelopes, for fit checking
 tools/
+  params.py             the single reader for parameters.scad
   measure_reference.py  metrology harness — regenerates every measured datum
-  validate.py           52-check design audit — the build gate
+  validate.py           68-check design audit — the build gate
+  audit_reference.py    component-facing accuracy against the reference
+  drawing.py            dimensioned GA sheets, measured from the mesh
 docs/                 datum sheet, design rationale, methodology, assembly
 export/reports/       machine-readable measurement and validation output
 ```

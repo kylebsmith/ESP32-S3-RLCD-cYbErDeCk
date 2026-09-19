@@ -37,6 +37,8 @@ import subprocess
 import sys
 import tempfile
 
+import params
+
 try:
     import numpy as np
     import trimesh
@@ -68,40 +70,9 @@ def check(name, cls, ok, detail=""):
 # ---------------------------------------------------------------------------
 
 def load_params():
-    """Parse parameters.scad into a dict.
-
-    Statement-based, not line-based. An earlier line-based version joined any
-    line ending in '=' onto the next one, which silently ate every parameter
-    that happened to follow a '// ======' section rule - and then every check
-    depending on it died with a KeyError rather than reporting a real result.
-    """
-    src = open(PARAMS).read()
-
-    # Record which statements are tagged [PROVISIONAL] before stripping comments.
-    provisional = set()
-    for stmt in re.finditer(r"([A-Za-z_]\w*)\s*=[^;]*;([^\n]*)", src):
-        if "[PROVISIONAL]" in stmt.group(2):
-            provisional.add(stmt.group(1))
-
-    code = re.sub(r"//[^\n]*", "", src)          # strip line comments
-    code = re.sub(r"/\*.*?\*/", "", code, flags=re.S)
-
-    env = {"sqrt": math.sqrt, "min": min, "max": max, "abs": abs, "pow": pow}
-    p = {}
-    for stmt in code.split(";"):
-        m = re.match(r"\s*([A-Za-z_]\w*)\s*=\s*(.+)\s*$", stmt, flags=re.S)
-        if not m:
-            continue
-        name, expr = m.group(1), m.group(2).strip()
-        try:
-            p[name] = float(eval(expr, {"__builtins__": {}}, dict(env, **p)))
-        except Exception:
-            pass      # strings, ternaries, module calls - not needed here
-
-    p.setdefault("wall", 3.2)
-    p.setdefault("spine", p["wall"])
-    p["_provisional"] = provisional
-    return p
+    """Delegates to tools/params.py so validate.py and drawing.py can never
+    disagree about what the model says."""
+    return params.load_with_defaults(PARAMS)
 
 
 def render(part, outdir):
