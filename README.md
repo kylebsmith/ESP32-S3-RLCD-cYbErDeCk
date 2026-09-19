@@ -161,6 +161,7 @@ measures the mesh cannot.
 | [3 — assembly](export/drawings/sheet3-assembly.png) | horizontal sections through both bays, **components in place**, clearances called out |
 | [4 — components](export/drawings/sheet4-components.png) | schedule of every component-facing dimension with its provenance |
 | [5 — structure](export/drawings/sheet5-structure.png) | section modulus along the folding axis, open vs closed |
+| [6 — corner lip](export/drawings/sheet6-corner-lip.png) | why the keyboard aperture corner is circular, and what it cost when it was not |
 
 ## How robust it actually is
 

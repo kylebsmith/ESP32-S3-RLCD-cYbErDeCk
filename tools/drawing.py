@@ -295,7 +295,7 @@ def sheet_chassis(parts, p, path):
         check_line(ax3, 0.0, 0.20 - j * 0.075, abs(meas - exp) < 0.05,
                    f"{nm:<10}{meas:8.2f} measured  vs {exp:8.2f} derived")
 
-    fig.suptitle("cYbErDeCk  ·  sheet 1 of 4  ·  chassis", fontsize=10.5,
+    fig.suptitle("cYbErDeCk  ·  sheet 1 of 6  ·  chassis", fontsize=10.5,
                  x=0.045, ha="left", y=0.972, color=INK, fontweight="bold")
     fig.savefig(path, facecolor="white"); plt.close(fig)
 
@@ -355,7 +355,7 @@ def sheet_backplate(parts, p, path):
     ax2.set_ylim(-p["batt_cowl_rise"] - 16, p["back_t"] + p["kbd_keeper"] + 14
                  if "kbd_keeper" in p else p["back_t"] + 14)
 
-    fig.suptitle("cYbErDeCk  ·  sheet 2 of 4  ·  back plate", fontsize=10.5,
+    fig.suptitle("cYbErDeCk  ·  sheet 2 of 6  ·  back plate", fontsize=10.5,
                  x=0.045, ha="left", y=0.972, color=INK, fontweight="bold")
     fig.savefig(path, facecolor="white"); plt.close(fig)
 
@@ -400,7 +400,7 @@ def sheet_assembly(parts, mocks, p, path):
         ax.set_xlim(b[0][0] - 20, b[1][0] + 30)
         ax.set_ylim(b[0][2] - 22, b[1][2] + 16)
 
-    fig.suptitle("cYbErDeCk  ·  sheet 3 of 4  ·  assembly sections, components in place",
+    fig.suptitle("cYbErDeCk  ·  sheet 3 of 6  ·  assembly sections, components in place",
                  fontsize=10.5, x=0.05, ha="left", y=0.975, color=INK, fontweight="bold")
     fig.savefig(path, facecolor="white"); plt.close(fig)
 
@@ -480,8 +480,70 @@ def sheet_components(parts, mocks, p, path):
         ax2.text(0.46, y, bb, fontsize=6.9, family="monospace", va="top", color=INK)
         ax2.text(0.76, y, c, fontsize=6.3, family="monospace", va="top", color=THIN)
 
-    fig.suptitle("cYbErDeCk  ·  sheet 4 of 4  ·  component schedule",
+    fig.suptitle("cYbErDeCk  ·  sheet 4 of 6  ·  component schedule",
                  fontsize=10.5, x=0.05, ha="left", y=0.972, color=INK, fontweight="bold")
+    fig.savefig(path, facecolor="white"); plt.close(fig)
+
+
+def _rr(w, h, c, n, q=600):
+    """Rounded rectangle with a superelliptical corner; n = 2 is a circle."""
+    c = min(c, w / 2 - 0.01, h / 2 - 0.01)
+    ax, ay = w / 2 - c, h / 2 - c
+    t = np.linspace(0, 90, q)
+    e = 2.0 / n
+    ct = np.power(np.clip(np.cos(np.radians(t)), 0, None), e)
+    st = np.power(np.clip(np.sin(np.radians(t)), 0, None), e)
+    return np.vstack([np.c_[ax + c*ct, ay + c*st], np.c_[-ax - c*st, ay + c*ct],
+                      np.c_[-ax - c*ct, -ay - c*st], np.c_[ax + c*st, -ay - c*ct]])
+
+
+def sheet_corner_lip(p, path):
+    """Why the keyboard aperture corner is circular rather than superelliptical.
+
+    The failure this records is invisible in a render and invisible to a check
+    that compares widths, so it is worth a drawing of its own.
+    """
+    from shapely.geometry import Polygon as SP
+    W, H = p["kbd_aper_w"], p["kbd_aper_h"]
+    BW, BH = p["kbd_body_w"], p["kbd_body_h"]
+    rb = p["kbd_body_corner_r"]
+
+    fig, axes = plt.subplots(1, 2, figsize=(16.5, 7.0), dpi=170)
+    fig.patch.set_facecolor("white")
+    cases = [(f"BEFORE  —  superelliptical corner, c = 9.0, n = {p['form_n']}",
+              9.0, p["form_n"], "#b04a3a"),
+             (f"AFTER  —  circular corner, c = {p['aper_blend_kbd']:.1f}, derived",
+              p["aper_blend_kbd"], p["aper_n_kbd"], "#2f6b45")]
+    body = _rr(BW, BH, rb, 2.0)
+    for ax, (title, c, n, col) in zip(axes, cases):
+        ap = _rr(W, H, c, n)
+        ax.add_patch(MplPolygon(body, closed=True, fc="#2b2e33", ec="#2b2e33",
+                                alpha=0.88, zorder=1))
+        ax.add_patch(MplPolygon(ap, closed=True, fc="white", ec=col, lw=2.2, zorder=3))
+        esc = SP(ap).difference(SP(body))
+        gs = list(esc.geoms) if esc.geom_type.startswith("Multi") else \
+             ([esc] if not esc.is_empty else [])
+        for g in gs:
+            ax.add_patch(MplPolygon(np.asarray(g.exterior.coords), closed=True,
+                                    fc="#e03a2f", ec="none", zorder=4))
+        held = SP(body).contains(SP(ap))
+        ax.set_xlim(BW/2 - 18, BW/2 + 4); ax.set_ylim(BH/2 - 16, BH/2 + 4)
+        ax.set_aspect("equal"); ax.set_xticks([]); ax.set_yticks([])
+        ax.set_title(title, fontsize=10, color=col, loc="left", fontweight="bold")
+        for sp in ax.spines.values():
+            sp.set_color("#ccc")
+        ax.text(0.03, 0.05,
+                "lip holds all the way round the corner" if held else
+                "lip is NEGATIVE — the keyboard does not\nreach the aperture edge "
+                "(red = open gap into the pocket)",
+                transform=ax.transAxes, fontsize=9, color=col, va="bottom")
+    fig.suptitle("cYbErDeCk  ·  sheet 6 of 6  ·  keyboard aperture corner against the "
+                 f"keyboard's measured {rb:.0f} mm corner  (top-right corner, detail)",
+                 fontsize=10.5, x=0.04, ha="left", y=0.97, color=INK, fontweight="bold")
+    fig.text(0.04, 0.012, "dark = Rii 518BT body   ·   outline = front-face aperture "
+             "  ·   the gap between them is the retaining lip",
+             fontsize=8, color=THIN)
+    fig.tight_layout(rect=[0, 0.03, 1, 0.94])
     fig.savefig(path, facecolor="white"); plt.close(fig)
 
 
@@ -512,6 +574,7 @@ def main():
         (2, "sheet2-backplate.png", lambda f: sheet_backplate(parts, p, f)),
         (3, "sheet3-assembly.png", lambda f: sheet_assembly(parts, mocks, p, f)),
         (4, "sheet4-components.png", lambda f: sheet_components(parts, mocks, p, f)),
+        (6, "sheet6-corner-lip.png", lambda f: sheet_corner_lip(p, f)),
     ]
     for n, name, fn in sheets:
         if args.sheet and args.sheet != n:
