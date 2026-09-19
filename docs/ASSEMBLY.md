@@ -3,7 +3,7 @@
 Read this before printing. The RLCD panel is fragile and must never be used as
 leverage while fitting a cable, a cell or a printed part.
 
-> **This design has not been built.** All **92** automated checks pass, but
+> **This design has not been built.** All **106** automated checks pass, but
 > nobody has held these components against a printed chassis. Print the
 > **chassis alone** first, offer the board and keyboard up to it, and check the
 > four measurements in
@@ -19,6 +19,7 @@ leverage while fitting a cable, a cell or a printed part.
 | `chassis` | 1 | ~53 g | front face down |
 | `backplate` | 1 | ~58 g | cowl up |
 | `buttons` | 1 | ~0.5 g | printed as one sprue |
+| `cover` | 1 | ~60 g | **variant 2 only** — inner face up, no supports |
 
 ### Hardware
 
@@ -26,6 +27,7 @@ leverage while fitting a cable, a cell or a printed part.
 |---|---|---|
 | Waveshare ESP32-S3-RLCD-4.2 | 1 | **not** an e-paper or other ESP32-S3 display board |
 | Rii 518BT mini Bluetooth keyboard | 1 | not the K18, and not the RT518S |
+| Ø5 × 2 mm N52 neodymium disc | 8 | **variant 2 only** — 4 in the shell, 4 in the cover |
 | 18650 lithium cell | 1 | flat-top or protected, up to Ø18.6 × 69.0 |
 | microSD card | 0–1 | FAT32 |
 | Speaker with the MX1.25 2-pin lead supplied with the board | 1 | |
@@ -100,6 +102,32 @@ the Ø7.4/Ø4.0 figures this step used to give were the M3 revision's and were
 never updated. Let the insert melt in under its own weight rather than forcing
 it, or the boss will split.
 
+### 2b. Fit the magnets — variant 2 only
+
+Eight Ø5 × 2 mm N52 discs, four in the chassis and four in the cover. Do this
+with the chassis **front face down** on the bench.
+
+Each shell station is a Ø6.0 access shaft running down to the back-plate
+seating plane, ending in a ribbed pocket under the show face. Drop a disc into
+the shaft, let it fall to the mouth of the pocket, and push it home with a 4 mm
+rod until it bottoms on the 0.8 mm skin. It should take a firm push — eight
+crush ribs close the 5.50 mm bore to 4.80, so the disc sees 0.10–0.30 mm of
+interference depending where it falls in its own ±0.10 mm tolerance. If it
+pushes in with no resistance at all, raise `magnet_rib_h`; if it will not start,
+lower it. That one parameter is the whole adjustment.
+
+The cover's four pockets are open on its **inner** face — press the discs in
+flush. There is deliberately no plastic between the cover's discs and the
+chassis's: the only gap in the magnetic circuit is the shell's own 0.8 mm skin,
+which is what makes four small magnets enough.
+
+**Polarity: every disc goes in the same way up.** Mark one pole before you
+start and keep it consistent — all four shell discs facing out, all four cover
+discs facing out. You cannot fit the cover backwards, so alternating polarity
+would buy nothing and turn every disc into a coin toss.
+
+Nothing is visible from outside when the back plate goes on.
+
 ### 3. Fit the button sprue
 
 Drop the three caps into the top-edge apertures from inside. The retaining
@@ -140,6 +168,16 @@ the **left** side, as you look at the front of the device. There is only one
 window, because everything that needs reaching is on that one short edge and
 the keys only read one way up. If they end up on the right, the keyboard is in
 upside down.
+
+### 5b. Fit the cover — variant 2 only
+
+Offer it up square and let it go from a millimetre out; the two register
+platforms find their apertures and pull it straight. To remove it, get a thumb
+into the scallop on the top edge and peel — do not try to slide it off.
+
+The platforms, not the magnets, are what stop it sliding. Four pairs make about
+15 N of pull across the 0.8 mm skin but only about 3 N of shear, which is a
+fraction of what a bag strap can apply; the platforms carry all of it.
 
 ### 6. Connect the speaker
 

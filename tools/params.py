@@ -53,6 +53,18 @@ def _evaluate(expr, scope):
     # bool is still rejected.
     if isinstance(v, (list, tuple)):
         return [float(q) for q in v]
+    # STRINGS ARE VALUES TOO. parameters.scad opens with
+    #     preset = "overbuilt";
+    #     wall   = (preset == "compact") ? 2.4 : 3.2;
+    # and float("overbuilt") raises, so `preset` was dropped, so `wall` was
+    # dropped, and with it body_w, body_h, board_bay_cy and every value derived
+    # from them. load_with_defaults() then seeded those four by hand AFTER
+    # parsing, which hid the breakage for the tools that existed at the time and
+    # silently dropped every NEW parameter that depended on them. Keep strings.
+    if isinstance(v, str):
+        return v
+    if isinstance(v, bool):
+        return v
     return float(v)
 
 
@@ -96,6 +108,13 @@ def load(path=PARAMS, seeds=None):
 def load_with_defaults(path=PARAMS):
     """As load(), but guarantees the handful of values every tool needs."""
     p, prov = load(path)
+    # A second pass with the first pass's results as seeds. Anything that could
+    # not resolve the first time because its input came later, or came from a
+    # fallback below, gets another chance with a fuller scope. Without this, a
+    # seeded value is a dead end: nothing derived from it ever resolves.
+    if p:
+        p2, prov = load(path, seeds=p)
+        p = p2
     p.setdefault("wall", 3.2)
     p.setdefault("spine", p["wall"])
     for name, expr in (("body_w", lambda q: q["wall"] + max(q["kbd_pocket_w"], q["board_pocket_w"]) + q["wall"]),

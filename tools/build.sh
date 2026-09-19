@@ -12,7 +12,10 @@ command -v xvfb-run >/dev/null 2>&1 && RUN="xvfb-run -a"
 # stderr, and renders something small and wrong. That is how a 2 x 2 x 1 mm
 # "acrylic window" once passed a 52-check audit. Treat the warning as fatal.
 fail=0
-for part in chassis backplate buttons assembly; do
+# The part list, in ONE place. Adding a part is this line, and the
+# dispatch in cad/cyberdeck.scad - nothing else.
+PARTS="chassis backplate buttons cover assembly"
+for part in $PARTS; do
     printf '  rendering %-12s ... ' "$part"
     log=$(mktemp)
     $RUN "$SCAD" -D "part=\"$part\"" -o "export/stl/$part.stl" cad/cyberdeck.scad 2>"$log" || true

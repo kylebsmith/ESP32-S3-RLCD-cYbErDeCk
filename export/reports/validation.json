@@ -1,12 +1,12 @@
 {
-  "passed": 92,
-  "total": 92,
+  "passed": 106,
+  "total": 106,
   "results": [
     {
       "check": "chassis: watertight",
       "class": "MESH",
       "ok": true,
-      "detail": "12088 faces"
+      "detail": "18344 faces"
     },
     {
       "check": "chassis: single body",
@@ -18,7 +18,7 @@
       "check": "chassis: positive volume",
       "class": "MESH",
       "ok": true,
-      "detail": "43098 mm^3 -> 53.4 g in PLA"
+      "detail": "41822 mm^3 -> 51.9 g in PLA"
     },
     {
       "check": "backplate: watertight",
@@ -55,6 +55,24 @@
       "class": "MESH",
       "ok": true,
       "detail": "174 mm^3 -> 0.2 g in PLA"
+    },
+    {
+      "check": "cover: watertight",
+      "class": "MESH",
+      "ok": true,
+      "detail": "10424 faces"
+    },
+    {
+      "check": "cover: single body",
+      "class": "MESH",
+      "ok": true,
+      "detail": "body_count=1"
+    },
+    {
+      "check": "cover: positive volume",
+      "class": "MESH",
+      "ok": true,
+      "detail": "48748 mm^3 -> 60.4 g in PLA"
     },
     {
       "check": "board: watertight",
@@ -132,7 +150,7 @@
       "check": "chassis is not degenerate",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "116.25 x 138.85 x 16.85, 43098 mm^3"
+      "detail": "116.25 x 138.85 x 16.85, 41822 mm^3"
     },
     {
       "check": "backplate: extent X is as specified",
@@ -153,6 +171,12 @@
       "detail": "26.00 x 4.80 x 3.44, 174 mm^3"
     },
     {
+      "check": "cover is not degenerate",
+      "class": "ENVELOPE",
+      "ok": true,
+      "detail": "115.95 x 138.55 x 4.45, 48748 mm^3"
+    },
+    {
       "check": "chassis fits the print bed",
       "class": "ENVELOPE",
       "ok": true,
@@ -169,6 +193,12 @@
       "class": "ENVELOPE",
       "ok": true,
       "detail": "26.0 x 4.8 x 3.4"
+    },
+    {
+      "check": "cover fits the print bed",
+      "class": "ENVELOPE",
+      "ok": true,
+      "detail": "116.0 x 138.6 x 4.5"
     },
     {
       "check": "board does not clash with the chassis",
@@ -409,6 +439,60 @@
       "class": "STACK",
       "ok": true,
       "detail": "bare pocket 109.85 x 59.15 closed to 108.950 x 58.650; travel on the smallest body falls to +-0.375 / +-0.375 mm"
+    },
+    {
+      "check": "pinned face-roll coefficient still matches the shell",
+      "class": "MAGNET",
+      "ok": true,
+      "detail": "front face measures 56.928 per side against the pinned 56.944 (face_roll_1 = 0.984)"
+    },
+    {
+      "check": "every magnet pocket sits under the stated skin",
+      "class": "MAGNET",
+      "ok": true,
+      "detail": "skin over the four discs 0.790..0.790 mm against 0.80"
+    },
+    {
+      "check": "every magnet pocket can actually be reached",
+      "class": "MAGNET",
+      "ok": true,
+      "detail": "all four open to the back-plate seating plane, so a disc can be dropped in and pushed home"
+    },
+    {
+      "check": "the shell is still one solid body with the pockets in it",
+      "class": "MAGNET",
+      "ok": true,
+      "detail": "bodies=1, watertight=True (a sealed pocket shows up here as an extra body)"
+    },
+    {
+      "check": "the cover's discs line up with the shell's",
+      "class": "MAGNET",
+      "ok": true,
+      "detail": "4 of 4 cover pockets found at the shared magnet_sites() stations"
+    },
+    {
+      "check": "crush ribs grip the whole tolerance band",
+      "class": "MAGNET",
+      "ok": true,
+      "detail": "rib tips close the 5.50 bore to 4.80; the discs run 4.90..5.10, so interference is 0.10..0.30 mm diametral"
+    },
+    {
+      "check": "the cover seats on the front face without clashing",
+      "class": "MAGNET",
+      "ok": true,
+      "detail": "shared volume 0.0000 mm^3 with both register platforms engaged in their apertures"
+    },
+    {
+      "check": "register platforms clear the glass and the keycaps",
+      "class": "MAGNET",
+      "ok": true,
+      "detail": "platforms reach 1.50 mm in; the glass is 2.65 below the face (1.15 clear) and the keycaps 2.80 (1.30 clear)"
+    },
+    {
+      "check": "magnets are not asked to carry shear",
+      "class": "MAGNET",
+      "ok": true,
+      "detail": "4 pairs make 15.4 N of pull across 0.8 mm but only 3.2 N of shear; the two 1.5 mm platforms carry it instead"
     },
     {
       "check": "back plate fits the chassis opening",

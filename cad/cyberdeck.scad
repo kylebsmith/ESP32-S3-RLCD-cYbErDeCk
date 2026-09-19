@@ -50,7 +50,6 @@ part = "assembly";      // override on the command line
 // Derived layout - nothing here is a free choice
 // ---------------------------------------------------------------------------
 
-inner_w = body_w - 2 * wall;                 // clear interior width
 inner_hw = inner_w / 2;
 
 // Spine centreline, between the two bays.
@@ -67,11 +66,6 @@ pcb_back_z = z_front_inner - board_w_display_front;
 // keyboard-width and the board bay leaves (inner_w - board_pocket_w)/2 of
 // unused material on each flank. That is where the screws go, at zero cost to
 // the footprint.
-boss_flank = (inner_w - board_pocket_w) / 2;          // available strip width
-boss_cx    = board_pocket_w/2 + boss_flank/2 + 0.4;   // nudged outboard so the
-                                                      // boss merges into the
-                                                      // side wall and clears
-                                                      // the board pocket
 
 // Boss rows are NOT free. They are squeezed between two hard constraints and
 // there is only about a millimetre of slack, so both are derived and asserted
@@ -88,12 +82,6 @@ boss_cx    = board_pocket_w/2 + boss_flank/2 + 0.4;   // nudged outboard so the
 //                what the plate_edge assert below now prevents.
 port_cut_hi = board_cy + max(usbc_off_y + usbc_open_w/2, tf_off_y + tf_open_w/2);
 port_cut_lo = board_cy + min(usbc_off_y - usbc_open_w/2, tf_off_y - tf_open_w/2);
-
-plate_half_h = (body_h - 2*wall - 2*fit_slide) / 2;
-plate_edge_margin = 0.8;        // [DESIGN] material left outboard of a countersink
-
-boss_rows = [ board_bay_cy - board_pocket_h/2 + shell_screw_boss_d/2,
-              plate_half_h - shell_screw_cs_head_d/2 - plate_edge_margin ];
 
 function boss_positions() = [ for (sx = [-1, 1], cy = boss_rows) [sx * boss_cx, cy] ];
 
@@ -158,6 +146,20 @@ module chassis() {
             rse_soft(body_w, body_h, body_t, corner_blend, form_n,
                      edge_soft, edge_roll);
 
+            // --- magnet bosses, variant 2 only -------------------------------
+            //  front_t is 2.4 and a 2.0 disc under a 0.8 skin needs 2.95, so
+            //  the material is added INWARD as a local boss rather than by
+            //  thinning the show face. Filleted into the face so it cannot
+            //  read as a bulge or a gloss patch from outside.
+            if (variant >= 2)
+                for (m = magnet_sites())
+                    translate([m[0], m[1], z_front_inner - magnet_boss_rise])
+                        // Runs a full millimetre INTO the front panel rather
+                        // than kissing it: a 0.01 mm overlap leaves CGAL a
+                        // hair-thin weld and the boss comes out as a separate
+                        // body in the mesh.
+                        cylinder(h = magnet_boss_rise + 1.0, d = magnet_boss_d);
+
             // --- fastener bosses, rising from the front face rearward --------
             for (p = boss_positions())
                 translate([p[0], p[1], z_back_inner])
@@ -199,7 +201,7 @@ module chassis() {
         // --- keyboard aperture ----------------------------------------------
         translate([0, kbd_bay_cy, z_front_inner - 0.01])
             rse_aperture(kbd_aper_w, kbd_aper_h, front_t + 0.02,
-                         aper_blend_kbd, aper_n_kbd, 0.6);
+                         aper_blend_kbd, aper_n_kbd, kbd_aper_draft);
 
         // --- control cluster recess ------------------------------------------
         // The three buttons sit in ONE shallow dish rather than in three bare
@@ -317,6 +319,22 @@ module chassis() {
                 rotate([0, sx * 90, 0])
                     rbox(kbd_access_h, kbd_access_w, wall + 3, 1.5);
 
+        // --- magnet pockets, variant 2 only ----------------------------------
+        //  Blind, opening INWARD. The chassis prints front-face-down, so this
+        //  is a hole opening upward: the show face stays continuous, normally
+        //  printed solid material with nothing bridged over a void.
+        if (variant >= 2)
+            for (m = magnet_sites()) {
+                pocket_z = body_t - magnet_skin - magnet_pocket_h;
+                // access shaft, from the back-plate seating plane
+                translate([m[0], m[1], z_back_inner - 0.01])
+                    cylinder(d = magnet_shaft_d,
+                             h = pocket_z - z_back_inner + 0.02);
+                // the ribbed pocket the disc actually grips in
+                translate([m[0], m[1], pocket_z])
+                    magnet_pocket(magnet_pocket_h + 0.01);
+            }
+
         // --- bottom-edge tongue groove ---------------------------------------
         translate([0, -body_h/2 + wall - tongue_depth/2 + 0.01, tongue_z])
             cube([inner_w - 2*corner_gusset, tongue_depth + 0.02, tongue_t],
@@ -372,6 +390,76 @@ module kbd_locating_ribs() {
     for (sy = [-1, 1], dx = kbd_rib_dx)        // short axis, +-Y walls
         translate([dx, kbd_bay_cy + sy * kbd_pocket_h / 2, kfloor])
             kbd_rib(kbd_rib_r_y);
+}
+
+//  A magnet pocket is a generous bore with crush ribs, NOT a toleranced hole.
+//  The discs arrive at +-0.10 mm on diameter - a 0.20 mm band - and PLA's
+//  usable press-fit window is 0.05-0.10 mm diametral, so no single bore grips a
+//  whole bag. Eight ribs absorb the band by deforming. Tuning the fit is one
+//  parameter, magnet_rib_h, and nothing else moves.
+module magnet_pocket(h) {
+    difference() {
+        cylinder(d = magnet_bore, h = h);
+        // Subtracted from the CUTTER, so what is left behind is material: eight
+        // bumps standing magnet_rib_h proud of the bore wall.
+        for (i = [0 : magnet_rib_n - 1])
+            rotate([0, 0, i * 360 / magnet_rib_n])
+                translate([magnet_bore / 2, 0, -0.01])
+                    cylinder(r = magnet_rib_h, h = h + 0.02);
+    }
+}
+
+//  THE COVER. A flat plate, because nothing on the front face stands proud to
+//  work around: the glass is 2.65 mm down and the keycaps 2.80 at worst case.
+//
+//  It is located by two drafted platforms that drop into the apertures the
+//  design already has, and held by four buried magnets. That split is the whole
+//  idea - shear is only ~20% of a magnet's pull and comes from friction, so
+//  magnets can never be the shear path. The platforms take every bit of it and
+//  self-centre the cover as it closes; the magnets only resist lift-off.
+//  One register platform: a drafted rim that drops into an aperture. Outer face
+//  tapers with the aperture so it self-centres; inner face is parallel to it,
+//  so the rim is a constant cover_reg_rim thick all the way round.
+module register_rim(w, h, cr, n, draft) {
+    difference() {
+        rse_aperture(w - 2 * draft, h - 2 * draft,
+                     cover_reg_depth + 0.01, cr, n, draft);
+        translate([0, 0, -0.01])
+            rse_aperture(w - 2 * draft - 2 * cover_reg_rim,
+                         h - 2 * draft - 2 * cover_reg_rim,
+                         cover_reg_depth + 0.03,
+                         max(cr - cover_reg_rim, 0.4), n, draft);
+    }
+}
+
+module cover() {
+    difference() {
+        union() {
+            rse_soft(cover_w, cover_h, cover_t,
+                     corner_blend - cover_gap, form_n, edge_soft, edge_roll);
+            // register platforms, one per aperture, as rims
+            translate([board_cx + display_off_x, board_bay_cy + display_off_y,
+                       -cover_reg_depth])
+                register_rim(cover_reg_w_display, cover_reg_h_display,
+                             cover_reg_blend_display, form_n,
+                             cover_reg_draft_display);
+            translate([0, kbd_bay_cy, -cover_reg_depth])
+                register_rim(cover_reg_w_kbd, cover_reg_h_kbd,
+                             cover_reg_blend_kbd, aper_n_kbd,
+                             cover_reg_draft_kbd);
+        }
+        // magnet pockets, opening on the INNER face. No skin on this side: it
+        // is never seen, and halving the gap is worth more than another magnet.
+        for (m = magnet_sites())
+            translate([m[0], m[1], -0.01])
+                magnet_pocket(magnet_pocket_h + 0.01);
+        // thumb scallop - ONE affordance, on the flank opposite the keyboard
+        // service window, so the intended peel starts furthest from the end
+        // that is keyed deepest into its aperture.
+        translate([cover_notch_x,
+                   cover_h / 2 + cover_notch_r - cover_notch_depth, -1])
+            cylinder(r = cover_notch_r, h = cover_t + 2);
+    }
 }
 
 module backplate() {
@@ -572,6 +660,7 @@ module plate() {
 if      (part == "chassis")   chassis();
 else if (part == "backplate") backplate();
 else if (part == "buttons")   buttons();
+else if (part == "cover")     cover();
 else if (part == "plate")     plate();
 else if (part == "exploded")  assembly(explode = 22);
 else                          assembly();

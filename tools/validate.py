@@ -841,6 +841,115 @@ def _corner_lip_with_play(chassis, p):
     return best, at
 
 
+def check_magnets(parts, p):
+    """The magnetic cover: the discs, the stack they clamp across, and the
+    platforms that carry the shear the magnets cannot.
+
+    A magnet pocket is easy to get dimensionally right and still wrong: the
+    first build cut four of them into the solid rib between the board pocket and
+    the side wall, where they were SEALED VOIDS with no way to fit a disc. Every
+    dimension checked out. The mesh had five bodies. So these checks ask whether
+    a magnet can be installed, not merely whether a hole is the right size.
+    """
+    print("\n-- MAGNET --")
+    ok = True
+    ch, cv = parts["chassis"], parts["cover"]
+    sites = [(sx * p["magnet_x"], sy)
+             for sy in (p["magnet_y_lo"], p["magnet_y_hi"]) for sx in (-1, 1)]
+
+    # The station coordinates are derived from front_face_half_w, which is
+    # derived from a roll coefficient pinned by hand because params.py cannot
+    # evaluate roll_f(). If the roll is ever retuned, this is what notices.
+    half_w = float(ch.extents[0]) / 2
+    sec = section_polys(ch, p["body_t"] - 0.05)
+    face = max(sec, key=lambda q: q.area)
+    fb = face.bounds
+    ok &= check("pinned face-roll coefficient still matches the shell", "MAGNET",
+                abs((fb[2] - fb[0]) / 2 - p["front_face_half_w"]) < 0.03,
+                f"front face measures {(fb[2]-fb[0])/2:.3f} per side against the "
+                f"pinned {p['front_face_half_w']:.3f} (face_roll_1 = {p['face_roll_1']})")
+
+    # Every station: a pocket under the right skin, and a way in.
+    pocket_floor = p["body_t"] - p["magnet_skin"] - p["magnet_pocket_h"]
+    worst_skin, sealed = [], []
+    probes = []
+    for cx, cy in sites:
+        loc, _, _ = ch.ray.intersects_location(
+            np.array([[cx, cy, p["body_t"] + 5]], float),
+            np.array([[0.0, 0.0, -1.0]], float))
+        zs = sorted((float(q[2]) for q in loc), reverse=True)
+        if len(zs) >= 2:
+            worst_skin.append(zs[0] - zs[1])
+        # Is there a way IN? Sample the axis a couple of millimetres below the
+        # pocket floor: solid there means the pocket is a sealed void, which is
+        # precisely the defect that shipped four enclosed cavities the first
+        # time. Ray-crossing counts were tried first and read backwards - an
+        # open shaft gives FEWER crossings, not more - so ask containment.
+        probes.append([cx, cy, pocket_floor - 2.0])
+    inside = ch.contains(np.array(probes, float))
+    sealed = [sites[i] for i, q in enumerate(inside) if q]
+    ok &= check("every magnet pocket sits under the stated skin", "MAGNET",
+                bool(worst_skin) and
+                all(abs(q - p["magnet_skin"]) < 0.05 for q in worst_skin),
+                f"skin over the four discs {min(worst_skin):.3f}..{max(worst_skin):.3f} mm "
+                f"against {p['magnet_skin']:.2f}" if worst_skin else "no pockets found")
+    ok &= check("every magnet pocket can actually be reached", "MAGNET",
+                not sealed,
+                "all four open to the back-plate seating plane, so a disc can be "
+                "dropped in and pushed home" if not sealed else
+                f"{len(sealed)} pocket(s) are sealed voids: {sealed}")
+    ok &= check("the shell is still one solid body with the pockets in it",
+                "MAGNET", ch.body_count == 1 and ch.is_watertight,
+                f"bodies={ch.body_count}, watertight={ch.is_watertight} "
+                "(a sealed pocket shows up here as an extra body)")
+
+    # The cover's discs must land on the shell's, and its pockets open inward.
+    cv_sec = section_polys(cv, p["cover_t"] / 2)
+    holes = [Polygon(r) for g in cv_sec for r in g.interiors]
+    found = []
+    for cx, cy in sites:
+        near = [h for h in holes
+                if abs((h.bounds[0] + h.bounds[2]) / 2 - cx) < 0.6
+                and abs((h.bounds[1] + h.bounds[3]) / 2 - cy) < 0.6]
+        if near:
+            found.append(near[0].bounds[2] - near[0].bounds[0])
+    ok &= check("the cover's discs line up with the shell's", "MAGNET",
+                len(found) == len(sites),
+                f"{len(found)} of {len(sites)} cover pockets found at the shared "
+                "magnet_sites() stations")
+    grip = p["magnet_bore"] - 2 * p["magnet_rib_h"]
+    tight = p["magnet_d"] + p["magnet_tol"] - grip     # on the largest disc
+    loose = p["magnet_d"] - p["magnet_tol"] - grip     # on the smallest
+    ok &= check("crush ribs grip the whole tolerance band", "MAGNET",
+                loose >= 0.05 and tight <= 0.35,
+                f"rib tips close the {p['magnet_bore']:.2f} bore to {grip:.2f}; the "
+                f"discs run {p['magnet_d']-p['magnet_tol']:.2f}..{p['magnet_d']+p['magnet_tol']:.2f}, "
+                f"so interference is {p['magnet_d']-p['magnet_tol']-grip:.2f}..{p['magnet_d']+p['magnet_tol']-grip:.2f} mm diametral")
+
+    # Seated, as the assembly puts it.
+    seat = cv.copy()
+    seat.apply_translation([0.0, 0.0, p["body_t"]])
+    inter = ch.intersection(seat)
+    clash = float(inter.volume) if inter is not None and len(inter.faces) else 0.0
+    ok &= check("the cover seats on the front face without clashing", "MAGNET",
+                clash <= 0.01,
+                f"shared volume {clash:.4f} mm^3 with both register platforms "
+                "engaged in their apertures")
+    reach = p["cover_reg_depth"]
+    ok &= check("register platforms clear the glass and the keycaps", "MAGNET",
+                reach + 0.8 <= 2.65 and reach + 0.8 <= 2.80,
+                f"platforms reach {reach:.2f} mm in; the glass is 2.65 below the "
+                f"face ({2.65-reach:.2f} clear) and the keycaps 2.80 "
+                f"({2.80-reach:.2f} clear)")
+    ok &= check("magnets are not asked to carry shear", "MAGNET",
+                p["cover_reg_depth"] >= 1.0,
+                f"4 pairs make {4*p['magnet_pull_08']:.1f} N of pull across "
+                f"{p['magnet_skin']:.1f} mm but only "
+                f"{4*p['magnet_pull_08']*p['magnet_shear_frac']:.1f} N of shear; "
+                f"the two {p['cover_reg_depth']:.1f} mm platforms carry it instead")
+    return ok
+
+
 def check_interface(parts, p):
     print("\n-- INTERFACE --")
     ok = True
@@ -1096,7 +1205,10 @@ def main():
     tmp = tempfile.mkdtemp(prefix="cyberdeck-validate-")
     try:
         print("\nrendering parts from source ...")
-        parts = {n: render(n, tmp) for n in ("chassis", "backplate", "buttons")}
+        names = ["chassis", "backplate", "buttons"]
+        if p.get("variant", 1) >= 2:
+            names.append("cover")
+        parts = {n: render(n, tmp) for n in names}
         print("rendering component mocks ...")
         mocks = {}
         bx, by = 0.0, p["board_bay_cy"] if "board_bay_cy" in p else None
@@ -1123,6 +1235,8 @@ def main():
         ok &= check_openings(parts, p)
         ok &= check_obstruction(parts, p)
         ok &= check_stacks(parts, mocks, p)
+        if p.get("variant", 1) >= 2:
+            ok &= check_magnets(parts, p)
         ok &= check_interface(parts, p)
         ok &= check_print(parts, p)
         ok &= check_datums(p)

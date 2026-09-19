@@ -731,6 +731,10 @@ kbd_pocket_h_poc =  60.600;  // [MEASURED] +2.40 mm
 // cannot fall forward; it is pushed out from behind instead.
 kbd_aper_w = 106.5;   // [MEASURED] ref. 106.502
 kbd_aper_h = 55.8;    // [MEASURED] ref.  55.802
+kbd_aper_draft = 0.6; // [MEASURED] per-side flare through the front panel. Was
+                      //   a bare literal in cyberdeck.scad; the cover's
+                      //   register platform has to taper at the same rate, and
+                      //   a number that lives in one file cannot cascade.
 
 // --- keyboard service access ------------------------------------------------
 //  The power slide switch and the charging port are BOTH on one short edge of
@@ -1008,9 +1012,213 @@ assert(kbd_depth >= kbd_body_t + 0.4 && kbd_depth >= kbd_body_t_max + 0.4,
 //  ... and it must clear the upper bound set by a working reference enclosure.
 assert(kbd_pocket_w >= kbd_pocket_w_ata + 0.6,
        "keyboard pocket tighter than a tray known to accept a real unit");
+// ---- fastener pattern, moved here from cyberdeck.scad ----------------------
+//  These were derived in the model file, which meant the magnet stations below
+//  could not see them without restating the arithmetic - the exact duplication
+//  this file exists to prevent. They are pure derived scalars; the values are
+//  unchanged, and tools/check_golden.py proves it.
+inner_w           = body_w - 2 * wall;                     // clear interior width
+boss_flank        = (inner_w - board_pocket_w) / 2;        // free strip each side
+boss_cx           = board_pocket_w/2 + boss_flank/2 + 0.4; // outboard of the bay
+plate_half_h      = (body_h - 2*wall - 2*fit_slide) / 2;
+plate_edge_margin = 0.8;   // [DESIGN] material left outboard of a countersink
+boss_rows = [ board_bay_cy - board_pocket_h/2 + shell_screw_boss_d/2,
+              plate_half_h - shell_screw_cs_head_d/2 - plate_edge_margin ];
+
+// ============================================================================
+//  9.  VARIANT 2 - THE MAGNETIC FRONT COVER
+// ============================================================================
+//  v1.0 is a printed, frozen design (tests/golden/v1.json). Everything in this
+//  section is ADDITIVE and gated on `variant`, so setting variant = 1 rebuilds
+//  v1 byte for byte. tools/check_golden.py proves that on every run; nothing
+//  below may change a value v1 already had.
+variant = 2;   // [DESIGN] 1 = v1.0 as printed, 2 = adds the magnetic cover
+
+//  ---- THE ONE MEASUREMENT THE COVER TURNS ON --------------------------------
+//  The shell's edges roll into its faces, so the FRONT FACE is narrower than
+//  body_w. rse_soft() insets each face by edge_soft * roll_f(1, edge_roll), and
+//  roll_f lives in lib/util.scad where tools/params.py cannot evaluate it. The
+//  coefficient is therefore evaluated once and pinned here, and validate.py
+//  asserts the rendered shell still matches it - so if the roll is ever
+//  retuned, the assertion fails rather than the magnets quietly moving.
+face_roll_1       = 0.984;   // [DERIVED] roll_f(1, edge_roll) at edge_roll = 0.28
+front_face_inset  = edge_soft * face_roll_1;        // [DERIVED] = 1.1808
+front_face_half_w = body_w / 2 - front_face_inset;  // [DERIVED] = 56.944
+front_face_half_h = body_h / 2 - front_face_inset;  // [DERIVED] = 68.244
+
+//  ---- THE MAGNETS -----------------------------------------------------------
+//  Ø5 x 2 mm N52 NdFeB discs, Ni-Cu-Ni plated. A genuine catalogue standard
+//  (supermagnete S-05-02-N and equivalents), stocked at +-0.10 mm on BOTH
+//  diameter and thickness.
+//
+//  THE NUMBER THAT DECIDES THE DESIGN: force collapses with the gap. A pair of
+//  these makes ~6.7 N in contact, 3.85 N through 0.8 mm, 2.15 N through 1.6 mm
+//  and 1.30 N through 2.4 mm. Every 0.1 mm of skin removed is worth more than
+//  another magnet. So the stack is ASYMMETRIC: a thin 0.8 mm skin on the
+//  enclosure's show face, and NO skin at all on the cover's inner face, which
+//  nobody ever sees. Total gap 0.8 mm, not 1.6.
+//
+//  THE OTHER NUMBER: shear is only ~20% of pull (this SKU publishes 1.33 N
+//  against 6.67 N) and it comes from surface friction, not from the magnet. A
+//  cover shoved into a bag is loaded in shear. So the magnets are NOT the shear
+//  path - the two register platforms are. Magnets carry lift-off only.
+magnet_d     = 5.00;   // [VENDOR] Ø5 x 2 mm N52 disc
+magnet_h     = 2.00;   // [VENDOR]
+magnet_tol   = 0.10;   // [VENDOR] +- on both diameter and thickness
+magnet_pull_contact = 6.67;  // [VENDOR] N, pair in contact
+magnet_pull_08      = 3.85;  // [DERIVED] N, pair across 0.8 mm
+magnet_shear_frac   = 0.206; // [VENDOR] 1.33 N of 6.67 N
+
+//  The magnet's own tolerance band (0.20 mm) is WIDER than PLA's usable
+//  press-fit window (0.05-0.10 mm diametral), so no single bore diameter grips
+//  a whole bag of them. The bore is therefore drawn generous and gripped by
+//  crush ribs, which absorb the tolerance by deforming. This is also why the
+//  bore is NOT magnet_d - something: that stack is consumed before printing
+//  starts.
+magnet_bore  = magnet_d + 0.50;    // [DESIGN] = 5.50 drawn. FDM holes print
+                                   //   0.1-0.3 undersize, so this lands near
+                                   //   5.30 as printed; the ribs, not the bore,
+                                   //   set the grip. ONE compensation, here.
+magnet_rib_n = 8;                  // [DESIGN] crush ribs around the bore
+magnet_rib_h = 0.35;               // [DESIGN] rib tips close the bore to 4.80,
+                                   //   so even the smallest disc in the band
+                                   //   (4.90) sees 0.10 mm of diametral
+                                   //   interference and the largest (5.10)
+                                   //   sees 0.30 - well inside what eight ribs
+                                   //   absorb by deforming, and nowhere near
+                                   //   the hoop strain that cracks a solid bore
+magnet_seat_clear = 0.15;          // [DESIGN] so the disc can bottom on the skin
+magnet_pocket_h   = magnet_h + magnet_seat_clear;   // [DERIVED] = 2.15
+magnet_skin       = 0.80;          // [DESIGN] 4 layers over the disc, show face
+magnet_boss_wall  = 1.60;          // [DESIGN] 4 extrusions around the bore
+magnet_boss_d     = magnet_bore + 2 * magnet_boss_wall;   // [DERIVED] = 8.50
+//  front_t is 2.4 and the stack needs 2.95, so the pocket grows INWARD as a
+//  local boss rather than thinning the show face.
+magnet_boss_rise  = max(0, magnet_skin + magnet_pocket_h - front_t);  // = 0.55
+
+//  HOW THE DISC GETS IN. The stations sit in the solid rib between the board
+//  pocket and the side wall - 13.65 mm of material from the back-plate seating
+//  plane to the show face - so a blind pocket buried in the middle of it is a
+//  SEALED VOID. The first build made exactly that: four enclosed cavities, a
+//  mesh in five bodies, and no way to fit a magnet.
+//
+//  So each pocket gets an access shaft down to the back-plate seating plane.
+//  The disc drops in from the back, falls to the mouth of the ribbed section
+//  and is pushed home with a 4 mm rod; the back plate then covers the shaft and
+//  nothing is visible from anywhere. The shaft is clearance, not a fit - the
+//  ribs at the top do all the gripping - and it removes ~0.3 cm3 of otherwise
+//  dead material from each corner.
+magnet_shaft_d = magnet_d + 1.00;   // [DESIGN] = 6.00, free drop
+
+//  ---- WHERE THEY GO, AND WHY THERE IS ONLY ONE ANSWER -----------------------
+//  Measured on the rendered front face, the solid bands are:
+//      left of the display   10.64 mm        right of the display  13.84 mm
+//      between the apertures  5.29 mm        below the keyboard     3.17 mm
+//      above the display      2.96 mm
+//  A Ø5 pocket with 1.6 mm of surround needs 8.50. Only the two display flanks
+//  can take one. Placing magnets anywhere else on this face is not a style
+//  choice that was rejected; it does not fit.
+//
+//  Within a flank the x is bounded on both sides: inboard by the board pocket,
+//  outboard by the shell's own skin. The station is the middle of that window.
+magnet_x_min = board_pocket_w / 2 + magnet_boss_d / 2;          // clears the bay
+magnet_x_max = front_face_half_w - magnet_boss_d / 2;           // keeps its skin
+magnet_x     = (magnet_x_min + magnet_x_max) / 2;               // [DERIVED]
+
+//  In y the limit is the fastener bosses, which stand at the same x. Two Ø6.6
+//  bosses and a Ø8.50 magnet boss need half of each plus a margin between
+//  centres; the stations sit exactly there, which is also as far apart as they
+//  can get, and spacing is what resists peel.
+magnet_boss_keepout = shell_screw_boss_d / 2 + magnet_boss_d / 2 + 1.0;
+magnet_y_lo = boss_rows[0] + magnet_boss_keepout;   // [DERIVED] =  7.975
+magnet_y_hi = boss_rows[1] - magnet_boss_keepout;   // [DERIVED] = 54.575
+
+//  ONE list, consumed by the shell AND by the cover. Hard-coding these twice is
+//  exactly the surgery-on-every-script failure this section exists to avoid.
+function magnet_sites() = [ for (sy = [magnet_y_lo, magnet_y_hi],
+                                 sx = [-magnet_x, magnet_x]) [sx, sy] ];
+
+//  POLARITY: uniform, every disc the same way up, because the cover is already
+//  keyed by geometry and cannot be fitted rotated. The two register platforms
+//  are different sizes and neither the x stations nor the y stations are
+//  symmetric about the device centre, so a cover offered up backwards simply
+//  does not drop in. Alternating polarity (the iPad Smart Cover's answer) buys
+//  nothing here and makes assembly a coin toss on every disc.
+
+//  ---- THE COVER -------------------------------------------------------------
+//  Nothing on the front face stands proud: the RLCD glass is 2.65 mm below the
+//  outer face and the keycaps 2.80 mm at worst case. So a flat cover touches
+//  neither, and the only thickness question is stiffness - a thin cover
+//  deflects onto the glass under a thumb. At 3.0 mm a 30 N press stays well
+//  clear, and the extra section also removes any need for ribs, which the
+//  aperture clearance would cap at ~2 mm anyway.
+//  Thickness is DERIVED, not chosen: it is exactly what a buried magnet needs.
+//  The pocket opens on the cover's INNER face, so the disc sits against the
+//  chassis with nothing between them but the chassis's own 0.8 mm skin - the
+//  gap stays 0.8, not 1.6 - and the 0.8 mm left on the far side is the cover's
+//  show face. Change magnet_h or magnet_skin and the cover follows.
+cover_t         = magnet_pocket_h + magnet_skin;   // [DERIVED] = 2.95
+cover_gap       = 0.15;   // [DESIGN] shadow gap per side; flush is a tolerance trap
+cover_w         = body_w - 2 * cover_gap;
+cover_h         = body_h - 2 * cover_gap;
+
+//  LOCATION, which magnets cannot supply. Both apertures are already drafted
+//  sockets, so the cover grows a platform into each: they carry every bit of
+//  shear, they self-centre as the cover closes, and they cost no new features
+//  on the show face. Depth is set by what is behind them - the glass at 2.65
+//  and the keycaps at 2.80 - with better than 1 mm to spare.
+cover_reg_depth = 1.50;   // [DESIGN] into each aperture
+cover_reg_clear = 0.30;   // [DESIGN] per side, at the outer face
+//  The platforms are RIMS, not slabs. A rim locates exactly as well as a solid
+//  block, adds stiffness where a flat plate wants it most - around the two big
+//  spans - and keeps 20 g of PLA out of a part that hangs off four small
+//  magnets. It also leaves nothing to trap grit against the glass.
+cover_reg_rim   = 2.50;   // [DESIGN] wall of each register platform
+//  A platform must taper with the aperture it enters, or it wedges. Each one
+//  is the aperture's OUTER-face opening, less clearance, tapering at the same
+//  rate over the depth it actually enters - so it self-centres instead of
+//  jamming, and every figure follows the aperture it mates with.
+cover_reg_draft_display = display_aper_draft * cover_reg_depth / front_t;
+cover_reg_draft_kbd     = kbd_aper_draft     * cover_reg_depth / front_t;
+
+cover_reg_w_display = display_aper_w + 2*display_aper_draft - 2*cover_reg_clear;
+cover_reg_h_display = display_aper_h + 2*display_aper_draft - 2*cover_reg_clear;
+cover_reg_blend_display = aper_blend_display + display_aper_draft
+                          - cover_reg_clear - cover_reg_draft_display;
+
+cover_reg_w_kbd = kbd_aper_w + 2*kbd_aper_draft - 2*cover_reg_clear;
+cover_reg_h_kbd = kbd_aper_h + 2*kbd_aper_draft - 2*cover_reg_clear;
+cover_reg_blend_kbd = aper_blend_kbd + kbd_aper_draft
+                      - cover_reg_clear - cover_reg_draft_kbd;
+
+//  RELEASE. One deliberate affordance, at the top right - the flank opposite
+//  the keyboard service window - so the intended peel starts furthest from the
+//  hooked keyboard end. A scallop, not a lever: it says how the cover comes off
+//  without adding a mechanism.
+cover_notch_r     = 10.0;   // [DESIGN] scallop radius
+cover_notch_depth =  3.0;   // [DESIGN] how far it bites into the edge
+cover_notch_x     = 28.0;   // [DESIGN] right of centre, on the top edge
+
 //  A locating rib that stands taller than the gap to the LARGEST body stops
 //  that body entering at all, and one that strays into a corner blend or the
 //  service window bears on nothing.
+//  ---- variant 2 assertions ---------------------------------------------
+assert(variant == 1 || variant == 2, "variant must be 1 or 2");
+assert(magnet_x_min <= magnet_x_max,
+       "no room on the display flank for a magnet boss: it cannot clear both the board pocket and the shell skin");
+assert(magnet_y_lo < magnet_y_hi,
+       "magnet y stations collapsed: the fastener bosses leave no run between them");
+assert(magnet_skin >= 0.6,
+       "magnet skin thinner than 3 layers will telegraph the disc on the show face");
+assert(magnet_bore > magnet_d + magnet_tol,
+       "magnet bore is inside the disc's own tolerance band; crush ribs cannot absorb that");
+assert(magnet_rib_h > magnet_tol * 2,
+       "crush ribs shorter than the disc's tolerance band cannot grip the whole batch");
+assert(cover_reg_depth + 0.8 <= 2.65,
+       "cover register platform would reach the display glass");
+assert(cover_t - magnet_pocket_h >= 0.6,
+       "cover too thin to bury a magnet without telegraphing it");
+
 //  The plunger must clear the board and land on the switch, and the flange must
 //  fit its counterbore with travel left over.
 assert(btn_post_dy + btn_post_h / 2 <= btn_band_hi,
