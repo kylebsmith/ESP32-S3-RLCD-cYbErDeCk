@@ -426,20 +426,23 @@ module window() {
 module assembly(explode = 0) {
     e = explode;
     color("#cfcabf")                      chassis();
-    color("#b6b0a4") translate([0, 0, -e * 1.6])  backplate();
-    translate([board_cx, board_cy, z_front_inner - board_depth - e * 0.9]) {
-        color("#2f6b45", 0.95) mock_board();
-        // COSMETIC ONLY. The fit mock above is one solid envelope, which is
-        // what the clash tests need, but it makes the PCB read as the screen
-        // in a render. This is the active area drawn as glass so the assembly
-        // views show what the face actually looks like. It is inside the
-        // envelope already tested, so it cannot affect any fit result.
+    color("#b6b0a4") translate([0, 0, -e * 3.0])  backplate();
+    translate([board_cx, board_cy, z_front_inner - board_depth - e * 1.8]) {
+        color("#2f6b45") mock_board();
+        // COSMETIC ONLY, and only for the interactive preview - the PUBLISHED
+        // views are built by tools/render.sh from the exported STLs, for the
+        // reason given in cad/render_assembly.scad. The fit mock above is one
+        // solid envelope, which is what the clash tests need, but it makes the
+        // PCB read as the screen. This is the active area drawn as glass.
+        // Floated 0.05 clear of the envelope rather than flush or overlapping:
+        // coplanar faces z-fight and interpenetrating solids stripe. It sits
+        // outside the envelope already tested, so it cannot affect a fit test.
         color("#14171a")
-            translate([display_off_x, 0, board_stack - 0.01])
-                rbox(display_active_w, display_active_h, 0.35, 0.5);
+            translate([display_off_x, 0, board_stack + 0.05])
+                rbox(display_active_w, display_active_h, 0.4, 0.5);
     }
-    color("#2b2e33", 0.95)
-        translate([0, kbd_bay_cy, z_front_inner - kbd_depth - e * 0.55])
+    color("#2b2e33")
+        translate([0, kbd_bay_cy, z_front_inner - kbd_depth - e * 0.9])
             mock_keyboard();
     color("#a8342b")
         for (i = [0 : button_count - 1])
@@ -470,5 +473,5 @@ else if (part == "backplate") backplate();
 else if (part == "buttons")   buttons();
 else if (part == "window")    window();
 else if (part == "plate")     plate();
-else if (part == "exploded")  assembly(explode = 14);
+else if (part == "exploded")  assembly(explode = 22);
 else                          assembly();
