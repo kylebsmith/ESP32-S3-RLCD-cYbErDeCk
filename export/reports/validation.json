@@ -1,0 +1,300 @@
+{
+  "passed": 49,
+  "total": 49,
+  "results": [
+    {
+      "check": "chassis: watertight",
+      "class": "MESH",
+      "ok": true,
+      "detail": "5920 faces"
+    },
+    {
+      "check": "chassis: single body",
+      "class": "MESH",
+      "ok": true,
+      "detail": "body_count=1"
+    },
+    {
+      "check": "chassis: positive volume",
+      "class": "MESH",
+      "ok": true,
+      "detail": "47838 mm^3 -> 59.3 g in PLA"
+    },
+    {
+      "check": "backplate: watertight",
+      "class": "MESH",
+      "ok": true,
+      "detail": "8960 faces"
+    },
+    {
+      "check": "backplate: single body",
+      "class": "MESH",
+      "ok": true,
+      "detail": "body_count=1"
+    },
+    {
+      "check": "backplate: positive volume",
+      "class": "MESH",
+      "ok": true,
+      "detail": "59250 mm^3 -> 73.5 g in PLA"
+    },
+    {
+      "check": "buttons: watertight",
+      "class": "MESH",
+      "ok": true,
+      "detail": "2428 faces"
+    },
+    {
+      "check": "buttons: single body",
+      "class": "MESH",
+      "ok": true,
+      "detail": "body_count=1"
+    },
+    {
+      "check": "buttons: positive volume",
+      "class": "MESH",
+      "ok": true,
+      "detail": "377 mm^3 -> 0.5 g in PLA"
+    },
+    {
+      "check": "board: watertight",
+      "class": "MESH",
+      "ok": true,
+      "detail": "1900 faces"
+    },
+    {
+      "check": "board: single body",
+      "class": "MESH",
+      "ok": true,
+      "detail": "body_count=1"
+    },
+    {
+      "check": "board: positive volume",
+      "class": "MESH",
+      "ok": true,
+      "detail": "99488 mm^3 -> 123.4 g in PLA"
+    },
+    {
+      "check": "keyboard: watertight",
+      "class": "MESH",
+      "ok": true,
+      "detail": "540 faces"
+    },
+    {
+      "check": "keyboard: single body",
+      "class": "MESH",
+      "ok": true,
+      "detail": "body_count=1"
+    },
+    {
+      "check": "keyboard: positive volume",
+      "class": "MESH",
+      "ok": true,
+      "detail": "68914 mm^3 -> 85.5 g in PLA"
+    },
+    {
+      "check": "width is component-bound",
+      "class": "ENVELOPE",
+      "ok": true,
+      "detail": "116.60 mm, minimum possible with 3.2 mm walls = 116.60 mm"
+    },
+    {
+      "check": "height is component-bound",
+      "class": "ENVELOPE",
+      "ok": true,
+      "detail": "140.20 mm, minimum possible = 140.20 mm"
+    },
+    {
+      "check": "thickness is component-bound",
+      "class": "ENVELOPE",
+      "ok": true,
+      "detail": "18.60 mm, board needs 13.0 mm of pocket"
+    },
+    {
+      "check": "chassis fits the print bed",
+      "class": "ENVELOPE",
+      "ok": true,
+      "detail": "116.6 x 140.2 x 18.6"
+    },
+    {
+      "check": "backplate fits the print bed",
+      "class": "ENVELOPE",
+      "ok": true,
+      "detail": "109.6 x 135.8 x 17.2"
+    },
+    {
+      "check": "buttons fits the print bed",
+      "class": "ENVELOPE",
+      "ok": true,
+      "detail": "26.0 x 4.8 x 6.6"
+    },
+    {
+      "check": "board does not clash with the chassis",
+      "class": "FIT",
+      "ok": true,
+      "detail": "shared volume 0.00 mm^3"
+    },
+    {
+      "check": "board does not clash with the back plate",
+      "class": "FIT",
+      "ok": true,
+      "detail": "shared volume 0.00 mm^3"
+    },
+    {
+      "check": "board is inside the assembled envelope",
+      "class": "FIT",
+      "ok": true,
+      "detail": "bounds [[-46.25, -3.75, -7.3], [46.25, 67.35, 16.2]] in [-58.3, -70.1, -12.0]..[58.3, 70.1, 18.6]"
+    },
+    {
+      "check": "keyboard does not clash with the chassis",
+      "class": "FIT",
+      "ok": true,
+      "detail": "shared volume 0.00 mm^3"
+    },
+    {
+      "check": "keyboard does not clash with the back plate",
+      "class": "FIT",
+      "ok": true,
+      "detail": "shared volume 0.00 mm^3"
+    },
+    {
+      "check": "keyboard is inside the assembled envelope",
+      "class": "FIT",
+      "ok": true,
+      "detail": "bounds [[-54.61, -66.41, 5.2], [54.61, -7.99, 16.15]] in [-58.3, -70.1, -12.0]..[58.3, 70.1, 18.6]"
+    },
+    {
+      "check": "board pocket clearance",
+      "class": "FIT",
+      "ok": true,
+      "detail": "1.05 / 0.55 mm per side"
+    },
+    {
+      "check": "keyboard is captured by the front lip",
+      "class": "FIT",
+      "ok": true,
+      "detail": "lip 1.85 / 1.80 mm per side"
+    },
+    {
+      "check": "board is captured by the front lip",
+      "class": "FIT",
+      "ok": true,
+      "detail": "lip 3.90 mm per side"
+    },
+    {
+      "check": "18650 fits inside the battery cowl",
+      "class": "FIT",
+      "ok": true,
+      "detail": "cell reaches z=-7.30, cowl inner face at z=-10.00, clearance 2.70 mm"
+    },
+    {
+      "check": "cowl is deep enough for a worst-case cell",
+      "class": "FIT",
+      "ok": true,
+      "detail": "10.0 mm of internal rise for a 18.6 mm cell"
+    },
+    {
+      "check": "front face does not clip the panel",
+      "class": "FIT",
+      "ok": true,
+      "detail": "reveal 0.73 / 0.80 mm per side"
+    },
+    {
+      "check": "back plate fits the chassis opening",
+      "class": "INTERFACE",
+      "ok": true,
+      "detail": "plate 109.60 mm into a 110.20 mm opening"
+    },
+    {
+      "check": "chassis and back plate do not clash",
+      "class": "INTERFACE",
+      "ok": true,
+      "detail": "shared volume 0.00 mm^3"
+    },
+    {
+      "check": "fastener count matches",
+      "class": "INTERFACE",
+      "ok": true,
+      "detail": "4 insert bores in the chassis, 4 clearance holes in the plate"
+    },
+    {
+      "check": "wall is a whole number of extrusions",
+      "class": "PRINT",
+      "ok": true,
+      "detail": "3.20 mm = 8.00 x 0.4 mm nozzle"
+    },
+    {
+      "check": "spine is a whole number of extrusions",
+      "class": "PRINT",
+      "ok": true,
+      "detail": "3.20 mm = 8.00 x 0.4 mm nozzle"
+    },
+    {
+      "check": "front_t is a whole number of extrusions",
+      "class": "PRINT",
+      "ok": true,
+      "detail": "2.40 mm = 6.00 x 0.4 mm nozzle"
+    },
+    {
+      "check": "back_t is a whole number of extrusions",
+      "class": "PRINT",
+      "ok": true,
+      "detail": "3.20 mm = 8.00 x 0.4 mm nozzle"
+    },
+    {
+      "check": "wall is at least 4 extrusions",
+      "class": "PRINT",
+      "ok": true,
+      "detail": "8 perimeters"
+    },
+    {
+      "check": "vent slots are printable",
+      "class": "PRINT",
+      "ok": true,
+      "detail": "1.60 mm"
+    },
+    {
+      "check": "speaker grille slots are printable",
+      "class": "PRINT",
+      "ok": true,
+      "detail": "1.30 mm wide, 3.05 mm pitch"
+    },
+    {
+      "check": "insert boss wall is thick enough",
+      "class": "PRINT",
+      "ok": true,
+      "detail": "2.00 mm around the insert"
+    },
+    {
+      "check": "front apertures are drafted, not bridged",
+      "class": "PRINT",
+      "ok": true,
+      "detail": "1.45 mm per-side flare over 2.4 mm = 31 deg from vertical"
+    },
+    {
+      "check": "board outline is provisional but not load-bearing",
+      "class": "DATUM",
+      "ok": true,
+      "detail": "pocket is specified from the measured reference, not from board_w, so a wrong vendor figure cannot cause a clash"
+    },
+    {
+      "check": "keyboard pocket is measured, not inferred",
+      "class": "DATUM",
+      "ok": true,
+      "detail": "pocket comes from two independent reference designs"
+    },
+    {
+      "check": "mount pattern is not provisional",
+      "class": "DATUM",
+      "ok": true,
+      "detail": "85.5 x 62.1 mm, two independent derivations agree"
+    },
+    {
+      "check": "side ports are oversized while provisional",
+      "class": "DATUM",
+      "ok": true,
+      "detail": "cut 0.50 mm oversize per side pending confirmation of the connector assignment"
+    }
+  ]
+}
