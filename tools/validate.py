@@ -157,6 +157,29 @@ def check_envelope(parts, p):
     ok &= check("thickness is component-bound", "ENVELOPE", abs(t - exp_t) < 0.05,
                 f"{t:.2f} mm, board needs {p['board_depth']:.1f} mm of pocket")
 
+    # A part that renders degenerate still passes every other check, because
+    # every other check looks at the datums rather than at the part. This is how
+    # a 2 x 2 x 1 mm "acrylic window" survived a 52-check audit: its four
+    # parameters had been deleted, OpenSCAD substituted undef, and rbox() fell
+    # back to a unit cylinder. Assert each part is the size it should be.
+    expect = {
+        "chassis":   (exp_w, exp_h, exp_t),
+        "backplate": (exp_w - 2*p["wall"] - 2*p["fit_slide"], None, None),
+        "buttons":   (None, None, None),
+        "window":    (p["window_w"], p["window_h"], p["window_t"]),
+    }
+    for name, m in parts.items():
+        for axis, want in enumerate(expect.get(name, (None, None, None))):
+            if want is None:
+                continue
+            ok &= check(f"{name}: extent {'XYZ'[axis]} is as specified", "ENVELOPE",
+                        abs(m.extents[axis] - want) < 0.15,
+                        f"{m.extents[axis]:.2f} mm, expected {want:.2f}")
+        ok &= check(f"{name} is not degenerate", "ENVELOPE",
+                    min(m.extents) > 0.5 and m.volume > 10.0,
+                    f"{m.extents[0]:.2f} x {m.extents[1]:.2f} x {m.extents[2]:.2f}, "
+                    f"{m.volume:.0f} mm^3")
+
     for name, m in parts.items():
         e = sorted(m.extents)
         bed = sorted(BED)
@@ -373,7 +396,7 @@ def main():
     tmp = tempfile.mkdtemp(prefix="cyberdeck-validate-")
     try:
         print("\nrendering parts from source ...")
-        parts = {n: render(n, tmp) for n in ("chassis", "backplate", "buttons")}
+        parts = {n: render(n, tmp) for n in ("chassis", "backplate", "buttons", "window")}
         print("rendering component mocks ...")
         mocks = {}
         bx, by = 0.0, p["board_bay_cy"] if "board_bay_cy" in p else None

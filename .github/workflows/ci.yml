@@ -31,21 +31,11 @@ jobs:
       - name: Install the Python toolchain
         run: pip install -r tools/requirements.txt
 
+      # Renders every part and fails on an OpenSCAD "unknown variable" warning.
+      # A deleted parameter does not stop a render - OpenSCAD substitutes undef
+      # and quietly produces something small and wrong.
       - name: Render every part
-        run: |
-          mkdir -p export/stl
-          for part in chassis backplate buttons window; do
-            echo "::group::$part"
-            xvfb-run -a openscad -D "part=\"$part\"" \
-                     -o "export/stl/$part.stl" cad/cyberdeck.scad
-            echo "::endgroup::"
-          done
-
-      # The gate. Non-zero exit if any of the 52 checks fails.
-      - name: Design audit
-        run: |
-          mkdir -p export/reports
-          xvfb-run -a python3 tools/validate.py --json export/reports/validation.json
+        run: ./tools/build.sh
 
       # Re-derives every [MEASURED] datum from the reference artefacts and
       # asserts the mounting-pattern cross-check between two unrelated designs.

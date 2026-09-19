@@ -164,6 +164,18 @@ display_aper_draft = 1.45;   // [MEASURED] per-side flare across the front face
 display_off_x = -1.60;   // [VENDOR] computed from the drawing's AA margins
 display_off_y =  0.00;   // [VENDOR] centred in V
 
+// --- optional laser-cut acrylic window ---------------------------------------
+//  Outline taken from the reference's own 2D acrylic template, which is an
+//  exact, unambiguous source: a single closed 26-vertex LWPOLYLINE, DXF AC1015,
+//  $INSUNITS = 4 (millimetres). It is authored in the board's portrait frame,
+//  so its X/Y are transposed relative to this file's device frame.
+window_w = 94.2193;   // [MEASURED] plexiglass.dxf, transposed
+window_h = 70.8163;   // [MEASURED] plexiglass.dxf, transposed
+window_t = 2.0;       // [VENDOR] nominal cast-acrylic sheet
+window_corner_r = 1.294;  // [MEASURED] the DXF corners are polygonal chamfers;
+                          //   fitting a circle to each of the four gives
+                          //   1.2941, 1.2941, 1.2942 and 1.2942 mm
+
 // --- edge features, all relative to the mounting-pattern centre -------------
 //  The mounting-pattern centre coincides with the PCB centre, (U,V) =
 //  (46.25, 34.55), so these are simply the feature centres minus that.
@@ -510,6 +522,7 @@ assert(display_aper_w >= display_active_w, "front face clips the display");
 assert(display_aper_h >= display_active_h, "front face clips the display");
 assert(body_t >= back_t + board_depth + front_t, "not deep enough for the board");
 assert(vent_slot_w >= 4 * nozzle, "vent slots too narrow to print");
+assert(window_w > 50 && window_h > 50, "acrylic window outline is degenerate");
 
 echo(str("cYbErDeCk envelope [", preset, "]: ",
          body_w, " x ", body_h, " x ", body_t, " mm"));

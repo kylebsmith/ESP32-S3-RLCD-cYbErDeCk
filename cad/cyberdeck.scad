@@ -393,7 +393,7 @@ module assembly() {
     color("SlateGray", 0.9) translate([0, 0, 0]) backplate();
     color("Crimson") for (i = [0 : button_count - 1]) {
         bx = board_cx + (i - (button_count - 1)/2) * button_pitch;
-        translate([bx, body_h/2 + 0.3, z_front_inner - button_z_below_front])
+        translate([bx, body_h/2 + 0.3, pcb_back_z + button_w_centre])
             rotate([90, 0, 0]) buttons_single();
     }
     // component mock-ups, for visual fit checking only

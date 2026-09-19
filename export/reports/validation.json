@@ -1,6 +1,6 @@
 {
-  "passed": 52,
-  "total": 52,
+  "passed": 67,
+  "total": 67,
   "results": [
     {
       "check": "chassis: watertight",
@@ -57,6 +57,24 @@
       "detail": "377 mm^3 -> 0.5 g in PLA"
     },
     {
+      "check": "window: watertight",
+      "class": "MESH",
+      "ok": true,
+      "detail": "268 faces"
+    },
+    {
+      "check": "window: single body",
+      "class": "MESH",
+      "ok": true,
+      "detail": "body_count=1"
+    },
+    {
+      "check": "window: positive volume",
+      "class": "MESH",
+      "ok": true,
+      "detail": "13342 mm^3 -> 16.5 g in PLA"
+    },
+    {
       "check": "board: watertight",
       "class": "MESH",
       "ok": true,
@@ -111,6 +129,72 @@
       "detail": "16.60 mm, board needs 11.0 mm of pocket"
     },
     {
+      "check": "chassis: extent X is as specified",
+      "class": "ENVELOPE",
+      "ok": true,
+      "detail": "116.60 mm, expected 116.60"
+    },
+    {
+      "check": "chassis: extent Y is as specified",
+      "class": "ENVELOPE",
+      "ok": true,
+      "detail": "139.10 mm, expected 139.10"
+    },
+    {
+      "check": "chassis: extent Z is as specified",
+      "class": "ENVELOPE",
+      "ok": true,
+      "detail": "16.60 mm, expected 16.60"
+    },
+    {
+      "check": "chassis is not degenerate",
+      "class": "ENVELOPE",
+      "ok": true,
+      "detail": "116.60 x 139.10 x 16.60, 43060 mm^3"
+    },
+    {
+      "check": "backplate: extent X is as specified",
+      "class": "ENVELOPE",
+      "ok": true,
+      "detail": "109.60 mm, expected 109.60"
+    },
+    {
+      "check": "backplate is not degenerate",
+      "class": "ENVELOPE",
+      "ok": true,
+      "detail": "109.60 x 134.69 x 12.20, 45485 mm^3"
+    },
+    {
+      "check": "buttons is not degenerate",
+      "class": "ENVELOPE",
+      "ok": true,
+      "detail": "26.00 x 4.80 x 6.59, 377 mm^3"
+    },
+    {
+      "check": "window: extent X is as specified",
+      "class": "ENVELOPE",
+      "ok": true,
+      "detail": "94.22 mm, expected 94.22"
+    },
+    {
+      "check": "window: extent Y is as specified",
+      "class": "ENVELOPE",
+      "ok": true,
+      "detail": "70.82 mm, expected 70.82"
+    },
+    {
+      "check": "window: extent Z is as specified",
+      "class": "ENVELOPE",
+      "ok": true,
+      "detail": "2.00 mm, expected 2.00"
+    },
+    {
+      "check": "window is not degenerate",
+      "class": "ENVELOPE",
+      "ok": true,
+      "detail": "94.22 x 70.82 x 2.00, 13342 mm^3"
+    },
+    {
       "check": "chassis fits the print bed",
       "class": "ENVELOPE",
       "ok": true,
@@ -127,6 +211,12 @@
       "class": "ENVELOPE",
       "ok": true,
       "detail": "26.0 x 4.8 x 6.6"
+    },
+    {
+      "check": "window fits the print bed",
+      "class": "ENVELOPE",
+      "ok": true,
+      "detail": "94.2 x 70.8 x 2.0"
     },
     {
       "check": "board does not clash with the chassis",
