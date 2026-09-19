@@ -61,23 +61,58 @@ def _ring_moments(xy):
 
 def section_props(polys):
     """Area, centroid height, I about the centroidal horizontal axis, and the
-    section modulus of a set of shapely polygons in (u, v) = (X, Z)."""
+    section modulus of a set of shapely polygons in (u, v) = (X, Z).
+
+    RING ORIENTATION IS NOT OPTIONAL HERE. The signed moments only sum
+    correctly if every exterior runs counter-clockwise and every hole runs
+    clockwise, so each polygon is explicitly oriented first. An earlier version
+    took abs() of the totals instead, which works for a single solid ring and
+    silently corrupts anything with holes or several disjoint regions: once the
+    button and microphone apertures were cut, the top-wall stations reported a
+    NEGATIVE second moment and a section modulus of -1,629 mm^3. A negative I
+    is not a small error, it is a sign the summation is wrong.
+    """
+    from shapely.geometry.polygon import orient
     A = Q = I0 = 0.0
     vs = []
     for g in polys:
+        g = orient(g, sign=1.0)               # exterior CCW, interiors CW
         a, q, i = _ring_moments(g.exterior.coords)
         A += a; Q += q; I0 += i
         vs += [c[1] for c in g.exterior.coords]
-        for r in g.interiors:
+        for r in g.interiors:                 # wound CW, so these subtract
             a, q, i = _ring_moments(r.coords)
             A += a; Q += q; I0 += i
-    if abs(A) < 1e-9:
+    if A < 1e-9:
         return None
-    A, Q, I0 = abs(A), Q if A > 0 else -Q, abs(I0)
     vbar = Q / A
     I = I0 - A * vbar * vbar                  # parallel axis, to the centroid
+    if I <= 0:
+        return None
     c = max(abs(max(vs) - vbar), abs(vbar - min(vs)))
     return dict(A=A, vbar=vbar, I=I, c=c, Z=I / c if c > 1e-9 else 0.0)
+
+
+def _self_test():
+    """A rectangle and a hollow box, against the closed-form answers.
+
+    A section tool that can return a negative second moment has to prove it
+    does not before any of its output is quoted.
+    """
+    from shapely.geometry import box
+    b, h = 40.0, 10.0
+    r = section_props([box(-b/2, -h/2, b/2, h/2)])
+    want = b * h**3 / 12.0
+    assert abs(r["I"] - want) < 1e-6 * want, f"rect I {r['I']} != {want}"
+    assert abs(r["Z"] - want / (h/2)) < 1e-6 * want
+    t = 2.0
+    hollow = box(-b/2, -h/2, b/2, h/2).difference(
+        box(-b/2 + t, -h/2 + t, b/2 - t, h/2 - t))
+    r2 = section_props([hollow])
+    want2 = (b * h**3 - (b - 2*t) * (h - 2*t)**3) / 12.0
+    assert abs(r2["I"] - want2) < 1e-6 * want2, f"box I {r2['I']} != {want2}"
+    assert r2["I"] > 0 and r2["A"] > 0
+    return want, want2
 
 
 def close_cell(polys, gap):
@@ -174,6 +209,9 @@ def main():
     ap.add_argument("--reference", help="path to a clone of nilseuropa/solar_term")
     a = ap.parse_args()
 
+    w1, w2 = _self_test()
+    print(f"  self-test: solid rect I = {w1:,.1f} mm^4, hollow box I = {w2:,.1f} "
+          f"mm^4, both reproduced exactly")
     p = load_params()
     tmp = a.workdir or tempfile.mkdtemp(prefix="cyberdeck-structure-")
     chassis, plate = render("chassis", tmp), render("backplate", tmp)

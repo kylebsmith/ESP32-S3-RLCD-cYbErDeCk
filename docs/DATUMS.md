@@ -319,6 +319,27 @@ a wider recess behind it. This back plate is 3.2 mm thick and the header stands
 8.603 mm off the PCB back — **1.60 mm proud of the standoff plane** — so the
 body itself must pass through. The window here is sized from the body.
 
+### C-21 — Three values whose stated reasons were wrong
+
+All three survived adversarial refutation in the re-derivation pass. Two keep
+their value and lose their justification; one moves.
+
+- **`expansion_body_h` 8.603 → 8.700.** 8.603 is the header component's own
+  bounding-box height. Waveshare's assembly seats it insulator 8.500 + 0.100
+  lead + 0.100 seating below the PCB back plane. **The bbox of a part in
+  isolation is not where the assembly puts it** — and the dependent figure,
+  how far it stands proud of the standoff plane, was 1.60 and is 1.70.
+- **`batt_cowl_base_ri` stays 3.0, for a different reason.** It was justified
+  by "the holder's corners are R2.0". They are not: in the STEP the holder's
+  plan form is exactly square at every height through the body — 0.0000 mm
+  deviation from its bounding rectangle, 504 of 576 edges straight, every
+  circle in the part on the cell axis. The real constraint is that a cavity
+  corner must not bite into a square-cornered body inside it.
+- **C-11's replica tangency figures.** "6.99 (tangency 6.81 / 6.88)" is a fit
+  artefact; on the replica's authored vertex ring at z = 7.000 each flat is a
+  single segment, so the tangent points are **exact** and the figure is
+  7.000 / 7.000.
+
 ### C-20 — There are two keyboard revisions, and the corner is not an arc
 
 **The charge port.** The owner's unit is **Type-C**. The drawing this project
@@ -458,7 +479,7 @@ Re-measured arc-only, four sources converge:
 | Source | Corner radius |
 |---|---|
 | Manufacturer drawing, rear view, arc only | 5.87 – 5.96 |
-| Third-party CAD replica STL, arc only | 6.99 (tangency 6.81 / 6.88) |
+| Third-party CAD replica STL, arc only | 7.000 (tangency 7.000 / 7.000, exact) |
 | A Shapr3D STEP carrying authored `CIRCLE` entities | 6.5 exactly |
 | Reference ATA tray R6.100 requires a body of | ≥ 4.66 |
 

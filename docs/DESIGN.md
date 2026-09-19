@@ -25,7 +25,7 @@ height = wall + keyboard 59.4 + spine + board 70.1 + wall
 depth  = back plate + board stack 11.0 + front face
 ```
 
-With 3.2 mm walls that is **116.6 × 139.1 × 16.6 mm**, and
+With 3.2 mm walls that is **116.6 × 139.1 × 16.85 mm**, and
 `tools/validate.py` asserts each of those three equalities on every run. The
 enclosure cannot be made smaller without thinning a wall or crushing a part.
 
@@ -34,8 +34,8 @@ Against the reference:
 | | Reference (ATA) | This design | Δ |
 |---|---|---|---|
 | Height | 151.65 | 139.10 | **−12.55** |
-| Width | 116.77 | 116.60 | −0.17 |
-| Thickness | 18.00 | 16.60 | **−1.40** |
+| Width | 116.77 | 116.85 | −0.17 |
+| Thickness | 18.00 | 16.85 | **−1.40** |
 | Battery bulge | +12.0 | +9.0 | −3.0 |
 | Wall | 2.90 | 3.20 | +0.30 |
 | Footprint area | 17 708 mm² | 16 218 mm² | **−8.4 %** |
@@ -47,7 +47,7 @@ Waveshare's stand base.
 Where the width is concerned there is nothing left to take: the keyboard pocket
 is 110.2 mm — wide enough to clear both the certified 108.5 mm body and the
 rounded retail figure, since the vendor has revised the unit at least once
-without publishing new dimensions — and the walls are 3.2 mm, so 116.6 mm is the
+without publishing new dimensions — and the walls are 3.2 mm, so 116.85 mm is the
 floor. The board is 17 mm narrower than the keyboard pocket, and that mismatch is the single biggest
 constraint in the design — it is also, usefully, the only free space in it.
 
@@ -82,28 +82,28 @@ and says nothing about absolute stress.
 
 | | reference deck | this design |
 |---|---|---|
-| mean second moment `I` | 9 553 mm⁴ | **19 780 mm⁴** |
-| mean section modulus `Z` | 891 mm³ | **1 657 mm³** |
-| worst-section `Z` | 212 mm³ | **332 mm³** |
+| mean second moment `I` | 9 553 mm⁴ | **20 374 mm⁴** |
+| mean section modulus `Z` | 891 mm³ | **1 675 mm³** |
+| worst-section `Z` | 212 mm³ | **340 mm³** |
 
-**2.07× the mean bending stiffness and 1.56× at the worst section, in a
-smaller envelope.** Fitting the back plate is worth 3.47× on its own, which is
+**2.13× the mean bending stiffness and 1.60× at the worst section, in a
+smaller envelope.** Fitting the back plate is worth 3.26× on its own, which is
 the monocoque argument in one number.
 
 Moving the joint to the back is worth more than expected. At a typical station
-the closed section's neutral axis sits at z = 2.35 mm and the joint plane at
-z = 3.20 — 0.85 mm from the neutral axis, against 14.25 mm for the front face.
+the closed section's neutral axis sits at z = 2.75 mm and the joint plane at
+z = 3.20 — 0.45 mm from the neutral axis, against 14.10 mm for the front face.
 Bending stress varies with distance from the neutral axis, so **the joint at the
-back carries about 94 % less bending stress than the same joint across the
+back carries about 97 % less bending stress than the same joint across the
 face.** That was reasoned qualitatively before it was computed; the computation
 made it stronger, not weaker.
 
 The claim it *contradicts* is the "closed torsion box" one, and the correction
-is worth stating plainly. Only **9 of 90 stations enclose a genuine cell — 10 %
+is worth stating plainly. Only **11 of 90 stations enclose a genuine cell — 12 %
 of the length.** Everywhere else the front face is absent, because that is what
 an aperture is, and the section is a U closed only by the back plate. The deck
 is not a torsion box with two holes in it; it is two open channels joined by one
-short closed cell at the spine. Bredt's formula at that cell gives J = 36 492 mm⁴
+short closed cell at the spine. Bredt's formula at that cell gives J = 37 764 mm⁴
 against roughly 2 910 mm⁴ for the same outline left open — about **13×**.
 
 So the spine is not merely *a* shear web, it is the only closed cell in the
@@ -115,16 +115,16 @@ its cross-section suggests.
 ### The weak point, named
 
 The worst section is at **Y = −36.4 mm, mid-keyboard-bay** — 31 mm from the
-spine, which does not cover it. `Z` there is 332 mm³ against a mean of 1 657.
+spine, which does not cover it. `Z` there is 340 mm³ against a mean of 1 675.
 
 The cause is not an oversight and cannot be designed out: the keyboard aperture
-is 106.5 mm across a 116.6 mm body, so there is almost no front face left over
+is 106.5 mm across a 116.85 mm body, so there is almost no front face left over
 that bay — about 5 mm each side. Any material added there covers keys. The board
 bay does not have the problem, because the display aperture is 86.8 mm wide and
 leaves ~15 mm of face on each flank; its `Z` runs 1 400–3 300.
 
 The reference deck is weakest in the same place for the same reason (212 mm³),
-which is what makes the comparison like for like. This design is 56 % better at
+which is what makes the comparison like for like. This design is 60 % better at
 the point that governs. **If this deck fails in a drop, that is where, and the
 honest answer is that the keyboard's own width sets it.**
 
@@ -300,7 +300,7 @@ board, battery and back plate come out as one module.
 
 ## The battery has to stick out, so it was made useful
 
-An 18650 is 18.4 mm in diameter (18.6 for protected cells). This deck is 16.6 mm
+An 18650 is 18.4 mm in diameter (18.6 for protected cells). This deck is 16.85 mm
 thick. The cell cannot be contained — it reaches 8.20 mm past the standoff
 plane and must project through the back.
 

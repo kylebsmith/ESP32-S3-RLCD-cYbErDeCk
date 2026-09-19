@@ -6,8 +6,8 @@ silently detaches from the datum set and from all 71 checks.
 
 | File | Size (mm) | Volume | ~PLA | Notes |
 |---|---|---|---|---|
-| `chassis.stl` | 116.60 × 139.10 × 16.60 | 42.2 cm³ | 52 g | the monocoque: front face, all four walls, the spine |
-| `backplate.stl` | 109.60 × 134.70 × 13.20 | 46.9 cm³ | 58 g | structural closure + battery cowl; the board bolts to this |
+| `chassis.stl` | 116.60 × 139.10 × 16.85 | 42.9 cm³ | 53 g | the monocoque: front face, all four walls, the spine |
+| `backplate.stl` | 109.60 × 133.30 × 13.45 | 48.4 cm³ | 60 g | structural closure + battery cowl; the board bolts to this |
 | `buttons.stl` | 26.00 × 4.80 × 6.59 | 0.4 cm³ | 0.5 g | three caps on a sprue |
 
 There is no separate window or screen protector: the display sits 2.65 mm

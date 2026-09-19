@@ -292,6 +292,14 @@ batt_cowl_crown  = 0.50;   // [DESIGN] fraction of rise before the crown starts.
                            //   until they are clear of it.
 batt_cowl_cap_r  = 3.0;    // [DESIGN] retained for the cavity's ridge()
 batt_cowl_base_r  = 6.0;   // [DESIGN] outer plan-view corner radius
+//  CORRECTED RATIONALE. This used to say "the holder's corners are R2.0".
+//  They are not: in Waveshare's STEP the holder's plan form is exactly square
+//  at every height through the body - 0.0000 mm deviation from its bounding
+//  rectangle, 504 of 576 edges are straight lines, and every circle in the
+//  part lies on the cell axis. The value is right for a different reason: a
+//  cavity corner must stay small enough not to bite into a square-cornered
+//  body sitting inside it. The number stands; the reason it was given for did
+//  not. See docs/DATUMS.md C-21.
 batt_cowl_base_ri = 3.0;   // [DESIGN] INNER plan-view corner radius. Same trap
                            //   as board_pocket_r: the holder's corners are
                            //   R2.0, so a generously rounded cavity corner
@@ -341,7 +349,7 @@ expansion_win_enable = true;   // [DESIGN] position is now a VENDOR datum
 //  plate cuts 21.60 x 5.60, which is NARROWER than the 21.003 x 6.603 insulator
 //  - their window exposes the pin field, and the body sits in a wider recess
 //  behind it. This plate is only 3.2 mm thick and the header stands 8.603 mm
-//  off the PCB back face, i.e. 1.60 mm PROUD of the standoff plane, so the body
+//  off the PCB back face, i.e. 1.70 mm PROUD of the standoff plane, so the body
 //  itself has to pass through.
 expansion_win_w = 22.0;   // [DESIGN] body 21.003 + 0.5 per side
 expansion_win_h =  7.6;   // [DESIGN] body  6.603 + 0.5 per side
@@ -352,7 +360,12 @@ expansion_win_y = -0.70;  // [VENDOR] header centre V 33.850
 expansion_pitch = 2.54;   // [VENDOR]
 expansion_rows  = 2;      // [VENDOR]
 expansion_cols  = 8;      // [VENDOR]
-expansion_body_h = 8.603; // [VENDOR] insulator height above the PCB back face
+//  8.700, not the part's own 8.603 bounding-box height: Waveshare's assembly
+//  seats it insulator 8.500 + 0.100 lead + 0.100 seating below the PCB back
+//  plane. The bbox of the component in isolation is not where the assembly
+//  puts it. See docs/DATUMS.md C-21.
+expansion_body_h = 8.700; // [VENDOR] far face of the 2x8 header as ASSEMBLED,
+                          //   below the PCB back plane
 expansion_card_w = 76.2;    // [VENDOR] SolarLink reference card
 expansion_card_h = 48.26;   // [VENDOR] SolarLink reference card
 

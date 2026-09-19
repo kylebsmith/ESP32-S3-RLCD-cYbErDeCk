@@ -233,7 +233,7 @@ either window serves it.
   Bredt's formula on sections cut from the real mesh — but classical section
   analysis gives **ratios and weak-point location**, which depend only on
   geometry, and not absolute stress, which depends on layer adhesion and strain
-  rate. It found one claim overstated: the shell is a closed cell over 10 % of
+  rate. It found one claim overstated: the shell is a closed cell over 12 % of
   its length, not throughout.
 - **No print verification.** Wall thicknesses are checked against nozzle
   multiples and overhangs against a draft-angle rule, but nothing has been

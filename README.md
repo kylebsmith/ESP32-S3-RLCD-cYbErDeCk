@@ -21,7 +21,7 @@ so it reads as grown rather than extruded.
 </p>
 
 ```
-116.6 × 139.1 × 16.6 mm   (+ 10.0 mm battery cowl)
+116.6 × 139.1 × 16.85 mm   (+ 10.0 mm battery cowl)
 2 printed structural parts · 4 screws · 76 automated checks
 ```
 
@@ -61,13 +61,13 @@ on — the panel sets that corner, not taste, and the bound is asserted in CI.
 
 | | Reference design | This design |
 |---|---|---|
-| Envelope | 151.65 × 116.77 × 18.00 | **116.6 × 139.1 × 16.6** |
+| Envelope | 151.65 × 116.77 × 18.00 | **116.6 × 139.1 × 16.85** |
 | Battery bulge | +12.0 mm, separate clip-on cover | +10.0 mm, integral grip ridge |
 | Wall | 2.90 mm | **3.20 mm** (8 extrusions, solid perimeters) |
 | Split | bezel screwed onto a tray | monocoque front, joint at the back |
 | Footprint area | 17 708 mm² | **16 218 mm² (−8.4 %)** |
 
-12.55 mm shorter, 1.4 mm thinner, *and* thicker-walled.
+12.55 mm shorter, 1.15 mm thinner, *and* thicker-walled.
 
 ## Print it
 
@@ -184,24 +184,24 @@ not FEA: good for **ratios and weak-point location**, silent on absolute stress.
 
 | | reference deck | this design |
 |---|---|---|
-| mean second moment `I` | 9 553 mm⁴ | **19 780 mm⁴** |
-| mean section modulus `Z` | 891 mm³ | **1 657 mm³** |
-| worst-section `Z` | 212 mm³ | **332 mm³** |
+| mean second moment `I` | 9 553 mm⁴ | **20 374 mm⁴** |
+| mean section modulus `Z` | 891 mm³ | **1 675 mm³** |
+| worst-section `Z` | 212 mm³ | **340 mm³** |
 
-**2.07× the mean bending stiffness and 1.56× at the worst section, in a smaller
-envelope.** Fitting the back plate is worth 3.47× on its own. Putting the joint
-at the back rather than across the face puts it 0.85 mm from the neutral axis
-instead of 14.25 mm, so it carries about **94 % less bending stress**.
+**2.13× the mean bending stiffness and 1.60× at the worst section, in a smaller
+envelope.** Fitting the back plate is worth 3.26× on its own. Putting the joint
+at the back rather than across the face puts it 0.45 mm from the neutral axis
+instead of 14.10 mm, so it carries about **97 % less bending stress**.
 
 It also corrected one of this project's own claims. The shell was described as a
-closed torsion box; it is one over **10 % of its length**. Everywhere else the
+closed torsion box; it is one over **12 % of its length**. Everywhere else the
 front face is absent — that is what an aperture is — and the section is a U
 closed only by the back plate. The deck is two open channels joined by one short
 closed cell at the spine, and that cell is worth 13× in torsion. The spine is
 not merely a shear web, it is the only closed cell in the device.
 
-The weak point is named rather than hidden: **mid-keyboard-bay, `Z` = 332 mm³**,
-because the keyboard aperture is 106.5 mm across a 116.6 mm body and leaves
+The weak point is named rather than hidden: **mid-keyboard-bay, `Z` = 340 mm³**,
+because the keyboard aperture is 106.5 mm across a 116.85 mm body and leaves
 about 5 mm of face each side. Nothing can be added there without covering keys.
 The reference is weakest in the same place for the same reason. If this deck
 fails in a drop, that is where.
@@ -238,7 +238,7 @@ counted among the audited rows.
 
 | | |
 |---|---|
-| **[DATUMS.md](docs/DATUMS.md)** | every dimension, its provenance, twenty recorded corrections, seven open items |
+| **[DATUMS.md](docs/DATUMS.md)** | every dimension, its provenance, twenty-one recorded corrections, seven open items |
 | **[DESIGN.md](docs/DESIGN.md)** | form language, why it is shaped this way, material and finish |
 | **[METHODOLOGY.md](docs/METHODOLOGY.md)** | how the numbers were obtained and how to reproduce them |
 | **[MEASURE.md](docs/MEASURE.md)** | caliper checklist for someone holding the actual hardware |

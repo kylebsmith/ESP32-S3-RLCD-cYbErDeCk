@@ -16,8 +16,8 @@ leverage while fitting a cable, a cell or a printed part.
 
 | Part | Qty | Mass (PLA) | Notes |
 |---|---|---|---|
-| `chassis` | 1 | ~51 g | front face down |
-| `backplate` | 1 | ~58 g | cowl up |
+| `chassis` | 1 | ~53 g | front face down |
+| `backplate` | 1 | ~60 g | cowl up |
 | `buttons` | 1 | ~0.5 g | printed as one sprue |
 
 ### Hardware
@@ -29,9 +29,22 @@ leverage while fitting a cable, a cell or a printed part.
 | 18650 lithium cell | 1 | flat-top or protected, up to Ø18.6 × 69.0 |
 | microSD card | 0–1 | FAT32 |
 | Speaker with the MX1.25 2-pin lead supplied with the board | 1 | |
-| M2 × 5 brass heat-set insert, Ø4.0 OD | 4 | |
-| M2 × 8 countersunk screw, ISO 10642 | 4 | M2 × 12 if rigging a bracket |
-| M2.5 screw, supplied with the board | 4 | into the board's own standoffs |
+| M2 × 4 brass heat-set insert, Ø3.2 OD | 4 | Ø3.2 is the bore; a Ø4.0 insert is M3 |
+| M2 × 6 countersunk screw, ISO 10642 | 4 | see the note below — **not** M2 × 8 |
+| M2.5 × 8 countersunk screw, ISO 10642 | 4 | into the board's own standoffs |
+
+**On the two screw lengths.** Both are worked from the stack, not chosen:
+
+- **M2 × 6, not longer.** The plate is 3.20 mm and the insert is 4.00 mm, so a
+  6 mm screw engages 2.80 mm — 1.4 × diameter, comfortably past the 1 × minimum.
+  M2 × 8 would put 4.80 mm past the plate into a 4.00 mm insert: the last
+  0.80 mm spins in the relief below it and buys nothing.
+- **M2.5 × 8 for the board, not the screws in the box.** The screws supplied
+  with the board are 4.90 mm overall and countersunk, so through a 3.20 mm
+  plate they leave **1.70 mm** biting the standoff — 0.68 × diameter, below the
+  usual 1 × minimum, and these four screws carry the board and an 18650. At
+  8 mm the engagement is 4.80 mm into a 7.00 mm standoff, 1.9 × diameter. Keep
+  the stock screws for a test fit; do not ship on them.
 | Adhesive foam gasket, 0.5 mm | 1 strip | around the display aperture |
 
 ## Printing

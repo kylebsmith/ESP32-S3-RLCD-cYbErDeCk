@@ -72,7 +72,7 @@
       "check": "board: positive volume",
       "class": "MESH",
       "ok": true,
-      "detail": "84591 mm^3 -> 104.9 g in PLA"
+      "detail": "84604 mm^3 -> 104.9 g in PLA"
     },
     {
       "check": "keyboard: watertight",
