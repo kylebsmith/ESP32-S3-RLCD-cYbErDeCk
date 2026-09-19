@@ -187,26 +187,41 @@ module chassis() {
         // as perforation. Cut from the outer face inward, flaring outward, so
         // the recess has no hard rim.
         top_wall_y = body_h/2;
+        //  ORIENTATION, and it was wrong. rotate([90,0,0]) maps local +Z to
+        //  global -Y, so an rse_aperture built narrow-at-z=0 widens as it goes
+        //  INWARD - backwards for a dish cut from the outside. The previous
+        //  version tried to correct that with mirror([0,0,1]), which instead
+        //  placed the whole cutter at y > top_wall_y: entirely outside the
+        //  wall, removing nothing at all. See docs/DATUMS.md C-10.
+        //
+        //  rotate([-90,0,0]) maps local +Z to +Y, so the narrow end sits at the
+        //  dish floor and it flares out to the face, which is the dish.
         if (dish_enable)
-            translate([board_cx, top_wall_y + 0.01,
+            translate([board_cx, top_wall_y - dish_depth,
                        pcb_back_z + button_w_centre])
-                rotate([90, 0, 0])
-                    mirror([0, 0, 1])
-                        rse_aperture((button_count - 1) * button_pitch
-                                     + button_aper_w + 2 * dish_margin,
-                                     button_aper_h + 2 * dish_margin,
-                                     dish_depth + 0.01, dish_blend, form_n,
-                                     dish_flare);
+                rotate([-90, 0, 0])
+                    rse_aperture((button_count - 1) * button_pitch
+                                 + button_aper_w + 2 * dish_margin,
+                                 button_aper_h + 2 * dish_margin,
+                                 dish_depth + 0.01, dish_blend, form_n,
+                                 dish_flare);
 
         // --- top-edge apertures: three buttons, two microphones --------------
+        //  rbox() extrudes from z = 0 to +t, NOT centred on z = 0. After
+        //  rotate([90,0,0]) that runs inward from the translate point, so
+        //  starting at top_wall_y - wall/2 cut a BLIND POCKET: it reached the
+        //  inner face but stopped 1.60 mm short of the outer one, leaving the
+        //  top wall solid. Every button and both microphones were sealed in,
+        //  and 64 checks passed. Start outboard of the face instead, so the
+        //  cut is unambiguously through. See docs/DATUMS.md C-10.
         for (i = [0 : button_count - 1]) {
             bx = board_cx + (i - (button_count - 1)/2) * button_pitch;
-            translate([bx, top_wall_y - wall/2, pcb_back_z + button_w_centre])
+            translate([bx, top_wall_y + 1.0, pcb_back_z + button_w_centre])
                 rotate([90, 0, 0])
                     rbox(button_aper_w, button_aper_h, wall + 2, 1.0);
         }
         for (sx = [-1, 1])
-            translate([board_cx + sx * mic_offset_x, top_wall_y - wall/2,
+            translate([board_cx + sx * mic_offset_x, top_wall_y + 1.0,
                        pcb_back_z + mic_w_centre])
                 rotate([90, 0, 0])
                     rbox(mic_aper_w, mic_aper_h, wall + 2, mic_aper_h/2 * 0.9);

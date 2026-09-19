@@ -319,6 +319,83 @@ a wider recess behind it. This back plate is 3.2 mm thick and the header stands
 8.603 mm off the PCB back — **1.60 mm proud of the standoff plane** — so the
 body itself must pass through. The window here is sized from the body.
 
+### C-11 — The keyboard corner radius was an artefact of the fitting window
+
+[C-08](#c-08--a-guessed-corner-radius-hid-a-defect-that-a-1-d-check-could-not-see)
+replaced a guessed 5.0 mm corner with a "measured" 10.0 mm, band 9.5–11.2, from
+two sources. **Both were the same methodological error, and the error was mine.**
+
+A least-squares circle fitted over a window that also contains the straight
+edges is no longer fitting an arc, and it inflates with the window size. The
+same corner on the replica STL reads:
+
+| window | radius | rms |
+|---|---|---|
+| ±4 mm | 7.00 | 0.003 |
+| ±8 mm | 6.99 | 0.004 |
+| ±15 mm | 8.78 | 0.227 |
+
+and on the manufacturer's drawing, 5.87 (rms 0.034) at ±5 mm against 12.46
+(rms 0.812) at ±20. I used ±14 to ±16 and reported the result to two decimal
+places. **The rms column is the tell, and I was printing it without reading
+it** — a fit whose residual grows forty-fold is not measuring the thing you
+named.
+
+Re-measured arc-only, four sources converge:
+
+| Source | Corner radius |
+|---|---|
+| Manufacturer drawing, rear view, arc only | 5.87 – 5.96 |
+| Third-party CAD replica STL, arc only | 6.99 (tangency 6.81 / 6.88) |
+| A Shapr3D STEP carrying authored `CIRCLE` entities | 6.5 exactly |
+| Reference ATA tray R6.100 requires a body of | ≥ 4.66 |
+
+Now **6.5 nominal, band 5.9 – 7.0**. The aperture corner derives from it, so it
+moved 10.2 → 6.0, which holds the full 1.00 mm lip across the whole corrected
+band **and recovers 58.4 mm² of opening**.
+
+One claim in the audit that produced this correction was itself wrong and is
+worth recording beside it: that the reference tray's R6.100 sets a *hard upper
+bound* of 6.1 mm on the keyboard's corner. It does the opposite. A rounder body
+has **more** corner clearance, not less — its corner retreats further from the
+box corner than the pocket's does — so the tray sets a **lower** bound, measured
+at 4.66 mm. Verified by brute force before the datum was changed.
+
+### C-10 — Every side button and both microphones were sealed inside the wall
+
+The chassis had **no opening at all** for the three side buttons or the two
+microphones, and the control dish removed no material. Sixty-four checks passed.
+
+Two independent orientation faults:
+
+- **`rbox()` extrudes from z = 0 to +t, not centred on z = 0.** After
+  `rotate([90,0,0])` that runs *inward* from the translate point, so starting
+  the cutter at `top_wall_y - wall/2` reached the inner face at y = 66.35 and
+  stopped 1.60 mm short of the outer face at 69.55. Five blind pockets on the
+  inside of a solid wall.
+- **The dish was outside the part.** `rotate([90,0,0])` maps local +Z to global
+  −Y, so an aperture built narrow-at-z=0 widens as it goes *inward* — backwards
+  for a dish cut from outside. `mirror([0,0,1])` was used to correct that and
+  instead placed the entire cutter at y > `top_wall_y`, clear of the wall,
+  removing nothing. It is now `rotate([-90,0,0])` with the narrow end at the
+  dish floor.
+
+Ray casting proves it: before the fix, 181 rays fired inward at button height
+returned a first hit at y = 69.5500 at **every** x — the top face was dead flat.
+
+**Why nothing caught it.** Every one of the 64 checks measured a dimension.
+Not one asked whether a hole was a hole. A new `OPENING` class now fires a ray
+at each stated aperture and asserts it crosses **no** surface — and asserts the
+wall between the buttons still crosses two, so the test cannot be satisfied by
+deleting the wall. Verified against the original geometry: it reports six
+failures.
+
+Its first version was wrong twice over, both worth stating: it probed the side
+ports at y = 0 when the board bay sits at y = 31.3, reporting two perfectly good
+tunnels as sealed; and it sampled the dish only across ±15 mm when the dish
+spans ±15.9, so every sample sat on the dish floor and max − min was zero
+however deep it was.
+
 ### C-09 — Two defects the dimensional checks could not see
 
 Both were found by eye, in a render, after being committed and published — which

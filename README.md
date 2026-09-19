@@ -22,7 +22,7 @@ so it reads as grown rather than extruded.
 
 ```
 116.6 × 139.1 × 16.6 mm   (+ 10.0 mm battery cowl)
-2 printed structural parts · 4 screws · 71 automated checks
+2 printed structural parts · 4 screws · 73 automated checks
 ```
 
 ---
@@ -90,7 +90,7 @@ openscad -D 'part="chassis"'   -o export/stl/chassis.stl   cad/cyberdeck.scad
 openscad -D 'part="backplate"' -o export/stl/backplate.stl cad/cyberdeck.scad
 openscad -D 'part="buttons"'   -o export/stl/buttons.stl   cad/cyberdeck.scad
 
-python3 tools/validate.py          # 71 checks; non-zero exit if any fail
+python3 tools/validate.py          # 73 checks; non-zero exit if any fail
 ```
 
 0.4 mm nozzle, 0.2 mm layers, no supports. Full instructions, BOM and print
@@ -144,7 +144,7 @@ Full record, including every correction and every remaining gap, in
 
 ## What is *not* proven
 
-**Nobody has built this.** It is asserted internally consistent by 71 automated
+**Nobody has built this.** It is asserted internally consistent by 73 automated
 checks; it has not been printed, and the components have not been offered up to
 a physical chassis.
 
@@ -238,7 +238,7 @@ counted among the audited rows.
 
 | | |
 |---|---|
-| **[DATUMS.md](docs/DATUMS.md)** | every dimension, its provenance, nine recorded corrections, seven open items |
+| **[DATUMS.md](docs/DATUMS.md)** | every dimension, its provenance, eleven recorded corrections, seven open items |
 | **[DESIGN.md](docs/DESIGN.md)** | form language, why it is shaped this way, material and finish |
 | **[METHODOLOGY.md](docs/METHODOLOGY.md)** | how the numbers were obtained and how to reproduce them |
 | **[ASSEMBLY.md](docs/ASSEMBLY.md)** | BOM, print settings, build order |
@@ -250,7 +250,7 @@ counted among the audited rows.
 |---|---|
 | `tools/params.py` | the single reader for `parameters.scad`; every other tool goes through it |
 | `tools/measure_reference.py` | metrology harness — regenerates every measured datum |
-| `tools/validate.py` | 71-check design audit — the build gate |
+| `tools/validate.py` | 73-check design audit — the build gate |
 | `tools/audit_reference.py` | component-facing accuracy against the reference |
 | `tools/test_primitives.py` | unit tests for the geometry helpers; catches a primitive that lies |
 | `tools/structure.py` | section properties from the mesh; stiffness against the reference |
@@ -269,7 +269,7 @@ cad/
 tools/
   params.py             the single reader for parameters.scad
   measure_reference.py  metrology harness — regenerates every measured datum
-  validate.py           71-check design audit — the build gate
+  validate.py           73-check design audit — the build gate
   audit_reference.py    component-facing accuracy against the reference
   test_primitives.py    unit tests for the geometry helpers
   structure.py          section properties, stiffness, weak-point location

@@ -377,15 +377,31 @@ kbd_body_w = 108.5;   // [VENDOR] FCC ID YIZRT-RII518, User Manual exhibit p13
 kbd_body_h =  58.2;   // [VENDOR] as above
 kbd_body_t =  10.2;   // [VENDOR] as above, overall, including keycaps
 
-//  CORNER RADIUS. Measured, because a guess here was hiding a real defect -
-//  see docs/DATUMS.md C-08. Two independent sources agree that this keyboard's
-//  corners are far rounder than the 5.0 mm this project used to assume:
+//  CORNER RADIUS. Measured - and then re-measured, because the first
+//  measurement was wrong in a way worth recording. See docs/DATUMS.md C-11.
 //
-//    manufacturer drawing, rear view, circle-fit to the silhouette   10.8-11.2
-//    third-party CAD replica STL, circle-fit by section height        9.5-10.6
+//  A plain least-squares circle fitted over a window that also contains the
+//  straight edges INFLATES with the window size, because it is no longer
+//  fitting an arc. On the replica STL the same corner reads
 //
-//  Neither is a dimensioned callout, so this is [MEASURED] with a real band
-//  rather than [VENDOR]. The band matters in BOTH directions and they are not
+//      window +/- 4 mm   r = 7.00   rms 0.003     <- the arc
+//      window +/- 8 mm   r = 6.99   rms 0.004
+//      window +/-15 mm   r = 8.78   rms 0.227     <- eating the flats
+//
+//  and on the manufacturer's drawing 5.87 (rms 0.034) at +/-5 mm against 12.46
+//  (rms 0.812) at +/-20. The earlier "10.0 nominal, 9.5-11.2" came from a
+//  +/-14 to +/-16 mm window and was an artefact of the method, not a property
+//  of the keyboard. The rms column is the tell and it was not being read.
+//
+//  Measured arc-only, four sources agree on roughly 6 to 7 mm:
+//
+//    manufacturer drawing, rear view, arc only          5.87 - 5.96
+//    third-party CAD replica STL, arc only              6.99  (tangency 6.81/6.88)
+//    a Shapr3D STEP carrying authored CIRCLE entities   6.5 exactly
+//    reference ATA tray R6.100 requires a body of      >= 4.66
+//
+//  Neither silhouette is a dimensioned callout, so this is [MEASURED] with a
+//  real band rather than [VENDOR]. The band matters in BOTH directions and they are not
 //  the same direction for every check:
 //
 //    pocket clearance  a SQUARER body (small r) is the worst case - its corner
@@ -395,9 +411,9 @@ kbd_body_t =  10.2;   // [VENDOR] as above, overall, including keycaps
 //
 //  So there is no single conservative value, and anything that checks a corner
 //  must say which end of the band it is using.
-kbd_body_corner_r     = 10.0;   // [MEASURED] nominal, two sources
-kbd_body_corner_r_min =  9.5;   // [MEASURED] worst case for pocket clearance
-kbd_body_corner_r_max = 11.2;   // [MEASURED] worst case for lip capture
+kbd_body_corner_r     = 6.5;   // [MEASURED] authored CIRCLE value, mid-band
+kbd_body_corner_r_min = 5.9;   // [MEASURED] worst case for pocket clearance
+kbd_body_corner_r_max = 7.0;   // [MEASURED] worst case for lip capture
 kbd_mass_g =  75.0;   // [VENDOR] as-certified 2011 sample
 
 //  CORRECTION - THERE IS NO SECOND CANDIDATE BODY. See docs/DATUMS.md C-07.

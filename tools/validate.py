@@ -385,6 +385,103 @@ def _corner_lip(chassis, p):
     return narrowest(p["kbd_body_corner_r_max"]), narrowest(p["kbd_body_corner_r"])
 
 
+def _clear(mesh, origin, direction, lo, hi):
+    """How many surfaces a ray crosses within a band along its axis.
+
+    0 crossings inside the band = the ray passed through an opening.
+    2 = it entered and left solid material, i.e. there is no opening there.
+    """
+    loc, _, _ = mesh.ray.intersects_location(np.array([origin], float),
+                                             np.array([direction], float))
+    ax = int(np.argmax(np.abs(direction)))
+    return sorted(float(q[ax]) for q in loc if lo <= q[ax] <= hi)
+
+
+def check_openings(parts, p):
+    """Every opening the design CLAIMS must actually be open.
+
+    This class exists because it was absent. The three side buttons and both
+    microphones had no opening at all - rbox() extrudes from z = 0 to +t rather
+    than centred, so after rotate([90,0,0]) the cutters ran inward from the
+    middle of the wall and left 1.60 mm of solid material outboard - and the
+    control dish was positioned entirely outside the wall and removed nothing.
+    Sixty-four checks passed on a chassis with its controls sealed in, because
+    every one of them measured a dimension and none asked whether a hole was a
+    hole. See docs/DATUMS.md C-10.
+    """
+    print("\n-- OPENINGS --")
+    ok = True
+    ch = parts["chassis"]
+    top = p["body_h"] / 2
+    zf = p["body_t"] - p["front_t"]
+    # These are derived in cyberdeck.scad, not parameters.scad, so recompute
+    # them here the same way rather than defaulting them to zero - probing the
+    # ports at y = 0 puts the ray through the spine and reports a false sealed
+    # port, which is exactly what the first version of this check did.
+    board_bay_cy = top - p["wall"] - p["board_pocket_h"] / 2
+    pcb_back_z = zf - p["board_w_display_front"]
+    bz = zf - p["board_w_display_front"] + p["button_w_centre"]
+    mz = zf - p["board_w_display_front"] + p["mic_w_centre"]
+    band = (top - 8.0, top + 1.0)
+
+    for i in range(int(p["button_count"])):
+        bx = p.get("board_cx", 0.0) + (i - (p["button_count"] - 1) / 2) * p["button_pitch"]
+        hits = _clear(ch, [bx, top + 6.0, bz], [0, -1, 0], *band)
+        ok &= check(f"button aperture {i+1} is open through the wall", "OPENING",
+                    len(hits) == 0,
+                    f"x={bx:+.1f}, {len(hits)} surface crossing(s) in the top wall "
+                    f"(0 = open, 2 = sealed)")
+    for sx, nm in ((-1, "left"), (1, "right")):
+        mx = p.get("board_cx", 0.0) + sx * p["mic_offset_x"]
+        hits = _clear(ch, [mx, top + 6.0, mz], [0, -1, 0], *band)
+        ok &= check(f"microphone aperture ({nm}) is open through the wall", "OPENING",
+                    len(hits) == 0, f"x={mx:+.1f}, {len(hits)} crossing(s)")
+
+    # ... and the wall must still BE a wall between them.
+    mid = p.get("board_cx", 0.0) + p["button_pitch"] / 2
+    hits = _clear(ch, [mid, top + 6.0, bz], [0, -1, 0], *band)
+    ok &= check("top wall is still solid between the buttons", "OPENING",
+                len(hits) == 2,
+                f"x={mid:+.1f}, {len(hits)} crossing(s) (2 = solid, as it should be)")
+
+    # The dish has to actually remove material.
+    dish_on = bool(re.search(r"^\s*dish_enable\s*=\s*true", open(PARAMS).read(),
+                             re.M))
+    if dish_on:
+        # Sample WIDER than the dish, or every sample sits on the dish floor
+        # and max - min is zero however deep it is. The dish half-width is
+        # ((count-1)*pitch + aper_w)/2 + margin.
+        half = ((p["button_count"] - 1) * p["button_pitch"]
+                + p["button_aper_w"]) / 2 + p["dish_margin"]
+        xs = np.linspace(-half - 8.0, half + 8.0, 121)
+        depths = []
+        for x in xs:
+            h = _clear(ch, [p.get("board_cx", 0.0) + x, top + 6.0, bz + 4.0],
+                       [0, -1, 0], *band)
+            if h:
+                depths.append(max(h))
+        rec = (max(depths) - min(depths)) if depths else 0.0
+        ok &= check("control dish actually cuts into the face", "OPENING",
+                    rec > 0.2,
+                    f"{rec:.3f} mm of recess across the cluster, dish_depth "
+                    f"{p['dish_depth']:.2f} (it used to be 0.000 - the cutter "
+                    f"sat outside the wall entirely)")
+
+    # Side ports must be tunnels all the way across the flank, not dimples.
+    for nm, off, wc in (("USB-C", p["usbc_off_y"], p["usbc_w_centre"]),
+                        ("microSD", p["tf_off_y"], p["tf_w_centre"])):
+        y = board_bay_cy + off
+        z = pcb_back_z + wc
+        x0 = p["body_w"] / 2
+        hits = _clear(ch, [x0 + 6.0, y, z], [-1, 0, 0],
+                      p["board_pocket_w"] / 2, x0 + 1.0)
+        ok &= check(f"{nm} port is a tunnel through the flank", "OPENING",
+                    len(hits) == 0,
+                    f"{len(hits)} crossing(s) between the outer wall and the "
+                    f"board pocket (0 = open tunnel)")
+    return ok
+
+
 def check_interface(parts, p):
     print("\n-- INTERFACE --")
     ok = True
@@ -589,6 +686,7 @@ def main():
         ok &= check_mesh({**parts, **mocks})
         ok &= check_envelope(parts, p)
         ok &= check_fit(parts, mocks, p)
+        ok &= check_openings(parts, p)
         ok &= check_interface(parts, p)
         ok &= check_print(parts, p)
         ok &= check_datums(p)

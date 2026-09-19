@@ -1,12 +1,12 @@
 {
-  "passed": 64,
-  "total": 64,
+  "passed": 73,
+  "total": 73,
   "results": [
     {
       "check": "chassis: watertight",
       "class": "MESH",
       "ok": true,
-      "detail": "8992 faces"
+      "detail": "9440 faces"
     },
     {
       "check": "chassis: single body",
@@ -18,7 +18,7 @@
       "check": "chassis: positive volume",
       "class": "MESH",
       "ok": true,
-      "detail": "42383 mm^3 -> 52.6 g in PLA"
+      "detail": "41875 mm^3 -> 51.9 g in PLA"
     },
     {
       "check": "backplate: watertight",
@@ -90,7 +90,7 @@
       "check": "keyboard: positive volume",
       "class": "MESH",
       "ok": true,
-      "detail": "70814 mm^3 -> 87.8 g in PLA"
+      "detail": "71377 mm^3 -> 88.5 g in PLA"
     },
     {
       "check": "width is component-bound",
@@ -132,7 +132,7 @@
       "check": "chassis is not degenerate",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "116.60 x 139.10 x 16.60, 42383 mm^3"
+      "detail": "116.60 x 139.10 x 16.60, 41875 mm^3"
     },
     {
       "check": "backplate: extent X is as specified",
@@ -222,7 +222,7 @@
       "check": "keyboard covers the aperture at the corners too",
       "class": "FIT",
       "ok": true,
-      "detail": "narrowest lip 0.99 mm, at the corners, against a keyboard corner radius of 11.2 mm (the worst case for capture); on the flats it is 1.00; nominal corner r 10.0 gives 0.99"
+      "detail": "narrowest lip 0.99 mm, at the corners, against a keyboard corner radius of 7.0 mm (the worst case for capture); on the flats it is 1.00; nominal corner r 6.5 gives 0.99"
     },
     {
       "check": "board is captured by the front lip",
@@ -259,6 +259,60 @@
       "class": "FIT",
       "ok": true,
       "detail": "reveal 1.00 / 1.00 mm per side"
+    },
+    {
+      "check": "button aperture 1 is open through the wall",
+      "class": "OPENING",
+      "ok": true,
+      "detail": "x=-10.0, 0 surface crossing(s) in the top wall (0 = open, 2 = sealed)"
+    },
+    {
+      "check": "button aperture 2 is open through the wall",
+      "class": "OPENING",
+      "ok": true,
+      "detail": "x=+0.0, 0 surface crossing(s) in the top wall (0 = open, 2 = sealed)"
+    },
+    {
+      "check": "button aperture 3 is open through the wall",
+      "class": "OPENING",
+      "ok": true,
+      "detail": "x=+10.0, 0 surface crossing(s) in the top wall (0 = open, 2 = sealed)"
+    },
+    {
+      "check": "microphone aperture (left) is open through the wall",
+      "class": "OPENING",
+      "ok": true,
+      "detail": "x=-32.5, 0 crossing(s)"
+    },
+    {
+      "check": "microphone aperture (right) is open through the wall",
+      "class": "OPENING",
+      "ok": true,
+      "detail": "x=+32.5, 0 crossing(s)"
+    },
+    {
+      "check": "top wall is still solid between the buttons",
+      "class": "OPENING",
+      "ok": true,
+      "detail": "x=+5.0, 2 crossing(s) (2 = solid, as it should be)"
+    },
+    {
+      "check": "control dish actually cuts into the face",
+      "class": "OPENING",
+      "ok": true,
+      "detail": "0.500 mm of recess across the cluster, dish_depth 0.90 (it used to be 0.000 - the cutter sat outside the wall entirely)"
+    },
+    {
+      "check": "USB-C port is a tunnel through the flank",
+      "class": "OPENING",
+      "ok": true,
+      "detail": "0 crossing(s) between the outer wall and the board pocket (0 = open tunnel)"
+    },
+    {
+      "check": "microSD port is a tunnel through the flank",
+      "class": "OPENING",
+      "ok": true,
+      "detail": "0 crossing(s) between the outer wall and the board pocket (0 = open tunnel)"
     },
     {
       "check": "back plate fits the chassis opening",
