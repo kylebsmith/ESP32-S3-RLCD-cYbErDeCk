@@ -28,8 +28,15 @@ jobs:
           python-version: '3.11'
           cache: pip
 
+      # Deliberately a bare `pip install -r`, with no extras and nothing
+      # preinstalled beyond the runner image. If requirements.txt is incomplete
+      # the gate below dies with a ModuleNotFoundError naming a package no
+      # source file imports - which is exactly how this workflow stayed red
+      # from its first push. See the note at the top of tools/requirements.txt.
       - name: Install the Python toolchain
-        run: pip install -r tools/requirements.txt
+        run: |
+          pip install -r tools/requirements.txt
+          pip list
 
       # Cloned BEFORE the gate so the reference-facing audit and the structural
       # comparison inside build.sh actually run. Non-fatal: it is a third-party

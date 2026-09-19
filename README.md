@@ -10,6 +10,8 @@ Dieter Rams read organically: one radius system, nothing applied, a single
 perforated element — but with curvature continuity everywhere a surface turns,
 so it reads as grown rather than extruded.
 
+[![validate](https://github.com/kylebsmith/ESP32-S3-RLCD-cYbErDeCk/actions/workflows/ci.yml/badge.svg?branch=claude/cyberdeck-enclosure-design-4vzwq6)](https://github.com/kylebsmith/ESP32-S3-RLCD-cYbErDeCk/actions/workflows/ci.yml)
+
 <p align="center">
   <img src="docs/img/render-exploded.png" width="84%" alt="Exploded assembly">
 </p>

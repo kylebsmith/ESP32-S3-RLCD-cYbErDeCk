@@ -1,7 +1,38 @@
 # Metrology + validation toolchain for the cYbErDeCk datum set.
-# Pinned to major versions that were verified to reproduce the committed report.
+#
+# WHY THE TRIMESH EXTRAS ARE PINNED EXPLICITLY
+# --------------------------------------------
+# Only trimesh, numpy, scipy, shapely, ezdxf and matplotlib are imported by
+# anything in tools/. The other three are trimesh's OPTIONAL dependencies, and
+# leaving them out is what kept this repository's CI red from its first push:
+#
+#   networkx    trimesh.path traversal. Without it Path2D.polygons_full raises,
+#               and polygons_full is the basis of every measurement here - it is
+#               what turns a section into an outline with its holes identified.
+#   rtree       trimesh.path.polygons.enclosure_tree. Without it trimesh cannot
+#               work out which interior ring sits inside which, so the same
+#               polygons_full call fails a layer deeper.
+#   manifold3d  the boolean engine behind mesh.intersection(), which is how the
+#               FIT checks prove a component does not clash with a part.
+#
+# The trap is that trimesh does NOT fail at import time when these are missing.
+# It substitutes a stub object that defers the ImportError to the call site, so
+# `import trimesh` succeeds, the tool starts, and it dies partway through with a
+# ModuleNotFoundError naming a package the source never mentions. A dependency
+# audit that greps imports will not find these. Only running the suite against a
+# clean environment does - which is what CI now does on every push.
+#
+# `trimesh[easy]` would also pull them in, but that is a moving target; these are
+# named so the failure above cannot come back silently.
+
 trimesh>=4.0
 numpy>=1.24
 scipy>=1.10
 shapely>=2.0
 ezdxf>=1.1
+matplotlib>=3.7
+
+# trimesh optional dependencies - see the note above. Not optional here.
+networkx>=3.0
+rtree>=1.0
+manifold3d>=2.3
