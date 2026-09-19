@@ -32,6 +32,7 @@ import argparse
 import json
 import os
 import re
+import math
 import subprocess
 import sys
 import tempfile
@@ -67,20 +68,36 @@ def check(name, cls, ok, detail=""):
 # ---------------------------------------------------------------------------
 
 def load_params():
+    """Parse parameters.scad into a dict.
+
+    Statement-based, not line-based. An earlier line-based version joined any
+    line ending in '=' onto the next one, which silently ate every parameter
+    that happened to follow a '// ======' section rule - and then every check
+    depending on it died with a KeyError rather than reporting a real result.
+    """
     src = open(PARAMS).read()
-    p, provisional = {}, set()
-    for line in src.splitlines():
-        m = re.match(r"\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([^;]+);(.*)$", line)
+
+    # Record which statements are tagged [PROVISIONAL] before stripping comments.
+    provisional = set()
+    for stmt in re.finditer(r"([A-Za-z_]\w*)\s*=[^;]*;([^\n]*)", src):
+        if "[PROVISIONAL]" in stmt.group(2):
+            provisional.add(stmt.group(1))
+
+    code = re.sub(r"//[^\n]*", "", src)          # strip line comments
+    code = re.sub(r"/\*.*?\*/", "", code, flags=re.S)
+
+    env = {"sqrt": math.sqrt, "min": min, "max": max, "abs": abs, "pow": pow}
+    p = {}
+    for stmt in code.split(";"):
+        m = re.match(r"\s*([A-Za-z_]\w*)\s*=\s*(.+)\s*$", stmt, flags=re.S)
         if not m:
             continue
-        name, expr, comment = m.group(1), m.group(2).strip(), m.group(3)
-        if "[PROVISIONAL]" in comment:
-            provisional.add(name)
+        name, expr = m.group(1), m.group(2).strip()
         try:
-            p[name] = float(eval(expr, {"__builtins__": {}}, dict(p)))
+            p[name] = float(eval(expr, {"__builtins__": {}}, dict(env, **p)))
         except Exception:
-            pass          # strings, ternaries, function calls - not needed here
-    # values the parser cannot evaluate but that the checks need
+            pass      # strings, ternaries, module calls - not needed here
+
     p.setdefault("wall", 3.2)
     p.setdefault("spine", p["wall"])
     p["_provisional"] = provisional
@@ -211,10 +228,13 @@ def check_fit(parts, mocks, p):
                 batt_rear >= cowl_floor + 0.2,
                 f"cell reaches z={batt_rear:.2f}, cowl inner face at "
                 f"z={cowl_floor:.2f}, clearance {batt_rear-cowl_floor:.2f} mm")
-    ok &= check("cowl is deep enough for a worst-case cell", "FIT",
-                p["batt_cowl_rise"] - p["batt_cowl_wall"] >= p["cell_dia_max"] * 0.5,
-                f"{p['batt_cowl_rise']-p['batt_cowl_wall']:.1f} mm of internal "
-                f"rise for a {p['cell_dia_max']:.1f} mm cell")
+    # The criterion is the holder's protrusion past the STANDOFF plane less the
+    # plate thickness - not the cell diameter. Half the cell is inside the deck.
+    need = p["batt_protrusion"] - p["back_t"]
+    have = p["batt_cowl_rise"] - p["batt_cowl_wall"]
+    ok &= check("cowl clears the holder protrusion", "FIT", have >= need,
+                f"holder reaches {need:.2f} mm past the back plate's outer face; "
+                f"cowl gives {have:.2f} mm of internal rise")
 
     ok &= check("front face does not clip the panel", "FIT",
                 p["display_aper_w"] >= p["display_active_w"] and
@@ -307,10 +327,19 @@ def check_datums(p):
     ok = True
     prov = p["_provisional"]
     # A provisional datum may not set a hard fit without margin somewhere else.
-    ok &= check("board outline is provisional but not load-bearing", "DATUM",
-                "board_w" in prov and p["board_pocket_w"] > p["board_w"],
-                "pocket is specified from the measured reference, not from "
-                "board_w, so a wrong vendor figure cannot cause a clash")
+    ok &= check("board outline comes from the factory drawing", "DATUM",
+                "board_w" not in prov and "board_h" not in prov
+                and abs(p["board_w"] - 92.50) < 0.01
+                and abs(p["board_h"] - 69.10) < 0.01,
+                "92.50 x 69.10 read from Waveshare's dimensioned drawing; the "
+                "circulating 70.1 figure is the removable stand base, not the PCB")
+    ok &= check("display active area is not derived from a nominal diagonal", "DATUM",
+                abs(p["display_active_w"] - 84.80) < 0.01,
+                "84.80 x 63.60 from the drawing. Deriving it from '4.2 inch' "
+                "gives 85.34 x 64.01, about 0.5 mm too big in each axis.")
+    ok &= check("display aperture is offset, not centred", "DATUM",
+                abs(p["display_off_x"] + 1.60) < 0.01,
+                "the active area sits 1.60 mm toward the U=0 edge of the PCB")
     ok &= check("keyboard pocket is measured, not inferred", "DATUM",
                 "kbd_pocket_w" not in prov and "kbd_pocket_h" not in prov,
                 "pocket comes from two independent reference designs")
@@ -318,10 +347,15 @@ def check_datums(p):
                 "board_mount_pitch_x" not in prov and "board_mount_pitch_y" not in prov,
                 f"{p['board_mount_pitch_x']:.1f} x {p['board_mount_pitch_y']:.1f} mm, "
                 "two independent derivations agree")
-    ok &= check("side ports are oversized while provisional", "DATUM",
-                p["fit_free"] >= 0.5,
-                f"cut {p['fit_free']:.2f} mm oversize per side pending "
-                "confirmation of the connector assignment")
+    ok &= check("port openings clear their connectors", "DATUM",
+                p["usbc_open_w"] > p["usbc_body_w"] and p["tf_open_w"] > p["tf_body_w"] - 3.0,
+                f"USB-C shell {p['usbc_body_w']:.2f} through a {p['usbc_open_w']:.2f} mm "
+                f"opening; microSD card 11.0 through {p['tf_open_w']:.2f} mm "
+                "(the socket body stays inside the pocket, only the card passes)")
+    ok &= check("keyboard service access exists", "DATUM",
+                p["kbd_access_w"] >= 33.0 and p["kbd_access_h"] >= 8.0,
+                f"{p['kbd_access_w']:.1f} x {p['kbd_access_h']:.1f} mm window reaches the "
+                "keyboard's power switch and charging port, which share one short edge")
     return ok
 
 

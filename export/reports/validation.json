@@ -1,6 +1,6 @@
 {
-  "passed": 49,
-  "total": 49,
+  "passed": 52,
+  "total": 52,
   "results": [
     {
       "check": "chassis: watertight",
@@ -18,13 +18,13 @@
       "check": "chassis: positive volume",
       "class": "MESH",
       "ok": true,
-      "detail": "47838 mm^3 -> 59.3 g in PLA"
+      "detail": "43060 mm^3 -> 53.4 g in PLA"
     },
     {
       "check": "backplate: watertight",
       "class": "MESH",
       "ok": true,
-      "detail": "8960 faces"
+      "detail": "8792 faces"
     },
     {
       "check": "backplate: single body",
@@ -36,7 +36,7 @@
       "check": "backplate: positive volume",
       "class": "MESH",
       "ok": true,
-      "detail": "59250 mm^3 -> 73.5 g in PLA"
+      "detail": "45485 mm^3 -> 56.4 g in PLA"
     },
     {
       "check": "buttons: watertight",
@@ -60,7 +60,7 @@
       "check": "board: watertight",
       "class": "MESH",
       "ok": true,
-      "detail": "1900 faces"
+      "detail": "812 faces"
     },
     {
       "check": "board: single body",
@@ -72,7 +72,7 @@
       "check": "board: positive volume",
       "class": "MESH",
       "ok": true,
-      "detail": "99488 mm^3 -> 123.4 g in PLA"
+      "detail": "82994 mm^3 -> 102.9 g in PLA"
     },
     {
       "check": "keyboard: watertight",
@@ -102,25 +102,25 @@
       "check": "height is component-bound",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "140.20 mm, minimum possible = 140.20 mm"
+      "detail": "139.10 mm, minimum possible = 139.10 mm"
     },
     {
       "check": "thickness is component-bound",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "18.60 mm, board needs 13.0 mm of pocket"
+      "detail": "16.60 mm, board needs 11.0 mm of pocket"
     },
     {
       "check": "chassis fits the print bed",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "116.6 x 140.2 x 18.6"
+      "detail": "116.6 x 139.1 x 16.6"
     },
     {
       "check": "backplate fits the print bed",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "109.6 x 135.8 x 17.2"
+      "detail": "109.6 x 134.7 x 12.2"
     },
     {
       "check": "buttons fits the print bed",
@@ -144,7 +144,7 @@
       "check": "board is inside the assembled envelope",
       "class": "FIT",
       "ok": true,
-      "detail": "bounds [[-46.25, -3.75, -7.3], [46.25, 67.35, 16.2]] in [-58.3, -70.1, -12.0]..[58.3, 70.1, 18.6]"
+      "detail": "bounds [[-46.25, -3.25, -5.0], [46.25, 65.85, 13.95]] in [-58.3, -69.55, -9.0]..[58.3, 69.55, 16.6]"
     },
     {
       "check": "keyboard does not clash with the chassis",
@@ -162,13 +162,13 @@
       "check": "keyboard is inside the assembled envelope",
       "class": "FIT",
       "ok": true,
-      "detail": "bounds [[-54.61, -66.41, 5.2], [54.61, -7.99, 16.15]] in [-58.3, -70.1, -12.0]..[58.3, 70.1, 18.6]"
+      "detail": "bounds [[-54.61, -65.86, 3.2], [54.61, -7.44, 14.15]] in [-58.3, -69.55, -9.0]..[58.3, 69.55, 16.6]"
     },
     {
       "check": "board pocket clearance",
       "class": "FIT",
       "ok": true,
-      "detail": "1.05 / 0.55 mm per side"
+      "detail": "0.50 / 0.50 mm per side"
     },
     {
       "check": "keyboard is captured by the front lip",
@@ -180,25 +180,25 @@
       "check": "board is captured by the front lip",
       "class": "FIT",
       "ok": true,
-      "detail": "lip 3.90 mm per side"
+      "detail": "lip 3.35 mm per side"
     },
     {
       "check": "18650 fits inside the battery cowl",
       "class": "FIT",
       "ok": true,
-      "detail": "cell reaches z=-7.30, cowl inner face at z=-10.00, clearance 2.70 mm"
+      "detail": "cell reaches z=-5.00, cowl inner face at z=-7.00, clearance 2.00 mm"
     },
     {
-      "check": "cowl is deep enough for a worst-case cell",
+      "check": "cowl clears the holder protrusion",
       "class": "FIT",
       "ok": true,
-      "detail": "10.0 mm of internal rise for a 18.6 mm cell"
+      "detail": "holder reaches 5.00 mm past the back plate's outer face; cowl gives 7.00 mm of internal rise"
     },
     {
       "check": "front face does not clip the panel",
       "class": "FIT",
       "ok": true,
-      "detail": "reveal 0.73 / 0.80 mm per side"
+      "detail": "reveal 1.00 / 1.00 mm per side"
     },
     {
       "check": "back plate fits the chassis opening",
@@ -264,7 +264,7 @@
       "check": "insert boss wall is thick enough",
       "class": "PRINT",
       "ok": true,
-      "detail": "2.00 mm around the insert"
+      "detail": "1.70 mm around the insert"
     },
     {
       "check": "front apertures are drafted, not bridged",
@@ -273,10 +273,22 @@
       "detail": "1.45 mm per-side flare over 2.4 mm = 31 deg from vertical"
     },
     {
-      "check": "board outline is provisional but not load-bearing",
+      "check": "board outline comes from the factory drawing",
       "class": "DATUM",
       "ok": true,
-      "detail": "pocket is specified from the measured reference, not from board_w, so a wrong vendor figure cannot cause a clash"
+      "detail": "92.50 x 69.10 read from Waveshare's dimensioned drawing; the circulating 70.1 figure is the removable stand base, not the PCB"
+    },
+    {
+      "check": "display active area is not derived from a nominal diagonal",
+      "class": "DATUM",
+      "ok": true,
+      "detail": "84.80 x 63.60 from the drawing. Deriving it from '4.2 inch' gives 85.34 x 64.01, about 0.5 mm too big in each axis."
+    },
+    {
+      "check": "display aperture is offset, not centred",
+      "class": "DATUM",
+      "ok": true,
+      "detail": "the active area sits 1.60 mm toward the U=0 edge of the PCB"
     },
     {
       "check": "keyboard pocket is measured, not inferred",
@@ -291,10 +303,16 @@
       "detail": "85.5 x 62.1 mm, two independent derivations agree"
     },
     {
-      "check": "side ports are oversized while provisional",
+      "check": "port openings clear their connectors",
       "class": "DATUM",
       "ok": true,
-      "detail": "cut 0.50 mm oversize per side pending confirmation of the connector assignment"
+      "detail": "USB-C shell 9.58 through a 12.50 mm opening; microSD card 11.0 through 14.00 mm (the socket body stays inside the pocket, only the card passes)"
+    },
+    {
+      "check": "keyboard service access exists",
+      "class": "DATUM",
+      "ok": true,
+      "detail": "34.0 x 8.0 mm window reaches the keyboard's power switch and charging port, which share one short edge"
     }
   ]
 }

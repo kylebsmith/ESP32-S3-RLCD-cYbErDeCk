@@ -29,43 +29,54 @@ use <util.scad>
 //  whole point of the mock: it is what proves the cowl is deep enough.
 
 module mock_board() {
-    holder_wall = 1.2;      // holder shell either side of the cell
-
-    // Everything is referenced to the board's FRONT (display) face, because
-    // that is the plane the enclosure locates against, and because every
-    // measured edge-feature datum is quoted below the front face. The PCB's own
-    // height within the stack is NOT independently known - see docs/DATUMS.md
-    // O-03 - so the board is modelled as ONE SOLID ENVELOPE filling its pocket
-    // rather than as a speculative layer stack. That is deliberately
-    // conservative: a mock that fits guarantees a real board that fits.
-    front = board_depth;
+    //  Z DATUM: z = 0 is the STANDOFF SEATING PLANE (Waveshare W = -7.00), the
+    //  plane the back plate's inner face bears on. +z runs toward the display.
+    //  Every height below is Waveshare's own W coordinate shifted by +7.00.
+    //
+    //  The board is drawn as ONE SOLID ENVELOPE rather than as a layer stack.
+    //  That is deliberately conservative: a mock that fits guarantees a real
+    //  board that fits, never the other way round.
+    front    = board_stack;                              // display glass front
+    pcb_back = board_w_pcb_back - board_w_standoff_end;   // = 7.00
+    batt_end = board_w_battery_end - board_w_standoff_end;  // = -8.20
 
     union() {
-        // board envelope, front face flush with the front-face lip
-        rbox(board_w, board_h, front, 2.0);
+        // board envelope: standoff ends up to the display glass front
+        rbox(board_w, board_h, front, board_corner_r);
 
-        // 18650 cell + holder, rear-mounted, projecting through the back plate
-        // into the cowl. The cell is 18.6 mm worst case and the pocket is
-        // 13.0 mm, so this protrusion is unavoidable - modelling it honestly is
-        // what proves the cowl is deep enough.
-        translate([batt_off_x, batt_off_y,
-                   -(cell_dia_max + 2*holder_wall) / 2])
-            rbox(cell_len_max, cell_dia_max + 2*holder_wall,
-                 (cell_dia_max + 2*holder_wall) / 2 + 0.01, 2.0);
+        // 18650 holder. It reaches batt_protrusion BELOW z = 0, i.e. straight
+        // through the back plate and into the cowl. That is not a modelling
+        // error - the cell is 18.6 mm across and the deck is 16.6 mm thick, so
+        // it cannot be contained. Drawing it honestly is what proves the cowl.
+        translate([batt_off_x, batt_off_y, batt_end])
+            rbox(batt_bay_w, batt_bay_h, pcb_back - batt_end, 2.0);
 
-        // edge buttons, at the MEASURED aperture height
+        // 2 x 8 expansion header, on the PCB back face
+        translate([expansion_win_x, expansion_win_y, pcb_back - expansion_body_h])
+            rbox(expansion_cols * expansion_pitch, expansion_rows * expansion_pitch + 1.5,
+                 expansion_body_h, 0.5);
+
+        // three side-actuated tact switches, on the board's top edge
         for (i = [0 : button_count - 1])
             translate([(i - (button_count - 1)/2) * button_pitch,
-                       board_h/2 + 1.0, front - button_z_below_front])
+                       board_h/2 - 1.0, pcb_back + button_w_centre])
                 rotate([90, 0, 0])
-                    rbox(button_cap_w - 0.4, button_cap_h - 0.4, 4.0, 0.8);
+                    rbox(button_body_w, button_body_h, 3.0, 0.4);
 
-        // dual microphone ports, likewise at the measured height
+        // dual microphone ports
         for (sx = [-1, 1])
-            translate([sx * mic_offset_x, board_h/2 + 0.5,
-                       front - mic_z_below_front])
+            translate([sx * mic_offset_x, board_h/2 - 0.5, pcb_back + mic_w_centre])
                 rotate([90, 0, 0])
-                    rbox(mic_aper_w - 0.6, mic_aper_h - 0.6, 3.0, 0.5);
+                    rbox(4.0, 1.0, 2.0, 0.3);
+
+        // USB-C and microSD, on the board's right edge. Both are seated where
+        // Waveshare puts them: the USB-C shell face is flush with the PCB edge,
+        // and the microSD socket mouth stops 1.03 mm INSIDE it - so neither
+        // body protrudes, and the microSD opening only has to pass the card.
+        translate([board_w/2 - 8.0, usbc_off_y, pcb_back + usbc_w_centre])
+            rotate([0, 90, 0]) rbox(usbc_body_h, usbc_body_w, 8.0, 0.5);
+        translate([board_w/2 - 1.03 - 15.0, tf_off_y, pcb_back + tf_w_centre])
+            rotate([0, 90, 0]) rbox(tf_body_h, tf_body_w, 15.0, 0.5);
     }
 }
 

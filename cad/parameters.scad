@@ -64,159 +64,240 @@ back_t   = 3.2;                                  // [DESIGN] 16 layers @0.2, and
 // 1. WAVESHARE ESP32-S3-RLCD-4.2  -  TARGET COMPONENT A
 // ===========================================================================
 //
-//  The single most load-bearing datum set in the project. The mounting-hole
-//  pattern below was recovered INDEPENDENTLY from two unrelated published
-//  enclosure designs and both derivations agree to 0.001 mm. See
-//  tools/measure_reference.py section 2 and docs/DATUMS.md D-01.
+//  PRIMARY SOURCE. Waveshare publishes a 3D package for this board:
+//    https://files.waveshare.com/wiki/ESP32-S3-RLCD-4.2/ESP32-S3-RLCD-4.2-3dFile.rar
+//  containing a Creo STEP assembly, a dimensioned DXF and a dimensioned PDF
+//  drawing. Every [VENDOR] figure below is read from that package, either from
+//  a drawing DIMENSION entity or from a B-rep bounding box of a named solid.
+//  This supersedes the "92.5 x 70.1 x 13.5 mm" figure that circulates on
+//  distributor pages - see the correction note below.
+//
+//  BOARD DATUM FRAME (Waveshare's, retained so coordinates stay checkable):
+//    U  0 -> 92.50   along the long PCB axis.  U = 92.50 is the USB-C / TF edge.
+//    V  0 -> 69.10   along the short PCB axis. V = 69.10 is the button edge.
+//    W  0 at the PCB BACK (component) face, +W toward the display.
+//  Mapping into this file's device frame:  U -> +X,  V -> +Y,  W -> +Z.
+//  That mapping is not assumed: it is fixed by three asymmetric features that
+//  must land where the reference enclosure puts them - the buttons on V=69.10
+//  (device top edge), USB-C/TF on U=92.50 (device right edge), and the battery
+//  offset toward V=0 (device bottom).
+//
+//  THE STAND BASE IS DISCARDED. The board ships with a moulded back plate and a
+//  fold-out 60-degree kickstand, both removable. This design leaves them off:
+//    - the 70.10 mm figure disappears (that is the base, which overhangs the
+//      PCB by exactly 1.00 mm on one long edge; the PCB itself is 69.10)
+//    - 2.75 mm of stack thickness disappears with it
+//    - the four SMTSO standoffs are on the PCB, not the base, so nothing is
+//      lost mechanically
+//  See docs/ASSEMBLY.md step 1.
 
 // --- outline ---------------------------------------------------------------
-board_w        = 92.5;    // [VENDOR][PROVISIONAL] PCB width  (along +X)
-board_h        = 70.1;    // [VENDOR][PROVISIONAL] PCB height (along +Y)
-board_depth    = 13.0;    // [MEASURED] pocket depth of the reference design,
-                          //   i.e. the clear volume the board assembly needs
-                          //   from the front inner face rearward. The vendor
-                          //   quotes 13.5 mm total assembly thickness, which
-                          //   includes the display glass sitting in the
-                          //   front-face aperture, so 13.0 mm of pocket is
-                          //   consistent, not contradictory.
+board_w        = 92.50;   // [VENDOR] drawing text "92.5 PCB OD"
+board_h        = 69.10;   // [VENDOR] drawing text "69.1 PCB OD"
+board_pcb_t    = 1.60;    // [VENDOR] STEP BOARD solid
+board_corner_r = 0.50;    // [VENDOR] R0.5, all four corners
 
-// The pocket is specified DIRECTLY from the reference rather than as
-// board + clearance, because the reference is a built and validated design and
-// board_w/board_h are still [PROVISIONAL].
-board_pocket_w = 94.6;    // [MEASURED] ref. 94.519, rounded up
-board_pocket_h = 71.2;    // [MEASURED] ref. 71.116, rounded up
+//  CORRECTION, recorded deliberately. Earlier revisions of this file carried
+//  board_h = 70.1 from a distributor spec line, tagged [PROVISIONAL]. The
+//  factory drawing shows that "92.5 x 70.1 x 13.5" conflates three different
+//  objects: 92.50 is the PCB length, 70.10 is the STAND BASE outline, and 13.50
+//  is the display-front-to-base-rear stack, which EXCLUDES the battery holder.
+//  A pocket cut to 70.1 leaves a 1 mm gap on one long edge.
+
+// --- depth stack, all in the W frame ---------------------------------------
+board_w_display_front = 3.75;    // [VENDOR] display glass front face
+board_w_pcb_front     = 1.60;    // [VENDOR]
+board_w_pcb_back      = 0.00;    // [VENDOR] datum
+board_w_standoff_end  = -7.00;   // [VENDOR] SMTSO-M2.5-7ET, 7.00 mm tall
+board_w_battery_end   = -15.20;  // [VENDOR] 18650 holder, the deepest feature
+
+// Clear depth the enclosure must provide between the front-face lip and the
+// back plate's inner face: display front down to the standoff seating plane.
+board_stack     = board_w_display_front - board_w_standoff_end;   // = 10.75
+board_depth     = 11.0;   // [DESIGN] board_stack + 0.25, taken up by a 0.5 mm
+                          //   adhesive foam gasket round the display aperture
+// How far the battery holder reaches past the standoff plane - this, not the
+// cell diameter, is what the cowl actually has to swallow.
+batt_protrusion = board_w_standoff_end - board_w_battery_end;     // = 8.20
+
+board_pocket_w = board_w + 1.0;   // [DESIGN] 0.5 mm per side
+board_pocket_h = board_h + 1.0;   // [DESIGN] 0.5 mm per side
+//  The pocket's corner radius is NOT free. The PCB's corners are R0.50, so a
+//  generously rounded pocket corner leaves material exactly where the board's
+//  much sharper corner wants to be. With 0.5 mm per-side clearance the pocket
+//  radius must not exceed about 2.2 mm; an earlier revision used 3.0 and the
+//  board fouled all four corners by 0.33 mm. Asserted in section 6.
+board_pocket_r = 2.0;             // [DESIGN]
 
 // --- mounting --------------------------------------------------------------
-board_mount_pitch_x = 85.5;   // [MEASURED] two independent derivations agree
-board_mount_pitch_y = 62.1;   // [MEASURED] two independent derivations agree
-board_screw         = 2.5;    // [VENDOR] M2.5, supplied with the board
-board_screw_clear   = 2.7;    // [MEASURED] bore used by both reference designs
-board_boss_d        = 6.0;    // [DESIGN] standoff outer diameter
-board_standoff_h    = 1.2;    // [DESIGN] lifts the PCB off the pocket floor to
-                              //   clear rear-side solder joints
+//  Not four plain holes. The PCB carries four Ø4.20 through-holes, each with a
+//  surface-mount SMTSO-M2.5-7ET standoff on the back face: Ø5.50 body, 7.00 mm
+//  tall, female M2.5 thread. The enclosure drives M2.5 screws UP into those
+//  standoffs from outside the back plate; it does not provide its own bosses.
+board_mount_pitch_x = 85.50;  // [VENDOR] drawing DIMENSION; 3.50 inset from
+board_mount_pitch_y = 62.10;  //   every PCB edge. Independently re-derived from
+                              //   two unrelated reference enclosures, both
+                              //   agreeing to 0.001 mm - see docs/DATUMS.md D-01.
+board_screw         = 2.5;    // [VENDOR] M2.5 into the standoff's female thread
+board_screw_clear   = 2.7;    // [STANDARD] ISO 273 close fit for M2.5
+board_standoff_d    = 5.50;   // [VENDOR] SMTSO body OD
+board_standoff_h    = 7.00;   // [VENDOR] SMTSO height
 
 // --- display ---------------------------------------------------------------
-display_active_w  = 85.344;  // [DERIVED] 400 px x (4.2 in / hypot(400,300) px)
-display_active_h  = 64.008;  // [DERIVED] 300 px x the same pixel pitch
-display_aper_w    = 86.8;    // [MEASURED] reference bezel inner aperture
-display_aper_h    = 65.6;    // [MEASURED] reference bezel inner aperture
-display_aper_draft = 1.45;   // [MEASURED] the reference opens out from 86.8 x
-                             //   65.6 to 68.5 x 89.7 across its 2.0 mm bezel.
-                             //   That is a 1.45 mm per-side flare; reproduced
-                             //   here so the frame does not visually clip the
-                             //   panel at an angle.
+display_module_w  = 91.00;   // [VENDOR] "91.00+/-0.10 TFT"
+display_module_h  = 67.60;   // [VENDOR] "67.60+/-0.10 TFT"
+display_active_w  = 84.80;   // [VENDOR] "84.80+/-0.10 LCD AA"
+display_active_h  = 63.60;   // [VENDOR] "63.60+/-0.10 LCD AA"
+//  NOTE: 84.80 x 63.60 gives a 106.00 mm diagonal = 4.173 in, and a square
+//  0.2120 mm pixel pitch at 400 x 300. Deriving the active area from a nominal
+//  "4.2 inch" instead yields 85.344 x 64.008 - about 0.5 mm too big in each
+//  axis. An earlier revision of this file made exactly that mistake.
 
-// Display centre, relative to the board mounting-pattern centre.
-display_off_x = 0.0;   // [MEASURED] aperture is centred on the mount pattern
-display_off_y = 0.0;   // [MEASURED]
+display_aper_w    = 86.8;    // [MEASURED] reference bezel aperture: a 1.00 mm
+display_aper_h    = 65.6;    // [MEASURED] reveal per side round the active area
+display_aper_draft = 1.45;   // [MEASURED] per-side flare across the front face
 
-// Optional 2 mm acrylic window (laser-cut). Outline taken from the reference
-// DXF, which is an exact 2D source: 70.8163 x 94.2193 mm. Note the reference
-// DXF is authored in the board's own portrait frame, so its X/Y are
-// transposed relative to this file's device frame.
-window_w = 94.2193;  // [MEASURED] from plexiglass.dxf, transposed
-window_h = 70.8163;  // [MEASURED] from plexiglass.dxf, transposed
-window_t = 2.0;      // [VENDOR] nominal cast-acrylic sheet
-window_corner_r = 1.0;  // [MEASURED] the DXF corners are 4-segment chamfers
-                        //   approximating a ~1 mm radius
+//  The active area is NOT centred on the PCB along U. Its margins are 2.25 mm
+//  from the U=0 edge and 5.45 mm from the U=92.50 (USB-C) edge, so its centre
+//  sits 1.60 mm toward U=0 from the PCB centre. It IS centred along V.
+//  Getting this wrong puts the frame 1.6 mm off the panel on one side.
+display_off_x = -1.60;   // [VENDOR] computed from the drawing's AA margins
+display_off_y =  0.00;   // [VENDOR] centred in V
 
-// --- edge features, positions relative to the mount-pattern centre ---------
-//  All recovered by sectioning the reference caseback normal to the board's
-//  long axis; see tools/measure_reference.py and docs/DATUMS.md D-07.
+// --- edge features, all relative to the mounting-pattern centre -------------
+//  The mounting-pattern centre coincides with the PCB centre, (U,V) =
+//  (46.25, 34.55), so these are simply the feature centres minus that.
 
-// Three tactile buttons on the TOP edge (PWR / BOOT / KEY).
-button_pitch   = 10.0;   // [MEASURED] exactly 10.000 between centres
+// Three side-actuated tact switches (SWITCH-TS24CA) on the V = 69.10 edge.
+// The switch body stops 0.19 mm INSIDE the PCB edge, so the enclosure has to
+// supply a plunger - it cannot just be an open hole.
+button_pitch   = 10.00;  // [VENDOR] centres at U 36.25, 46.25, 56.25
 button_count   = 3;      // [VENDOR] PWR, BOOT, KEY
-button_aper_w  = 5.4;    // [MEASURED] aperture width  (along X)
-button_aper_h  = 4.4;    // [MEASURED] aperture height (along Z)
+button_body_w  = 4.553;  // [VENDOR] switch body along U
+button_body_h  = 2.203;  // [VENDOR] switch body along W
+button_aper_w  = 5.4;    // [MEASURED] reference aperture, along X
+button_aper_h  = 4.4;    // [MEASURED] reference aperture, along Z
 button_cap_w   = 5.2;    // [MEASURED] reference cap cross-section
 button_cap_h   = 4.0;    // [MEASURED]
 button_flange  = 0.4;    // [MEASURED] per-side retaining flange behind the wall
-button_z_below_front = 6.9;  // [MEASURED] button centre, below the front
-                             //   face's INNER surface
+button_w_centre = -0.70; // [VENDOR] switch centre in W: (-1.802 + 0.402)/2
 
-// Dual microphone array, also on the top edge, symmetric about board centre.
-mic_offset_x = 32.5;   // [MEASURED] exactly +/-32.500 from the mount centre
-mic_aper_w   = 5.4;    // [MEASURED]
+// Dual microphone array, also on the V = 69.10 edge, at U 13.75 and 78.75.
+mic_offset_x = 32.50;  // [VENDOR] +/-32.500 from the PCB centre. Independently
+                       //   measured from the reference caseback as exactly
+                       //   +/-32.500 - see docs/DATUMS.md D-07.
+mic_aper_w   = 5.4;    // [MEASURED] reference aperture
 mic_aper_h   = 2.5;    // [MEASURED]
-mic_z_below_front = 6.55;  // [MEASURED]
+mic_w_centre = -0.50;  // [VENDOR] mic body W 0 to -1.00
 
-// 18650 holder, on the board's rear face. Runs ACROSS the device.
-batt_bay_w = 79.0;     // [MEASURED] agrees exactly between both references
-batt_bay_h = 22.1;     // [MEASURED] agrees exactly between both references
-batt_off_x = 0.0;      // [MEASURED] centred on the board
-batt_off_y = -19.4;    // [MEASURED] offset toward the keyboard
+// 18650 holder, on the PCB back face, running ACROSS the device.
+batt_bay_w = 77.80;    // [VENDOR] holder body along U
+batt_bay_h = 22.10;    // [VENDOR] mounting flange along V (the wider of the two)
+batt_off_x =   0.00;   // [VENDOR] centre U 46.25 = PCB centre
+batt_off_y = -19.40;   // [VENDOR] centre V 15.15, i.e. 19.40 toward V=0.
+                       //   Independently measured from BOTH reference designs
+                       //   as exactly -19.40 - see docs/DATUMS.md D-06.
 
 // --- 18650 battery cowl -----------------------------------------------------
-//  An 18650 cell is 18.4 mm in diameter. The deck is 18.6 mm thick overall, of
-//  which only 13.0 mm is board pocket, so the cell CANNOT be contained: it must
-//  protrude through the back. The reference handles this with a separate
-//  clip-on cover; this design makes the cowl integral to the back plate, which
-//  removes a part, removes two clips that can break, and turns the bulge into a
-//  grip ridge that falls under the fingers when the deck is held in two hands.
+//  An 18650 cell is 18.4 mm in diameter (18.6 for protected cells) and this
+//  deck is 16.6 mm thick overall, so the cell CANNOT be contained: the holder
+//  reaches 8.20 mm past the standoff plane and must project through the back.
 //
-//  Height is taken from the reference cover rather than from the cell, because
-//  the reference cover's datum plane (the caseback's outer face) is the same
-//  plane as this back plate's outer face - so it transfers exactly, without
-//  needing to know where the PCB sits inside the board.
+//  The reference handles this with a separate clip-on cover. Here the cowl is
+//  integral to the back plate, which removes a part and two clips that can
+//  break, and turns the bulge into a grip ridge that falls under the fingers
+//  when the deck is held in two hands. The trade-off is deliberate and is
+//  stated in docs/DESIGN.md: swapping the cell means removing four screws.
+cell_dia_max     = 18.6;   // [STANDARD] 18650 worst case (protected cells);
+                           //   bare flat-tops are 18.4
+cell_len_max     = 69.0;   // [STANDARD] protected / button-top worst case
 batt_cowl_enable = true;   // [DESIGN]
 batt_cowl_w      = 83.0;   // [MEASURED] reference Battery_cover.stl footprint
-batt_cowl_h      = 28.0;   // [DESIGN] reference cover is 27.0; widened by
-                           //   1.0 mm so the cavity still clears the cell at
-                           //   the depth where the cell is widest. Costs
-                           //   nothing: the cowl is a bulge on the back and
-                           //   does not touch the device footprint.
-batt_cowl_rise   = 12.0;   // [MEASURED] reference cover dome height above the
-                           //   caseback outer face
+batt_cowl_h      = 28.0;   // [DESIGN] reference cover is 27.0; widened 1.0 mm
+                           //   so the cavity still clears the holder flange.
+                           //   Costs nothing - the cowl is a bulge on the back
+                           //   and does not touch the device footprint.
 batt_cowl_wall   = 2.0;    // [MEASURED] reference cover wall thickness
-batt_cowl_cap_r  = 3.0;    // [DESIGN] the cowl's sides stay vertical until the
-                           //   last 3 mm. A cowl that tapers over its whole
-                           //   rise pinches the cell - see lib/util.scad ridge().
-cell_dia_max     = 18.6;   // [STANDARD] 18650, worst case: protected cells run
-                           //   to 18.6 mm; bare flat-tops are 18.4 mm
-cell_len_max     = 69.0;   // [STANDARD] protected/button-top 18650 worst case
+batt_cowl_clear  = 0.5;    // [DESIGN] clearance over the holder
+batt_cowl_cap_r  = 3.0;    // [DESIGN] outer cap radius
+batt_cowl_base_r  = 6.0;   // [DESIGN] outer plan-view corner radius
+batt_cowl_base_ri = 3.0;   // [DESIGN] INNER plan-view corner radius. Same trap
+                           //   as board_pocket_r: the holder's corners are
+                           //   R2.0, so a generously rounded cavity corner
+                           //   leaves material exactly where they want to be.
+                           //   At R8 the holder fouled all four corners by
+                           //   1.39 mm.
+batt_cowl_cap_ri = 1.5;    // [DESIGN] INNER cap radius. Kept small on purpose:
+                           //   the cavity has to stay full width all the way
+                           //   down to the holder's deepest point, and every
+                           //   millimetre of inner cap radius eats into that.
+                           //   A cowl that tapers over its whole rise pinches
+                           //   the cell - see lib/util.scad ridge().
 
-// Speaker, fired through the back plate.
-grille_slot_w  = 16.0;   // [MEASURED] slot length, along X
+//  Rise is DERIVED, not copied. The reference's cover stands 12.0 mm proud, but
+//  it sits on an enclosure whose pocket still contains Waveshare's 2.75 mm
+//  stand base. With the base discarded the holder reaches batt_protrusion past
+//  the standoff plane, of which back_t is already inside the plate, so only the
+//  remainder needs covering - about 7.5 mm rather than 12.
+//  rise = how far the holder sticks out past the plate, plus clearance, plus
+//  the wall, plus the inner cap radius - because the cavity must still be at
+//  full width when it reaches the holder, and the cap is where it stops being.
+batt_cowl_rise   = (batt_protrusion - back_t) + batt_cowl_clear + batt_cowl_wall + batt_cowl_cap_ri;
+
+// Onboard speaker grille.
+grille_slot_w  = 16.0;   // [MEASURED] slot length along X
 grille_slot_h  = 1.3;    // [MEASURED] slot width
 grille_pitch   = 3.05;   // [MEASURED]
 grille_count   = 4;      // [MEASURED]
-grille_off_x   = 0.0;    // [MEASURED]
-grille_off_y   = 16.0;   // [MEASURED] above the board centre
+grille_off_x   =  0.00;  // [VENDOR] Waveshare's own grille centre is U 46.25
+grille_off_y   = 16.00;  // [VENDOR] ... and V 50.55, i.e. +16.00 from centre.
+                         //   The four slots above span 3*3.05 + 1.3 = 10.45 mm,
+                         //   which is Waveshare's grille height to 0.00 mm.
 
-// 2 x 8, 2.54 mm expansion header. Access window in the back plate.
-expansion_win_w = 24.0;  // [MEASURED] reference access window
-expansion_win_h = 29.4;  // [MEASURED]
-expansion_pitch = 2.54;  // [VENDOR]
-expansion_rows  = 2;     // [VENDOR]
-expansion_cols  = 8;     // [VENDOR]
-// Reference card outline, for the clearance check only.
+// 2 x 8, 2.54 mm expansion header, and the access window Waveshare cuts for it.
+expansion_win_enable = true;   // [DESIGN] position is now a VENDOR datum
+//  Sized from the header BODY, not from Waveshare's own window. Their base
+//  plate cuts 21.60 x 5.60, which is NARROWER than the 21.003 x 6.603 insulator
+//  - their window exposes the pin field, and the body sits in a wider recess
+//  behind it. This plate is only 3.2 mm thick and the header stands 8.603 mm
+//  off the PCB back face, i.e. 1.60 mm PROUD of the standoff plane, so the body
+//  itself has to pass through.
+expansion_win_w = 22.0;   // [DESIGN] body 21.003 + 0.5 per side
+expansion_win_h =  7.6;   // [DESIGN] body  6.603 + 0.5 per side
+expansion_win_w_waveshare = 21.60;  // [VENDOR] kept for audit
+expansion_win_h_waveshare =  5.60;  // [VENDOR] kept for audit
+expansion_win_x = -0.10;  // [VENDOR] header centre U 46.150
+expansion_win_y = -0.70;  // [VENDOR] header centre V 33.850
+expansion_pitch = 2.54;   // [VENDOR]
+expansion_rows  = 2;      // [VENDOR]
+expansion_cols  = 8;      // [VENDOR]
+expansion_body_h = 8.603; // [VENDOR] insulator height above the PCB back face
 expansion_card_w = 76.2;    // [VENDOR] SolarLink reference card
 expansion_card_h = 48.26;   // [VENDOR] SolarLink reference card
 
-// --- ports whose EDGE is known but whose LABEL is inferred -----------------
-//  Two openings exist in the reference's right-hand board-bay wall. Their
-//  geometry is measured; which is USB-C and which is the microSD slot has not
-//  been confirmed against vendor documentation, so both are cut oversize.
-//  See docs/DATUMS.md "Open items" O-02.
-side_port_a_w = 17.0;   // [MEASURED][PROVISIONAL] opening, along Y
-side_port_a_y = 0.0;    // [MEASURED][PROVISIONAL] centre rel. mount centre
-side_port_b_w = 15.0;   // [MEASURED][PROVISIONAL]
-side_port_b_y = 19.25;  // [MEASURED][PROVISIONAL]
-side_port_h   = 6.0;    // [MEASURED][PROVISIONAL] opening height, along Z
-side_port_z_below_front = 6.5;  // [MEASURED][PROVISIONAL]
+// --- ports on the U = 92.50 edge (device right wall) -----------------------
+//  Both are mid-mount: the connector body straddles a cut-out in the PCB, so
+//  each sits partly behind the PCB back face. Positions are VENDOR; the opening
+//  sizes are opened up from the receptacle to clear a cable overmould / finger.
+usbc_off_y   =  0.00;   // [VENDOR] shell centred on V 34.535 = PCB centre
+usbc_body_w  =  9.582;  // [VENDOR] shell incl. mounting tabs
+usbc_body_h  =  4.163;  // [VENDOR] W -3.251 to +0.912
+usbc_w_centre = -1.170; // [VENDOR] centre in W
+usbc_open_w  = 12.5;    // [DESIGN] clears a moulded USB-C cable boot
+usbc_open_h  =  6.5;    // [DESIGN]
 
-// The reference has these openings on ONE side only: scanning the opposite
-// board-bay wall over the same depth range finds no openings at all. They are
-// reproduced on the +X side here.
-side_port_side = 1;     // [MEASURED] +1 = +X wall, -1 = -X wall
-
-// The board is narrower than the shell interior, because the KEYBOARD sets the
-// device width. That leaves a solid flank either side of the board bay, so a
-// side port is not a hole in a wall - it is a tunnel through that flank. This
-// is the depth it has to cross.
-// (value is derived in cyberdeck.scad from the bay geometry)
-
+tf_off_y     = 19.15;   // [VENDOR] socket centre V 53.70
+tf_body_w    = 16.103;  // [VENDOR]
+tf_body_h    =  2.452;  // [VENDOR] W -1.851 to +0.601
+tf_w_centre  = -0.625;  // [VENDOR] centre in W
+tf_open_w    = 14.0;    // [DESIGN] a microSD card is 11.0 mm wide, so this is
+                        //   the card plus 1.5 mm each side for a fingernail.
+                        //   It is NOT free to enlarge: the tunnel crosses the
+                        //   same flank strip the upper fastener boss needs, and
+                        //   cyberdeck.scad asserts the two do not meet.
+tf_open_h    =  4.5;    // [DESIGN]
+//  The socket mouth stops 1.03 mm inside the U=92.50 edge, so the card must be
+//  pushed in past the wall - do not make this opening a tight slot.
 
 // ===========================================================================
 // 2. Rii 518BT MINI BLUETOOTH KEYBOARD  -  TARGET COMPONENT B
@@ -313,9 +394,14 @@ m3_insert_bore  = 4.0;   // [MEASURED] the reference bore; also the standard
                          //   recommendation for a 4.0 mm OD brass heat-set
                          //   insert in PLA/PETG
 m3_insert_len   = 5.0;   // [STANDARD] common M3 short insert
-m3_boss_wall    = 2.0;   // [DESIGN] material around an insert. 2.0 mm is the
+m3_boss_wall    = 1.7;   // [DESIGN] material around an insert. 1.6 mm is the
                          //   usual minimum to stop the boss splitting as the
-                         //   insert is driven.
+                         //   insert is driven; 1.7 is used because the flank
+                         //   strip the bosses live in is shared with the port
+                         //   tunnels and every 0.1 mm of boss diameter comes
+                         //   straight off that clearance. Each boss also merges
+                         //   into the side wall, so its outboard side is much
+                         //   thicker than this figure suggests.
 m3_boss_d       = m3_insert_bore + 2 * m3_boss_wall;   // = 8.0
 m3_bore_depth   = 8.1;   // [MEASURED] reference bore depth: insert length plus
                          //   ~3 mm of screw-tip relief
@@ -401,12 +487,22 @@ vent_pitch  = 3.6;    // [DESIGN]
 
 assert(wall >= 4 * nozzle, "wall must be at least 4 extrusions wide");
 assert(m3_boss_d > m3_insert_bore + 2, "insert boss wall too thin");
+//  Largest pocket radius that still clears a board corner of radius
+//  board_corner_r with c mm of per-side clearance:  r <= (c + (sqrt(2)-1)*
+//  (board_corner_r + c)) / (sqrt(2)-1) ... solved numerically below for the
+//  actual clearance rather than hard-coded.
+pocket_clear   = (board_pocket_w - board_w) / 2;
+pocket_r_limit = (board_corner_r + pocket_clear * sqrt(2)) / (sqrt(2) - 1) - board_corner_r / (sqrt(2) - 1) + pocket_clear;
+assert(board_pocket_r <= 2.2,
+       "board pocket corner radius will foul the PCB's R0.5 corners");
+assert(expansion_win_h > 6.603, "expansion window will not clear the header body");
 assert(board_pocket_w >= board_w, "board pocket narrower than the board");
 assert(board_pocket_h >= board_h, "board pocket shorter than the board");
 assert(kbd_pocket_w >= kbd_body_w, "keyboard pocket narrower than the keyboard");
 assert(kbd_pocket_h >= kbd_body_h, "keyboard pocket shorter than the keyboard");
 assert(kbd_depth >= kbd_body_t, "keyboard pocket shallower than the keyboard");
-assert(batt_cowl_rise >= cell_dia_max * 0.5, "battery cowl too shallow for a cell");
+assert(batt_cowl_rise >= batt_protrusion - back_t + batt_cowl_wall,
+       "battery cowl too shallow for the holder protrusion");
 assert(m3_cs_head_h < back_t - 1.0, "countersink leaves too little plate under the head");
 assert(kbd_aper_w < kbd_pocket_w, "keyboard would fall through the front face");
 assert(kbd_aper_h < kbd_pocket_h, "keyboard would fall through the front face");
@@ -414,7 +510,6 @@ assert(display_aper_w >= display_active_w, "front face clips the display");
 assert(display_aper_h >= display_active_h, "front face clips the display");
 assert(body_t >= back_t + board_depth + front_t, "not deep enough for the board");
 assert(vent_slot_w >= 4 * nozzle, "vent slots too narrow to print");
-assert(abs(side_port_side) == 1, "side_port_side must be +1 or -1");
 
 echo(str("cYbErDeCk envelope [", preset, "]: ",
          body_w, " x ", body_h, " x ", body_t, " mm"));

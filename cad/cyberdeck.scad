@@ -56,6 +56,12 @@ inner_hw = inner_w / 2;
 // Spine centreline, between the two bays.
 spine_cy = board_bay_cy - board_pocket_h/2 - spine/2;
 
+// The PCB's back (component) face. Every edge-feature position Waveshare
+// publishes is quoted in W, measured from this plane, so locating it once here
+// lets the ports, buttons and microphones be placed from vendor data directly
+// instead of from measurements of somebody else's enclosure.
+pcb_back_z = z_front_inner - board_w_display_front;
+
 // Back-plate fastener bosses. They live in the dead strips either side of the
 // board pocket: the keyboard is wider than the board, so the shell interior is
 // keyboard-width and the board bay leaves (inner_w - board_pocket_w)/2 of
@@ -80,13 +86,11 @@ boss_cx    = board_pocket_w/2 + boss_flank/2 + 0.4;   // nudged outboard so the
 //                row placed to suit the chassis can still break out of the
 //                plate - which is exactly what an earlier revision did, and
 //                what the plate_edge assert below now prevents.
-port_cut_hi = board_cy + max(side_port_a_y + side_port_a_w/2,
-                             side_port_b_y + side_port_b_w/2) + fit_free;
-port_cut_lo = board_cy + min(side_port_a_y - side_port_a_w/2,
-                             side_port_b_y - side_port_b_w/2) - fit_free;
+port_cut_hi = board_cy + max(usbc_off_y + usbc_open_w/2, tf_off_y + tf_open_w/2);
+port_cut_lo = board_cy + min(usbc_off_y - usbc_open_w/2, tf_off_y - tf_open_w/2);
 
 plate_half_h = (body_h - 2*wall - 2*fit_slide) / 2;
-plate_edge_margin = 0.9;        // [DESIGN] material left outboard of a countersink
+plate_edge_margin = 0.8;        // [DESIGN] material left outboard of a countersink
 
 boss_rows = [ board_bay_cy - board_pocket_h/2 + m3_boss_d/2,
               plate_half_h - m3_cs_head_d/2 - plate_edge_margin ];
@@ -97,10 +101,10 @@ function boss_positions() = [ for (sx = [-1, 1], cy = boss_rows) [sx * boss_cx, 
 // are the deck's rigging points - see parameters.scad section 5.
 function accessory_pattern() = boss_positions();
 
-assert(boss_rows[0] + m3_boss_d/2 <= port_cut_lo,
-       "lower fastener row fouls the side-port tunnel band");
-assert(boss_rows[1] - m3_boss_d/2 >= port_cut_hi,
-       "upper fastener row fouls the side-port tunnel band");
+assert(boss_rows[0] + m3_boss_d/2 <= port_cut_lo - 0.8,
+       "lower fastener row fouls the USB-C tunnel");
+assert(boss_rows[1] - m3_boss_d/2 >= port_cut_hi + 0.8,
+       "upper fastener row fouls the microSD tunnel: shrink tf_open_w or m3_boss_wall");
 assert(boss_rows[1] + m3_cs_head_d/2 <= plate_half_h - 0.5,
        "upper fastener countersink breaks out of the back plate edge");
 assert(abs(boss_rows[0]) + m3_cs_head_d/2 <= plate_half_h - 0.5,
@@ -150,7 +154,7 @@ module chassis() {
 
         // --- board bay ------------------------------------------------------
         translate([board_cx, board_bay_cy, z_front_inner - board_depth])
-            rbox(board_pocket_w, board_pocket_h, board_depth + 1, 3.0);
+            rbox(board_pocket_w, board_pocket_h, board_depth + 1, board_pocket_r);
 
         // --- keyboard bay ---------------------------------------------------
         // Cut clear through to the back-plate seating plane, NOT merely to
@@ -176,31 +180,32 @@ module chassis() {
         top_wall_y = body_h/2;
         for (i = [0 : button_count - 1]) {
             bx = board_cx + (i - (button_count - 1)/2) * button_pitch;
-            translate([bx, top_wall_y - wall/2,
-                       z_front_inner - button_z_below_front])
+            translate([bx, top_wall_y - wall/2, pcb_back_z + button_w_centre])
                 rotate([90, 0, 0])
                     rbox(button_aper_w, button_aper_h, wall + 2, 1.0);
         }
         for (sx = [-1, 1])
             translate([board_cx + sx * mic_offset_x, top_wall_y - wall/2,
-                       z_front_inner - mic_z_below_front])
+                       pcb_back_z + mic_w_centre])
                 rotate([90, 0, 0])
                     rbox(mic_aper_w, mic_aper_h, wall + 2, mic_aper_h/2 * 0.9);
 
-        // --- side port tunnels ------------------------------------------------
+        // --- side port tunnels: USB-C and microSD ---------------------------
         // Because the keyboard sets the device width, the board bay leaves a
-        // solid flank either side. A side port therefore has to be a TUNNEL
-        // across that flank, not a hole in the outer wall - cutting only the
-        // wall would leave the connector buried behind ~7 mm of plastic.
-        // Cut oversize: the openings' geometry is measured, but which connector
-        // is which is not yet confirmed. See docs/DATUMS.md O-02.
-        for (p = [[side_port_a_y, side_port_a_w], [side_port_b_y, side_port_b_w]])
-            translate([side_port_side * (board_pocket_w/2 - 1),
-                       board_bay_cy + p[0],
-                       z_front_inner - side_port_z_below_front])
-                rotate([0, side_port_side * 90, 0])
-                    rbox(side_port_h + 2*fit_free, p[1] + 2*fit_free,
-                         body_w/2 - board_pocket_w/2 + 2, 1.5);
+        // solid flank either side. A side port is therefore a TUNNEL across
+        // that flank, not a hole in the outer wall - cutting only the wall
+        // would leave the connector buried behind ~8 mm of plastic.
+        //
+        // Both connectors are mid-mount: the body straddles a cut-out in the
+        // PCB and sits partly behind the PCB back face, which is why each
+        // opening is positioned in W rather than centred on the board.
+        for (prt = [[usbc_off_y, usbc_open_w, usbc_open_h, usbc_w_centre],
+                    [tf_off_y,   tf_open_w,   tf_open_h,   tf_w_centre]])
+            translate([board_pocket_w/2 - 1,
+                       board_cy + prt[0],
+                       pcb_back_z + prt[3]])
+                rotate([0, 90, 0])
+                    rbox(prt[2], prt[1], body_w/2 - board_pocket_w/2 + 2, 1.2);
 
         // --- keyboard service access windows ---------------------------------
         // Reaches the keyboard's power slide switch and its charging port,
@@ -264,14 +269,15 @@ module backplate() {
                       tongue_len, tongue_t - 2*0.15], center = true);
 
             // --- 18650 cowl --------------------------------------------------
-            // Projects from the OUTER face, so it is subtracted from Z rather
-            // than added to it: the plate body occupies 0..back_t, and the cowl
-            // occupies -batt_cowl_rise..0.
+            // Projects from the OUTER face, so it is mirrored below z = 0: the
+            // plate body occupies 0..back_t and the cowl -batt_cowl_rise..0.
+            // Its rise is derived from the holder's measured protrusion past
+            // the standoff plane, not copied from the reference's cover.
             if (batt_cowl_enable)
                 translate([board_cx + batt_off_x, board_cy + batt_off_y, 0])
                     mirror([0, 0, 1])
                         ridge(batt_cowl_w, batt_cowl_h, batt_cowl_rise,
-                              batt_cowl_cap_r);
+                              batt_cowl_cap_r, batt_cowl_base_r);
 
             // --- stiffening ribs across the keyboard bay ---------------------
             // They run in the plate's weakest direction: the long span between
@@ -303,7 +309,7 @@ module backplate() {
                     ridge(batt_cowl_w - 2*batt_cowl_wall,
                           batt_cowl_h - 2*batt_cowl_wall,
                           batt_cowl_rise - batt_cowl_wall,
-                          batt_cowl_cap_r - 0.5);
+                          batt_cowl_cap_ri, batt_cowl_base_ri);
 
         // --- speaker grille --------------------------------------------------
         translate([board_cx + grille_off_x, board_cy + grille_off_y, -0.01])
@@ -311,8 +317,14 @@ module backplate() {
                      back_t + 0.02);
 
         // --- expansion-header access window ----------------------------------
-        translate([board_cx, board_cy - 6.0, -0.01])
-            rbox(expansion_win_h, expansion_win_w, back_t + 0.02, 2.0);
+        // Position and size are Waveshare's own: the window they cut in their
+        // stand base, 21.60 x 5.60 at header centre (U 46.150, V 33.850). The
+        // reference proof-of-concept enclosure cuts the identical 21.600 x
+        // 5.600 rectangle, which is an independent confirmation.
+        if (expansion_win_enable)
+            translate([board_cx + expansion_win_x, board_cy + expansion_win_y, -0.01])
+                rbox(expansion_win_w + 2*fit_slide, expansion_win_h + 2*fit_slide,
+                     back_t + 0.02, 1.5);
 
         // --- keyboard eject finger hole ---------------------------------------
         translate([kbd_eject_off_x, kbd_bay_cy + kbd_eject_off_y, -0.01])
