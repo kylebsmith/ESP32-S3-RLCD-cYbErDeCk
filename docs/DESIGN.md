@@ -390,11 +390,16 @@ This is a real constraint honestly resolved, not a feature quietly dropped.
 
 ## Performance-oriented details
 
-- **Keyboard service windows on both sides.** The 518BT's power slide switch and
-  charging port share one short edge. Without a window the deck cannot be
-  switched on. Both reference designs cut one; this cuts one on *each* side, so
-  the keyboard can be installed either way round. The window is the intersection
-  of both reference notches — the envelope two proven designs agree on.
+- **A keyboard service window, on the left flank only.** The 518BT's power
+  slide switch and charging port share one short edge. Without a window the deck
+  cannot be switched on. An earlier version cut one on *each* side "so the
+  keyboard can be installed either way round" — which it cannot, because the
+  keys only read one way up. Worse, mirroring the second window about the bay
+  centreline moved the one that matters off the features it exists to reach.
+  There is now one window, positioned from the keyboard's **top** edge against
+  measurements taken on the owner's unit: the slide switch starts 10.4 mm down
+  and the USB-C receptacle 29.6 mm, and the window spans 8.2 to 41.8 mm. See
+  [DATUMS.md C-22](DATUMS.md#corrections).
 - **Both microphone ports.** The board has a dual-mic array with echo
   cancellation, and blocking one would break beamforming. Both are at ±32.500 mm,
   a figure that came out of an independent measurement and the factory drawing

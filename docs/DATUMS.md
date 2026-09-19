@@ -480,8 +480,8 @@ change across the revision**, which is the part the geometry depends on. The
 Type-C sheet could not be sourced at full resolution; the analysis below uses
 the mini-USB sheet, whose body silhouette is the same rendering.
 
-Nothing in the model moves. The service window is 34 × 8 mm on both short
-edges and clears either connector.
+Nothing in the model moves. The 34 × 8 mm service window on the left flank
+clears either connector.
 
 **The corner is not a constant radius.** A sub-pixel trace of the rear view
 gives a circle-fit radius that depends on how much of the corner is included:
@@ -850,9 +850,12 @@ It is recorded here as measured-once rather than counted among the audited rows,
 because a datum that silently stops being checked is how the other corrections
 in this file happened.
 
-It gates nothing: this design puts a 34 × 8 mm window on **both** short edges,
-and the manufacturer's drawing confirms the charge port and power switch share
-one edge, so either window serves whichever way the keyboard is fitted.
+It gates nothing: the manufacturer's drawing confirms the charge port and the
+power switch share one short edge, and the 34 × 8 mm window on the **left**
+flank clears either connector type — the owner's Type-C unit and the mini-USB
+one on the drawing alike. (This design cut a window on both flanks until
+[C-22](#corrections); the keys only read one way up, so the second window
+reached nothing and the mirrored pair put the useful one off the features.)
 
 ### O-01 — Keyboard outline — CLOSED. Its tolerance is not.
 
@@ -868,11 +871,11 @@ The 75 g / 64.8 g mass discrepancy between the 2011 sample and current retail is
 real but does not touch the outline. The charge port **does** differ between
 revisions — the owner's unit is Type-C, the drawing on file is mini-USB — see
 [C-20](#corrections). It drives no geometry: the service window is 34 × 8 mm on
-both short edges and clears either connector.
+the left flank and clears either connector.
 
 *Mitigation*: the pocket clears an assumed ±0.30 mm in plane and +0.40 mm on
-thickness, and the service window is 34 × 8 mm on **both** short edges, so the
-port edge does not drive geometry.
+thickness, and the 34 × 8 mm service window clears either connector type, so
+the port revision does not drive geometry.
 *To close*: calipers. **Thickness first** — it is the only axis with no slack
 left against its assertion.
 
