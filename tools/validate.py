@@ -137,7 +137,7 @@ def check_envelope(parts, p):
         "chassis":   (exp_w, exp_h, exp_t),
         "backplate": (exp_w - 2*p["wall"] - 2*p["fit_slide"], None, None),
         "buttons":   (None, None, None),
-        "window":    (p["window_w"], p["window_h"], p["window_t"]),
+
     }
     for name, m in parts.items():
         for axis, want in enumerate(expect.get(name, (None, None, None))):
@@ -230,6 +230,16 @@ def check_fit(parts, mocks, p):
     ok &= check("board is captured by the front lip", "FIT",
                 p["display_aper_w"] < p["board_pocket_w"],
                 f"lip {(p['board_pocket_w']-p['display_aper_w'])/2:.2f} mm per side")
+    # Same 2-D argument as the keyboard: the active area is square-cornered and
+    # the aperture is not, so the reveal is narrowest at the corners and the
+    # flats measurement says nothing useful about whether the panel is clipped.
+    rev = _display_reveal(parts["chassis"], p)
+    ok &= check("display aperture does not clip the active area at the corners",
+                "FIT", rev >= 0.15,
+                f"narrowest reveal {rev:.3f} mm at the corners, against "
+                f"{(p['display_aper_w']-p['display_active_w'])/2:.2f} on the "
+                f"flats; the aperture corner is bounded above at about 5.0 by "
+                f"this, and is set to {p['aper_blend_display']:.1f}")
     # The 18650 is the reason the cowl exists. Prove it actually fits inside it.
     batt_rear = float(mocks["board"].bounds[0][2])
     cowl_floor = -(p["batt_cowl_rise"] - p["batt_cowl_wall"])
@@ -300,6 +310,40 @@ def _rounded(w, h, c, n, q=400):
                               np.c_[-ax - c*st, ay + c*ct],
                               np.c_[-ax - c*ct, -ay - c*st],
                               np.c_[ax + c*st,  -ay - c*ct]]))
+
+
+def _display_reveal(chassis, p):
+    """Narrowest reveal between the display aperture and the panel's ACTIVE area.
+
+    The active area of an LCD is a square-cornered rectangle. The aperture has a
+    rounded corner, so the reveal is narrowest at the corners and the flats say
+    nothing about it - the same one-dimensional blind spot that hid the keyboard
+    lip failure. Aperture outline is taken from the rendered mesh.
+    """
+    from shapely.geometry import box as _box, Point
+    z = p["body_t"] - p["front_t"] + 0.05          # inner face: smallest opening
+    bcy = p["body_h"] / 2 - p["wall"] - p["board_pocket_h"] / 2
+    ring = None
+    for g in section_polys(chassis, z):
+        for r in g.interiors:
+            q = Polygon(r); b = q.bounds
+            if (b[1] + b[3]) / 2 > 0 and 60 < (b[2] - b[0]) < 100:
+                ring = q
+    if ring is None:
+        return -99.0
+    # Aperture and active area share the same centre: display_off_x shifts the
+    # aperture to sit on the panel, so both are referenced to the active area.
+    b = ring.bounds
+    cx, cy = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2
+    aw, ah = p["display_active_w"], p["display_active_h"]
+    active = _box(cx - aw / 2, cy - ah / 2, cx + aw / 2, cy + ah / 2)
+    bnd = active.exterior
+    out = []
+    for t in np.linspace(0, 1, 1200):
+        q = bnd.interpolate(t, normalized=True)
+        d = q.distance(ring.exterior)
+        out.append(d if ring.contains(q) else -d)
+    return min(out)
 
 
 def _corner_lip(chassis, p):
@@ -521,7 +565,7 @@ def main():
     tmp = tempfile.mkdtemp(prefix="cyberdeck-validate-")
     try:
         print("\nrendering parts from source ...")
-        parts = {n: render(n, tmp) for n in ("chassis", "backplate", "buttons", "window")}
+        parts = {n: render(n, tmp) for n in ("chassis", "backplate", "buttons")}
         print("rendering component mocks ...")
         mocks = {}
         bx, by = 0.0, p["board_bay_cy"] if "board_bay_cy" in p else None

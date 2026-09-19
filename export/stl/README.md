@@ -9,9 +9,15 @@ silently detaches from the datum set and from all 71 checks.
 | `chassis.stl` | 116.60 × 139.10 × 16.60 | 42.2 cm³ | 52 g | the monocoque: front face, all four walls, the spine |
 | `backplate.stl` | 109.60 × 134.70 × 13.20 | 46.9 cm³ | 58 g | structural closure + battery cowl; the board bolts to this |
 | `buttons.stl` | 26.00 × 4.80 × 6.59 | 0.4 cm³ | 0.5 g | three caps on a sprue |
-| `window.stl` | 94.22 × 70.82 × 2.00 | 13.3 cm³ | 16.5 g | optional printed screen protector; the real one is 2 mm laser-cut acrylic, template in `cad/` |
 
-All four are watertight, single-body manifolds — asserted on every run by the
+There is no separate window or screen protector: the display sits 2.65 mm
+below the outer face behind a 2.4 mm front panel, and that recess is the
+protection. An earlier revision exported a `window.stl` copied from the
+reference's acrylic template; it was 0.72 mm larger than this design's board
+pocket in both axes and had no seat anywhere, so it could not be fitted. See
+[DATUMS.md C-09](../../docs/DATUMS.md#corrections).
+
+All three are watertight, single-body manifolds — asserted on every run by the
 `MESH` class in `tools/validate.py`.
 
 ## Printing

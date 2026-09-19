@@ -19,7 +19,6 @@ leverage while fitting a cable, a cell or a printed part.
 | `chassis` | 1 | ~51 g | front face down |
 | `backplate` | 1 | ~58 g | cowl up |
 | `buttons` | 1 | ~0.5 g | printed as one sprue |
-| `window` | 0–1 | — | optional; normally laser-cut acrylic |
 
 ### Hardware
 
@@ -34,7 +33,6 @@ leverage while fitting a cable, a cell or a printed part.
 | M3 × 8 countersunk screw, ISO 10642 | 4 | M3 × 12 if rigging a bracket |
 | M2.5 screw, supplied with the board | 4 | into the board's own standoffs |
 | Adhesive foam gasket, 0.5 mm | 1 strip | around the display aperture |
-| 2 mm acrylic window, 94.22 × 70.82 | 0–1 | optional; `stl/ata/plexiglass.dxf` outline |
 
 ## Printing
 
@@ -102,7 +100,7 @@ once you have found out.
 Run the 0.5 mm foam gasket around the inside of the display aperture. It absorbs
 the tolerance stack and isolates the panel from shock.
 
-Lay the chassis face down. If using the acrylic window, drop it in now. Lower
+Lay the chassis face down. Lower
 the board in **display first**, holding the PCB — never the panel. Check the
 three buttons and both microphone ports line up with their apertures.
 

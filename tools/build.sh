@@ -12,7 +12,7 @@ command -v xvfb-run >/dev/null 2>&1 && RUN="xvfb-run -a"
 # stderr, and renders something small and wrong. That is how a 2 x 2 x 1 mm
 # "acrylic window" once passed a 52-check audit. Treat the warning as fatal.
 fail=0
-for part in chassis backplate buttons window assembly; do
+for part in chassis backplate buttons assembly; do
     printf '  rendering %-12s ... ' "$part"
     log=$(mktemp)
     $RUN "$SCAD" -D "part=\"$part\"" -o "export/stl/$part.stl" cad/cyberdeck.scad 2>"$log" || true
@@ -27,6 +27,12 @@ for part in chassis backplate buttons window assembly; do
 done
 [ "$fail" -eq 0 ] || { echo; echo "undefined identifiers in the model - refusing to continue"; exit 1; }
 rm -f export/stl/assembly.stl
+
+# Unit tests for the geometry primitives, BEFORE the part-level gate. A broken
+# primitive produces parts that pass every dimensional check while being wrong
+# in a way only the eye catches - see the header of tools/test_primitives.py.
+echo
+$RUN python3 tools/test_primitives.py
 
 echo
 $RUN python3 tools/validate.py --json export/reports/validation.json

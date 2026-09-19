@@ -17,9 +17,9 @@
 //                 bolts to it, so board + battery + back plate lift out as one
 //                 module.
 //
-//  Plus two non-structural prints: the button sprue and (optionally) a
-//  printed screen protector. An optional 2 mm laser-cut acrylic window drops
-//  in behind the display aperture.
+//  Plus one non-structural print: the button sprue. There is no separate
+//  window or screen protector - the display sits 2.65 mm below the outer face
+//  behind a 2.4 mm front panel, which is the protection.
 //
 //  WHY THIS IS STIFFER THAN A BEZEL-ON-TRAY DESIGN
 //  -----------------------------------------------
@@ -33,7 +33,7 @@
 //
 //  USAGE
 //  -----
-//    part = "chassis" | "backplate" | "buttons" | "window" | "assembly"
+//    part = "chassis" | "backplate" | "buttons" | "assembly"
 //                     | "plate"   (everything, arranged for one print bed)
 //
 //    openscad -D 'part="chassis"' -o chassis.stl cad/cyberdeck.scad
@@ -416,9 +416,13 @@ module buttons() {
 //  OPTIONAL ACRYLIC WINDOW  (reference outline, for laser cutting)
 // ===========================================================================
 
-module window() {
-    rbox(window_w, window_h, window_t, window_corner_r);
-}
+//  The acrylic window was REMOVED as a part. See docs/DATUMS.md C-09. Its
+//  outline lives on in parameters.scad as a measurement of the reference's own
+//  DXF, which is still useful as provenance, but it is not a part of this
+//  design: this deck's board pocket is 11.0 mm (board 10.75 + a 0.25 gasket
+//  squeeze) where the reference's is 13.0 mm (board + 2.0 acrylic + 0.25), so
+//  there is nowhere for a 2 mm sheet to go. It was also 0.72 mm WIDER than
+//  this pocket in both axes, so it could not have been fitted even flat.
 
 
 // ===========================================================================
@@ -475,7 +479,6 @@ module plate() {
 if      (part == "chassis")   chassis();
 else if (part == "backplate") backplate();
 else if (part == "buttons")   buttons();
-else if (part == "window")    window();
 else if (part == "plate")     plate();
 else if (part == "exploded")  assembly(explode = 22);
 else                          assembly();

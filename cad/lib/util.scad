@@ -232,10 +232,19 @@ module rse_soft(w, h, t, cr, n, soft, roll, nz = 40, q = 16) {
 // An aperture that flares outward along +Z, so the frame does not visually clip
 // the panel when the deck is viewed off-axis. Corner language matches the shell.
 module rse_aperture(w, h, t, cr, n, flare, q = 16) {
+    //  BUG, FIXED. This used to read
+    //      rse_plate(w + 2*flare, h + 2*flare, cr + flare, n, q)
+    //  which is FIVE positional arguments into a SIX parameter module. Every
+    //  one after the second shifted: cr+flare landed in `t`, n landed in `cr`
+    //  and q landed in `n`. The top plate was extruded 10.8 mm tall with a
+    //  2.0 mm corner at exponent 16 - very nearly square - so both apertures
+    //  opened correctly but their corners collapsed from 10.2 and 4.2 to about
+    //  1.3 mm by the visible face. OpenSCAD cannot warn about this: omitting a
+    //  positional argument is legal and the defaults absorb it silently.
     hull() {
         rse_plate(w, h, 0.001, cr, n, q);
         translate([0, 0, t - 0.001])
-            rse_plate(w + 2 * flare, h + 2 * flare, cr + flare, n, q);
+            rse_plate(w + 2 * flare, h + 2 * flare, 0.001, cr + flare, n, q);
     }
 }
 

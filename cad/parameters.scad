@@ -164,11 +164,18 @@ display_aper_draft = 1.45;   // [MEASURED] per-side flare across the front face
 display_off_x = -1.60;   // [VENDOR] computed from the drawing's AA margins
 display_off_y =  0.00;   // [VENDOR] centred in V
 
-// --- optional laser-cut acrylic window ---------------------------------------
+// --- the reference's acrylic window: PROVENANCE ONLY, NOT A PART HERE --------
 //  Outline taken from the reference's own 2D acrylic template, which is an
 //  exact, unambiguous source: a single closed 26-vertex LWPOLYLINE, DXF AC1015,
 //  $INSUNITS = 4 (millimetres). It is authored in the board's portrait frame,
 //  so its X/Y are transposed relative to this file's device frame.
+//
+//  THIS DESIGN HAS NO ACRYLIC WINDOW - see docs/DATUMS.md C-09. The numbers are
+//  kept because they are a good measurement of somebody else's part and they
+//  explain part of why this deck is thinner: the reference's board pocket is
+//  13.0 mm (board 10.75 + acrylic 2.0 + 0.25 clearance) and this one is 11.0
+//  (board 10.75 + a 0.25 squeeze on a foam gasket). Dropping the acrylic is
+//  where 2 mm of that thickness went. Nothing in the model reads them.
 window_w = 94.2193;   // [MEASURED] plexiglass.dxf, transposed
 window_h = 70.8163;   // [MEASURED] plexiglass.dxf, transposed
 window_t = 2.0;       // [VENDOR] nominal cast-acrylic sheet
@@ -735,7 +742,13 @@ assert(kbd_aper_h < kbd_pocket_h, "keyboard would fall through the front face");
 assert(display_aper_w >= display_active_w, "front face clips the display");
 assert(display_aper_h >= display_active_h, "front face clips the display");
 assert(body_t >= back_t + board_depth + front_t, "not deep enough for the board");
-assert(window_w > 50 && window_h > 50, "acrylic window outline is degenerate");
+assert(window_w > 50 && window_h > 50,
+       "reference acrylic outline is degenerate");
+//  If an acrylic window is ever wanted, this is the bound it has to satisfy and
+//  it does NOT today: the sheet must fit the board pocket in plan AND the
+//  pocket must be deepened by window_t + clearance to take it.
+assert(window_w > board_pocket_w,
+       "reference acrylic is WIDER than this board pocket: provenance, not a part (DATUMS C-09)");
 assert(form_n > 2.0, "form_n <= 2 is a plain arc, not a continuous corner");
 assert(corner_blend < min(body_w, body_h) / 2, "corner blend larger than the part");
 assert(wall - edge_soft >= 5 * nozzle,

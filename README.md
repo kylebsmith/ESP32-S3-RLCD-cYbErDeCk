@@ -71,10 +71,10 @@ on — the panel sets that corner, not taste, and the bound is asserted in CI.
 
 ## Print it
 
-The four printable parts are committed in
-**[`export/stl/`](export/stl/)** — chassis, back plate, button sprue and an
-optional printed screen protector — with per-part orientations and print
-settings in [`export/stl/README.md`](export/stl/README.md).
+The three printable parts are committed in
+**[`export/stl/`](export/stl/)** — chassis, back plate and button sprue — with
+per-part orientations and print settings in
+[`export/stl/README.md`](export/stl/README.md).
 
 0.4 mm nozzle, 0.2 mm layers, no supports on any part.
 
@@ -238,7 +238,7 @@ counted among the audited rows.
 
 | | |
 |---|---|
-| **[DATUMS.md](docs/DATUMS.md)** | every dimension, its provenance, eight recorded corrections, seven open items |
+| **[DATUMS.md](docs/DATUMS.md)** | every dimension, its provenance, nine recorded corrections, seven open items |
 | **[DESIGN.md](docs/DESIGN.md)** | form language, why it is shaped this way, material and finish |
 | **[METHODOLOGY.md](docs/METHODOLOGY.md)** | how the numbers were obtained and how to reproduce them |
 | **[ASSEMBLY.md](docs/ASSEMBLY.md)** | BOM, print settings, build order |
@@ -252,6 +252,7 @@ counted among the audited rows.
 | `tools/measure_reference.py` | metrology harness — regenerates every measured datum |
 | `tools/validate.py` | 71-check design audit — the build gate |
 | `tools/audit_reference.py` | component-facing accuracy against the reference |
+| `tools/test_primitives.py` | unit tests for the geometry helpers; catches a primitive that lies |
 | `tools/structure.py` | section properties from the mesh; stiffness against the reference |
 | `tools/drawing.py` | dimensioned GA sheets, measured from the mesh |
 | `tools/render.sh` | every published view, with its camera stated in the script |
@@ -270,6 +271,7 @@ tools/
   measure_reference.py  metrology harness — regenerates every measured datum
   validate.py           71-check design audit — the build gate
   audit_reference.py    component-facing accuracy against the reference
+  test_primitives.py    unit tests for the geometry helpers
   structure.py          section properties, stiffness, weak-point location
   drawing.py            dimensioned GA sheets, measured from the mesh
   render.sh             every published view, cameras stated in the script

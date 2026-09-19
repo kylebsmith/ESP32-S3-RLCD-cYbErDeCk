@@ -319,6 +319,70 @@ a wider recess behind it. This back plate is 3.2 mm thick and the header stands
 8.603 mm off the PCB back — **1.60 mm proud of the standoff plane** — so the
 body itself must pass through. The window here is sized from the body.
 
+### C-09 — Two defects the dimensional checks could not see
+
+Both were found by eye, in a render, after being committed and published — which
+is the part worth recording, because this repository's whole argument is that
+numerical gating beats inspection.
+
+**The apertures were nearly square-cornered.** `rse_aperture()` called
+
+```
+rse_plate(w + 2*flare, h + 2*flare, cr + flare, n, q)
+```
+
+into a module declared `(w, h, t, cr, n, q = 16)`. The thickness argument was
+missing, so every argument after the second shifted left: `cr+flare` landed in
+`t`, `n` landed in `cr`, `q` landed in `n`, and `q` fell back to its default.
+The top plate of the loft was extruded **10.8 mm tall with a 2.0 mm corner at
+exponent 16** — very nearly square.
+
+The apertures still opened to the correct width and height, so the envelope
+checks, the clearance checks, the lip check and the whole reference audit
+passed. What it got wrong was the corner: **10.2 mm and 4.2 mm collapsed to
+about 1.3 mm by the visible face**, and the cutter was 13.219 mm tall for a
+2.42 mm cut.
+
+OpenSCAD cannot warn about this. Omitting a positional argument is legal.
+
+An argument-arity checker was written first and **does not catch it** — the call
+passes five positional arguments into five required parameters, so it is
+arity-legal; the error is a wrong value in the right slot. That checker was
+deleted rather than kept as reassurance. What replaced it is
+`tools/test_primitives.py`, which renders each primitive on its own and measures
+what it actually produced. Its `rse_aperture` case asserts the cut is exactly as
+tall as asked and that the corner **grows** with the flare instead of collapsing.
+
+Its first version then produced a *spurious* failure — `rbox` reading 0.116 mm
+under nominal — because the test did not inherit `$fn = 64` from
+`parameters.scad` and so measured OpenSCAD's default resolution. The test was
+wrong, not the model. It now sets the resolution explicitly and states the
+faceting budget (0.0096 mm across at `$fn = 64`) rather than hiding it in a
+loose tolerance.
+
+**The acrylic window was an orphan.** `window.stl` was exported as a part,
+listed in the BOM and shipped, and it fits nowhere. Its outline is the
+*reference's* `plexiglass.dxf`, and the reference's board pocket is 13.0 mm —
+board 10.75 + acrylic 2.0 + 0.25 clearance. This design's pocket is 11.0 mm:
+board 10.75 plus a 0.25 squeeze on a foam gasket. **Dropping the acrylic is
+where 2 mm of this deck's thinness came from**, and the part was simply never
+deleted with it. It was also 0.72 mm larger than this pocket in both axes, so it
+could not have been fitted even flat.
+
+Removed as a part. The outline stays in `parameters.scad` as provenance — it is
+a good measurement of somebody else's component — with an assert that now states
+the contradiction out loud instead of letting a future edit re-adopt it. The
+display needs no window: it sits 2.65 mm below the outer face behind a 2.4 mm
+panel.
+
+**Both checks that should have caught these were one-dimensional.** The panel
+check compared `display_aper_w >= display_active_w` — widths and heights, which
+only ever measure the flats. The active area of an LCD is square-cornered and
+the aperture is not, so the reveal is narrowest at the corners: **0.298 mm
+there against 1.00 on the flats**, with the corner bounded above at about 5.0.
+That is now measured around the whole ring from the rendered mesh, exactly as
+the keyboard lip already was after [C-08](#c-08--a-guessed-corner-radius-hid-a-defect-that-a-1-d-check-could-not-see).
+
 ### C-08 — A guessed corner radius hid a defect that a 1-D check could not see
 
 `mock_keyboard()` carried `body_r = 5.0` tagged `[PROVISIONAL]` — a guess, never
