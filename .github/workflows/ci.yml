@@ -62,9 +62,18 @@ jobs:
           python3 tools/measure_reference.py --reference /tmp/solar_term \
                   --json export/reports/measurements.json
 
-      - name: Check the datum sheet has no stale TODOs
+      # -I skips binary files, and the includes restrict this to source. Both
+      # matter: without -I this greps the PNGs in docs/img, and the compressed
+      # bytes of a render will eventually contain "XXX" by chance. That is not
+      # hypothetical - backplate-rear.png did, at byte 29806, and failed this
+      # step. A gate whose result depends on how an image happens to compress
+      # is worse than no gate, because it teaches you to ignore it.
+      - name: Check no stale TODOs in source or docs
         run: |
-          if grep -rnE '\b(TODO|FIXME|XXX)\b' cad/ docs/ tools/; then
+          if grep -rnIE '\b(TODO|FIXME|XXX)\b' \
+               --include='*.scad' --include='*.md' --include='*.py' \
+               --include='*.sh' --include='*.txt' --include='*.yml' \
+               cad/ docs/ tools/; then
             echo "::error::unresolved marker in a documented artefact"
             exit 1
           fi
