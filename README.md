@@ -254,7 +254,7 @@ counted among the audited rows.
 |---|---|
 | `tools/params.py` | the single reader for `parameters.scad`; every other tool goes through it |
 | `tools/measure_reference.py` | metrology harness — regenerates every measured datum |
-| `tools/validate.py` | 113-check design audit — the build gate |
+| `tools/validate.py` | 115-check design audit — the build gate |
 | `tools/audit_reference.py` | component-facing accuracy against the reference |
 | `tools/test_primitives.py` | unit tests for the geometry helpers; catches a primitive that lies |
 | `tools/structure.py` | section properties from the mesh; stiffness against the reference |
@@ -276,7 +276,7 @@ cad/
 tools/
   params.py             the single reader for parameters.scad
   measure_reference.py  metrology harness — regenerates every measured datum
-  validate.py           113-check design audit — the build gate
+  validate.py           115-check design audit — the build gate
   audit_reference.py    component-facing accuracy against the reference
   test_primitives.py    unit tests for the geometry helpers
   structure.py          section properties, stiffness, weak-point location

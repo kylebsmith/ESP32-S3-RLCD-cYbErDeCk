@@ -1,12 +1,12 @@
 {
-  "passed": 113,
-  "total": 113,
+  "passed": 115,
+  "total": 115,
   "results": [
     {
       "check": "chassis: watertight",
       "class": "MESH",
       "ok": true,
-      "detail": "18290 faces"
+      "detail": "15154 faces"
     },
     {
       "check": "chassis: single body",
@@ -18,7 +18,7 @@
       "check": "chassis: positive volume",
       "class": "MESH",
       "ok": true,
-      "detail": "44063 mm^3 -> 54.6 g in PLA"
+      "detail": "44070 mm^3 -> 54.6 g in PLA"
     },
     {
       "check": "backplate: watertight",
@@ -60,7 +60,7 @@
       "check": "cover: watertight",
       "class": "MESH",
       "ok": true,
-      "detail": "10424 faces"
+      "detail": "7288 faces"
     },
     {
       "check": "cover: single body",
@@ -72,7 +72,7 @@
       "check": "cover: positive volume",
       "class": "MESH",
       "ok": true,
-      "detail": "49224 mm^3 -> 61.0 g in PLA"
+      "detail": "49231 mm^3 -> 61.0 g in PLA"
     },
     {
       "check": "board: watertight",
@@ -150,7 +150,7 @@
       "check": "chassis is not degenerate",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "116.25 x 140.25 x 16.85, 44063 mm^3"
+      "detail": "116.25 x 140.25 x 16.85, 44070 mm^3"
     },
     {
       "check": "backplate: extent X is as specified",
@@ -174,7 +174,7 @@
       "check": "cover is not degenerate",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "115.95 x 139.95 x 4.45, 49224 mm^3"
+      "detail": "115.95 x 139.95 x 4.45, 49231 mm^3"
     },
     {
       "check": "chassis fits the print bed",
@@ -535,6 +535,18 @@
       "class": "MAGNET",
       "ok": true,
       "detail": "4 pairs make 15.4 N of pull across 0.8 mm but only 3.2 N of shear; the two 1.5 mm platforms carry it instead"
+    },
+    {
+      "check": "crush ribs are at least one extrusion wide",
+      "class": "MAGNET",
+      "ok": true,
+      "detail": "narrowest rib 1.467 mm = 1.83 extrusions at a 0.8 nozzle, across 48 sections; below 1.00 the slicer sets the width, not this design"
+    },
+    {
+      "check": "gaps between crush ribs survive the slicer",
+      "class": "MAGNET",
+      "ok": true,
+      "detail": "narrowest gap 1.342 mm = 1.68 extrusions; below 1.00 the ribs bridge into a solid ring and there is no crush relief left"
     },
     {
       "check": "back plate fits the chassis opening",
