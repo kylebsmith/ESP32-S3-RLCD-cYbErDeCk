@@ -24,3 +24,8 @@ export/stl/*.3mf
 # swept into a commit by a blanket "git add -A"; it is not part of the design.
 _echo_tmp.scad
 _*.scad
+
+# Vendor documentation mirrored for local reference only.
+# docs/PROVENANCE.md: no Waveshare file is redistributed by this repo.
+# Rebuild with: tools/fetch_reference.sh
+reference/
