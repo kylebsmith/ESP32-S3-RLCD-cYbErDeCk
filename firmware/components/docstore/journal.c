@@ -73,8 +73,98 @@ typedef struct {
 } rec_hdr_v1_t;
 
 static const esp_partition_t *s_part;
-static size_t   s_cursor;
 static uint32_t s_seq;
+
+/* WHICH SECTORS HOLD LIVE DATA.
+ *
+ * The journal used to keep a write cursor and wrap it to zero when it ran off
+ * the end. That is live data loss: sector 0 holds whichever document was
+ * written first, and on this device that is the guide - the owner's
+ * live-coding preset file. Wrapping erased it to make room for a save of
+ * something else, silently, at runtime, with no error anywhere.
+ *
+ * So allocate instead of wrapping. One bit per 4 KB sector says whether a
+ * LIVE record occupies it; a save finds a free run, and the space belonging
+ * to the previous version of that same document is released only after the
+ * new one is safely down. Nothing that is still reachable is ever erased. */
+#define MAX_SECTORS 256
+static uint8_t s_used[MAX_SECTORS / 8];
+static size_t  s_nsectors;
+
+/* Where each named document's live record sits, so its old sectors can be
+ * released once a newer one is written. */
+typedef struct {
+    char   name[DOC_NAME_MAX];
+    size_t off;
+    size_t sectors;
+    bool   in_use;
+} live_t;
+static live_t s_live[DOC_MAX_BUFFERS];
+
+static inline bool sec_used(size_t s)
+{
+    return (s_used[s >> 3] & (1u << (s & 7))) != 0;
+}
+
+static inline void sec_mark(size_t s, bool used)
+{
+    if (used) {
+        s_used[s >> 3] |= (uint8_t)(1u << (s & 7));
+    } else {
+        s_used[s >> 3] = (uint8_t)(s_used[s >> 3] & ~(1u << (s & 7)));
+    }
+}
+
+static void live_claim(const char *name, size_t off, size_t sectors)
+{
+    live_t *slot = NULL;
+    for (int i = 0; i < DOC_MAX_BUFFERS; i++) {
+        if (s_live[i].in_use &&
+            strncmp(s_live[i].name, name, DOC_NAME_MAX) == 0) {
+            slot = &s_live[i];
+            break;
+        }
+    }
+    if (slot == NULL) {
+        for (int i = 0; i < DOC_MAX_BUFFERS; i++) {
+            if (!s_live[i].in_use) { slot = &s_live[i]; break; }
+        }
+    }
+    if (slot == NULL) {
+        return;
+    }
+    /* Release the previous version's sectors, now that the new one is down. */
+    if (slot->in_use) {
+        for (size_t s = 0; s < slot->sectors; s++) {
+            sec_mark(slot->off / SECTOR + s, false);
+        }
+    }
+    slot->in_use = true;
+    snprintf(slot->name, DOC_NAME_MAX, "%s", name);
+    slot->off = off;
+    slot->sectors = sectors;
+    for (size_t s = 0; s < sectors; s++) {
+        sec_mark(off / SECTOR + s, true);
+    }
+}
+
+/* Find a run of free sectors. Returns (size_t)-1 when the journal genuinely
+ * has no room, which is a real condition and must be reported rather than
+ * papered over by erasing something. */
+static size_t find_free_run(size_t sectors)
+{
+    size_t run = 0;
+    for (size_t s = 0; s < s_nsectors; s++) {
+        if (sec_used(s)) {
+            run = 0;
+            continue;
+        }
+        if (++run == sectors) {
+            return s + 1 - sectors;
+        }
+    }
+    return (size_t)-1;
+}
 
 esp_err_t gapbuf_init(void);
 void      gapbuf_load(const char *data, size_t len);
@@ -91,8 +181,16 @@ static inline size_t rec_total(uint32_t len, size_t hdr)
     return ((raw + SECTOR - 1u) / SECTOR) * SECTOR;
 }
 
-uint32_t doc_save_seq(void)     { return s_seq; }
-size_t   doc_journal_used(void) { return s_cursor; }
+uint32_t doc_save_seq(void) { return s_seq; }
+
+size_t doc_journal_used(void)
+{
+    size_t n = 0;
+    for (size_t s = 0; s < s_nsectors; s++) {
+        if (sec_used(s)) { n++; }
+    }
+    return n * SECTOR;
+}
 
 /* Read one record's header, whichever version it is. Returns false when the
  * slot holds nothing usable. */
@@ -160,8 +258,14 @@ static void journal_scan(char *scratch, size_t scratch_len)
     struct { char name[DOC_NAME_MAX]; uint32_t seq; size_t off; size_t len;
              uint8_t kind; } best[DOC_MAX_BUFFERS];
     int nbest = 0;
-    size_t next_free = 0;
     size_t off = 0;
+
+    memset(s_used, 0, sizeof s_used);
+    memset(s_live, 0, sizeof s_live);
+    s_nsectors = s_part->size / SECTOR;
+    if (s_nsectors > MAX_SECTORS) {
+        s_nsectors = MAX_SECTORS;
+    }
 
     while (off + sizeof(rec_hdr_t) <= s_part->size) {
         rec_hdr_t h;
@@ -203,15 +307,20 @@ static void journal_scan(char *scratch, size_t scratch_len)
         }
         if (h.seq >= s_seq) {
             s_seq = h.seq;
-            /* Follow the NEWEST record, not the last by offset: a wrapped
-             * journal has older records at higher offsets, and writing after
-             * one of those would erase the sector holding the newest. */
-            next_free = off + rec_total(h.len, hsz);
         }
         off += rec_total(h.len, hsz);
     }
 
-    s_cursor = next_free < s_part->size ? next_free : 0;
+    /* Only the SURVIVING record of each name holds its sectors. Everything
+     * else in the partition is stale and is free to be reused. */
+    for (int i = 0; i < nbest; i++) {
+        rec_hdr_t h;
+        size_t poff, hsz;
+        if (read_hdr(best[i].off, &h, &poff, &hsz)) {
+            live_claim(best[i].name, best[i].off,
+                       rec_total(h.len, hsz) / SECTOR);
+        }
+    }
 
     /* Slot 0 is the scratch buffer and already exists; give it its record if
      * the journal has one, and claim a slot for every named document. */
@@ -229,8 +338,9 @@ static void journal_scan(char *scratch, size_t scratch_len)
                      (unsigned)best[i].len, (unsigned)best[i].seq);
         }
     }
-    ESP_LOGI(TAG, "%d document(s) in the journal, cursor at %u",
-             nbest, (unsigned)s_cursor);
+    ESP_LOGI(TAG, "%d document(s), %u of %u sectors live",
+             nbest, (unsigned)(doc_journal_used() / SECTOR),
+             (unsigned)s_nsectors);
 }
 
 esp_err_t doc_init(void)
@@ -274,9 +384,18 @@ esp_err_t doc_save(void)
         ESP_LOGE(TAG, "document larger than the journal partition");
         return ESP_ERR_INVALID_SIZE;
     }
-    if (s_cursor + need > s_part->size) {
-        s_cursor = 0;                   /* wrap; the seq keeps the ordering */
+
+    const size_t want = need / SECTOR;
+    const size_t start = find_free_run(want);
+    if (start == (size_t)-1) {
+        /* Genuinely full of LIVE documents. Report it; do not make room by
+         * erasing something the owner can still reach. */
+        ESP_LOGE(TAG, "journal full: %u of %u sectors hold live documents",
+                 (unsigned)(doc_journal_used() / SECTOR),
+                 (unsigned)s_nsectors);
+        return ESP_ERR_NO_MEM;
     }
+    const size_t s_cursor = start * SECTOR;
 
     char *tmp = malloc(len > 0 ? len : 1);
     if (tmp == NULL) {
@@ -311,7 +430,7 @@ esp_err_t doc_save(void)
     }
 
     s_seq = h.seq;
-    s_cursor += need;
+    live_claim(h.name, s_cursor, want);
     gapbuf_mark_clean();
     return ESP_OK;
 }
@@ -327,7 +446,8 @@ esp_err_t journal_erase_all(void)
     }
     const esp_err_t err = esp_partition_erase_range(s_part, 0, s_part->size);
     if (err == ESP_OK) {
-        s_cursor = 0;
+        memset(s_used, 0, sizeof s_used);
+        memset(s_live, 0, sizeof s_live);
         s_seq = 0;
     }
     return err;
@@ -340,7 +460,7 @@ esp_err_t journal_erase_all(void)
  * wrapped, and the test then reports a CRC failure that says nothing. */
 esp_err_t journal_corrupt_newest(void)
 {
-    if (s_part == NULL || s_cursor < SECTOR) {
+    if (s_part == NULL) {
         return ESP_ERR_INVALID_STATE;
     }
     size_t off = 0, last = 0, last_payload = 0;

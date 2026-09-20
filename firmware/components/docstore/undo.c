@@ -33,6 +33,7 @@ enum { OP_NONE = 0, OP_INSERT, OP_DELETE };
 typedef struct {
     uint8_t  type;
     uint8_t  closed;            /* no more characters join this run */
+    uint8_t  buf;               /* which buffer this edit belongs to */
     uint32_t pos;               /* document offset the run starts at */
     uint16_t len;
     char     text[UNDO_RUN_MAX];
@@ -71,9 +72,17 @@ static void drop_redo(void)
     s_count = s_cursor;
 }
 
+/* The log is global but an edit belongs to ONE buffer. Without this, undo in
+ * a document could apply an operation recorded in another one - the offsets
+ * are meaningless there, so it corrupted text at whatever position happened
+ * to match. Silent, and in the redo direction it wrote into the wrong file. */
 static undo_op_t *last_op(void)
 {
-    return s_cursor > 0 ? &s_ops[s_cursor - 1] : NULL;
+    if (s_cursor == 0) {
+        return NULL;
+    }
+    undo_op_t *op = &s_ops[s_cursor - 1];
+    return op->buf == (uint8_t)doc_buf_current() ? op : NULL;
 }
 
 static undo_op_t *push(void)
@@ -85,6 +94,7 @@ static undo_op_t *push(void)
     }
     undo_op_t *op = &s_ops[s_cursor++];
     memset(op, 0, sizeof *op);
+    op->buf = (uint8_t)doc_buf_current();
     s_count = s_cursor;
     return op;
 }
@@ -190,6 +200,10 @@ bool doc_undo(void)
     if (s_ops == NULL || s_cursor == 0) {
         return false;
     }
+    if (s_ops[s_cursor - 1].buf != (uint8_t)doc_buf_current()) {
+        ESP_LOGW(TAG, "nothing to undo in this buffer");
+        return false;
+    }
     const undo_op_t *op = &s_ops[--s_cursor];
     apply_inverse(op);
     ESP_LOGI(TAG, "undo: %s %u char(s) at %u -> doc %u, depth %d",
@@ -202,6 +216,10 @@ bool doc_redo(void)
 {
     ensure();
     if (s_ops == NULL || s_cursor >= s_count) {
+        return false;
+    }
+    if (s_ops[s_cursor].buf != (uint8_t)doc_buf_current()) {
+        ESP_LOGW(TAG, "nothing to redo in this buffer");
         return false;
     }
     const undo_op_t *op = &s_ops[s_cursor++];

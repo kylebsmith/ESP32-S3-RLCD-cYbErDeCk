@@ -63,19 +63,31 @@ static esp_err_t ensure_storage(buf_t *b)
     /* Fetch the text now that somebody actually wants it. */
     if (b->have_rec) {
         char *tmp = malloc(DOC_CAPACITY);
-        if (tmp != NULL) {
-            size_t n = 0;
-            if (journal_load_into(b->rec_off, tmp, DOC_CAPACITY, &n) == ESP_OK) {
-                if (n > b->cap) {
-                    n = b->cap;
-                }
-                memcpy(b->buf, tmp, n);
-                b->gs = n;
-                ESP_LOGI(TAG, "loaded '%s' (%u bytes) on demand",
-                         b->name[0] ? b->name : "(scratch)", (unsigned)n);
-            }
-            free(tmp);
+        if (tmp == NULL) {
+            return ESP_ERR_NO_MEM;       /* try again later, keep have_rec */
         }
+        size_t n = 0;
+        const esp_err_t lerr =
+            journal_load_into(b->rec_off, tmp, DOC_CAPACITY, &n);
+        if (lerr != ESP_OK) {
+            /* Do NOT clear have_rec and do NOT present an empty buffer. A
+             * document whose record cannot be read must say so; returning a
+             * blank one is how writing silently disappears. */
+            free(tmp);
+            free(b->buf);
+            b->buf = NULL;
+            ESP_LOGE(TAG, "cannot load '%s': %s - leaving it unopened",
+                     b->name, esp_err_to_name(lerr));
+            return lerr;
+        }
+        if (n > b->cap) {
+            n = b->cap;
+        }
+        memcpy(b->buf, tmp, n);
+        b->gs = n;
+        ESP_LOGI(TAG, "loaded '%s' (%u bytes) on demand",
+                 b->name[0] ? b->name : "(scratch)", (unsigned)n);
+        free(tmp);
         b->have_rec = false;
     }
     return ESP_OK;

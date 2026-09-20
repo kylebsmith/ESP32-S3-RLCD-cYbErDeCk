@@ -91,7 +91,7 @@ available to get wrong. Reach it over HTTP instead (see *Voice*).
 |---|---|---|
 | SolarOS `src/drivers/rlcd_st7305.c` | the ST7305 driver — the only one that solves windowed update | Apache-2.0 |
 | U8g2 | glyph rendering and the font pipeline | BSD-2-Clause |
-| Orca-c `sim.c` `field.c` `gbuffer.c` `base.h` | the live-coding VM, 1,381 lines | MIT |
+| Orca-c `sim.c` `field.c` `gbuffer.c` `base.h` | the live-coding VM, **1,138 lines** measured on a fresh clone (1,280 with headers); the 1,381 here was wrong | MIT |
 | `espressif/elf_loader` | loadable native apps | Apache-2.0 |
 | `midilab/uClock` | the musical clock | MIT |
 

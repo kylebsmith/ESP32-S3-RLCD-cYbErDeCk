@@ -13,6 +13,7 @@
 #include "driver/gpio.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "esp_task_wdt.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -287,7 +288,34 @@ void app_main(void)
     bool    force_save = false;
     size_t  saved_len = doc_len();
 
+    /* Arm the watchdog at the editor loop. It was configured and subscribed to
+     * nothing, so a hang anywhere in the main pass was invisible - the same
+     * failure shape as the BLE link that stayed "connected" while silent, and
+     * the display path that rendered without ever pushing.
+     *
+     * Subscribing can fail if the timer was never initialised, and calling
+     * reset from an unsubscribed task prints "task not found" on EVERY pass -
+     * which floods the console and is itself a way to lose a real message. */
+    bool wdt = esp_task_wdt_add(NULL) == ESP_OK;
+    if (!wdt) {
+        const esp_task_wdt_config_t wcfg = {
+            .timeout_ms = 10000,
+            .idle_core_mask = 0,
+            .trigger_panic = true,
+        };
+        if (esp_task_wdt_init(&wcfg) == ESP_OK) {
+            wdt = esp_task_wdt_add(NULL) == ESP_OK;
+        }
+    }
+    ESP_LOGI(TAG, "task watchdog %s",
+             wdt ? "armed on the editor loop"
+                 : "UNAVAILABLE - hangs will be silent");
+
     while (1) {
+        if (wdt) {
+            esp_task_wdt_reset();
+        }
+
         kbd_event_t ev;
         bool acted = false;
 
@@ -343,7 +371,18 @@ void app_main(void)
 
         if (need_draw) {
             editor_draw();
+            const uint32_t before = editor_cells_drawn();
             editor_present(&bytes);
+            /* An exact invariant, not a threshold: if cells were rendered into
+             * the framebuffer and nothing went out on the wire, the panel is
+             * showing something other than the document. That is precisely
+             * the bug that shipped for a day, and it has no false positive -
+             * tg_put returns early when nothing changed, so a render count
+             * above zero means the framebuffer really did change. */
+            if (editor_cells_drawn() > before && bytes == 0) {
+                ESP_LOGE(TAG, "FAULT: rendered %u cells, pushed 0 bytes",
+                         (unsigned)(editor_cells_drawn() - before));
+            }
             need_draw = false;
         }
 
@@ -399,7 +438,12 @@ void app_main(void)
                              (unsigned)doc_len(), (unsigned)doc_save_seq(), dt);
                     doc_mirror_sd();
                 } else {
+                    /* A failed save must be visible on the panel, not only in
+                     * a log nobody is reading. */
                     ESP_LOGE(TAG, "save failed: %s", esp_err_to_name(se));
+                    editor_message(se == ESP_ERR_NO_MEM
+                                   ? "JOURNAL FULL - free a document"
+                                   : "SAVE FAILED");
                 }
                 force_save = false;
                 last_edit_ms = now_ms();

@@ -34,6 +34,9 @@
 #include "esp_timer.h"
 #include "textgrid.h"
 
+int64_t editor_now_ms(void);
+static void line_at(size_t from, char *out, size_t max);
+
 #define MARGIN_X     20
 #define MARGIN_TOP   12
 #define CELL_W       12
@@ -97,6 +100,7 @@ static int     s_prev_buf = -1;
 static int64_t s_msg_until;
 static bool s_chrome_dirty = true;
 static uint32_t s_pushes, s_push_bytes, s_render_us, s_cells;
+static uint32_t s_cells_total;
 
 void editor_vitals(uint32_t *pushes, uint32_t *bytes,
                    uint32_t *render_us, uint32_t *cells)
@@ -109,6 +113,14 @@ void editor_vitals(uint32_t *pushes, uint32_t *bytes,
     s_push_bytes = 0;
     s_render_us = 0;
     s_cells = 0;
+}
+
+uint32_t editor_cells_drawn(void) { return s_cells_total; }
+
+void editor_message(const char *m)
+{
+    snprintf(s_msg, sizeof s_msg, "%s", m);
+    s_msg_until = editor_now_ms() + 6000;
 }
 
 void editor_invalidate(void)
@@ -222,7 +234,6 @@ static void wrap(int cols)
 
 /* The status bar is chrome, not part of the document grid, so it is drawn at
  * its own pixel row and only when its text actually changes. */
-int64_t editor_now_ms(void);
 static void line_at(size_t from, char *out, size_t max);
 
 /* Messages must fit. tg_draw_text_px used to clip silently at the screen
@@ -337,7 +348,7 @@ void editor_draw(void)
      * transform; that is the cost that competes with live coding, not the
      * SPI. */
     const int64_t t0 = esp_timer_get_time();
-    s_cells += (uint32_t)tg_render();
+    { const uint32_t n = (uint32_t)tg_render(); s_cells += n; s_cells_total += n; }
     s_render_us += (uint32_t)(esp_timer_get_time() - t0);
 }
 

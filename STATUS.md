@@ -334,13 +334,21 @@ the numbers keep flowing rather than stopping just when something goes wrong.
   not bandwidth. Nowhere near mattering, but that is where to look if it does.
 - **`UP`/`DOWN` move by a whole line width rather than preserving the column.**
   An honest placeholder, not a considered design.
-- **Autosave burns a flash sector per save, and saves are frequent.** Observed
-  in the log: typing slowly produces one save per character (`saved 210`,
-  `211`, `212`, … one sector each). 128 slots wrap safely and each save costs
-  only ~3-5 ms, so nothing is at risk — but a slow typist cycles the whole
-  partition every 128 characters. The fix is a minimum-change or
-  minimum-interval threshold on top of the existing idle timer. Worth doing
-  before this is a daily driver, not urgent.
+- **CORRECTED: "128 slots wrap safely … nothing is at risk" was false, and it
+  was the most dangerous sentence in this file.** The journal kept a write
+  cursor and wrapped it to zero when it ran off the end. Sector 0 holds
+  whichever document was written first — on this device, the `guide`, which is
+  the live-coding preset file. Wrapping erased it to make room for a save of
+  something else: silently, at runtime, with no error anywhere. A repository
+  that publishes a false reassurance about its own data path is worse off than
+  one that says nothing.
+
+  Fixed: the journal now **allocates**. One bit per 4 KB sector records
+  whether a live record occupies it, a save finds a free run, and the previous
+  version's sectors are released only after the new one is safely down.
+  Nothing still reachable is ever erased, and a genuinely full journal reports
+  `JOURNAL FULL` on the panel instead of making room by destroying something.
+  Observed after the fix: `5 document(s), 5 of 128 sectors live`.
 
 ---
 

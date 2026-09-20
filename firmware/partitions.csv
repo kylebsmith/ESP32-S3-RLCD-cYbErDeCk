@@ -2,7 +2,9 @@
 nvs,        data, nvs,      0x9000,   0x6000,
 phy_init,   data, phy,      0xf000,   0x1000,
 factory,    app,  factory,  0x10000,  0x300000,
-# The document journal. An append-only log of whole-buffer snapshots, each
-# CRC-checked, so a torn write costs the newest snapshot and never the file.
-# 512 KB at a typical 2 KB snapshot is ~250 saves between compactions.
+# The document journal. Sector-allocated records of whole-buffer snapshots,
+# each CRC-checked, so a torn write costs the newest snapshot and never the
+# file. 512 KB is 128 sectors; a record occupies ceil((48 + len) / 4096) of
+# them, so a short document is one sector and the limit is on LIVE documents,
+# not on the number of saves.
 notes,      data, 0x40,     0x310000, 0x80000,

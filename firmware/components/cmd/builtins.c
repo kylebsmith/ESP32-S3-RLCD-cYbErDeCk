@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include "docstore.h"
+#include "textgrid.h"
 
 static cmd_status_t c_help(cmd_ctx_t *ctx)
 {
@@ -172,7 +173,11 @@ static cmd_status_t c_density(cmd_ctx_t *ctx)
         cmd_out(ctx, "density: layout refused");
         return CMD_ERROR;
     }
-    snprintf(ctx->msg, sizeof ctx->msg, dense ? "dense 60x20" : "chunky 30x11");
+    /* Derived, not hardcoded: the string said 60x20 while the layout computed
+     * 60x24. A status message that disagrees with the machine is a small lie
+     * that costs someone an afternoon later. */
+    snprintf(ctx->msg, sizeof ctx->msg, "%s %dx%d", dense ? "dense" : "chunky",
+             tg_cols(), tg_rows());
     return CMD_DONE;
 }
 
