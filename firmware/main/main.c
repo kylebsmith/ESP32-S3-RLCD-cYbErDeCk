@@ -216,6 +216,7 @@ void app_main(void)
     bool    long_fired = false;
     int64_t last_edit_ms = now_ms();
     int64_t last_blink_ms = now_ms();
+    int64_t last_beat_ms  = now_ms();
     bool    blink_on = true;
     bool    need_draw = false;
     bool    force_save = false;
@@ -294,6 +295,22 @@ void app_main(void)
             blink_on = true;
             editor_cursor_solid();
             editor_present(&bytes);
+        }
+
+        /* Liveness. The main task printing this is proof the loop is
+         * turning; a silent log used to be ambiguous between idle and hung,
+         * which cost real debugging time. */
+        if (now_ms() - last_beat_ms >= 10000) {
+            last_beat_ms = now_ms();
+            uint32_t pushes = 0, pbytes = 0;
+            editor_vitals(&pushes, &pbytes);
+            ESP_LOGI(TAG, "alive: doc %u%s, undo %d, kbd %s, %u push/%u B, "
+                          "heap %u",
+                     (unsigned)doc_len(), doc_dirty() ? "*" : "",
+                     doc_undo_depth(),
+                     kbd_connected() ? "up" : kbd_state_name(),
+                     (unsigned)pushes, (unsigned)pbytes,
+                     (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
         }
 
         /* Autosave: on newline, or once typing has paused. Never per

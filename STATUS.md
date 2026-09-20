@@ -296,6 +296,31 @@ several discovery failures left the deck connected-but-dead for ever; and the
 passkey screen was drawn from the NimBLE task straight into the main task's
 framebuffer.
 
+## A lesson about instrumentation
+
+The deck was reported as frozen and was not. It was idle.
+
+Two decisions, each defensible alone, went quiet at the same moment. The
+cursor stops blinking fifteen seconds after the last keystroke, on purpose, so
+the panel can drop to low power - which makes a working screen look dead. And
+every log line was capped or conditional: the push probe stopped after exactly
+24 lines, the advertisement log capped at sixteen, and the scan heartbeat only
+printed while NOT connected. Connected and idle produced total silence.
+
+So the screen looked frozen and the log looked frozen, and neither was.
+
+The fix is a heartbeat from the MAIN loop, every ten seconds, carrying the
+things that distinguish idle from hung - document length, undo depth, keyboard
+state, pushes and bytes since the last beat, and free heap:
+
+```
+alive: doc 64*, undo 10, kbd up, 26 push/15696 B, heap 199571
+```
+
+The main task printing it is itself the proof that the loop is turning. Quiet
+now means idle and cannot mean broken. Counters replaced the capped probe, so
+the numbers keep flowing rather than stopping just when something goes wrong.
+
 ## Things I suspect
 
 - **The panel does not read back.** `RDDID` now executes cleanly but returns

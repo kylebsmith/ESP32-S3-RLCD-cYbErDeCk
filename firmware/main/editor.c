@@ -65,6 +65,15 @@ static char s_cur_ch  = ' ';
 
 static char s_status_shown[64];
 static bool s_chrome_dirty = true;
+static uint32_t s_pushes, s_push_bytes;
+
+void editor_vitals(uint32_t *pushes, uint32_t *bytes)
+{
+    *pushes = s_pushes;
+    *bytes  = s_push_bytes;
+    s_pushes = 0;
+    s_push_bytes = 0;
+}
 
 void editor_invalidate(void)
 {
@@ -263,13 +272,14 @@ void editor_present(size_t *bytes)
     if (bytes != NULL) {
         *bytes = n;
     }
-    /* Report what a redraw actually costs. The damage model is supposed to
-     * make one character 36 bytes; anything near a full frame means the
-     * damage rectangle is being widened by something else on the screen. */
-    static int logged;
-    if (n > 0 && logged < 24) {
-        logged++;
-        ESP_LOGI("editor", "present: %u bytes", (unsigned)n);
+    /* Counted, not logged. A capped one-shot probe went quiet after 24 pushes
+     * and made a perfectly healthy device look hung - the screen had stopped
+     * blinking by design at the same moment, so both signals died together.
+     * The heartbeat reports these instead, so quiet always means idle and
+     * never means broken. */
+    if (n > 0) {
+        s_pushes++;
+        s_push_bytes += n;
     }
 }
 

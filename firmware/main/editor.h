@@ -1,6 +1,7 @@
 #pragma once
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include "esp_err.h"
 #include "kbd.h"
 
@@ -9,6 +10,9 @@ void editor_draw(void);
 
 /* Forget cached chrome so the next draw repaints all of it. */
 void editor_invalidate(void);
+
+/* Pushes and bytes since the last call, for the liveness heartbeat. */
+void editor_vitals(uint32_t *pushes, uint32_t *bytes);
 
 /* Push what editor_draw/editor_blink rendered. Rendering does not push. */
 void editor_present(size_t *bytes);
