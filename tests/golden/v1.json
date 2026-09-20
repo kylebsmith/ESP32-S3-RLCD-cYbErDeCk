@@ -1,24 +1,24 @@
 {
- "commit": "9d4801d6a432254c4da80ddd289be93eb4bbfe79",
+ "commit": "f773112348e97aee95f63e5340da14949b27325a",
  "parts": {
   "backplate": {
    "bodies": 1,
    "extents": [
     109.25,
     133.05,
-    13.45
+    13.2
    ],
-   "volume": 47324.201,
+   "volume": 45799.505,
    "watertight": true
   },
   "buttons": {
    "bodies": 1,
    "extents": [
-    26.0,
-    4.8,
+    26.2,
+    5.2,
     3.44
    ],
-   "volume": 173.526,
+   "volume": 162.819,
    "watertight": true
   },
   "chassis": {
@@ -28,7 +28,7 @@
     138.85,
     16.85
    ],
-   "volume": 43098.377,
+   "volume": 43277.496,
    "watertight": true
   }
  },
@@ -99,6 +99,7 @@
   "body_w": 116.25,
   "boss_cx": 51.2375,
   "boss_flank": 8.175,
+  "boss_row_hi": 62.25,
   "btn_band_hi": 0.7,
   "btn_band_lo": -1.1015,
   "btn_cb_depth": 1.0,
@@ -114,10 +115,10 @@
   "button_aper_w": 5.4,
   "button_body_h": 2.203,
   "button_body_w": 4.553,
-  "button_cap_h": 4.0,
-  "button_cap_w": 5.2,
+  "button_cap_h": 3.8,
+  "button_cap_w": 4.8,
   "button_count": 3.0,
-  "button_flange": 0.4,
+  "button_flange": 0.7,
   "button_pitch": 10.0,
   "button_w_centre": -0.7,
   "cavity_blend": 6.0,
@@ -218,7 +219,7 @@
   "mic_offset_x": 32.5,
   "mic_w_centre": -0.5,
   "nozzle": 0.4,
-  "plate_edge_margin": 0.8,
+  "plate_edge_margin": 0.6,
   "plate_edge_roll": 0.45,
   "plate_edge_soft": 0.6,
   "plate_half_h": 65.925,
@@ -263,7 +264,7 @@
  "vectors": {
   "boss_rows": [
    -0.575,
-   63.125
+   62.25
   ],
   "kbd_rib_dx": [
    -35.0,

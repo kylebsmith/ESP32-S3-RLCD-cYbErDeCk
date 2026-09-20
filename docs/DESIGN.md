@@ -288,10 +288,13 @@ the front face:
 - the **keyboard aperture** (106.5 × 55.8) is 1.85 / 1.80 mm smaller per side
   than the keyboard pocket, so the keyboard cannot fall through.
 
-The back plate then holds both forward. Over the keyboard bay it carries a
-raised **keeper pad** whose thickness is *derived*, not chosen:
-`board_depth − kbd_depth` — the keyboard bay is shallower than the board bay by
-exactly that much, so the pad takes up the difference. A 0.5 mm adhesive foam
+The back plate then holds both forward. The keyboard bay is shallower than the
+board bay by `board_depth − kbd_depth` = 0.25 mm, and that difference is taken
+up by a **ledge in the chassis bay**, not by a pad on the plate: the bay stops
+0.25 mm short of the front panel and the keyboard bears on the band that
+leaves. It was a raised pad on the plate until printing it cowl-up showed the
+pad was the only thing touching the bed. The thickness is still *derived*, not
+chosen; only which part carries it changed. A 0.5 mm adhesive foam
 gasket around the display aperture absorbs the tolerance stack and doubles as
 shock isolation for a panel the reference's own documentation calls fragile.
 
@@ -411,7 +414,7 @@ This is a real constraint honestly resolved, not a feature quietly dropped.
 
 ## What is not proven
 
-Internal consistency is asserted by 92 automated checks, and the structural
+Internal consistency is asserted by 111 automated checks, and the structural
 claims by classical section analysis in `tools/structure.py`. **Fit against
 physical hardware is not, and neither is drop survival** — section analysis
 gives ratios, not absolute stress, and nothing here models layer adhesion,

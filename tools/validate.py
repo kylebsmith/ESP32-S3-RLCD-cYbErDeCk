@@ -293,11 +293,25 @@ def check_fit(parts, mocks, p):
                 f"thinnest {worst:.2f} mm at {worst_d:.1f} mm depth "
                 f"({worst/p['nozzle']:.1f} extrusions)")
 
-    ok &= check("front face does not clip the panel", "FIT",
-                p["display_aper_w"] >= p["display_active_w"] and
-                p["display_aper_h"] >= p["display_active_h"],
-                f"reveal {(p['display_aper_w']-p['display_active_w'])/2:.2f} / "
-                f"{(p['display_aper_h']-p['display_active_h'])/2:.2f} mm per side")
+    # The front face has TWO jobs at the display: clear the ACTIVE AREA, and
+    # still land on the MODULE to bear on it. The first was checked twice over
+    # (the corner check above already covers it); the second was never checked
+    # at all, which is how display_module_w/h sat in parameters.scad as dead
+    # values nothing read. The module is PCB-centred while the active area is
+    # not, so the land is lopsided and the -X side is the thin one.
+    land_x = (p["display_module_w"] / 2
+              - (abs(p["display_off_x"]) + p["display_aper_w"] / 2))
+    land_y = (p["display_module_h"] / 2
+              - (abs(p["display_off_y"]) + p["display_aper_h"] / 2))
+    reveal_x = (p["display_aper_w"] - p["display_active_w"]) / 2
+    reveal_y = (p["display_aper_h"] - p["display_active_h"]) / 2
+    ok &= check("front face lands on the panel module, not just past its glass",
+                "FIT", min(land_x, land_y) >= 0.40,
+                f"bearing land {land_x:.2f} mm in X and {land_y:.2f} in Y on a "
+                f"{p['display_module_w']:.2f} x {p['display_module_h']:.2f} module, "
+                f"with {reveal_x:.2f} / {reveal_y:.2f} mm of reveal past the active "
+                f"area. Reveal and land come out of the same bezel, so this pins "
+                f"the split: widening the aperture eats the land")
     return ok
 
 
@@ -841,6 +855,67 @@ def _corner_lip_with_play(chassis, p):
     return best, at
 
 
+def check_plate_edges(parts, p):
+    """Three things the suite measured by arithmetic and got wrong.
+
+    Each of these passed for as long as it was computed from parameters, and
+    failed the moment anything measured the rendered part instead.
+    """
+    print("\n-- PLATE --")
+    ok = True
+    bp = parts["backplate"]
+
+    # (1) Countersinks must be CLOSED HOLES in the plate's face, not notches in
+    # its rim. The upper pair broke out at boss_rows[1] = 63.125, and the giveaway
+    # is topological rather than dimensional: a hole that has merged with the
+    # outline is no longer an interior ring.
+    g = max(bp.section(plane_origin=[0, 0, 0.02],
+                       plane_normal=[0, 0, 1]).to_2D(to_2D=np.eye(4))[0].polygons_full,
+            key=lambda q: q.area)
+    rings = [Polygon(r) for r in g.interiors]
+    missing, gaps = [], []
+    for sx in (-1, 1):
+        for cy in p["boss_rows"]:
+            hit = [r for r in rings
+                   if abs((r.bounds[0] + r.bounds[2]) / 2 - sx * p["boss_cx"]) < 1.5
+                   and abs((r.bounds[1] + r.bounds[3]) / 2 - cy) < 1.5]
+            if hit:
+                gaps.append(g.exterior.distance(hit[0].exterior))
+            else:
+                missing.append((round(sx * p["boss_cx"], 2), round(cy, 2)))
+    ok &= check("every fastener countersink is a closed hole in the plate face",
+                "PLATE", not missing,
+                f"all 4 closed, nearest {min(gaps):.3f} mm from the plate edge "
+                f"(margin {p['plate_edge_margin']:.1f})" if not missing else
+                f"{len(missing)} countersink(s) have broken through the rim: {missing}")
+    if gaps:
+        ok &= check("countersinks keep their edge margin", "PLATE",
+                    min(gaps) >= p["plate_edge_margin"] - 0.05,
+                    f"nearest rim-to-edge {min(gaps):.3f} mm against a declared "
+                    f"{p['plate_edge_margin']:.2f}")
+
+    # (2) The plate's bed face, in the orientation ASSEMBLY.md prescribes.
+    hi = float(bp.bounds[1][2])
+    areas = {}
+    for tri, nrm in zip(bp.triangles, bp.face_normals):
+        if nrm[2] > 0.99:
+            z = round(float(tri[:, 2].mean()), 2)
+            areas[z] = areas.get(z, 0.0) + float(
+                np.linalg.norm(np.cross(tri[1] - tri[0], tri[2] - tri[0])) / 2)
+    contact = areas.get(round(hi, 2), 0.0)
+    # Only faces within a millimetre of the bed plane matter. Deeper ones are
+    # ordinary internal geometry - the cowl's own dome ceiling sits 11 mm up and
+    # is progressively self-supporting - and counting them made this check fail
+    # on a part that prints perfectly well.
+    hanging = sum(a for z, a in areas.items() if 0.01 < hi - z <= 1.0)
+    ok &= check("the plate's bed face is one plane, not a pad over open air",
+                "PLATE", hanging < 500.0,
+                f"{contact:.0f} mm^2 flat on the bed, {hanging:.0f} mm^2 within a "
+                f"millimetre of it and unsupported. It was 5777 mm^2 when the "
+                f"keyboard keeper was a raised pad on this face")
+    return ok
+
+
 def check_cowl(parts, p):
     """The battery cowl's wall, measured as a DISTANCE and at every height.
 
@@ -1086,19 +1161,30 @@ def check_interface(parts, p):
                     (f"tongue z {tongue.min():.2f}..{tongue.max():.2f}, chassis "
                      f"below {len(below)>0}, chassis above {len(above)>0}")
                     if len(tongue) else "no tongue found in the groove")
-        # And the groove must not eat the bottom wall. tongue_depth is declared
-        # in cyberdeck.scad rather than parameters.scad, so read it from there -
-        # defaulting it away turned this into a check that never ran.
-        src = open(SCAD).read()
-        mt = re.search(r"^\s*tongue_depth\s*=\s*([0-9.]+)", src, re.M)
-        assert mt, "tongue_depth not found in cyberdeck.scad"
-        left = p["wall"] - float(mt.group(1))
+        # And the groove must not eat the bottom wall. THIS USED TO COMPUTE
+        # wall - tongue_depth AND CALL IT THE WALL. It is not: rse_soft's edge
+        # roll withdraws the outer face by up to 1.2 mm over the back of the
+        # thickness, and the groove sits inside that band. The arithmetic said
+        # 1.60 mm while the rendered chassis carried 0.480 - so the check, the
+        # source comment and the docs all agreed with each other and none of
+        # them agreed with the part. Measure it. See docs/DATUMS.md C-30.
+        worst_wall, at_x, at_z = 1e9, 0.0, 0.0
+        for zz in np.arange(0.4, p["back_t"] + 0.4, 0.1):
+            for xx in np.arange(-50.0, 50.1, 1.0):
+                loc, _, _ = ch.ray.intersects_location(
+                    np.array([[float(xx), -p["body_h"] / 2 - 5, float(zz)]], float),
+                    np.array([[0.0, 1.0, 0.0]], float))
+                ys = sorted(float(q[1]) for q in loc)
+                if len(ys) >= 2 and ys[1] - ys[0] < worst_wall:
+                    worst_wall, at_x, at_z = ys[1] - ys[0], float(xx), float(zz)
         ok &= check("groove leaves a printable bottom wall", "INTERFACE",
-                    left >= 4 * p["nozzle"],
-                    f"{left:.2f} mm of wall outboard of a "
-                    f"{float(mt.group(1)):.2f} mm groove "
-                    f"({left/p['nozzle']:.1f} extrusions; it was 0.20 mm at "
-                    f"tongue_depth 3.0)")
+                    worst_wall >= 2 * p["nozzle"],
+                    f"{worst_wall:.3f} mm of wall outboard of the groove, "
+                    f"MEASURED on the rendered chassis at x = {at_x:.1f}, "
+                    f"z = {at_z:.2f} ({worst_wall / p['nozzle']:.2f} extrusions). "
+                    f"The old arithmetic, wall - tongue_depth, claimed "
+                    f"{p['wall'] - 1.3:.2f} and was wrong by "
+                    f"{p['wall'] - 1.3 - worst_wall:.2f} mm")
     except Exception as exc:
         ok &= check("tongue capture test ran", "INTERFACE", False, str(exc))
 
@@ -1305,6 +1391,7 @@ def main():
         ok &= check_obstruction(parts, p)
         ok &= check_stacks(parts, mocks, p)
         ok &= check_cowl(parts, p)
+        ok &= check_plate_edges(parts, p)
         if p.get("variant", 1) >= 2:
             ok &= check_magnets(parts, p)
         ok &= check_interface(parts, p)

@@ -3,7 +3,7 @@
 Read this before printing. The RLCD panel is fragile and must never be used as
 leverage while fitting a cable, a cell or a printed part.
 
-> **This design has not been built.** All **106** automated checks pass, but
+> **This design has not been built.** All **111** automated checks pass, but
 > nobody has held these components against a printed chassis. Print the
 > **chassis alone** first, offer the board and keyboard up to it, and check the
 > four measurements in
@@ -76,7 +76,12 @@ Orientation:
 
 - **chassis** — front face on the bed. The aperture draft then prints as a
   chamfer rather than a bridge, and the visible face gets the bed finish.
-- **backplate** — flat face on the bed, cowl upward. The cowl's sides are
+- **backplate** — flat face on the bed, cowl upward. That face is genuinely
+  flat now: the keyboard keeper used to be a 0.25 mm raised pad here, which made
+  it the only thing touching the bed and left 5777 mm² — 48% of the underside —
+  printing over open air. The step lives on the chassis instead. See
+  [DATUMS.md C-32](DATUMS.md#c-32--the-plates-bed-face-was-a-pad-over-open-air).
+  The cowl's sides are
   vertical and its cap is a dome, so no supports are needed. The countersinks
   face the bed and print clean.
 - **buttons** — caps down.
@@ -192,8 +197,10 @@ proud of the PCB — that is expected; the cowl covers it.
 ### 8. Close it up
 
 Lower the back plate bottom-edge first so the tongue enters the groove in the
-chassis bottom wall, then swing the top down. The keeper pad should meet the
-keyboard and the cowl should clear the cell.
+chassis bottom wall, then swing the top down. The plate's flat inner face
+should meet the keyboard — the 0.25 mm step that holds it forward is a ledge in
+the chassis bay now, not a pad on the plate — and the cowl should clear the
+cell.
 
 The tilt is not optional and it is not large. Searched as a rigid-body motion
 against the rendered chassis — rotation about X plus translation in Y and Z,

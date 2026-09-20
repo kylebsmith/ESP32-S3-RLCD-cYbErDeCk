@@ -22,7 +22,7 @@ so it reads as grown rather than extruded.
 
 ```
 116.25 × 138.85 × 16.85 mm   (+ 10.0 mm battery cowl)
-2 printed structural parts · 8 screws · 92 automated checks
+3 printed parts + a cover · 8 screws · 8 magnets · 111 automated checks
 ```
 
 ---
@@ -90,7 +90,7 @@ openscad -D 'part="chassis"'   -o export/stl/chassis.stl   cad/cyberdeck.scad
 openscad -D 'part="backplate"' -o export/stl/backplate.stl cad/cyberdeck.scad
 openscad -D 'part="buttons"'   -o export/stl/buttons.stl   cad/cyberdeck.scad
 
-python3 tools/validate.py          # 92 checks; non-zero exit if any fail
+python3 tools/validate.py          # 111 checks; non-zero exit if any fail
 ```
 
 0.4 mm nozzle, 0.2 mm layers, no supports. Full instructions, BOM and print

@@ -347,6 +347,74 @@ a wider recess behind it. This back plate is 3.2 mm thick and the header stands
 8.603 mm off the PCB back — **1.60 mm proud of the standoff plane** — so the
 body itself must pass through. The window here is sized from the body.
 
+### C-32 — The plate's bed face was a pad over open air
+
+`docs/ASSEMBLY.md` prints the back plate **cowl up**, so its inner face is the
+bed face. That face was not flat: the 0.25 mm keyboard keeper stood proud of it,
+so the pad's **6233 mm²** was the only thing touching the bed and the remaining
+**5777 mm² — 48% of the underside —** printed as a flat sheet over 0.25 mm of
+open air.
+
+The keeper's *thickness* was right and derived (`board_depth − kbd_depth`); the
+wrong part was which of the two parts carried it. The chassis's keyboard bay now
+stops 0.25 mm short of the front panel, leaving a band the keyboard bears on,
+and the aperture is carried down through that band at the same section as the
+flared aperture's narrow end so the two meet tangentially. The plate's inner
+face is one plane at z = 3.20 with **11,888 mm² flat on the bed** and 166 mm²
+within a millimetre of it. Nothing about the keyboard's clear depth, bearing
+area or retaining lip changes.
+
+### C-31 — Two countersinks were breaking out through the plate's rim — BLOCKING
+
+The upper pair of shell-screw countersinks was positioned at
+`plate_half_h − head/2 − margin`. `plate_half_h` is the plate's **mid-thickness**
+section, and the outer *face* is rolled in from it by `plate_edge_soft`. Worse,
+`boss_cx` = 51.24 lands inside the face's corner blend, which starts at
+x = 48.63 — and there the outline runs diagonally, so a vertical extent is not a
+clearance. The Ø4.0 countersink had **0.022 mm** of plate to bite on and opened
+a notch in the rim at both top corners.
+
+The give-away is topological, not dimensional: a countersink that has merged
+with the outline is no longer an interior ring. `validate.py` now checks exactly
+that, and it is also why the first attempt at a fix went wrong — measuring the
+"highest usable y" against the *rendered* plate returns 58.5, because the
+outline being measured already contains the breakout. Solved against the
+analytic face outline instead: **62.25**, which also clears the microSD tunnel's
+61.425 floor by 0.825 mm.
+
+`boss_cx` cannot move inboard to escape the blend: the board pocket floors it at
+50.05 and the blend starts at 48.63.
+
+### C-30 — The tongue groove's wall was 0.48 mm, and three places said 1.60
+
+`back_t − tongue_depth` is not the wall left outboard of the groove. That
+arithmetic assumes the outer face sits at the nominal envelope; `rse_soft`'s edge
+roll withdraws it by up to 1.2 mm over the back 4.7 mm of the thickness, and the
+groove sat inside that band. The rendered chassis carried **0.480 mm** — 1.2
+extrusions — while the source comment, the documentation and
+`validate.py`'s own "groove leaves a printable bottom wall" check all said 1.60.
+All three computed from parameters; none touched the mesh.
+
+`tongue_depth` 1.6 → 1.3, `tongue_z` `back_t/2` → 2.2, and `tongue_len` gains
+`fit_slide` so shortening the groove does not shorten the tongue. Measured
+result: **0.943 mm** (2.36 extrusions), engagement unchanged at 0.90 mm, tongue
+tip unmoved. The check now ray-casts the rendered chassis and reports both the
+measurement and what the old arithmetic claimed.
+
+### C-29 — The button cap was the reference sprue's bounding box
+
+`button_cap_w/h` were 5.2 × 4.0, taken as the reference cap's cross-section.
+They are its **bounding box**: 5.2 is the flange skirt at the rear face and 4.0
+is the sprue's axial depth. The cap's own prismatic section is a constant
+4.800 × 3.800 swept along the cap axis.
+
+At 5.2 in a 5.400 aperture the caps had **0.10 mm per side** against this
+project's own sliding fit of `fit_slide` = 0.30 — they would have bound.
+`button_flange` was wrong in the same way: 0.4 was the past-*aperture* figure
+used as a past-*cap* one, leaving 0.200 of overhang against 0.200 of float, so a
+cap could walk out of its own aperture. Now 4.8 × 3.8 with a 0.7 flange:
+0.30 mm per side of clearance, 0.40 mm per side of overhang.
+
 ### C-28 — The fix for C-25 opened a slit into the battery cavity — BLOCKING
 
 C-25 found the battery cowl lying on top of two M2.5 board-screw countersinks

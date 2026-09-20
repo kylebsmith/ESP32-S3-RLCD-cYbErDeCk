@@ -115,7 +115,15 @@ tongue_t     = 1.6;                  // [DESIGN] 4 extrusions
 //  captured, with 0.15 mm of clearance above and below the tongue in a 1.6 mm
 //  groove. It holds - but the figure is the one to check against, not 1.2.
 //  See docs/DATUMS.md C-14.
-tongue_depth = 1.6;                  // [DESIGN] groove depth into the bottom wall
+//  AND back_t - tongue_depth IS NOT THE WALL EITHER. That arithmetic assumes
+//  the outer face sits at the nominal envelope, and it does not: rse_soft's
+//  edge roll withdraws the face by up to 1.2 mm over the back 4.7 mm of the
+//  thickness, and the groove sits inside that band. Measured on the rendered
+//  chassis the wall outboard of the groove was 0.480 mm - 1.2 extrusions -
+//  while this line's comment, and the check that guarded it, both said 1.60.
+//  Both computed from parameters and neither touched the mesh.
+//  See docs/DATUMS.md C-30.
+tongue_depth = 1.3;                  // [DESIGN] groove depth into the bottom wall
 //  tongue_z is the groove's CENTRE, not its base: both the groove and the
 //  tongue are cube(..., center = true), which centres in Z as well as X and Y.
 //  Reading it as a base put the groove at z 0.000..1.600 - open to the
@@ -123,7 +131,12 @@ tongue_depth = 1.6;                  // [DESIGN] groove depth into the bottom wa
 //  captured in Z and the bottom edge of the plate could simply lift away. At
 //  back_t/2 the groove sits 0.800..2.400 with 0.8 mm of chassis above and
 //  below it, which is the joint the comment above describes.
-tongue_z     = back_t / 2;
+//  2.2, not back_t/2. Raising the groove's centre lifts its floor from 0.80 to
+//  1.40, out of the deepest part of the roll, and doubles the chassis lip under
+//  it. It is a ceiling, not a round number: the capture check samples z in 0.1
+//  steps up to back_t, so a groove ceiling above 3.0 leaves it nothing to
+//  sample above the tongue. 2.2 puts the ceiling at exactly 3.0.
+tongue_z     = 2.2;
 
 // The keyboard bay is shallower than the board bay. The back plate carries a
 // raised pad over the keyboard so the keyboard is held forward against the
@@ -183,14 +196,18 @@ module chassis() {
             rbox(board_pocket_w, board_pocket_h, board_depth + 0.01, board_pocket_r);
 
         // --- keyboard bay ---------------------------------------------------
-        // Cut clear through to the back-plate seating plane, NOT merely to
-        // kbd_depth. Stopping at kbd_depth would leave a 1.6 mm web across the
-        // bay in exactly the volume the back plate's keeper pad occupies: the
-        // two would collide and the keyboard could not be loaded at all. The
-        // keeper pad, not the chassis, is what sets the keyboard's depth.
+        // Stops kbd_keeper_t short of the panel, leaving a 0.25 mm band across
+        // the bay that the keyboard bears on. That band used to be a raised pad
+        // on the BACK PLATE, and printing the plate cowl-up made it the only
+        // thing touching the bed: 5776.9 mm2 - 48% of the plate's underside -
+        // then printed as a flat face hanging 0.25 mm over bare air. Moving the
+        // step here turns it into an upward-facing ledge on solid material and
+        // leaves the plate's inner face one flat plane. Nothing about the
+        // keyboard's clear depth, bearing area or lip changes.
+        // See docs/DATUMS.md C-32.
         translate([0, kbd_bay_cy, z_back_inner])
             rbox(kbd_pocket_w, kbd_pocket_h,
-                 z_front_inner - z_back_inner + 0.01, kbd_pocket_corner_r);
+                 z_front_inner - kbd_keeper_t - z_back_inner, kbd_pocket_corner_r);
 
         // --- display aperture, with the reference's draft angle --------------
         translate([board_cx + display_off_x, board_bay_cy + display_off_y,
@@ -202,6 +219,13 @@ module chassis() {
         translate([0, kbd_bay_cy, z_front_inner - 0.01])
             rse_aperture(kbd_aper_w, kbd_aper_h, front_t + 0.02,
                          aper_blend_kbd, aper_n_kbd, kbd_aper_draft);
+
+        // Carry the keyboard aperture down through the 0.25 mm band, at the
+        // same section as the flared aperture's narrow end so the two meet
+        // tangentially with no step and no sliver.
+        translate([0, kbd_bay_cy, z_front_inner - kbd_keeper_t - 0.01])
+            rse_plate(kbd_aper_w, kbd_aper_h, kbd_keeper_t + 0.02,
+                      aper_blend_kbd, aper_n_kbd);
 
         // --- control cluster recess ------------------------------------------
         // The three buttons sit in ONE shallow dish rather than in three bare
@@ -294,7 +318,7 @@ module chassis() {
         // Reaches the keyboard's power slide switch and its charging port,
         // which share one short edge. Cut on both sides so the keyboard can go
         // in either way round.
-        kbd_floor   = z_front_inner - kbd_depth;
+        kbd_floor   = z_back_inner;   // the plate is flat now; see C-32
         kbd_top_edge = kbd_bay_cy + kbd_pocket_h/2;
         //  ONE window, on the LEFT as the device is used, positioned from the
         //  TOP of the keyboard. Measured on the real unit: the slide switch
@@ -383,7 +407,7 @@ module kbd_rib(r) {
 module kbd_locating_ribs() {
     //  The ribs start exactly at the keeper pad's top face, which is where the
     //  keyboard's own back face begins, and run the full pocket depth.
-    kfloor = z_front_inner - kbd_depth;
+    kfloor = z_back_inner;   // the plate is flat now; see C-32
     for (sx = [-1, 1], dy = kbd_rib_dy)        // long axis, +-X walls
         translate([sx * kbd_pocket_w / 2, kbd_bay_cy + dy, kfloor])
             kbd_rib(kbd_rib_r_x);
@@ -479,12 +503,6 @@ module backplate() {
             rse_soft(plate_w, plate_h, back_t, cavity_blend, form_n,
                      plate_edge_soft, plate_edge_roll);
 
-            // --- keyboard keeper pad ----------------------------------------
-            // Holds the keyboard forward against the front face's lip.
-            translate([0, kbd_bay_cy, back_t - 0.01])
-                rbox(kbd_pocket_w - 2*fit_slide, kbd_pocket_h - 2*fit_slide,
-                     kbd_keeper_t + 0.01, 6.0);
-
             // --- bottom tongue ----------------------------------------------
             // Engages the groove in the chassis bottom wall. Length is set so
             // the tip stops short of the groove's blind end, and so the tongue
@@ -493,7 +511,11 @@ module backplate() {
             // perimeter is rolled, so at the tongue's height the edge has
             // already drawn back ~0.25 mm; a tongue that starts at the nominal
             // outline floats free of it and the part renders as two bodies.
-            tongue_len = tongue_depth - 0.4 + 1.0;
+            //  + fit_slide so that shortening the GROOVE does not shorten the
+            //  TONGUE: the tongue's length is set by how far it must reach past
+            //  the capture plane, not by the groove's depth. The value stays
+            //  2.20 and the tip does not move in y.
+            tongue_len = tongue_depth - 0.4 + 1.0 + fit_slide;
             translate([0, -plate_h/2 - tongue_len/2 + 1.0, tongue_z])
                 cube([inner_w - 2*corner_gusset - 2*fit_slide,
                       tongue_len, tongue_t - 2*0.15], center = true);
@@ -595,7 +617,7 @@ module backplate() {
 
         // --- keyboard eject finger hole ---------------------------------------
         translate([kbd_eject_off_x, kbd_bay_cy + kbd_eject_off_y, -0.01])
-            cylinder(h = back_t + kbd_keeper_t + 0.02, d1 = kbd_eject_d,
+            cylinder(h = back_t + 0.02, d1 = kbd_eject_d,
                      d2 = kbd_eject_d_min);
 
 

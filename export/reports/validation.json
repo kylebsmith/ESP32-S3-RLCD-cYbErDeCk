@@ -1,12 +1,12 @@
 {
-  "passed": 108,
-  "total": 108,
+  "passed": 111,
+  "total": 111,
   "results": [
     {
       "check": "chassis: watertight",
       "class": "MESH",
       "ok": true,
-      "detail": "18344 faces"
+      "detail": "18284 faces"
     },
     {
       "check": "chassis: single body",
@@ -18,13 +18,13 @@
       "check": "chassis: positive volume",
       "class": "MESH",
       "ok": true,
-      "detail": "41822 mm^3 -> 51.9 g in PLA"
+      "detail": "42004 mm^3 -> 52.1 g in PLA"
     },
     {
       "check": "backplate: watertight",
       "class": "MESH",
       "ok": true,
-      "detail": "17700 faces"
+      "detail": "17352 faces"
     },
     {
       "check": "backplate: single body",
@@ -36,7 +36,7 @@
       "check": "backplate: positive volume",
       "class": "MESH",
       "ok": true,
-      "detail": "47324 mm^3 -> 58.7 g in PLA"
+      "detail": "45800 mm^3 -> 56.8 g in PLA"
     },
     {
       "check": "buttons: watertight",
@@ -54,7 +54,7 @@
       "check": "buttons: positive volume",
       "class": "MESH",
       "ok": true,
-      "detail": "174 mm^3 -> 0.2 g in PLA"
+      "detail": "163 mm^3 -> 0.2 g in PLA"
     },
     {
       "check": "cover: watertight",
@@ -150,7 +150,7 @@
       "check": "chassis is not degenerate",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "116.25 x 138.85 x 16.85, 41822 mm^3"
+      "detail": "116.25 x 138.85 x 16.85, 42004 mm^3"
     },
     {
       "check": "backplate: extent X is as specified",
@@ -162,13 +162,13 @@
       "check": "backplate is not degenerate",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "109.25 x 133.05 x 13.45, 47324 mm^3"
+      "detail": "109.25 x 133.05 x 13.20, 45800 mm^3"
     },
     {
       "check": "buttons is not degenerate",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "26.00 x 4.80 x 3.44, 174 mm^3"
+      "detail": "26.20 x 5.20 x 3.44, 163 mm^3"
     },
     {
       "check": "cover is not degenerate",
@@ -186,13 +186,13 @@
       "check": "backplate fits the print bed",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "109.2 x 133.1 x 13.4"
+      "detail": "109.2 x 133.1 x 13.2"
     },
     {
       "check": "buttons fits the print bed",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "26.0 x 4.8 x 3.4"
+      "detail": "26.2 x 5.2 x 3.4"
     },
     {
       "check": "cover fits the print bed",
@@ -285,10 +285,10 @@
       "detail": "thinnest 2.00 mm at 2.0 mm depth (5.0 extrusions)"
     },
     {
-      "check": "front face does not clip the panel",
+      "check": "front face lands on the panel module, not just past its glass",
       "class": "FIT",
       "ok": true,
-      "detail": "reveal 1.00 / 1.00 mm per side"
+      "detail": "bearing land 0.50 mm in X and 1.00 in Y on a 91.00 x 67.60 module, with 1.00 / 1.00 mm of reveal past the active area. Reveal and land come out of the same bezel, so this pins the split: widening the aperture eats the land"
     },
     {
       "check": "button aperture 1 is open through the wall",
@@ -453,6 +453,24 @@
       "detail": "a \u00d85.0 driver column reaches both lower M2.5 screws through the cowl's relief bores"
     },
     {
+      "check": "every fastener countersink is a closed hole in the plate face",
+      "class": "PLATE",
+      "ok": true,
+      "detail": "all 4 closed, nearest 0.618 mm from the plate edge (margin 0.6)"
+    },
+    {
+      "check": "countersinks keep their edge margin",
+      "class": "PLATE",
+      "ok": true,
+      "detail": "nearest rim-to-edge 0.618 mm against a declared 0.60"
+    },
+    {
+      "check": "the plate's bed face is one plane, not a pad over open air",
+      "class": "PLATE",
+      "ok": true,
+      "detail": "11888 mm^2 flat on the bed, 166 mm^2 within a millimetre of it and unsupported. It was 5777 mm^2 when the keyboard keeper was a raised pad on this face"
+    },
+    {
       "check": "pinned face-roll coefficient still matches the shell",
       "class": "MAGNET",
       "ok": true,
@@ -528,13 +546,13 @@
       "check": "bottom tongue is captured in Z by the groove",
       "class": "INTERFACE",
       "ok": true,
-      "detail": "tongue z 1.00..2.20, chassis below True, chassis above True"
+      "detail": "tongue z 1.60..2.80, chassis below True, chassis above True"
     },
     {
       "check": "groove leaves a printable bottom wall",
       "class": "INTERFACE",
       "ok": true,
-      "detail": "1.60 mm of wall outboard of a 1.60 mm groove (4.0 extrusions; it was 0.20 mm at tongue_depth 3.0)"
+      "detail": "0.943 mm of wall outboard of the groove, MEASURED on the rendered chassis at x = -48.0, z = 1.40 (2.36 extrusions). The old arithmetic, wall - tongue_depth, claimed 1.90 and was wrong by 0.96 mm"
     },
     {
       "check": "fastener count matches",

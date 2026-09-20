@@ -226,9 +226,19 @@ button_body_w  = 4.553;  // [VENDOR] switch body along U
 button_body_h  = 2.203;  // [VENDOR] switch body along W
 button_aper_w  = 5.4;    // [MEASURED] reference aperture, along X
 button_aper_h  = 4.4;    // [MEASURED] reference aperture, along Z
-button_cap_w   = 5.2;    // [MEASURED] reference cap cross-section
-button_cap_h   = 4.0;    // [MEASURED]
-button_flange  = 0.4;    // [MEASURED] per-side retaining flange behind the wall
+//  THESE WERE THE SPRUE'S BOUNDING BOX, NOT THE CAP. 5.2 is the flange skirt at
+//  the rear face and 4.0 is the sprue's axial depth; the cap's own prismatic
+//  section is a constant 4.800 x 3.800 swept along the cap axis, concentric
+//  with the 5.400 x 4.400 aperture. The old numbers left 0.10 mm per side in X
+//  against this project's own sliding fit of fit_slide = 0.30, so the caps
+//  would have bound in their apertures. See docs/DATUMS.md C-29.
+button_cap_w   = 4.8;    // [MEASURED] reference cap prismatic section
+button_cap_h   = 3.8;    // [MEASURED]
+//  Past the CAP, not past the aperture. The reference flange is 6.201 x 5.201 =
+//  cap + 0.700 per side = aperture + 0.400 per side; 0.4 was the past-APERTURE
+//  figure used as a past-cap one, which left 0.200 of overhang against 0.200 of
+//  float - a cap that could walk out of its own aperture.
+button_flange  = 0.7;    // [MEASURED] per-side retaining flange, past the cap
 button_w_centre = -0.70; // [VENDOR] switch centre in W: (-1.802 + 0.402)/2
 
 //  THE BUTTON STACK. Everything here follows from one sentence above: the
@@ -1036,9 +1046,41 @@ inner_w           = body_w - 2 * wall;                     // clear interior wid
 boss_flank        = (inner_w - board_pocket_w) / 2;        // free strip each side
 boss_cx           = board_pocket_w/2 + boss_flank/2 + 0.4; // outboard of the bay
 plate_half_h      = (body_h - 2*wall - 2*fit_slide) / 2;
-plate_edge_margin = 0.8;   // [DESIGN] material left outboard of a countersink
+plate_edge_margin = 0.6;   // [DESIGN] material left outboard of a countersink
+
+//  THE UPPER ROW IS NOT plate_half_h MINUS A MARGIN, AND WAS BREAKING OUT.
+//  plate_half_h is the plate's MID-THICKNESS section. Its outer FACE is rolled
+//  in by plate_edge_soft, and - the part that actually bites - boss_cx = 51.24
+//  lands inside the face's corner blend, which starts at x = 48.63. There the
+//  outline runs diagonally, so the vertical extent is not the clearance. At
+//  63.125 the Ø4.0 countersink had 0.022 mm of plate to bite on and broke
+//  through the rim at both top corners. See docs/DATUMS.md C-31.
+//
+//  boss_cx cannot move inboard to escape the blend: the board pocket puts a
+//  floor of board_pocket_w/2 + shell_screw_boss_d/2 = 50.05 on it, and the
+//  blend starts at 48.63. So the row comes down instead.
+//
+//  This value is the highest y at which a countersink rim plus
+//  plate_edge_margin still fits inside the rendered plate FACE, found by
+//  true perpendicular distance - not by a superellipse extent, and not by
+//  offsetting the outline, which at n = 3.2 is optimistic by 3.1 mm. It is
+//  pinned rather than derived because the honest derivation needs a
+//  point-to-segment minimum over rse_poly(), which lives in lib/util.scad and
+//  which tools/params.py cannot evaluate. validate.py measures the real
+//  clearance on every run, so a change to the plate's shape fails the gate
+//  rather than silently moving the screws back over the edge.
+//  62.25 is the highest the row can sit and still keep a full countersink rim
+//  plus plate_edge_margin inside the plate's face outline, solved against the
+//  ANALYTIC face superellipse. It cannot be measured off the rendered plate,
+//  because at 63.125 the countersink has already merged into the exterior
+//  outline - the mesh you would measure is the defect. (Measuring it that way
+//  first gave 58.5, which then collided with the microSD tunnel and looked
+//  like an over-constrained design. It is not: the tunnel needs 61.425 and
+//  this clears it by 0.825.)
+boss_row_hi = 62.25;   // [DERIVED] solved against the plate's face outline
+
 boss_rows = [ board_bay_cy - board_pocket_h/2 + shell_screw_boss_d/2,
-              plate_half_h - shell_screw_cs_head_d/2 - plate_edge_margin ];
+              boss_row_hi ];
 
 // ============================================================================
 //  9.  VARIANT 2 - THE MAGNETIC FRONT COVER
