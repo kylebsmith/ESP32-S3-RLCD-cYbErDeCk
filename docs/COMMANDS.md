@@ -142,6 +142,50 @@ Buffers load **lazily**: a document restored at boot knows its name, length
 and record offset but holds no text until it is selected. Eight buffers cost
 eight small structs rather than a megabyte of PSRAM nobody asked for.
 
+## Output is a buffer, not a scrollback `[FACT]`
+
+`cmd_out` appends to a buffer called `+out`. That is not a detail — it is the
+difference between this and a terminal.
+
+A terminal's scrollback is the one thing on the machine that is *not* a
+document: you cannot edit it, undo it, name it, search it with the same keys,
+or pipe a piece of it anywhere. `SUBSTRATE.md` claims there is one data
+structure; if command output lived in a log or a scrollback, the claim would
+simply be false.
+
+So output is a buffer like any other — same editor, same arrow keys, same
+undo, same rendering. `Ctrl-O` goes there; so does the `out` command.
+
+**A name beginning with `+` marks a buffer the machine wrote.** Such buffers
+are never journalled, because an archive that fills up with command output is
+an archive nobody trusts. They are otherwise completely ordinary: a buffer
+need not be a file, exactly as a scratch buffer need not be.
+
+## There is no command *environment* `[JUDGEMENT]`
+
+Worth stating flatly, because it is the thing most likely to be got wrong
+later. A guide buffer is **not a mode, a shell, a REPL or a place you go.**
+
+- It is stored by the same journal.
+- It is edited by the same editor, with the same keys, the same undo, the
+  same wrap and the same cursor.
+- It is listed beside every other document.
+- It can be renamed, archived, or turned back into prose with one command.
+
+The *only* difference between a guide and a page of prose is which of Enter
+and Ctrl+Enter runs the line. One bit. That is precisely what `SUBSTRATE.md`
+specifies when it says prose and grid "differ in exactly one bit of
+interpretation, and that bit decides one thing."
+
+What this keeps from a terminal: text in, text out; a command you can edit
+before running it; composability.
+
+What it refuses: a modal place you have to enter and leave; history that is
+write-once and not editable; output you cannot touch; a command line that
+vanishes the moment it runs. **Your commands are a document you keep** —
+there is no history mechanism because the document *is* the history, and it is
+yours to organise, rename and archive like any other writing.
+
 ## Verified on the hardware `[FACT]`
 
 Observed on the deck, 2026-09-20:
@@ -159,7 +203,7 @@ and, across a reset, `archive: 'lullaby'`, `'rustbelt'` restored by name.
 
 | # | Question |
 |---|---|
-| 1 | Command output goes to the log and a status line. It should go to a buffer — the same primitive as everything else — so it can be scrolled, searched and piped. The `cmd_out` call site will not change; only its implementation. |
+| ~~1~~ | ~~Command output goes to the log and a status line.~~ **Closed.** Output is a buffer — see below. |
 | 2 | The selection does not exist yet, so the implicit input is always empty and `\|` (Pipe) cannot be implemented. Selection is the next primitive, not another command. |
 | 3 | Whole-buffer snapshots cost a flash sector per save. The undo log is already an operation log, which is already a redo log; deltas between periodic snapshots would cut writes by an order of magnitude. |
 | 4 | `DOC_MAX_BUFFERS` is 8 and `DOC_NAME_MAX` is 24. Both are arbitrary and neither is enforced anywhere a person would see a useful error. |

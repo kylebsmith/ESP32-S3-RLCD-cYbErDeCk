@@ -215,6 +215,60 @@ esp_err_t doc_buf_close(int i)
     return ESP_OK;
 }
 
+int doc_buf_find(const char *name)
+{
+    for (int i = 0; i < DOC_MAX_BUFFERS; i++) {
+        if (s_bufs[i].used && strncmp(s_bufs[i].name, name, DOC_NAME_MAX) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+int doc_buf_ensure(const char *name)
+{
+    const int found = doc_buf_find(name);
+    if (found >= 0) {
+        return found;
+    }
+    const int i = buffer_claim(name, (size_t)-1, 0, 0, DOC_KIND_PROSE);
+    if (i >= 0) {
+        ensure_storage(&s_bufs[i]);
+    }
+    return i;
+}
+
+void doc_buf_append(int i, const char *text)
+{
+    if (i < 0 || i >= DOC_MAX_BUFFERS || !s_bufs[i].used || text == NULL) {
+        return;
+    }
+    buf_t *b = &s_bufs[i];
+    if (ensure_storage(b) != ESP_OK) {
+        return;
+    }
+    /* Append at the very end, wherever the gap happens to be. */
+    const size_t len = b->cap - (b->ge - b->gs);
+    const size_t save_gs = b->gs;
+    while (b->gs < len) { b->buf[b->gs++] = b->buf[b->ge++]; }
+    for (const char *p = text; *p != '\0' && b->gs < b->ge; p++) {
+        b->buf[b->gs++] = *p;
+    }
+    if (b->gs < b->ge) {
+        b->buf[b->gs++] = '\n';
+    }
+    /* Leave the cursor where the owner had it if this is their buffer. */
+    if (i != s_cur) {
+        while (b->gs > save_gs) { b->buf[--b->ge] = b->buf[--b->gs]; }
+    }
+    b->dirty = true;
+}
+
+bool buffer_is_transient(const char *name)
+{
+    return name != NULL && name[0] == '+';
+}
+
 const char *buffer_current_name(void) { return cur()->name; }
 void        buffer_mark_clean(void)   { cur()->dirty = false; }
 

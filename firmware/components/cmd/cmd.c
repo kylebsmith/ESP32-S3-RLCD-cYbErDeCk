@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "docstore.h"
 #include "esp_log.h"
 
 static const char *TAG = "cmd";
@@ -50,10 +51,14 @@ void cmd_out(cmd_ctx_t *ctx, const char *fmt, ...)
     vsnprintf(line, sizeof line, fmt, ap);
     va_end(ap);
 
-    /* One sink, one call site. Today it is the log plus the context's short
-     * message; when an output buffer exists this is the only function that
-     * has to learn about it. */
+    /* One sink, one call site - and it is a BUFFER, which is the whole point.
+     * Command output that went to a log or a scrollback would be the one
+     * thing on this device that is not text in the substrate: not editable,
+     * not searchable, not pipeable, not undoable. docs/SUBSTRATE.md claims
+     * there is one data structure; output has to be in it or the claim is
+     * false. */
     ESP_LOGI(TAG, "%s", line);
+    doc_buf_append(doc_buf_ensure("+out"), line);
     if (ctx != NULL && ctx->msg[0] == '\0') {
         snprintf(ctx->msg, sizeof ctx->msg, "%.*s",
                  (int)(sizeof ctx->msg - 1), line);

@@ -68,6 +68,18 @@ esp_err_t   doc_buf_new(void);         /* a fresh scratch buffer           */
 esp_err_t   doc_buf_rename(const char *name);  /* promote current to filed */
 esp_err_t   doc_buf_close(int i);      /* forget it; the journal keeps it  */
 
+/* Find a buffer by name, or make one. A name beginning with '+' marks a
+ * buffer the machine wrote rather than the owner: it is a buffer like any
+ * other - editable, scrollable, undoable - but it is NOT journalled, because
+ * an archive that fills with command output is an archive nobody trusts. */
+int         doc_buf_find(const char *name);
+int         doc_buf_ensure(const char *name);
+
+/* Append to a buffer that is not necessarily the current one. This is how
+ * command output reaches the substrate without yanking the view away from
+ * whatever the owner was doing. */
+void        doc_buf_append(int i, const char *text);
+
 
 /* Load the newest valid snapshot, or start empty. */
 esp_err_t doc_init(void);

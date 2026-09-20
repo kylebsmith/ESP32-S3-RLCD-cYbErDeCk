@@ -83,6 +83,7 @@ int       buffer_claim(const char *name, size_t rec_off, size_t rec_len,
                        uint32_t seq, uint8_t kind);
 const char *buffer_current_name(void);
 uint8_t     buffer_current_kind(void);
+bool        buffer_is_transient(const char *name);
 
 static inline size_t rec_total(uint32_t len, size_t hdr)
 {
@@ -260,6 +261,11 @@ esp_err_t doc_save(void)
 {
     if (s_part == NULL) {
         return ESP_ERR_INVALID_STATE;
+    }
+    /* Machine-written buffers are never archived. */
+    if (buffer_is_transient(buffer_current_name())) {
+        gapbuf_mark_clean();
+        return ESP_OK;
     }
     const size_t len = doc_len();
     const size_t need = rec_total((uint32_t)len, sizeof(rec_hdr_t));

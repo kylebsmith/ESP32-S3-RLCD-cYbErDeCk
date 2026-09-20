@@ -121,6 +121,17 @@ static cmd_status_t c_prose(cmd_ctx_t *ctx)
     return CMD_DONE;
 }
 
+static cmd_status_t c_out(cmd_ctx_t *ctx)
+{
+    const int i = doc_buf_ensure("+out");
+    if (i < 0 || doc_buf_select(i) != ESP_OK) {
+        cmd_out(ctx, "no output buffer");
+        return CMD_ERROR;
+    }
+    snprintf(ctx->msg, sizeof ctx->msg, "output");
+    return CMD_DONE;
+}
+
 static const cmd_t s_builtins[] = {
     { "help",  c_help,  CMD_CAP_READ,                   "list the commands" },
     { "list",  c_list,  CMD_CAP_READ,                   "list open buffers" },
@@ -131,6 +142,7 @@ static const cmd_t s_builtins[] = {
     { "close", c_close, CMD_CAP_EDIT,                   "forget this buffer" },
     { "guide", c_guide, CMD_CAP_EDIT,                   "Enter runs lines here" },
     { "prose", c_prose, CMD_CAP_EDIT,                   "Enter splits lines here" },
+    { "out",   c_out,   CMD_CAP_READ,                   "read command output" },
 };
 
 void cmd_register(const cmd_t *table, int count);

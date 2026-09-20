@@ -420,6 +420,16 @@ static void handle_ctrl(char c)
         s_msg_until = editor_now_ms() + 3000;
         return;
     }
+    case 'o': {                      /* jump to command output */
+        const int i = doc_buf_find("+out");
+        if (i >= 0 && doc_buf_select(i) == ESP_OK) {
+            editor_invalidate();
+            tg_invalidate();
+            snprintf(s_msg, sizeof s_msg, "+out");
+            s_msg_until = editor_now_ms() + 2500;
+        }
+        return;
+    }
     case 'z': doc_undo(); break;
     case 'y': doc_redo(); break;
     case 'a': { int s, e; line_bounds(&s, &e); doc_move_to((size_t)s); break; }
