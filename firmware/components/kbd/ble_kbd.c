@@ -49,6 +49,7 @@ static const char *TAG = "kbd";
 
 #define REPEAT_DELAY_MS   400
 #define REPEAT_PERIOD_MS   45
+#define REPEAT_MAX        400   /* ~18 s; a lost key-up must not run for ever */
 
 static QueueHandle_t s_q;
 static uint16_t      s_conn = BLE_HS_CONN_HANDLE_NONE;
@@ -191,6 +192,7 @@ static void repeat_task(void *arg)
 {
     (void)arg;
     int64_t last_beat = 0;
+    int     repeats = 0;
     while (1) {
         const int64_t nowb = esp_timer_get_time() / 1000;
         if (nowb - last_beat >= 10000) {
@@ -201,12 +203,31 @@ static void repeat_task(void *arg)
                          s_state, s_adv_seen);
             }
         }
-        if (s_held_usage != 0 && s_connected) {
+        /* Read the shared held-key state once into locals. It is written by
+         * the NimBLE host task on another core; sampling it repeatedly can
+         * see it change mid-decision and emit a character for a key that has
+         * already been released. */
+        const uint8_t held = s_held_usage;
+        const uint8_t hmods = s_held_mods;
+
+        if (held != 0 && s_connected && s_subscribed) {
             const int64_t now = esp_timer_get_time() / 1000;
             if (now >= s_next_repeat_ms) {
-                dispatch_usage(s_held_usage, s_held_mods, true);
-                s_next_repeat_ms = now + REPEAT_PERIOD_MS;
+                /* Bounded. A key-up report lost to a dropped BLE packet used
+                 * to repeat until the supervision timeout - several seconds
+                 * of one character, with no way to stop it. */
+                if (repeats < REPEAT_MAX) {
+                    dispatch_usage(held, hmods, true);
+                    repeats++;
+                    s_next_repeat_ms = now + REPEAT_PERIOD_MS;
+                } else if (repeats == REPEAT_MAX) {
+                    repeats++;
+                    ESP_LOGW(TAG, "key repeat capped - assuming a lost key-up");
+                    s_held_usage = 0;
+                }
             }
+        } else {
+            repeats = 0;
         }
         vTaskDelay(pdMS_TO_TICKS(15));
     }
@@ -395,9 +416,13 @@ static void subscribe_next(uint16_t conn)
                 after_subscribe(conn);
             }
         } else {
-            ESP_LOGE(TAG, "connected but NOTHING subscribed - the keyboard "
-                          "exposed no notifiable report characteristic");
+            /* Connected with nothing subscribed is a dead link that will
+             * never produce a keystroke. Drop it and rescan rather than
+             * sitting there looking healthy for ever. */
+            ESP_LOGE(TAG, "connected but NOTHING subscribed - dropping the "
+                          "link and rescanning");
             s_state = "no reports";
+            ble_gap_terminate(conn, BLE_ERR_REM_USER_CONN_TERM);
         }
         return;
     }
@@ -456,6 +481,11 @@ static int on_chr(uint16_t conn, const struct ble_gatt_error *err,
 
     if (s_all_def_count < (int)(sizeof s_all_defs / sizeof s_all_defs[0])) {
         s_all_defs[s_all_def_count++] = chr->def_handle;
+    } else {
+        /* Silent truncation here corrupts the descriptor ranges the whole
+         * subscription walk depends on. */
+        ESP_LOGW(TAG, "more characteristics than the handle table holds - "
+                      "descriptor ranges may be wrong");
     }
 
     const uint16_t u = ble_uuid_u16(&chr->uuid.u);
@@ -499,11 +529,19 @@ static int on_svc(uint16_t conn, const struct ble_gatt_error *err,
         const int rc = ble_gattc_disc_all_chrs(conn, s_svc_start, s_svc_end,
                                                on_chr, NULL);
         if (rc != 0) {
-            ESP_LOGE(TAG, "characteristic discovery could not start: %d", rc);
+            ESP_LOGE(TAG, "characteristic discovery could not start (%d) - "
+                          "dropping the link", rc);
+            ble_gap_terminate(conn, BLE_ERR_REM_USER_CONN_TERM);
         }
         return 0;
     }
-    if (err->status != 0 || svc == NULL) {
+    if (err->status != 0) {
+        ESP_LOGW(TAG, "service discovery failed (%d) - dropping the link",
+                 err->status);
+        ble_gap_terminate(conn, BLE_ERR_REM_USER_CONN_TERM);
+        return 0;
+    }
+    if (svc == NULL) {
         return 0;
     }
     s_svc_start = svc->start_handle;
@@ -651,6 +689,21 @@ static int gap_event(struct ble_gap_event *ev, void *arg)
     case BLE_GAP_EVENT_NOTIFY_RX: {
         const int len = OS_MBUF_PKTLEN(ev->notify_rx.om);
         uint8_t buf[16];
+
+        /* Only a characteristic we deliberately subscribed to may be decoded
+         * as keystrokes. This peer also notifies battery level on a handle
+         * outside the HID service; a three-byte notification from anywhere
+         * would otherwise have been typed into the document. */
+        bool ours = false;
+        for (int i = 0; i < s_chr_count; i++) {
+            if (s_chrs[i].val_handle == ev->notify_rx.attr_handle) {
+                ours = true;
+                break;
+            }
+        }
+        if (!ours) {
+            return 0;
+        }
         if (len >= 1 && len <= (int)sizeof buf &&
             ble_hs_mbuf_to_flat(ev->notify_rx.om, buf, sizeof buf, NULL) == 0) {
             if (!s_connected) {

@@ -74,6 +74,18 @@ bool selftest_run(void)
 {
     const uint8_t stage = stage_get();
 
+    /* Refuse to run against a document that is not the test's own. Stage 2
+     * erases the whole journal; on a device that has been written on, that is
+     * the owner's work. The test only ever starts on an empty journal, so a
+     * non-empty one at stage 0 means this is a real device, not a bench. */
+    if (stage == 0 && doc_len() != 0) {
+        ESP_LOGW(TAG, "journal already has %u bytes - skipping the self-test "
+                      "rather than erasing someone's writing",
+                 (unsigned)doc_len());
+        stage_set(3);
+        return false;
+    }
+
     switch (stage) {
     case 0:
         ESP_LOGW(TAG, "STAGE 0: seeding snapshot A (%u bytes) and saving",

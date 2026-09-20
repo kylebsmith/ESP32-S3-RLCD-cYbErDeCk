@@ -112,9 +112,23 @@ static void bench(void)
 
 static int64_t now_ms(void) { return esp_timer_get_time() / 1000; }
 
-/* Show the pairing passkey on the deck itself. A standalone device that can
- * only tell you its passkey down a USB cable is not standalone. */
+/* The passkey arrives on the NimBLE host task. It is only RECORDED here; the
+ * main task draws it on its next pass.
+ *
+ * Drawing it directly raced the main task over the text grid, the framebuffer
+ * and the SPI bus - three pieces of shared state with no lock between them -
+ * and would have produced a torn screen at exactly the moment the owner most
+ * needs to read six digits correctly. */
+static volatile uint32_t s_passkey;
+static volatile bool     s_passkey_pending;
+
 void kbd_on_passkey(uint32_t passkey)
+{
+    s_passkey = passkey;
+    s_passkey_pending = true;
+}
+
+static void draw_passkey(uint32_t passkey)
 {
     char line[32];
     snprintf(line, sizeof line, "%06u", (unsigned)passkey);
@@ -193,7 +207,7 @@ void app_main(void)
     st7305_clear(false);
     editor_draw();
     size_t bytes = 0;
-    tg_flush(&bytes);
+    editor_present(&bytes);
     ESP_LOGI(TAG, "editor up - KEY taps cycle orientation, KEY held %d ms "
                   "forgets all keyboard bonds", KEY_LONG_MS);
 
@@ -232,6 +246,14 @@ void app_main(void)
             editor_cursor_solid();   /* never blink away mid-keystroke */
         }
 
+        if (s_passkey_pending) {
+            s_passkey_pending = false;
+            draw_passkey(s_passkey);
+            tg_invalidate();
+            editor_invalidate();
+            need_draw = true;        /* restore the editor afterwards */
+        }
+
         /* KEY: tap cycles orientation, long hold forgets bonds. */
         const bool down = gpio_get_level(PIN_KEY) == 0;
         if (down && !key_was_down) {
@@ -247,13 +269,15 @@ void app_main(void)
             orient_save(orient);
             ESP_LOGI(TAG, "orientation -> %d (saved)", orient);
             tg_invalidate();
+            editor_invalidate();
+            st7305_clear(false);
             need_draw = true;
         }
         key_was_down = down;
 
         if (need_draw) {
             editor_draw();
-            tg_flush(&bytes);
+            editor_present(&bytes);
             need_draw = false;
         }
 
@@ -264,12 +288,12 @@ void app_main(void)
                 last_blink_ms = now_ms();
                 blink_on = !blink_on;
                 editor_blink(blink_on);
-                tg_flush(&bytes);
+                editor_present(&bytes);
             }
         } else if (!blink_on) {
             blink_on = true;
             editor_cursor_solid();
-            tg_flush(&bytes);
+            editor_present(&bytes);
         }
 
         /* Autosave: on newline, or once typing has paused. Never per

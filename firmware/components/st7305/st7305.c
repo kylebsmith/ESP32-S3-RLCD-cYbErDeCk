@@ -17,6 +17,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 
 static const char *TAG = "st7305";
@@ -44,11 +45,45 @@ static spi_device_handle_t s_spi_write;
 static spi_device_handle_t s_spi_read;
 static uint8_t *s_fb;       /* 15,000 B, controller order, internal DMA SRAM */
 static uint8_t *s_stage;    /* gather buffer for windows narrower than a row */
-static st7305_damage_t s_dmg = { .x0 = 1, .y0 = 1, .x1 = -1, .y1 = -1 };
+/* A damage LIST, not a single rectangle.
+ *
+ * docs/OS.md specifies a damage list and the reason is visible the moment one
+ * is not used: a character changing at the top of the screen and a status bar
+ * changing at the bottom union into a rectangle covering the whole panel, and
+ * a 36-byte update becomes a 13,800-byte one. Measured, not theorised.
+ *
+ * Four rectangles is enough for text + cursor + rule + status; beyond that the
+ * two cheapest to combine are merged, so the list degrades into the old
+ * behaviour rather than dropping damage. */
+#define DMG_MAX 4
+static st7305_damage_t s_dmg[DMG_MAX];
+static int s_dmg_count;
 static st7305_power_policy_t s_policy = ST7305_POWER_AUTO;
 static bool s_in_hpm;
 static esp_timer_handle_t s_idle_timer;
 static st7305_orient_t s_orient = ST7305_ORIENT_1;
+
+/* The bus is reached from three tasks: the main task drawing, the esp_timer
+ * task dropping the panel to LPM after an idle timeout, and the NimBLE host
+ * task. st_cmd_data holds CS low across a command and its payload, so an
+ * interleaved command from another task lands INSIDE that window and the
+ * panel receives a spliced transaction. Recursive because a flush takes the
+ * lock and then calls st_cmd_data, which takes it again. */
+static SemaphoreHandle_t s_bus;
+
+static inline void bus_lock(void)
+{
+    if (s_bus != NULL) {
+        xSemaphoreTakeRecursive(s_bus, portMAX_DELAY);
+    }
+}
+
+static inline void bus_unlock(void)
+{
+    if (s_bus != NULL) {
+        xSemaphoreGiveRecursive(s_bus);
+    }
+}
 
 /* --------------------------------------------------------------------------
  * Low-level SPI. CS is driven by hand because a RAM write has to hold CS low
@@ -72,6 +107,7 @@ static esp_err_t spi_raw(const uint8_t *data, size_t len)
 
 static esp_err_t st_cmd_data(uint8_t cmd, const uint8_t *data, size_t len)
 {
+    bus_lock();
     gpio_set_level(PIN_DC, 0);
     gpio_set_level(PIN_CS, 0);
     esp_err_t err = spi_raw(&cmd, 1);
@@ -80,6 +116,7 @@ static esp_err_t st_cmd_data(uint8_t cmd, const uint8_t *data, size_t len)
         err = spi_raw(data, len);
     }
     gpio_set_level(PIN_CS, 1);
+    bus_unlock();
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "command 0x%02x failed: %s", cmd, esp_err_to_name(err));
     }
@@ -267,6 +304,11 @@ esp_err_t st7305_init(void)
 
     /* The framebuffer must be internal DMA SRAM: SPI DMA cannot reach PSRAM
      * without cache-coherence work, and 15 KB of 512 KB is affordable. */
+    s_bus = xSemaphoreCreateRecursiveMutex();
+    if (s_bus == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
+
     s_fb = heap_caps_calloc(1, ST7305_FB_SIZE, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
     s_stage = heap_caps_malloc(ST7305_FB_SIZE, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
     if (s_fb == NULL || s_stage == NULL) {
@@ -313,6 +355,29 @@ static inline void to_native(int x, int y, int *nx, int *ny)
 #define fb_index_n st7305_fb_index_n
 #define fb_mask_n  st7305_fb_mask_n
 
+static inline long rect_area(const st7305_damage_t *r)
+{
+    return (long)(r->x1 - r->x0 + 1) * (long)(r->y1 - r->y0 + 1);
+}
+
+static inline void rect_union(st7305_damage_t *a, const st7305_damage_t *b)
+{
+    if (b->x0 < a->x0) { a->x0 = b->x0; }
+    if (b->y0 < a->y0) { a->y0 = b->y0; }
+    if (b->x1 > a->x1) { a->x1 = b->x1; }
+    if (b->y1 > a->y1) { a->y1 = b->y1; }
+}
+
+/* Would merging these two cost less than keeping them apart? Rectangles that
+ * already overlap or sit within a controller quantum of each other are always
+ * worth merging, because the window would quantise them together anyway. */
+static long merge_cost(const st7305_damage_t *a, const st7305_damage_t *b)
+{
+    st7305_damage_t u = *a;
+    rect_union(&u, b);
+    return rect_area(&u) - rect_area(a) - rect_area(b);
+}
+
 void st7305_damage(int x, int y, int w, int h)
 {
     if (w <= 0 || h <= 0) {
@@ -327,15 +392,36 @@ void st7305_damage(int x, int y, int w, int h)
     if (x > x1 || y > y1) {
         return;
     }
-    if (s_dmg.x0 > s_dmg.x1) {
-        s_dmg.x0 = (int16_t)x;  s_dmg.y0 = (int16_t)y;
-        s_dmg.x1 = (int16_t)x1; s_dmg.y1 = (int16_t)y1;
+
+    st7305_damage_t r = { (int16_t)x, (int16_t)y, (int16_t)x1, (int16_t)y1 };
+
+    /* Fold into an existing rectangle when they touch; a quantum of slack
+     * because the window is snapped out to 12 px and 2 lines regardless. */
+    for (int i = 0; i < s_dmg_count; i++) {
+        if (r.x0 <= s_dmg[i].x1 + 2 && s_dmg[i].x0 <= r.x1 + 2 &&
+            r.y0 <= s_dmg[i].y1 + 12 && s_dmg[i].y0 <= r.y1 + 12) {
+            rect_union(&s_dmg[i], &r);
+            return;
+        }
+    }
+
+    if (s_dmg_count < DMG_MAX) {
+        s_dmg[s_dmg_count++] = r;
         return;
     }
-    if (x  < s_dmg.x0) { s_dmg.x0 = (int16_t)x;  }
-    if (y  < s_dmg.y0) { s_dmg.y0 = (int16_t)y;  }
-    if (x1 > s_dmg.x1) { s_dmg.x1 = (int16_t)x1; }
-    if (y1 > s_dmg.y1) { s_dmg.y1 = (int16_t)y1; }
+
+    /* Full: merge whichever pair costs least, then take the freed slot. */
+    int bi = 0, bj = 1;
+    long best = merge_cost(&s_dmg[0], &s_dmg[1]);
+    for (int i = 0; i < s_dmg_count; i++) {
+        for (int j = i + 1; j < s_dmg_count; j++) {
+            const long cst = merge_cost(&s_dmg[i], &s_dmg[j]);
+            if (cst < best) { best = cst; bi = i; bj = j; }
+        }
+    }
+    rect_union(&s_dmg[bi], &s_dmg[bj]);
+    s_dmg[bj] = s_dmg[s_dmg_count - 1];
+    s_dmg[s_dmg_count - 1] = r;
 }
 
 void st7305_pixel(int x, int y, bool on)
@@ -370,8 +456,9 @@ void st7305_fill(int x, int y, int w, int h, bool on)
 void st7305_clear(bool on)
 {
     memset(s_fb, on ? 0xFF : 0x00, ST7305_FB_SIZE);
-    s_dmg.x0 = 0; s_dmg.y0 = 0;
-    s_dmg.x1 = ST7305_WIDTH - 1; s_dmg.y1 = ST7305_HEIGHT - 1;
+    s_dmg_count = 1;
+    s_dmg[0].x0 = 0; s_dmg[0].y0 = 0;
+    s_dmg[0].x1 = ST7305_WIDTH - 1; s_dmg[0].y1 = ST7305_HEIGHT - 1;
 }
 
 /* --------------------------------------------------------------------------
@@ -389,6 +476,7 @@ void st7305_clear(bool on)
 
 static esp_err_t push_window(int nx0, int nx1, int ny0, int ny1, size_t *sent)
 {
+    bus_lock();
     /* Quantise out: native x to 12 px, native y to 2 lines. */
     st7305_window_t w;
     st7305_window(nx0, nx1, ny0, ny1, &w);
@@ -398,13 +486,18 @@ static esp_err_t push_window(int nx0, int nx1, int ny0, int ny1, size_t *sent)
     const int row_first  = w.raset[0];
 
     if (s_policy == ST7305_POWER_AUTO) {
-        ST_TRY(set_mode(true));
+        const esp_err_t e = set_mode(true);
+        if (e != ESP_OK) { bus_unlock(); return e; }
         esp_timer_stop(s_idle_timer);
         esp_timer_start_once(s_idle_timer, (uint64_t)IDLE_LPM_MS * 1000);
     }
 
-    ST_TRY(st_cmd_data(0x2A, w.caset, sizeof w.caset));
-    ST_TRY(st_cmd_data(0x2B, w.raset, sizeof w.raset));
+    {
+        const esp_err_t e1 = st_cmd_data(0x2A, w.caset, sizeof w.caset);
+        if (e1 != ESP_OK) { bus_unlock(); return e1; }
+        const esp_err_t e2 = st_cmd_data(0x2B, w.raset, sizeof w.raset);
+        if (e2 != ESP_OK) { bus_unlock(); return e2; }
+    }
 
     const uint8_t *payload;
     if (send_count == ST7305_ROW_BYTES) {
@@ -421,7 +514,11 @@ static esp_err_t push_window(int nx0, int nx1, int ny0, int ny1, size_t *sent)
     }
 
     const size_t len = (size_t)send_count * (size_t)rows;
-    ST_TRY(st_cmd_data(0x2C, payload, len));
+    const esp_err_t err = st_cmd_data(0x2C, payload, len);
+    bus_unlock();
+    if (err != ESP_OK) {
+        return err;
+    }
     if (sent != NULL) {
         *sent = len;
     }
@@ -433,27 +530,39 @@ esp_err_t st7305_flush(size_t *bytes_sent)
     if (bytes_sent != NULL) {
         *bytes_sent = 0;
     }
-    if (s_dmg.x0 > s_dmg.x1) {
-        return ESP_OK;   /* nothing changed */
+    if (s_dmg_count == 0) {
+        return ESP_OK;                      /* nothing changed */
     }
-    /* Map the rectangle's corners through the same transform and take the
-     * extremes; a mirror swaps which corner is which. */
-    int ax, ay, bx, by;
-    to_native(s_dmg.x0, s_dmg.y0, &ax, &ay);
-    to_native(s_dmg.x1, s_dmg.y1, &bx, &by);
-    const int nx0 = ax < bx ? ax : bx, nx1 = ax < bx ? bx : ax;
-    const int ny0 = ay < by ? ay : by, ny1 = ay < by ? by : ay;
-    const esp_err_t err = push_window(nx0, nx1, ny0, ny1, bytes_sent);
-    if (err == ESP_OK) {
-        s_dmg.x0 = 1; s_dmg.y0 = 1; s_dmg.x1 = -1; s_dmg.y1 = -1;
+
+    const int count = s_dmg_count;
+    s_dmg_count = 0;                        /* cleared up front: a failure
+                                             * should not replay for ever */
+    for (int i = 0; i < count; i++) {
+        /* Map the rectangle's corners through the orientation transform and
+         * take the extremes; a mirror swaps which corner is which. */
+        int ax, ay, bx, by;
+        to_native(s_dmg[i].x0, s_dmg[i].y0, &ax, &ay);
+        to_native(s_dmg[i].x1, s_dmg[i].y1, &bx, &by);
+        const int nx0 = ax < bx ? ax : bx, nx1 = ax < bx ? bx : ax;
+        const int ny0 = ay < by ? ay : by, ny1 = ay < by ? by : ay;
+
+        size_t sent = 0;
+        const esp_err_t err = push_window(nx0, nx1, ny0, ny1, &sent);
+        if (err != ESP_OK) {
+            return err;
+        }
+        if (bytes_sent != NULL) {
+            *bytes_sent += sent;
+        }
     }
-    return err;
+    return ESP_OK;
 }
 
 esp_err_t st7305_flush_full(void)
 {
-    s_dmg.x0 = 0; s_dmg.y0 = 0;
-    s_dmg.x1 = ST7305_WIDTH - 1; s_dmg.y1 = ST7305_HEIGHT - 1;
+    s_dmg_count = 1;
+    s_dmg[0].x0 = 0; s_dmg[0].y0 = 0;
+    s_dmg[0].x1 = ST7305_WIDTH - 1; s_dmg[0].y1 = ST7305_HEIGHT - 1;
     return st7305_flush(NULL);
 }
 

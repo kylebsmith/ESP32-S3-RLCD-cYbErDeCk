@@ -29,6 +29,7 @@
 #include "docstore.h"
 #include "kbd.h"
 #include "st7305.h"
+#include "esp_log.h"
 #include "textgrid.h"
 
 #define MARGIN_X     20
@@ -43,6 +44,12 @@
 #define RULE_Y      254        /* a hairline between text and status */
 
 #define MAX_LINES  2048
+/* How far back from the cursor the wrap window starts. The old code wrapped
+ * from byte zero, so a document past MAX_LINES display lines stopped growing
+ * the table, the cursor line was never found, and the view froze with every
+ * further keystroke invisible. Wrapping a bounded window around the cursor
+ * removes the cliff and makes the cost independent of document length. */
+#define WRAP_BACK  6000
 
 static int  s_line_start[MAX_LINES];
 static int  s_line_count;
@@ -57,6 +64,13 @@ static int  s_cur_col = -1, s_cur_row = -1;
 static char s_cur_ch  = ' ';
 
 static char s_status_shown[64];
+static bool s_chrome_dirty = true;
+
+void editor_invalidate(void)
+{
+    s_chrome_dirty = true;
+    s_status_shown[0] = '\0';
+}
 
 esp_err_t editor_init(void)
 {
@@ -66,43 +80,54 @@ esp_err_t editor_init(void)
 
 /* Greedy word wrap. Records where each display line starts and where the
  * cursor lands. Prose kind: Enter splits and what follows reflows. */
+static int s_wrap_origin;       /* document offset the table starts at */
+
 static void wrap(int cols)
 {
     const size_t len = doc_len();
     const size_t cur = doc_cursor();
 
+    /* Start a bounded distance before the cursor, then advance to the first
+     * character after a newline so the window begins on a real line boundary
+     * - wrapping is independent of anything before that point. */
+    size_t origin = cur > WRAP_BACK ? cur - WRAP_BACK : 0;
+    if (origin > 0) {
+        while (origin < cur && doc_at(origin - 1) != '\n') {
+            origin++;
+        }
+    }
+    s_wrap_origin = (int)origin;
+
     s_line_count  = 0;
     s_cursor_line = 0;
     s_cursor_col  = 0;
 
-    size_t i = 0;
-    int line_begin = 0;
+    size_t i = origin;
+    int line_begin = (int)origin;
     int col = 0;
     int last_space = -1;
 
-    s_line_start[s_line_count++] = 0;
+    s_line_start[s_line_count++] = (int)origin;
 
     while (i <= len) {
         if (i == cur) {
             s_cursor_line = s_line_count - 1;
             s_cursor_col  = col;
         }
-        if (i == len) {
+        if (i == len || s_line_count >= MAX_LINES) {
             break;
         }
-        const char c = doc_at(i);
+        const char ch = doc_at(i);
 
-        if (c == '\n') {
+        if (ch == '\n') {
             i++;
             line_begin = (int)i;
             col = 0;
             last_space = -1;
-            if (s_line_count < MAX_LINES) {
-                s_line_start[s_line_count++] = line_begin;
-            }
+            s_line_start[s_line_count++] = line_begin;
             continue;
         }
-        if (c == ' ') {
+        if (ch == ' ') {
             last_space = (int)i;
         }
         col++;
@@ -121,9 +146,7 @@ static void wrap(int cols)
             line_begin = brk;
             col = 0;
             last_space = -1;
-            if (s_line_count < MAX_LINES) {
-                s_line_start[s_line_count++] = line_begin;
-            }
+            s_line_start[s_line_count++] = line_begin;
         }
     }
 }
@@ -191,10 +214,18 @@ void editor_draw(void)
         }
     }
 
+    /* Cells first, then sub-cell chrome on top of them. Note that this
+     * RENDERS but does not PUSH: the caller pushes once, with editor_present,
+     * after the chrome is in the framebuffer too. */
     tg_render();
 
-    /* Chrome, drawn over the grid. */
-    st7305_fill(MARGIN_X, RULE_Y, ST7305_WIDTH - 2 * MARGIN_X, 2, true);
+    /* Chrome, drawn over the grid. The rule is static, so it is painted only
+     * when the whole screen is being repainted anyway - redrawing it every
+     * frame dragged the damage rectangle down across the entire panel. */
+    if (s_chrome_dirty) {
+        st7305_fill(MARGIN_X, RULE_Y, ST7305_WIDTH - 2 * MARGIN_X, 2, true);
+        s_chrome_dirty = false;
+    }
     status_bar();
 }
 
@@ -215,6 +246,31 @@ void editor_blink(bool on)
     s_cursor_on = on;
     tg_put(s_cur_col, s_cur_row, s_cur_ch, on ? TG_INVERSE : TG_NORMAL);
     tg_render();
+}
+
+/* Push whatever editor_draw/editor_blink put in the framebuffer.
+ *
+ * This exists because the alternative was a silent no-op. tg_flush() renders
+ * AND pushes, but editor_draw has already rendered - so tg_flush saw zero
+ * dirty cells, concluded there was nothing to send, and skipped the SPI push
+ * entirely. Every edit was drawn perfectly into the framebuffer and never
+ * reached the glass. Splitting render from present makes that mistake
+ * impossible to make again by accident. */
+void editor_present(size_t *bytes)
+{
+    size_t n = 0;
+    st7305_flush(&n);
+    if (bytes != NULL) {
+        *bytes = n;
+    }
+    /* Report what a redraw actually costs. The damage model is supposed to
+     * make one character 36 bytes; anything near a full frame means the
+     * damage rectangle is being widened by something else on the screen. */
+    static int logged;
+    if (n > 0 && logged < 24) {
+        logged++;
+        ESP_LOGI("editor", "present: %u bytes", (unsigned)n);
+    }
 }
 
 void editor_cursor_solid(void)

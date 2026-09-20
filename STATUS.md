@@ -251,6 +251,51 @@ I built no transport; I just did not design it out.
 
 ---
 
+## The audit, and what it found
+
+Before building step 5 on top of this, five reviewers went through the tree by
+subsystem and every finding was put to two adversarial verifiers instructed to
+refute by default. Nineteen survived; all nineteen are fixed.
+
+The one that mattered most had been sitting in plain sight and was reported by
+the owner in three words:
+
+**The editor never reached the panel.** `editor_draw()` called `tg_render()`,
+which draws the dirty cells and *clears the dirty bits*; `main` then called
+`tg_flush()`, which renders again, sees zero dirty cells, and concludes there
+is nothing to push. Every edit was drawn perfectly into the framebuffer and
+never clocked out. The only things that ever reached the glass were the test
+card and the passkey screen, which call `st7305_flush_full()` directly.
+
+The owner said "the text isn't reacting" and that was diagnosed as a keyboard
+problem. It was not. Render and present are now separate calls with the reason
+written at the call site.
+
+**A keystroke was pushing 13,800 bytes** — 92 % of a full frame — because the
+status bar and the hairline rule span the full width and damage was a single
+union rectangle. `docs/OS.md` specifies a damage *list* and this is why: with
+four rectangles it is **1,272 bytes**, and a cursor blink is 36. Measured
+before and after, on the panel.
+
+**The SPI bus had no mutual exclusion** while three tasks reached it - the
+main task drawing, the esp_timer callback dropping to LPM, and the NimBLE host
+task. `st_cmd_data` holds CS low across a command and its payload, so an
+interleaved command lands inside that window and the panel receives a spliced
+transaction. Now serialised with a recursive mutex.
+
+**The journal's write cursor followed the last record by offset rather than
+the newest by sequence.** On a wrapped journal that put the cursor after a
+stale record, and the next save would have erased the sector holding the
+newest one. This is the finding that could have lost writing.
+
+Also fixed: the self-test could erase a real document; the view froze silently
+past 2,048 display lines (wrapping is now a bounded window around the cursor);
+notifications from any characteristic were decoded as keystrokes, including
+the battery service; a lost key-up repeated until the BLE supervision timeout;
+several discovery failures left the deck connected-but-dead for ever; and the
+passkey screen was drawn from the NimBLE task straight into the main task's
+framebuffer.
+
 ## Things I suspect
 
 - **The panel does not read back.** `RDDID` now executes cleanly but returns

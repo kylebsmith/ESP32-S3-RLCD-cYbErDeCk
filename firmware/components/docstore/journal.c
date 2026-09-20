@@ -88,8 +88,13 @@ static esp_err_t journal_scan(char *scratch, size_t scratch_len,
                 best_seq = h.seq;
                 best_off = off;
                 found = true;
+                /* Follow the NEWEST record, not the last one encountered.
+                 * A wrapped journal has older records at higher offsets, so
+                 * taking the last by offset put the write cursor immediately
+                 * after a STALE record - and the next save would erase the
+                 * sector holding the newest one. */
+                next_free = off + rec_total(h.len);
             }
-            next_free = off + rec_total(h.len);
         } else {
             ESP_LOGW(TAG, "record at %u fails CRC - ignoring (the torn-write "
                           "case, working as designed)", (unsigned)off);
@@ -148,6 +153,9 @@ esp_err_t doc_init(void)
 
 esp_err_t doc_save(void)
 {
+    if (s_part == NULL) {
+        return ESP_ERR_INVALID_STATE;   /* doc_init failed; do not deref */
+    }
     const size_t len = doc_len();
     const size_t need = rec_total((uint32_t)len);
 
@@ -202,6 +210,9 @@ esp_err_t doc_save(void)
 
 esp_err_t journal_erase_all(void)
 {
+    if (s_part == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
     const esp_err_t err = esp_partition_erase_range(s_part, 0, s_part->size);
     if (err == ESP_OK) {
         s_cursor = 0;
@@ -215,17 +226,21 @@ esp_err_t journal_erase_all(void)
  * exact failure a cut mid-write leaves behind. */
 esp_err_t journal_corrupt_newest(void)
 {
-    if (s_cursor < SECTOR) {
+    if (s_part == NULL || s_cursor < SECTOR) {
         return ESP_ERR_INVALID_STATE;
     }
+    /* Newest by SEQUENCE. Picking the last by offset corrupts an unrelated
+     * record once the journal has wrapped, and the test then reports a CRC
+     * failure that says nothing about the CRC gate. */
     size_t off = 0, last = 0;
+    uint32_t best = 0;
     bool found = false;
     while (off + sizeof(rec_hdr_t) <= s_part->size) {
         rec_hdr_t h;
         if (esp_partition_read(s_part, off, &h, sizeof h) != ESP_OK) break;
         if (h.magic == REC_MAGIC && h.len <= DOC_CAPACITY &&
             off + rec_total(h.len) <= s_part->size) {
-            last = off; found = true;
+            if (!found || h.seq >= best) { best = h.seq; last = off; found = true; }
             off += rec_total(h.len);
         } else {
             off += SECTOR;
