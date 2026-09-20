@@ -62,6 +62,15 @@ void cmd_out(cmd_ctx_t *ctx, const char *fmt, ...)
      * there is one data structure; output has to be in it or the claim is
      * false. */
     ESP_LOGI(TAG, "%s", line);
+    /* A RULE BETWEEN COMMANDS.
+     *
+     * Output accumulates in one buffer, so several runs ran together into an
+     * unreadable wall - the owner described these pages as jumbled. One thin
+     * line per command is enough to see where one answer ends and the next
+     * begins, and it costs one row. */
+    if (s_out_lines == 0) {
+        doc_buf_append(doc_buf_ensure("+out"), "------------------------------");
+    }
     doc_buf_append(doc_buf_ensure("+out"), line);
     s_out_lines++;
     if (ctx != NULL && ctx->msg[0] == '\0') {

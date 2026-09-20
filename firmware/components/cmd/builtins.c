@@ -702,9 +702,18 @@ static cmd_status_t c_usb(cmd_ctx_t *ctx)
 static cmd_status_t c_send(cmd_ctx_t *ctx)
 {
     if (ctx->arg[0] == '\0') {
+        /* TWO SHORT LINES, NOT ONE LONG ONE.
+         *
+         * This printed name, state and help on one line - 39 characters into
+         * a 30-column grid, so every line wrapped mid-word and ran into the
+         * next. The owner's report was that these pages are "jumbled in a
+         * funky way that's not very legible", and they were right: output
+         * that does not fit the screen is output nobody can read, which makes
+         * every command that produces it useless as a diagnostic. */
         for (int i = 0; i < seq_dest_count(); i++) {
-            cmd_out(ctx, "%-5s %-3s %s", seq_dest_name(i),
-                    seq_dest_on(i) ? "on" : "off", seq_dest_help(i));
+            cmd_out(ctx, "%-4s %s", seq_dest_name(i),
+                    seq_dest_on(i) ? "ON" : "off");
+            cmd_out(ctx, "     %.24s", seq_dest_help(i));
         }
         snprintf(ctx->msg, sizeof ctx->msg, "%d destination%s",
                  seq_dest_count(), seq_dest_count() == 1 ? "" : "s");

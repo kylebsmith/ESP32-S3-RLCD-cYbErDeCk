@@ -316,8 +316,8 @@ void app_main(void)
      * pointer: BLE MIDI, USB MIDI and a UART all plug in here without the
      * musical core changing. */
     cmd_set_announce(announce);
-    seq_dest_add("ble", dest_ble, blemidi_flush, "BLE MIDI to a laptop or phone");
-    seq_dest_add("mon", dest_mon, NULL, "print notes on the console");
+    seq_dest_add("ble", dest_ble, blemidi_flush, "BLE MIDI - off by default");
+    seq_dest_add("mon", dest_mon, NULL, "echo notes to the console");
     /* BLE MIDI is OFF by default. It is quantised to the connection interval
      * and shares one radio with the keyboard link, so typing contends with
      * the notes - which is exactly when the owner heard the timing go loose.
@@ -386,7 +386,7 @@ void app_main(void)
      * must NOT also be started - the console moves to the CDC interface and
      * reaches the editor through the same key mapper. */
     if (usbdev_boot()) {
-        seq_dest_add("usb", dest_usb, usbdev_midi_flush, "USB MIDI, one cable");
+        seq_dest_add("usb", dest_usb, usbdev_midi_flush, "USB MIDI - the native path");
         seq_dest_enable("usb", true);
     } else {
         serialkbd_init();            /* the cable is a keyboard too */
