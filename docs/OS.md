@@ -54,7 +54,16 @@ look reasonable. All are established in HARDWARE.md.
 | LPM write latency ≈ one refresh period `[FACT]` | Idle at 1 Hz is free, but the first keystroke must kick the panel to HPM or it feels like a Freewrite. |
 | Framebuffer must be internal DMA SRAM `[FACT]` | 15 KB of the 512 KB is spoken for. Documents and scrollback go to PSRAM. |
 | No backlight and no net to add one `[FACT]` | The device is unusable in the dark. This is a real product limitation, not a footnote. |
-| TLS ≈ 40–50 KB free internal heap `[FACT]` | **Exactly one TLS session at a time**, serialised behind one network task. No "sync in the background while talking to Daemon". |
+| TLS ≈ 40–50 KB free internal heap `[FACT]` | **Exactly one TLS session at a time**, serialised behind one network task. No "sync in the background while talking to Daemon". **This bounds TLS only** — see below. |
+
+**The TLS figure does not generalise to "the network."** It is driven by
+mbedTLS's record buffers — `CONFIG_MBEDTLS_SSL_IN_CONTENT_LEN` 16384 and
+`..._OUT_CONTENT_LEN` 4096 in this project's own `sdkconfig`, 20,480 B that
+exist purely for TLS record framing. SSH frames its own packets and never
+allocates them: an SSH client measures at **696 B of static internal SRAM**,
+with its 80,728-byte session in PSRAM. The constraint was correctly derived
+for TLS and wrongly extended to everything networked. See
+[NETWORK.md](NETWORK.md).
 
 ## Base: ESP-IDF 5.5.x, directly `[JUDGEMENT]`
 
