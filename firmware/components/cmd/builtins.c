@@ -688,8 +688,12 @@ static cmd_status_t c_usb(cmd_ctx_t *ctx)
 
     doc_save_all_dirty();
     seq_stop();
-    cmd_announce(on ? "USB MIDI - back in a moment"
-                    : "serial console - back in a moment");
+    /* Say REBOOTING. This command deliberately restarts the deck, which cuts
+     * the console off mid-sentence - and the owner reported '>usb on' as a
+     * crash, because that is exactly what a deliberate reboot looks like from
+     * a serial terminal. */
+    cmd_announce(on ? "USB MIDI - rebooting now"
+                    : "serial console - rebooting now");
     vTaskDelay(pdMS_TO_TICKS(600));
     esp_restart();
     return CMD_DONE;                 /* not reached */

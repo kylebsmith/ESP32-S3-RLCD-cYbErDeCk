@@ -342,6 +342,21 @@ void app_main(void)
     if (kbd_init() != ESP_OK) {
         ESP_LOGE(TAG, "BLE keyboard init FAILED");
     }
+    /* Configure KEY BEFORE reading it. This was nineteen lines lower, after
+     * the read below and after usbdev_boot() - so the escape hatch sampled an
+     * unconfigured pin with no pull-up enabled, and the comment claiming
+     * otherwise was simply wrong. The consequence was not subtle: the branch
+     * only ever turns USB OFF, so a pin reading low would have cancelled
+     * '>usb on' on every boot forever, and a floating pin would have done it
+     * at random. Never flashed; caught by an audit of the unflashed code. */
+    const gpio_config_t key = {
+        .pin_bit_mask = 1ULL << PIN_KEY,
+        .mode         = GPIO_MODE_INPUT,
+        .pull_up_en   = GPIO_PULLUP_ENABLE,
+        .intr_type    = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&key);
+
     /* HOLD KEY AT BOOT TO FORCE USB MIDI OFF.
      *
      * The last resort that needs no console, no keyboard and no host - and
@@ -353,6 +368,11 @@ void app_main(void)
      * Read here, after the GPIO is configured and before usbdev_boot(), and
      * only ever used to turn something OFF - so a stuck button can cost the
      * owner a feature but can never cost them the deck. */
+    /* Let the internal pull-up actually pull. It is ~45 kOhm against the pad
+     * and trace capacitance, so sampling immediately after gpio_config can
+     * read the pre-config level rather than the pulled one. */
+    vTaskDelay(pdMS_TO_TICKS(2));
+    ESP_LOGI(TAG, "KEY reads %d at boot", gpio_get_level(PIN_KEY));
     if (gpio_get_level(PIN_KEY) == 0) {
         if (usbdev_wanted()) {
             usbdev_want(false);
@@ -373,13 +393,6 @@ void app_main(void)
     }
     report_memory("after BLE");
 
-    const gpio_config_t key = {
-        .pin_bit_mask = 1ULL << PIN_KEY,
-        .mode         = GPIO_MODE_INPUT,
-        .pull_up_en   = GPIO_PULLUP_ENABLE,
-        .intr_type    = GPIO_INTR_DISABLE,
-    };
-    gpio_config(&key);
 
     ESP_ERROR_CHECK(editor_init());      /* margins; 30 x 10 inside them */
     tg_invalidate();

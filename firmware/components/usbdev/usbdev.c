@@ -135,6 +135,7 @@ static RTC_NOINIT_ATTR uint32_t s_tries;
  * context. Never acted on from the callback itself - see usbdev.h. */
 typedef enum { ACT_NONE = 0, ACT_CONFIRM, ACT_REVERT, ACT_REBOOT } action_t;
 static volatile action_t s_action;
+static volatile bool     s_say_waiting;
 static const char *volatile s_action_why;
 
 static bool     s_active;          /* this boot is running USB MIDI */
@@ -322,6 +323,10 @@ static void do_reboot(void)
 
 void usbdev_poll(void)
 {
+    if (s_say_waiting) {
+        s_say_waiting = false;
+        ESP_LOGW(TAG, "no host yet; staying armed");
+    }
     const action_t a = s_action;
     if (a == ACT_NONE) {
         return;
@@ -409,7 +414,13 @@ static void trial_expired(void *arg)
         /* No host at all - nothing is proven broken and no console was lost,
          * because there was nobody to lose it to. Keep waiting rather than
          * reverting on a deck that is simply running on battery. */
-        ESP_LOGW(TAG, "no host yet; staying armed");
+        /* NO LOGGING FROM HERE. This runs on the shared esp_timer task, and
+         * once USB MIDI is up stdout has been moved to the CDC interface -
+         * so this is a write into a 512-byte buffer that nothing may be
+         * draining, on the one branch that fires precisely when USB is in an
+         * uncertain state. That is the same shape as the two faults that have
+         * already stranded this deck. usbdev_poll() says it instead. */
+        s_say_waiting = true;
         esp_timer_start_once(s_trial, (uint64_t)TRIAL_MS * 1000);
         return;
     }

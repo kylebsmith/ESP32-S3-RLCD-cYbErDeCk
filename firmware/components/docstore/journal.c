@@ -253,11 +253,28 @@ esp_err_t journal_load_into(size_t rec_off, char *out, size_t max, size_t *len)
     return ESP_OK;
 }
 
+/* HOW MANY DISTINCT NAMES THE ARCHIVE CAN HOLD.
+ *
+ * This used to be DOC_MAX_BUFFERS, which is 8 and means something else - how
+ * many documents are resident in RAM at once. Conflating them was silent
+ * document loss: a ninth distinct name found no slot, so its record was
+ * skipped entirely, never claimed its sectors, and find_free_run handed them
+ * to the next save. And because the walk is in PHYSICAL SECTOR ORDER rather
+ * than by age, which eight names survived was arbitrary - not the newest,
+ * not the oldest.
+ *
+ * It is reachable with shipped commands: name eight documents, '>close' one,
+ * then '>new' and '>name' a ninth.
+ *
+ * The archive can be larger than the working set; the only cost here is stack
+ * for the scan array, 40 bytes per entry. */
+#define JOURNAL_MAX_NAMES 24
+
 /* Walk the whole partition and register the newest valid record per name. */
 static void journal_scan(char *scratch, size_t scratch_len)
 {
     struct { char name[DOC_NAME_MAX]; uint32_t seq; size_t off; size_t len;
-             uint8_t kind; } best[DOC_MAX_BUFFERS];
+             uint8_t kind; } best[JOURNAL_MAX_NAMES];
     int nbest = 0;
     size_t off = 0;
 
@@ -295,7 +312,24 @@ static void journal_scan(char *scratch, size_t scratch_len)
         for (int i = 0; i < nbest; i++) {
             if (strncmp(best[i].name, h.name, DOC_NAME_MAX) == 0) { slot = i; break; }
         }
-        if (slot < 0 && nbest < DOC_MAX_BUFFERS) {
+        if (slot < 0 && nbest >= JOURNAL_MAX_NAMES) {
+            /* No room to TRACK this name - but its sectors are still live,
+             * and handing them to the next write would overwrite a document
+             * that merely cannot be listed. Losing the ability to open a
+             * document is bad; overwriting it is unrecoverable. Claim the
+             * sectors under a placeholder so find_free_run never returns
+             * them, and say so, loudly, because this is data the owner can
+             * no longer reach. */
+            live_claim("", off, rec_total(h.len, hsz) / SECTOR);
+            ESP_LOGE(TAG, "archive full: '%s' is held but unreachable "
+                          "(%d names max)", h.name, JOURNAL_MAX_NAMES);
+            if (h.seq >= s_seq) {
+                s_seq = h.seq;
+            }
+            off += rec_total(h.len, hsz);
+            continue;
+        }
+        if (slot < 0) {
             slot = nbest++;
             snprintf(best[slot].name, DOC_NAME_MAX, "%s", h.name);
             best[slot].seq = 0;
@@ -321,6 +355,11 @@ static void journal_scan(char *scratch, size_t scratch_len)
             live_claim(best[i].name, best[i].off,
                        rec_total(h.len, hsz) / SECTOR);
         }
+    }
+
+    if (nbest > DOC_MAX_BUFFERS) {
+        ESP_LOGW(TAG, "%d documents archived, %d can be open at once",
+                 nbest, DOC_MAX_BUFFERS);
     }
 
     /* Slot 0 is the scratch buffer and already exists; give it its record if
