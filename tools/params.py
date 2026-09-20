@@ -22,6 +22,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 PARAMS = os.path.join(os.path.dirname(HERE), "cad", "parameters.scad")
 
 _ENV = {
+    # PI is built into OpenSCAD; this reader has to be told.
+    "PI": math.pi,
     "sqrt": math.sqrt, "min": min, "max": max, "abs": abs, "pow": pow,
     "cos": lambda d: math.cos(math.radians(d)),
     "sin": lambda d: math.sin(math.radians(d)),

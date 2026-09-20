@@ -1159,6 +1159,65 @@ def check_magnets(parts, p):
                 f"{p['magnet_skin']:.1f} mm but only "
                 f"{4*p['magnet_pull_08']*p['magnet_shear_frac']:.1f} N of shear; "
                 f"the two {p['cover_reg_depth']:.1f} mm platforms carry it instead")
+
+    # C-35. A crush rib narrower than one extrusion is not a crush rib, it is a
+    # suggestion the slicer may decline. The rib was 0.70 mm against a 0.80 mm
+    # nozzle and nothing looked at it, because every check here asked about
+    # DIAMETERS and a rib is a feature WIDTH. So this one measures the rib and
+    # the gap beside it on the rendered mesh, in extrusions.
+    noz = p["nozzle"]
+    bore_r = p["magnet_bore"] / 2.0
+    widths, gaps, lobed = [], [], 0
+    for z in np.arange(p["body_t"] - p["magnet_skin"] - p["magnet_pocket_h"] + 0.3,
+                        p["body_t"] - p["magnet_skin"] - 0.2, 0.15):
+        sec = ch.section(plane_origin=[0, 0, float(z)], plane_normal=[0, 0, 1])
+        if sec is None:
+            continue
+        pl, _ = sec.to_2D(to_2D=np.eye(4))
+        for e in pl.entities:
+            c = e.discrete(pl.vertices)
+            ctr = c.mean(axis=0)
+            if abs(abs(ctr[0]) - p["magnet_x"]) > 2.0 or len(c) < 40:
+                continue
+            rad = np.hypot(c[:, 0] - ctr[0], c[:, 1] - ctr[1])
+            if rad.max() > 4.0 or (rad.max() - rad.min()) < 0.25:
+                continue
+            lobed += 1
+            ang = np.arctan2(c[:, 1] - ctr[1], c[:, 0] - ctr[0])
+            o = np.argsort(ang)
+            ang, rr = ang[o], rad[o]
+            inside = rr < (bore_r - 0.05)
+            runs, i, n = [], 0, len(inside)
+            while i < n:
+                if inside[i]:
+                    j = i
+                    while j + 1 < n and inside[j + 1]:
+                        j += 1
+                    runs.append((ang[i], ang[j]))
+                    i = j + 1
+                else:
+                    i += 1
+            # Drop the first and last run: either may be clipped by the seam at
+            # +-pi, which would read as a false narrow rib.
+            for a0, a1 in runs[1:-1]:
+                widths.append((a1 - a0) * bore_r)
+            for k in range(len(runs) - 1):
+                gaps.append((runs[k + 1][0] - runs[k][1]) * bore_r)
+    if widths and gaps:
+        wmin, gmin = min(widths), min(gaps)
+        ok &= check("crush ribs are at least one extrusion wide", "MAGNET",
+                    wmin >= noz,
+                    f"narrowest rib {wmin:.3f} mm = {wmin/noz:.2f} extrusions at "
+                    f"a {noz} nozzle, across {lobed} sections; below 1.00 the "
+                    "slicer sets the width, not this design")
+        ok &= check("gaps between crush ribs survive the slicer", "MAGNET",
+                    gmin >= noz,
+                    f"narrowest gap {gmin:.3f} mm = {gmin/noz:.2f} extrusions; "
+                    "below 1.00 the ribs bridge into a solid ring and there is "
+                    "no crush relief left")
+    else:
+        ok &= check("crush rib geometry was measurable", "MAGNET", False,
+                    "no ribbed bore sections found in the chassis")
     return ok
 
 

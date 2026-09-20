@@ -443,8 +443,8 @@ module magnet_pocket(h) {
         // bumps standing magnet_rib_h proud of the bore wall.
         for (i = [0 : magnet_rib_n - 1])
             rotate([0, 0, i * 360 / magnet_rib_n])
-                translate([magnet_bore / 2, 0, -0.01])
-                    cylinder(r = magnet_rib_h, h = h + 0.02);
+                translate([magnet_rib_c, 0, -0.01])
+                    cylinder(r = magnet_rib_r, h = h + 0.02);
     }
 }
 

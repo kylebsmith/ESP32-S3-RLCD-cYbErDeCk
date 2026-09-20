@@ -1209,14 +1209,51 @@ magnet_bore  = magnet_d + 0.50;    // [DESIGN] = 5.50 drawn. FDM holes print
                                    //   0.1-0.3 undersize, so this lands near
                                    //   5.30 as printed; the ribs, not the bore,
                                    //   set the grip. ONE compensation, here.
-magnet_rib_n = 8;                  // [DESIGN] crush ribs around the bore
 magnet_rib_h = 0.35;               // [DESIGN] rib tips close the bore to 4.80,
                                    //   so even the smallest disc in the band
                                    //   (4.90) sees 0.10 mm of diametral
                                    //   interference and the largest (5.10)
-                                   //   sees 0.30 - well inside what eight ribs
+                                   //   sees 0.30 - well inside what six ribs
                                    //   absorb by deforming, and nowhere near
                                    //   the hoop strain that cracks a solid bore
+
+//  RIB WIDTH, WHICH WAS NOT FREE AND WAS NOT CHECKED. The rib used to be cut
+//  by a cylinder of radius magnet_rib_h centred ON the bore wall, which makes
+//  the bump 2 * magnet_rib_h = 0.70 mm wide at its base. Against a 0.80 mm
+//  nozzle that is 0.85 of ONE extrusion: the slicer cannot resolve it, so what
+//  printed was a smear of whatever width the bead happened to be, and none of
+//  the designed 0.10-0.30 mm interference was under the designer's control.
+//  See docs/DATUMS.md C-35.
+//
+//  The height stays. The base widens to two clean extrusions by cutting with a
+//  LARGER cylinder pushed further OUTSIDE the bore wall. Radius and offset are
+//  solved from the height and the width below, so they cannot drift apart when
+//  either moves - which is the whole point of doing it here rather than in the
+//  module.
+magnet_rib_w = 2 * nozzle;         // [DESIGN] = 1.60, two clean extrusions
+magnet_rib_n = 6;                  // [DESIGN] crush ribs around the bore. WAS
+                                   //   8, which fails twice at this width: the
+                                   //   gaps between ribs fall to 0.56 mm, below
+                                   //   one extrusion, so the slicer bridges
+                                   //   them into a solid ring with no crush
+                                   //   relief left; and the cutters themselves
+                                   //   overlap (2.985 mm apart, 3.001 mm of
+                                   //   summed radius), which deforms the ribs
+                                   //   before they are even sliced. Six leaves
+                                   //   1.28 mm gaps and 0.90 mm of cutter
+                                   //   clearance.
+
+//  Solving the cutter. Given bore radius R, rib height h and base width w, the
+//  bump is the part of the bore left uncut by a circle of radius r centred at
+//  distance c from the axis. Its innermost point must sit at R - h, and its
+//  base must meet the wall at +-w/2. Those two conditions fix r and c.
+magnet_rib_y = magnet_rib_w / 2;                                   // [DERIVED]
+magnet_rib_x = sqrt(pow(magnet_bore/2, 2) - pow(magnet_rib_y, 2)); // [DERIVED]
+magnet_rib_a = magnet_rib_x - (magnet_bore/2 - magnet_rib_h);      // [DERIVED]
+magnet_rib_r = (pow(magnet_rib_a, 2) + pow(magnet_rib_y, 2))
+               / (2 * magnet_rib_a);        // [DERIVED] = 1.5004, cutter radius
+magnet_rib_c = magnet_rib_r + (magnet_bore/2 - magnet_rib_h);
+                                            // [DERIVED] = 3.9004, from the axis
 magnet_seat_clear = 0.15;          // [DESIGN] so the disc can bottom on the skin
 magnet_pocket_h   = magnet_h + magnet_seat_clear;   // [DERIVED] = 2.15
 magnet_skin       = 0.80;          // [DESIGN] 4 layers over the disc, show face
@@ -1344,6 +1381,15 @@ assert(magnet_bore > magnet_d + magnet_tol,
        "magnet bore is inside the disc's own tolerance band; crush ribs cannot absorb that");
 assert(magnet_rib_h > magnet_tol * 2,
        "crush ribs shorter than the disc's tolerance band cannot grip the whole batch");
+//  C-35. Both halves of the feature have to survive the slicer: the rib itself
+//  and the gap beside it. Either one below a single extrusion and the ring
+//  prints as something other than what is drawn.
+assert(magnet_rib_w >= nozzle,
+       "crush rib narrower than one extrusion: the slicer decides its width, not this file");
+assert(PI * magnet_bore / magnet_rib_n - magnet_rib_w >= nozzle,
+       "gaps between crush ribs are under one extrusion; they will bridge into a solid ring");
+assert(2 * magnet_rib_c * sin(180 / magnet_rib_n) > 2 * magnet_rib_r,
+       "rib cutters overlap each other; the ribs would be malformed before slicing");
 assert(cover_reg_depth + 0.8 <= 2.65,
        "cover register platform would reach the display glass");
 assert(cover_t - magnet_pocket_h >= 0.6,

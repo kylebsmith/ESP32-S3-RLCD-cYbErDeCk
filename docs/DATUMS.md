@@ -347,6 +347,91 @@ a wider recess behind it. This back plate is 3.2 mm thick and the header stands
 8.603 mm off the PCB back — **1.60 mm proud of the standoff plane** — so the
 body itself must pass through. The window here is sized from the body.
 
+### C-35 — The crush ribs were narrower than the nozzle that had to print them
+
+Eight ribs, 0.35 mm tall, cut into the magnet bore so the discs would grip
+across their own 0.20 mm tolerance band. The heights were right, the
+interference arithmetic was right, and the ribs could not be printed.
+
+The rib was formed by subtracting a cylinder of radius `magnet_rib_h` centred
+**on** the bore wall, which leaves a bump exactly `2 × magnet_rib_h` wide at
+its base — **0.70 mm**. Against the 0.80 mm nozzle this design was re-derived
+for in [C-33](#c-33--every-wall-was-measured-against-the-wrong-nozzle), that is
+**0.87 of a single extrusion.** A feature narrower than one bead is not a
+feature; the slicer renders it as whatever the bead happens to do there. None
+of the designed 0.10–0.30 mm of interference was under this file's control.
+
+**Why nothing caught it.** Every magnet check asked about a *diameter* — bore
+against disc, skin thickness, seat depth, whether the pocket was reachable.
+The defect is a *width*, and no check in the suite had ever measured one.
+C-33 re-derived every **wall** against the new nozzle and stopped there,
+because a rib is not a wall.
+
+### The fix
+
+The height is correct and stays. The base widens to two clean extrusions, and
+both the cutter radius and its offset are now **solved** from the height and
+the width rather than being implied by a single number doing two jobs:
+
+| | Was | Now |
+|---|---|---|
+| `magnet_rib_w` | 0.70 (implied) | **1.60** = `2 × nozzle` |
+| `magnet_rib_n` | 8 | **6** |
+| cutter radius | 0.35 | **1.5004** (derived) |
+| cutter centre from axis | 2.75 (on the wall) | **3.9004** (derived) |
+| `magnet_rib_h` | 0.35 | 0.35 — unchanged |
+
+Given bore radius *R*, rib height *h* and base width *w*, the bump is the part
+of the bore left uncut by a circle of radius *r* centred at distance *c*. Its
+innermost point must sit at *R − h* and its base must meet the wall at ±*w*/2,
+and those two conditions fix both:
+
+```
+y = w/2                    x = sqrt(R² − y²)
+a = x − (R − h)            r = (a² + y²) / 2a          c = r + (R − h)
+```
+
+**The count had to move too, and for two independent reasons.** At 1.60 mm
+wide, eight ribs leave gaps of **0.56 mm** — below one extrusion, so the
+slicer bridges them and the ring prints solid with no crush relief anywhere.
+Worse, the *cutters themselves* overlap at eight: their centres sit 2.985 mm
+apart against 3.001 mm of summed radius, so the ribs are malformed in the
+model before slicing is even reached. Six leaves 1.28 mm gaps and 0.90 mm of
+cutter clearance.
+
+### Measured on the rendered mesh
+
+| | Before | After |
+|---|---|---|
+| Rib base width | 0.70 mm — **0.87 extrusions** | 1.45 mm — **1.82 extrusions** |
+| Gap between ribs | 1.46 mm | 1.40 mm |
+| Rib height | 0.35 | 0.374 |
+| Bore closes to | Ø4.80 | Ø4.777 |
+| Lobes counted | 8 | **6** |
+
+Measured across 88 ribbed sections through both magnet stations. Rib height
+and tip diameter read very slightly proud of nominal because the section
+samples the circumradius of a `$fn = 64` facet; the bias is under 0.03 mm and
+is conservative — it reports marginally *more* interference than is drawn, not
+less.
+
+Against the disc's own band this leaves 0.12 mm of diametral interference on
+the smallest disc (Ø4.90) and 0.32 mm on the largest (Ø5.10), which is what
+six deforming ribs are for.
+
+### The check
+
+`MAGNET` gains two checks that measure the rib and the gap beside it **on the
+mesh, in extrusions** — the first checks in the suite to interrogate a feature
+width rather than a diameter. Three asserts in `parameters.scad` refuse the
+same mistakes at parse time: a rib under one extrusion, gaps under one
+extrusion, and cutters that overlap each other.
+
+The general lesson is the one this file keeps recording. C-33 asked *"is every
+wall thick enough for this nozzle?"* and answered it completely. It did not
+ask *"is every **feature** wide enough for this nozzle?"*, and a rib, a web, a
+gusset tip and a slot land outside the first question.
+
 ### C-34 — The board is a perfect rectangle, and the pocket assumed a radius
 
 The drawing gives the PCB R0.5 corners. **The board in hand is square at all

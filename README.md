@@ -239,7 +239,7 @@ counted among the audited rows.
 
 | | |
 |---|---|
-| **[DATUMS.md](docs/DATUMS.md)** | every dimension, its provenance, thirty-four recorded corrections, nine open items |
+| **[DATUMS.md](docs/DATUMS.md)** | every dimension, its provenance, thirty-five recorded corrections, nine open items |
 | **[HARDWARE.md](docs/HARDWARE.md)** | the board itself: panel, controller, pin map, USB and power, all traced to vendor sources |
 | **[OS.md](docs/OS.md)** | the firmware design: what it runs, why, and what it deliberately will not do |
 | **[DESIGN.md](docs/DESIGN.md)** | form language, why it is shaped this way, material and finish |
