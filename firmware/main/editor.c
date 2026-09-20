@@ -421,6 +421,12 @@ static void handle_ctrl(char c)
 static void log_motion(const char *what)
 {
 #if EDITOR_TRACE_MOTION
+    /* Re-wrap before reporting. editor_handle wraps once up front, so by the
+     * time a motion has run the cached line/col describe where the cursor
+     * WAS - which made a working goal column look broken in the trace while
+     * the offsets proved it correct. Only compiled in for tracing, so the
+     * extra wrap costs nothing in a normal build. */
+    wrap(TEXT_COLS);
     ESP_LOGI("editor", "%s -> line %d col %d (offset %u of %u)",
              what, s_cursor_line + 1, s_cursor_col + 1,
              (unsigned)doc_cursor(), (unsigned)doc_len());
