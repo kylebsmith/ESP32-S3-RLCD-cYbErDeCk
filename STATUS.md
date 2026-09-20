@@ -54,6 +54,7 @@ Every row has log evidence from the board on your desk.
 | Autosave fires on newline and after a 1 s pause | `saved 180 bytes, seq 11, 3934 us` |
 | The journal appends across sectors and wraps | cursor walked 0 → 4096 → 8192 → 45056 |
 | BLE host starts, scans, decodes advertisements | ~48 distinct advertisers logged |
+| **Keystrokes decode and reach the document** | `report handle 36 len 8: 00 00 17 …` -> 't' |
 | Memory headroom with everything running | 212 KB internal free, 8.25 MB PSRAM free |
 
 ### The acceptance test, minus the radio
@@ -175,32 +176,28 @@ a real power cut.
 
 ---
 
-## Blocked
+## The SD card: not a blocker, an empty slot
 
-### The SD card will not initialise
+For most of this session the card would not initialise:
 
 ```
 sdmmc_init_ocr: send_op_cond (1) returned 0x107   (ESP_ERR_TIMEOUT)
 ```
 
-Tried, all failing identically: 1-bit SDMMC on CLK 38 / CMD 21 / D0 39 (the
-pin map from `solar_term.toml`, corroborated by the board manifest's own pin
-table); internal pull-ups; D1–D3 explicitly `GPIO_NUM_NC`; no card-detect and
-no write-protect; probe clock (400 kHz) *and* default (20 MHz). The card never
-answers `SEND_OP_COND`, the very first command after reset — so this is the
-card or the electrical path, not FAT and not the filesystem layer.
+**There was no card in the slot.** The owner confirmed it afterwards. A timeout
+on `SEND_OP_COND` - the very first command after reset - is precisely what an
+empty slot looks like, so the driver was behaving correctly the whole time and
+the pin map from `solar_term.toml` was right.
 
-**Your writing is not at risk.** Per the handoff's trap 6 the card was only
-ever the export mirror; the flash journal is the source of truth and it is the
-half that is verified. The deck runs fine with no card.
-
-Worth trying next, in order: reseat the card; try a different one (some are
-fussy in 1-bit mode); check whether the slot's power is gated by a GPIO absent
-from the manifest; and note that SolarOS reaches storage on this board through
-a `storage_expansion` driver rather than a board-native one, which hints the
-slot may not be a plain always-on SDMMC.
-
----
+Recorded because the reasoning went wrong in an instructive way. Everything
+that *was* checked - both clock rates, internal pull-ups, explicit `GPIO_NUM_NC`
+on the unused data lines, no card-detect - was checked against the hypothesis
+"the bus is misconfigured", and each negative result made that hypothesis look
+worse without ever promoting the simpler one. The failure mode is identical for
+a missing card and a broken bus, and nothing in the firmware could tell them
+apart. **A card-detect line would have, and this board does not route one** -
+so the honest fix is for the log to name both possibilities rather than imply
+a fault. ESP-IDF's own hint said as much and it was read past.
 
 ## What changed in the design, and why
 

@@ -67,8 +67,18 @@ esp_err_t sdmirror_init(void)
     if (err != ESP_OK) {
         /* A missing or unreadable card is not an error worth stopping for -
          * the journal is the truth and the deck must work without a card. */
-        ESP_LOGW(TAG, "no SD card mounted (%s) - journal only",
-                 esp_err_to_name(err));
+        /* A timeout on the first command is what an EMPTY SLOT looks like,
+         * and this board routes no card-detect line, so the firmware cannot
+         * tell that apart from a wiring fault. Say both rather than implying
+         * a defect - most of a session was spent debugging a bus that was
+         * fine because this message only mentioned failure. */
+        if (err == ESP_ERR_TIMEOUT) {
+            ESP_LOGW(TAG, "no SD card responded - the slot is probably EMPTY "
+                          "(no card-detect pin on this board); journal only");
+        } else {
+            ESP_LOGW(TAG, "no SD card mounted (%s) - journal only",
+                     esp_err_to_name(err));
+        }
         s_card = NULL;
         return err;
     }
