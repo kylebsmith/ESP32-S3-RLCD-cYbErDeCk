@@ -23,6 +23,7 @@ tools/fetch_reference.sh --code   # also the example repos, ~900 MB
 | H6 | H5 → `02_Example/XiaoZhi/XiaoZhiCode_V2.1.0/main/boards/waveshare-s3-rlcd-4.2/config.h` | 2026-09-20 |
 | H7 | H5 → `02_Example/ESP-IDF/11_U8G2_Test/components/port_bsp/display_bsp.{h,cpp}` | 2026-09-20 |
 | H8 | `documentation.espressif.com/esp32-s3_datasheet_en.pdf` — Espressif ESP32-S3 datasheet | 2026-09-20 |
+| H9 | `github.com/nilseuropa/solar_os` v4.12.2 → `src/drivers/rlcd_st7305.c` — a working ST7305 driver for this exact panel, Apache-2.0 | 2026-09-20 |
 
 Tags: `[VENDOR]` vendor states it · `[CODE]` read from vendor source ·
 `[DERIVED]` computed here from tagged values · `[OPEN]` not yet established.
@@ -209,6 +210,85 @@ uncommitted lines are few. Both **I²C and UART0 are broken out**, which is the
 practical expansion route — any future peripheral should prefer one of those
 two buses over claiming raw GPIOs.
 
+## Window addressing — the datasheet contradiction, resolved `[CODE]` H9
+
+`docs/DATUMS.md`-style caveat first: this comes from a **third-party
+implementation**, not from Sitronix. It is recorded as `[CODE]` rather than
+`[VENDOR]` because H3 §7.4 states something different. It is trusted because
+it is exercised on this exact panel, it reproduces the byte count derived
+independently here, and its bit packing agrees with a second unrelated
+implementation.
+
+### The address model
+
+| Unit | Mapping | Range |
+|------|---------|-------|
+| Column address (`CASET` 2Ah) | **1 address = 12 native-X pixels = 3 bytes** | `0x12` … `0x2A` (25 × 12 = 300) |
+| Row address (`RASET` 2Bh) | **1 address = 2 native-Y lines** | `0x00` … `0xC7` (200 × 2 = 400) |
+| One RAM byte | 4 X pixels × 2 Y pixels | — |
+
+Derived: `controller_row_bytes = ((300 + 11) / 12) × 3 = 75`, and
+`75 × 4 × 50 = 15,000 bytes` — the same framebuffer size derived above from
+Waveshare's own code, by a completely different route.
+
+### The rule the datasheet does not give you
+
+`address_mirror_base = address_start + address_end = 0x12 + 0x2A = `**`0x3C`**.
+For a window spanning natural left-to-right column addresses `[a, b]`:
+
+```
+CASET (0x2A)  =  { 0x3C - b ,  0x3C - a }      <-- reversed and mirrored
+RASET (0x2B)  =  { first_y / 2 , last_y / 2 }  <-- window must be 2-line aligned
+```
+
+then stream the data in normal left-to-right order from the leftmost group.
+With `MADCTL (0x36) = 0x48`, the column pointer **decrements from the CASET end
+address**, so the first byte written lands at the *high* address.
+
+**Why nobody finds this.** At full width `a = 0x12, b = 0x2A`, so
+`{0x3C − 0x2A, 0x3C − 0x12} = {0x12, 0x2A}` — the mirroring is an **identity**.
+Every full-frame driver, Waveshare's own included, is therefore silently
+correct and never discovers the rule. It only bites once a window narrows: to
+write the leftmost 12 px alone you must send `CASET = {0x2A, 0x2A}`, **not**
+`{0x12, 0x12}`.
+
+Windows are quantised — X snaps out to 12-pixel boundaries, Y to 2 lines.
+
+### What this buys `[DERIVED]`
+
+A window of *N* column addresses × *M* row addresses costs `N × 3 × M` bytes.
+One 8 × 12 character cell spans at most 2 column addresses and exactly 6 row
+addresses:
+
+| Update | Bytes | Wire time @ 20 MHz |
+|--------|-------|--------------------|
+| Full frame | 15,000 | 6.0 ms |
+| One 8 × 12 character cell | **36** | **14 µs** |
+
+Roughly a **400× reduction** for the common case of typing a character. The
+earlier conclusion stands and strengthens: full-frame pushes were already fast
+enough for a comfortable editor, and windowed updates now make a keystroke
+essentially free, which is what matters for battery life rather than for
+latency.
+
+### Frame-rate control `[CODE]` H9
+
+Not obvious from H3, and worth having:
+
+| Mode | Rates | How |
+|------|-------|-----|
+| HPM | 16 / 25.5 / 32 / 51 Hz | `OSCSET` (`0xD8`) byte 0 = `0xA6` or `0x80`, plus the HFRA bit `0x10` in `0xB2` |
+| LPM | 0.25 / 0.5 / 1 / 2 / 4 / 8 Hz | low 3 bits (`0x07`) of `0xB2` |
+
+H9 drives the panel at **24 MHz** SPI rather than the 20 MHz in Waveshare's
+example, so 24 MHz is known-good on this hardware.
+
+### Still unsolved: tearing `[OPEN]`
+
+H9 declares the TE pin (GPIO6) in its board manifest and **never reads it** —
+no tear-free synchronisation exists anywhere in the prior art examined. Anyone
+wanting glitch-free updates during HPM is on their own.
+
 ## Prior art on this exact board `[VENDOR]` H2
 
 Waveshare's own resource page lists community projects. Two are directly
@@ -228,14 +308,13 @@ keyboard-first writing device.
 ## Open questions `[OPEN]`
 
 1. **Controller RAM vs. panel size.** H3 states 264 × 320 × 1 b = 84,480 bits
-   of display RAM, but the panel needs 400 × 300 = 120,000 bits, and the
-   vendor driver allocates the full 15,000 bytes. H3 §7.4's stated address
-   range (X = 19…40, Y = 0…159) also disagrees with the `CASET` values the
-   vendor actually writes (XS = 0x12, XE = 0x2A). The datasheet is v0.2 and
-   parts of §7.4 read as boilerplate from a smaller part. **The window →
-   byte-address mapping must be established empirically before any
-   partial-update path is trusted.** Full-frame pushes are unaffected and
-   remain the safe default.
+   of display RAM against a panel needing 120,000, and its §7.4 address range
+   (X = 19…40, Y = 0…159) disagrees with the `CASET` values every working
+   driver writes. The datasheet is v0.2 and parts of §7.4 read as boilerplate
+   from a smaller part. **The practical mapping is now resolved** — see
+   *Window addressing* above — so this no longer gates partial update. What
+   remains open is only the reconciliation with H3's stated RAM figure, which
+   is a curiosity rather than a blocker.
 2. **Measured current** in HPM vs LPM vs sleep is not given in H3 and has not
    been measured on the bench. The power argument for LPM is currently
    qualitative.
