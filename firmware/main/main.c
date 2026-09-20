@@ -462,6 +462,12 @@ void app_main(void)
         }
         key_was_down = down;
 
+        /* Anything a USB timer callback decided, carried out here in task
+         * context where blocking is allowed. See usbdev.h - this separation
+         * is why the deck can no longer wedge itself into unreachability. */
+        usbdev_poll();
+        st7305_service();
+
         /* The playhead moves on the sequencer's clock, so the document has to
          * be redrawn on it - need_draw is otherwise set only by keys, the
          * keyboard reset and the orientation button.

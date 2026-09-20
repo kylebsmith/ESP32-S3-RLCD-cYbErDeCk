@@ -155,11 +155,30 @@ esp_err_t st7305_set_inverted(bool inverted)
 esp_err_t st7305_set_hpm(void) { return set_mode(true); }
 esp_err_t st7305_set_lpm(void) { return set_mode(false); }
 
+/* FLAG ONLY - the mode change happens in st7305_service(), in task context.
+ *
+ * This used to call set_mode() directly, which takes the SPI bus mutex with
+ * portMAX_DELAY. esp_timer dispatches on a shared task with a 3.5 KB stack
+ * that must not block, and this timer shares that task with the sequencer's
+ * clock: if the editor held the bus mid-flush, the callback waited, and the
+ * clock waited behind it. Two separate incidents in this project have come
+ * from blocking work in a timer callback, so this one is not left as the
+ * third. */
+static volatile bool s_want_lpm;
+
 static void idle_timer_cb(void *arg)
 {
     (void)arg;
     if (s_policy == ST7305_POWER_AUTO) {
         /* docs/OS.md power policy: drop back to 1 Hz once typing stops. */
+        s_want_lpm = true;
+    }
+}
+
+void st7305_service(void)
+{
+    if (s_want_lpm) {
+        s_want_lpm = false;
         (void)set_mode(false);
     }
 }

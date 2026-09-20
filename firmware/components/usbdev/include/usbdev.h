@@ -14,6 +14,23 @@
  * path is always the one that works. */
 bool usbdev_boot(void);
 
+/* Called from the main loop, every pass. Performs any work a timer callback
+ * decided on but must not do itself.
+ *
+ * THIS EXISTS BECAUSE THE SAME BUG STRANDED THIS DEVICE TWICE IN ONE SESSION.
+ * esp_timer dispatch callbacks run on a shared task with a 3.5 KB stack that
+ * must not block, and both the revert path and the reboot path were calling
+ * NVS writes, flash writes and SD card I/O from there. Each takes a lock and
+ * can block indefinitely; when it did, the timer task stopped - taking the
+ * sequencer clock, the editor and the console with it - while TinyUSB's own
+ * task carried on enumerating, so the deck looked perfectly alive to the host
+ * and answered nothing. Nothing tripped the task watchdog either, because it
+ * watches the idle tasks and those were still running.
+ *
+ * So: timer callbacks set a flag. This does the work, in task context, where
+ * blocking is allowed. */
+void usbdev_poll(void);
+
 /* Is a host actually there? Not "did we try" - tud_mounted(). */
 bool usbdev_mounted(void);
 

@@ -115,10 +115,14 @@ _Static_assert(sizeof(s_cfg_desc) == CFG_TOTAL_LEN, "config descriptor length");
 static const char *s_strings[] = {
     (const char[]){ 0x09, 0x04 },   /* 0: English (US) */
     "cyberdeck",                    /* 1: manufacturer */
-    "cyberdeck",                    /* 2: product      */
+    "cyberdeck usb",                /* 2: product - DISTINCT from the BLE
+                                     * peripheral, which also advertises as
+                                     * "cyberdeck". Two MIDI ports with the
+                                     * same name is how you get "cyberdeck #2"
+                                     * in a DAW and no idea which is which. */
     "deck-0001",                    /* 3: serial       */
     "cyberdeck console",            /* 4: CDC          */
-    "cyberdeck MIDI",               /* 5: MIDI         */
+    "cyberdeck usb MIDI",           /* 5: MIDI         */
 };
 
 /* ------------------------------------------------------------------- state */
@@ -126,6 +130,12 @@ static const char *s_strings[] = {
 #define TRY_MAGIC 0x55534201u
 static RTC_NOINIT_ATTR uint32_t s_try_magic;
 static RTC_NOINIT_ATTR uint32_t s_tries;
+
+/* What a timer callback decided, for usbdev_poll() to carry out in task
+ * context. Never acted on from the callback itself - see usbdev.h. */
+typedef enum { ACT_NONE = 0, ACT_CONFIRM, ACT_REVERT, ACT_REBOOT } action_t;
+static volatile action_t s_action;
+static const char *volatile s_action_why;
 
 static bool     s_active;          /* this boot is running USB MIDI */
 static bool     s_attached;        /* a host is there - NOT that it works */
@@ -277,6 +287,12 @@ static int                s_prev_rts;
 static void reboot_now(void *arg)
 {
     (void)arg;
+    s_action = ACT_REBOOT;
+}
+
+/* Everything below runs in TASK context, from usbdev_poll(). */
+static void do_reboot(void)
+{
     /* ARM THE ESCAPE HATCH FIRST, BEFORE ANY WORK THAT CAN BLOCK.
      *
      * This used to save every dirty document and then set the bits. Saving
@@ -291,22 +307,52 @@ static void reboot_now(void *arg)
     if (s_reboot_to_loader) {
         REG_WRITE(RTC_CNTL_OPTION1_REG, RTC_CNTL_FORCE_DOWNLOAD_BOOT);
     }
-    /* NO SAVE HERE, AND THAT IS THE WHOLE POINT.
-     *
-     * This used to call doc_save_all_dirty() before restarting. It runs on an
-     * esp_timer dispatch task, and saving touches both the flash journal and
-     * the SD card - each of which takes a lock and can block indefinitely.
-     * That is exactly what happened: the deck wedged inside this function
-     * with the timer task blocked, TinyUSB's own task still happily
-     * enumerating, so the device looked alive to the host while the console,
-     * the keyboard and the sequencer were all stopped. Nothing tripped the
-     * task watchdog either, because the idle tasks were still running.
-     *
-     * esp_restart() runs the registered shutdown handlers, which is where
-     * work belongs. Unsaved edits are bounded by the autosave in the main
-     * loop; a reboot that always completes is worth more than a save that
-     * sometimes does not. */
+    /* Saving is allowed HERE because this runs in task context. It is not
+     * allowed in the timer callback that asked for it, which is the whole
+     * reason the two are separate functions. The hatch above is armed first
+     * regardless, so even if this blocks, the watchdog lands in download
+     * mode rather than back in a mode nobody can escape. */
+    doc_save_all_dirty();
     esp_restart();
+}
+
+void usbdev_poll(void)
+{
+    const action_t a = s_action;
+    if (a == ACT_NONE) {
+        return;
+    }
+    s_action = ACT_NONE;
+
+    switch (a) {
+    case ACT_CONFIRM:
+        if (!s_confirmed) {
+            s_confirmed = true;
+            if (s_trial != NULL) {
+                esp_timer_stop(s_trial);
+            }
+            s_tries = 0;
+            nvs_put_u8(KEY_ARMED, 0);
+            ESP_LOGW(TAG, "USB MIDI live");
+        }
+        break;
+
+    case ACT_REVERT:
+        ESP_LOGE(TAG, "%s - reverting to the console",
+                 s_action_why ? s_action_why : "usb");
+        nvs_put_u8(KEY_WANT, 0);
+        nvs_put_u8(KEY_ARMED, 0);
+        usbmux_release_to_usj();
+        esp_restart();
+        break;
+
+    case ACT_REBOOT:
+        do_reboot();
+        break;
+
+    default:
+        break;
+    }
 }
 
 static void cdc_line_state(int itf, cdcacm_event_t *event)
@@ -339,13 +385,11 @@ static void cdc_line_state(int itf, cdcacm_event_t *event)
 
 /* ------------------------------------------------------------ the trial */
 
-static void revert(const char *why)
+/* FLAG ONLY. The work is done by usbdev_poll() in task context. */
+static void want_revert(const char *why)
 {
-    ESP_LOGE(TAG, "%s - reverting to the console", why);
-    nvs_put_u8(KEY_WANT, 0);
-    nvs_put_u8(KEY_ARMED, 0);
-    usbmux_release_to_usj();
-    esp_restart();
+    s_action_why = why;
+    s_action = ACT_REVERT;
 }
 
 static void trial_expired(void *arg)
@@ -355,10 +399,7 @@ static void trial_expired(void *arg)
         return;                     /* the CDC carried data; it works */
     }
     if (s_attached) {
-        /* A host is there and the CDC still has not carried a byte. That is
-         * the failure that stranded this deck once: enumerated, listed by the
-         * OS, and mute. Revert. */
-        revert("host attached but the console never spoke");
+        return;                     /* enumerated; nothing to revert */
     }
     if (!s_host_seen_usj) {
         /* No host at all - nothing is proven broken and no console was lost,
@@ -368,7 +409,7 @@ static void trial_expired(void *arg)
         esp_timer_start_once(s_trial, (uint64_t)TRIAL_MS * 1000);
         return;
     }
-    revert("USB did not enumerate");
+    want_revert("USB did not enumerate");
 }
 
 /* Confirmation comes through esp_tinyusb's own event callback rather than by
@@ -381,36 +422,26 @@ static void usb_event(tinyusb_event_t *ev, void *arg)
     if (ev->id != TINYUSB_EVENT_ATTACHED) {
         return;
     }
-    /* ATTACHMENT IS NOT PROOF THAT ANYTHING WORKS, and treating it as proof
-     * is how this went wrong the first time it was tried.
+    /* A host attached, so the descriptor was accepted and the device
+     * enumerated. That IS the thing the trial was watching for.
      *
-     * The deck enumerated perfectly - macOS listed it, a /dev node appeared -
-     * and the CDC carried no data in either direction. Because ATTACHED had
-     * cancelled the trial and cleared `armed`, the automatic revert that
-     * exists for exactly this case had already been switched off. The deck
-     * was left with no console, no serial keyboard, and therefore no way to
-     * type the command that would undo it.
-     *
-     * So attachment only notes that a host is THERE. Confirmation waits for
-     * evidence that the CDC actually carries a byte - see cdc_rx. */
+     * An earlier version refused to treat this as confirmation, on the theory
+     * that a device could enumerate and still carry no data. It can - but the
+     * one time that happened it was this firmware hanging in a timer
+     * callback, not the CDC failing, and requiring the owner to TYPE within
+     * eight seconds to confirm turned a rare path into the normal one. The
+     * fix belongs where the bug was. */
     s_attached = true;
-    ESP_LOGW(TAG, "host attached; waiting for the console to prove itself");
-    return;
+    s_action = ACT_CONFIRM;
 }
 
-/* The real confirmation: the CDC carried data. Called from the RX path. */
+/* Bytes actually crossed the CDC. Stronger evidence than attachment, and it
+ * clears the attempt counter, but it is not required to confirm. */
 static void usb_confirm(void)
 {
-    if (s_confirmed) {
-        return;
+    if (!s_confirmed) {
+        s_action = ACT_CONFIRM;
     }
-    s_confirmed = true;
-    if (s_trial != NULL) {
-        esp_timer_stop(s_trial);
-    }
-    s_tries = 0;
-    nvs_put_u8(KEY_ARMED, 0);
-    ESP_LOGW(TAG, "USB MIDI live - a host attached");
 }
 
 bool usbdev_boot(void)

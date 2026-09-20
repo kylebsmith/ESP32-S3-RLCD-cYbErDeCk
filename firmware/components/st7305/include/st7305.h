@@ -99,6 +99,11 @@ esp_err_t st7305_flush(size_t *bytes_sent);
 esp_err_t st7305_flush_full(void);
 
 esp_err_t st7305_set_power_policy(st7305_power_policy_t policy);
+/* Called from the main loop. Performs any power-mode change the idle timer
+ * asked for - in task context, because taking the SPI bus mutex from a timer
+ * callback blocks the task the sequencer's clock also dispatches on. */
+void st7305_service(void);
+
 esp_err_t st7305_set_hpm(void);
 
 /* INVON/INVOFF - which way round ink and paper are. */
