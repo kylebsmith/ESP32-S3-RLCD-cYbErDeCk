@@ -318,9 +318,11 @@ void app_main(void)
     cmd_set_announce(announce);
     seq_dest_add("ble", dest_ble, blemidi_flush, "BLE MIDI to a laptop or phone");
     seq_dest_add("mon", dest_mon, NULL, "print notes on the console");
-    /* BLE MIDI on by default because the radio is already up for the
-     * keyboard, so it costs nothing extra that is not already being paid. */
-    seq_dest_enable("ble", true);
+    /* BLE MIDI is OFF by default. It is quantised to the connection interval
+     * and shares one radio with the keyboard link, so typing contends with
+     * the notes - which is exactly when the owner heard the timing go loose.
+     * USB MIDI is the native path. This stays a feature; it is not the
+     * default. */
     if (seq_init() != ESP_OK) {
         ESP_LOGE(TAG, "sequencer init failed");
     }
@@ -486,6 +488,12 @@ void app_main(void)
          * is why the deck can no longer wedge itself into unreachability. */
         usbdev_poll();
         st7305_service();
+
+        /* Keep the radio in step with the destination. '>send ble on' must
+         * actually bring the peripheral up, and '>send ble off' must stop it
+         * ADVERTISING - not merely drop notes - or the radio keeps contending
+         * with the keyboard for nothing. */
+        blemidi_set_enabled(seq_dest_is_on("ble"));
 
         /* The playhead moves on the sequencer's clock, so the document has to
          * be redrawn on it - need_draw is otherwise set only by keys, the

@@ -24,6 +24,8 @@ static uint16_t s_chr_handle;
 static uint16_t s_conn = BLE_HS_CONN_HANDLE_NONE;
 static bool     s_subscribed;
 static uint8_t  s_own_addr_type;
+static bool     s_enabled;   /* off by default - see blemidi.h */
+static bool     s_synced;
 
 bool blemidi_connected(void)
 {
@@ -161,7 +163,7 @@ static int adv_event(struct ble_gap_event *ev, void *arg)
             s_conn = ev->connect.conn_handle;
             ESP_LOGI(TAG, "a host connected for MIDI");
             report_and_request_interval(s_conn);
-        } else {
+        } else if (s_enabled) {
             advertise();
         }
         return 0;
@@ -171,7 +173,9 @@ static int adv_event(struct ble_gap_event *ev, void *arg)
                  ev->disconnect.reason);
         s_conn = BLE_HS_CONN_HANDLE_NONE;
         s_subscribed = false;
-        advertise();
+        if (s_enabled) {
+            advertise();
+        }
         return 0;
 
     case BLE_GAP_EVENT_SUBSCRIBE:
@@ -217,10 +221,41 @@ void blemidi_register(void)
     ESP_LOGI(TAG, "MIDI service registered");
 }
 
+bool blemidi_enabled(void) { return s_enabled; }
+
+void blemidi_set_enabled(bool on)
+{
+    if (on == s_enabled) {
+        return;
+    }
+    s_enabled = on;
+    if (!s_synced) {
+        return;                 /* the host is not up yet; start() will apply */
+    }
+    if (on) {
+        advertise();
+        ESP_LOGW(TAG, "BLE MIDI on - it shares the radio with the keyboard");
+    } else {
+        if (s_conn != BLE_HS_CONN_HANDLE_NONE) {
+            ble_gap_terminate(s_conn, BLE_ERR_REM_USER_CONN_TERM);
+        }
+        ble_gap_adv_stop();
+        ESP_LOGW(TAG, "BLE MIDI off - the radio is the keyboard's alone");
+    }
+}
+
 void blemidi_start(void)
 {
     ble_hs_id_infer_auto(0, &s_own_addr_type);
-    advertise();
+    s_synced = true;
+    /* Only advertise if it has been asked for. Coming up advertising by
+     * default would put the deck back on the transport the owner rejected,
+     * and would do it on the radio the keyboard needs. */
+    if (s_enabled) {
+        advertise();
+    } else {
+        ESP_LOGI(TAG, "BLE MIDI available but off - '>send ble on' to use it");
+    }
 }
 
 /* THE PACKET BUFFER.

@@ -25,6 +25,20 @@
 void blemidi_register(void);
 
 /* Begin advertising. Runs from kbd's `synced` hook. */
+/* Bring the MIDI peripheral up, or take it down.
+ *
+ * DEFAULT: DOWN. BLE MIDI is quantised to the connection interval - 7.5 ms at
+ * best, commonly 15-30 ms - and this device runs a SECOND BLE link for its
+ * keyboard on the same radio, so typing contends with the notes. The owner's
+ * verdict after playing it: "a cute feature that no professional would ever
+ * use, too fragile and too much latency". USB MIDI is the native path; this
+ * stays as a feature and is off until asked for.
+ *
+ * Off means the peripheral does not ADVERTISE, not merely that notes are
+ * dropped. An advertising radio still costs power and still contends. */
+void blemidi_set_enabled(bool on);
+bool blemidi_enabled(void);
+
 void blemidi_start(void);
 
 /* Send one MIDI message. Safe to call when nothing is connected. */
