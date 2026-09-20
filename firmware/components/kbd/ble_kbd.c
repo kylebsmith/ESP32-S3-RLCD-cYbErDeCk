@@ -21,6 +21,9 @@
 #include <string.h>
 
 #include "esp_log.h"
+#include "esp_random.h"
+#include "nvs.h"
+#include "nvs_flash.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
@@ -37,6 +40,9 @@ static const char *TAG = "kbd";
 #define UUID_REPORT         0x2A4D
 #define UUID_BOOT_KBD_IN    0x2A22
 #define UUID_PROTOCOL_MODE  0x2A4E
+#define UUID_HID_CTRL_POINT 0x2A4C
+#define UUID_REPORT_REF     0x2908
+#define UUID_DEVICE_NAME    0x2A00
 #define UUID_CCCD           0x2902
 
 #define APPEARANCE_KEYBOARD 0x03C1
@@ -51,7 +57,12 @@ static bool          s_connected;
 static bool          s_subscribed;
 static const char   *s_state = "starting";
 static int           s_adv_logged;
+static int           s_adv_seen;
 static int           s_reports_logged;
+static bool          s_clear_bonds_on_sync;
+
+/* Bumped when the pairing scheme changes. */
+#define KBD_PAIR_SCHEME 2
 
 /* Held-key tracking for synthesised repeat. */
 static uint8_t  s_held_usage;
@@ -165,7 +176,17 @@ static void handle_report(const uint8_t *r, int len)
 static void repeat_task(void *arg)
 {
     (void)arg;
+    int64_t last_beat = 0;
     while (1) {
+        const int64_t nowb = esp_timer_get_time() / 1000;
+        if (nowb - last_beat >= 10000) {
+            last_beat = nowb;
+            if (!s_connected) {
+                ESP_LOGW(TAG, "%s - %d adverts heard, no keyboard yet "
+                              "(put the keyboard into PAIRING mode)",
+                         s_state, s_adv_seen);
+            }
+        }
         if (s_held_usage != 0 && s_connected) {
             const int64_t now = esp_timer_get_time() / 1000;
             if (now >= s_next_repeat_ms) {
@@ -206,6 +227,7 @@ static int            s_chr_count;
 static uint16_t       s_all_defs[16];
 static int            s_all_def_count;
 static uint16_t       s_protocol_mode_handle;
+static uint16_t       s_ctrl_point_handle;
 static int            s_sub_index;        /* which report we are subscribing */
 static int            s_sub_done;
 /* Descriptor discovery reports a CCCD and THEN reports completion. If both
@@ -217,6 +239,7 @@ static int            s_sub_done;
 static bool           s_cccd_started;
 
 static void subscribe_next(uint16_t conn);
+static void after_subscribe(uint16_t conn);
 
 /* The end of a characteristic's descriptor range is just before the next
  * characteristic's declaration, or the end of the service for the last one. */
@@ -257,6 +280,10 @@ static int on_dsc(uint16_t conn, const struct ble_gatt_error *err,
 {
     (void)chr_val_handle; (void)arg;
 
+    if (err->status == 0 && dsc != NULL) {
+        ESP_LOGI(TAG, "  descriptor 0x%04X at handle %u",
+                 ble_uuid_u16(&dsc->uuid.u), dsc->handle);
+    }
     if (err->status == 0 && dsc != NULL &&
         ble_uuid_u16(&dsc->uuid.u) == UUID_CCCD) {
         static const uint8_t on[2] = { 0x01, 0x00 };
@@ -280,6 +307,67 @@ static int on_dsc(uint16_t conn, const struct ble_gatt_error *err,
     return 0;
 }
 
+static int on_name_read(uint16_t conn, const struct ble_gatt_error *err,
+                        struct ble_gatt_attr *attr, void *arg)
+{
+    (void)conn; (void)arg;
+    if (err->status == 0 && attr != NULL && attr->om != NULL) {
+        char name[32] = {0};
+        uint16_t n = OS_MBUF_PKTLEN(attr->om);
+        if (n > sizeof name - 1) {
+            n = sizeof name - 1;
+        }
+        ble_hs_mbuf_to_flat(attr->om, name, n, NULL);
+        ESP_LOGW(TAG, "PEER DEVICE NAME: '%s'", name);
+    } else {
+        ESP_LOGW(TAG, "could not read the peer device name (status %d)",
+                 err->status);
+    }
+    return 0;
+}
+
+static int on_ctrl_point_write(uint16_t conn, const struct ble_gatt_error *err,
+                               struct ble_gatt_attr *attr, void *arg)
+{
+    (void)attr; (void)arg;
+    ESP_LOGI(TAG, "HID exit-suspend write status %d", err->status);
+    /* Whatever happened, now ask who we are actually talking to. */
+    const ble_uuid16_t name = BLE_UUID16_INIT(UUID_DEVICE_NAME);
+    ble_gattc_read_by_uuid(conn, 1, 0xFFFF, &name.u, on_name_read, NULL);
+    return 0;
+}
+
+/* Once the reports are subscribed, two things are still worth doing.
+ *
+ * The HID Control Point gets 0x01, Exit Suspend. A HOGP keyboard that has
+ * parked itself in suspend stays subscribed and simply stops notifying, which
+ * looks exactly like a working connection that types nothing - and SolarOS
+ * added a periodic version of this write for the same reason.
+ *
+ * Then read the peer's device name, because "found a keyboard (unnamed)" is
+ * not proof that the thing we connected to is the keyboard in the owner's
+ * hands rather than some other HID peripheral in range. */
+static void after_subscribe(uint16_t conn)
+{
+    if (s_ctrl_point_handle != 0) {
+        static const uint8_t exit_suspend = 0x01;
+        ESP_LOGI(TAG, "writing HID exit-suspend to handle %u",
+                 s_ctrl_point_handle);
+        if (ble_gattc_write_no_rsp_flat(conn, s_ctrl_point_handle,
+                                        &exit_suspend, 1) == 0) {
+            /* write-no-response has no callback; go straight on. */
+            const ble_uuid16_t name = BLE_UUID16_INIT(UUID_DEVICE_NAME);
+            ble_gattc_read_by_uuid(conn, 1, 0xFFFF, &name.u, on_name_read, NULL);
+            return;
+        }
+        ESP_LOGW(TAG, "exit-suspend write could not start");
+    } else {
+        ESP_LOGW(TAG, "peer has no HID Control Point");
+    }
+    const ble_uuid16_t name = BLE_UUID16_INIT(UUID_DEVICE_NAME);
+    ble_gattc_read_by_uuid(conn, 1, 0xFFFF, &name.u, on_name_read, NULL);
+}
+
 static void subscribe_next(uint16_t conn)
 {
     if (s_sub_index >= s_chr_count) {
@@ -290,6 +378,7 @@ static void subscribe_next(uint16_t conn)
                 ESP_LOGI(TAG, "keyboard ready - %d report(s) subscribed",
                          s_sub_done);
                 emit(KBD_EV_CONNECTED, 0, false);
+                after_subscribe(conn);
             }
         } else {
             ESP_LOGE(TAG, "connected but NOTHING subscribed - the keyboard "
@@ -313,15 +402,6 @@ static void subscribe_next(uint16_t conn)
     }
 }
 
-static int on_protocol_mode_write(uint16_t conn, const struct ble_gatt_error *err,
-                                  struct ble_gatt_attr *attr, void *arg)
-{
-    (void)attr; (void)arg;
-    ESP_LOGI(TAG, "boot protocol requested, status %d", err->status);
-    subscribe_next(conn);              /* proceed regardless */
-    return 0;
-}
-
 static int on_chr(uint16_t conn, const struct ble_gatt_error *err,
                   const struct ble_gatt_chr *chr, void *arg)
 {
@@ -341,15 +421,16 @@ static int on_chr(uint16_t conn, const struct ble_gatt_error *err,
         s_sub_index = 0;
         s_sub_done  = 0;
 
+        /* Protocol Mode is Write Without Response only; a write REQUEST to it
+         * is answered with ATT Write Not Permitted. Report Protocol is the
+         * default on connection and is what we decode, so this only needs to
+         * be nudged, not confirmed. */
         if (s_protocol_mode_handle != 0) {
-            static const uint8_t bootmode = 0x00;
-            const int rc = ble_gattc_write_flat(conn, s_protocol_mode_handle,
-                                                &bootmode, 1,
-                                                on_protocol_mode_write, NULL);
-            if (rc == 0) {
-                return 0;              /* its callback continues the chain */
-            }
-            ESP_LOGW(TAG, "protocol mode write could not start: %d", rc);
+            static const uint8_t report_mode = 0x01;
+            const int rc = ble_gattc_write_no_rsp_flat(conn,
+                                                       s_protocol_mode_handle,
+                                                       &report_mode, 1);
+            ESP_LOGI(TAG, "report protocol nudged (rc %d)", rc);
         }
         subscribe_next(conn);
         return 0;
@@ -366,6 +447,10 @@ static int on_chr(uint16_t conn, const struct ble_gatt_error *err,
     const uint16_t u = ble_uuid_u16(&chr->uuid.u);
     if (u == UUID_PROTOCOL_MODE) {
         s_protocol_mode_handle = chr->val_handle;
+        return 0;
+    }
+    if (u == UUID_HID_CTRL_POINT) {
+        s_ctrl_point_handle = chr->val_handle;
         return 0;
     }
     const bool notifiable = (chr->properties & BLE_GATT_CHR_PROP_NOTIFY) != 0;
@@ -396,6 +481,7 @@ static int on_svc(uint16_t conn, const struct ble_gatt_error *err,
         s_chr_count = 0;
         s_all_def_count = 0;
         s_protocol_mode_handle = 0;
+        s_ctrl_point_handle = 0;
         const int rc = ble_gattc_disc_all_chrs(conn, s_svc_start, s_svc_end,
                                                on_chr, NULL);
         if (rc != 0) {
@@ -467,28 +553,33 @@ static int gap_event(struct ble_gap_event *ev, void *arg)
         if (ble_hs_adv_parse_fields(&f, ev->disc.data, ev->disc.length_data) != 0) {
             return 0;
         }
-        /* Log everything we hear for the first while. If no keyboard ever
-         * connects, this is the difference between "the keyboard was off" and
-         * "our filter is wrong", which is not a distinction to leave open. */
-        if (s_adv_logged < 48) {
-            char nm[32] = "";
-            if (f.name != NULL && f.name_len > 0) {
-                const int n = f.name_len < (int)sizeof nm - 1
-                              ? f.name_len : (int)sizeof nm - 1;
-                memcpy(nm, f.name, n);
-                nm[n] = '\0';
+        /* A keyboard match is ALWAYS logged; everything else only for the
+         * first few. Capping both together meant the log went blind to the
+         * one device that matters as soon as a busy room filled the quota. */
+        {
+            const bool match = adv_is_keyboard(&f);
+            if (match || s_adv_logged < 16) {
+                char nm[32] = "";
+                if (f.name != NULL && f.name_len > 0) {
+                    const int n = f.name_len < (int)sizeof nm - 1
+                                  ? f.name_len : (int)sizeof nm - 1;
+                    memcpy(nm, f.name, n);
+                    nm[n] = '\0';
+                }
+                ESP_LOGI(TAG, "adv %02x:%02x:%02x:%02x:%02x:%02x rssi %d "
+                              "name '%s' appearance %04x uuid16s %d%s",
+                         ev->disc.addr.val[5], ev->disc.addr.val[4],
+                         ev->disc.addr.val[3], ev->disc.addr.val[2],
+                         ev->disc.addr.val[1], ev->disc.addr.val[0],
+                         ev->disc.rssi, nm,
+                         f.appearance_is_present ? f.appearance : 0,
+                         f.num_uuids16,
+                         match ? "   <-- KEYBOARD" : "");
+                if (!match) {
+                    s_adv_logged++;
+                }
             }
-            ESP_LOGI(TAG, "adv %02x:%02x:%02x:%02x:%02x:%02x rssi %d "
-                          "name '%s' appearance %s%04x uuid16s %d%s",
-                     ev->disc.addr.val[5], ev->disc.addr.val[4],
-                     ev->disc.addr.val[3], ev->disc.addr.val[2],
-                     ev->disc.addr.val[1], ev->disc.addr.val[0],
-                     ev->disc.rssi, nm,
-                     f.appearance_is_present ? "" : "(absent) ",
-                     f.appearance_is_present ? f.appearance : 0,
-                     f.num_uuids16,
-                     adv_is_keyboard(&f) ? "  <-- KEYBOARD" : "");
-            s_adv_logged++;
+            s_adv_seen++;
         }
         if (!adv_is_keyboard(&f) && !addr_is_bonded(&ev->disc.addr)) {
             return 0;
@@ -506,7 +597,16 @@ static int gap_event(struct ble_gap_event *ev, void *arg)
     case BLE_GAP_EVENT_CONNECT:
         if (ev->connect.status == 0) {
             s_conn = ev->connect.conn_handle;
-            ESP_LOGI(TAG, "connected, starting encryption");
+            struct ble_gap_conn_desc d;
+            if (ble_gap_conn_find(s_conn, &d) == 0) {
+                ESP_LOGW(TAG, "CONNECTED TO %02x:%02x:%02x:%02x:%02x:%02x "
+                              "(addr type %d)",
+                         d.peer_id_addr.val[5], d.peer_id_addr.val[4],
+                         d.peer_id_addr.val[3], d.peer_id_addr.val[2],
+                         d.peer_id_addr.val[1], d.peer_id_addr.val[0],
+                         d.peer_id_addr.type);
+            }
+            ESP_LOGI(TAG, "starting encryption");
             s_state = "pairing";
             /* If already bonded this resolves immediately from NVS. */
             if (ble_gap_security_initiate(s_conn) != 0) {
@@ -543,8 +643,9 @@ static int gap_event(struct ble_gap_event *ev, void *arg)
                 s_connected = true;
                 ESP_LOGI(TAG, "first report received - the keyboard is live");
             }
-            if (s_reports_logged < 12) {
-                ESP_LOGI(TAG, "report[%d] %02x %02x %02x %02x %02x %02x %02x %02x",
+            if (s_reports_logged < 40) {
+                ESP_LOGI(TAG, "report handle %u len %d: %02x %02x %02x %02x %02x %02x %02x %02x",
+                         ev->notify_rx.attr_handle,
                          len, buf[0], buf[1], buf[2], buf[3],
                          len > 4 ? buf[4] : 0, len > 5 ? buf[5] : 0,
                          len > 6 ? buf[6] : 0, len > 7 ? buf[7] : 0);
@@ -553,6 +654,31 @@ static int gap_event(struct ble_gap_event *ev, void *arg)
             handle_report(buf, len);
         } else if (len > 0) {
             ESP_LOGW(TAG, "ignoring a %d-byte report", len);
+        }
+        return 0;
+    }
+
+    case BLE_GAP_EVENT_PASSKEY_ACTION: {
+        if (ev->passkey.params.action == BLE_SM_IOACT_DISP) {
+            struct ble_sm_io io = {
+                .action  = BLE_SM_IOACT_DISP,
+                .passkey = esp_random() % 1000000u,
+            };
+            ESP_LOGW(TAG, "=====================================");
+            ESP_LOGW(TAG, "  TYPE THIS ON THE KEYBOARD: %06u",
+                     (unsigned)io.passkey);
+            ESP_LOGW(TAG, "  then press Enter");
+            ESP_LOGW(TAG, "=====================================");
+            s_state = "pairing";
+            kbd_on_passkey((uint32_t)io.passkey);
+            ble_sm_inject_io(ev->passkey.conn_handle, &io);
+        } else if (ev->passkey.params.action == BLE_SM_IOACT_NUMCMP) {
+            struct ble_sm_io io = { .action = BLE_SM_IOACT_NUMCMP,
+                                    .numcmp_accept = 1 };
+            ble_sm_inject_io(ev->passkey.conn_handle, &io);
+        } else {
+            ESP_LOGW(TAG, "unsupported passkey action %d",
+                     ev->passkey.params.action);
         }
         return 0;
     }
@@ -599,6 +725,10 @@ static void scan_start(void)
 
 static void on_sync(void)
 {
+    if (s_clear_bonds_on_sync) {
+        ble_store_clear();
+        s_clear_bonds_on_sync = false;
+    }
     ble_hs_util_ensure_addr(0);
     ble_hs_id_infer_auto(0, &s_own_addr_type);
     ESP_LOGI(TAG, "BLE ready, scanning for a keyboard");
@@ -647,11 +777,37 @@ esp_err_t kbd_init(void)
     ble_hs_cfg.reset_cb = on_reset;
     ble_hs_cfg.store_status_cb = ble_store_util_status_rr;
 
-    /* No display and no keypad of our own, so Just Works is the only
-     * association model available; bonding still gives us a persistent LTK. */
-    ble_hs_cfg.sm_io_cap    = BLE_HS_IO_NO_INPUT_OUTPUT;
+    /* A bond created under a different pairing scheme is worse than none: the
+     * peer reuses it and never re-pairs, so the new scheme never takes effect.
+     * Cleared once per scheme change, not on every boot. */
+    {
+        nvs_handle_t nh;
+        uint8_t ver = 0;
+        if (nvs_open("deck", NVS_READWRITE, &nh) == ESP_OK) {
+            nvs_get_u8(nh, "pair_ver", &ver);
+            if (ver != KBD_PAIR_SCHEME) {
+                ESP_LOGW(TAG, "pairing scheme changed - clearing old bonds");
+                s_clear_bonds_on_sync = true;
+                nvs_set_u8(nh, "pair_ver", KBD_PAIR_SCHEME);
+                nvs_commit(nh);
+            }
+            nvs_close(nh);
+        }
+    }
+
+    /* The deck has a screen and the keyboard has keys, so the correct
+     * association model is Passkey Entry with US displaying: we show six
+     * digits, they are typed on the keyboard, and the link comes up
+     * MITM-authenticated.
+     *
+     * Declaring NoInputNoOutput instead degrades this to Just Works, which
+     * pairs, bonds and encrypts perfectly happily - and then a HID keyboard
+     * that requires an authenticated link simply never sends an input report.
+     * The link looks healthy, the battery service notifies, and not one
+     * keystroke arrives. That is exactly the symptom this hardware showed. */
+    ble_hs_cfg.sm_io_cap    = BLE_HS_IO_DISPLAY_ONLY;
     ble_hs_cfg.sm_bonding   = 1;
-    ble_hs_cfg.sm_mitm      = 0;
+    ble_hs_cfg.sm_mitm      = 1;
     ble_hs_cfg.sm_sc        = 1;
     ble_hs_cfg.sm_our_key_dist  = BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
     ble_hs_cfg.sm_their_key_dist = BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;

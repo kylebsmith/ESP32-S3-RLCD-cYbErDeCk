@@ -124,9 +124,40 @@ boot keyboard report never notifies. Collapsing to the boot report — the tidy
 thing to do — would have been silently wrong. The firmware subscribes to every
 notifiable report instead and decodes any report of three bytes or more.
 
-**Still unproven: that a key press becomes a character.** The keyboard sleeps
-and stops advertising when idle, and it was asleep for every attempt after the
-fix. The decode path has never seen a real keystroke.
+**The keyboard types.** Verified on the hardware:
+
+```
+report handle 36 len 8: 00 00 17 00 ...   't'
+report handle 36 len 8: 00 00 0b 00 ...   'h'
+report handle 36 len 8: 00 00 08 00 ...   'e'
+cyberdeck: saved 177 bytes, seq 22
+```
+
+Reports arrive on handle 36 - a report-protocol input report in the 8-byte
+boot-style layout - are decoded, and land in the document.
+
+Three things were wrong, and the one that looked most likely was not the one
+that mattered:
+
+1. **Nested GATT procedures** (fixed earlier): descriptor discovery started
+   inside the characteristic-discovery callback, failed with `EBUSY`, and no
+   CCCD was ever written.
+2. **A double-advance in the subscription walk** (fixed earlier).
+3. **A stale bond.** The keyboard had bonded during the era when nothing was
+   ever subscribed, and kept reusing that bond, so the fixed code never got a
+   clean pairing. Clearing it and re-pairing is what actually released the
+   keystrokes.
+
+Also corrected: Protocol Mode is a *write-without-response* characteristic, so
+the original write request was answered with ATT Write Not Permitted (259).
+
+**A theory that was wrong, recorded because it was acted on:** that the link
+needed to be MITM-authenticated and the deck had to display a passkey. The
+firmware now asks for authenticated pairing and can show a passkey on its own
+screen, but the keyboard still negotiates Just Works - `encryption change,
+status 0`, no passkey action ever raised - so authentication was never the
+problem. The passkey display is kept because it is correct behaviour for a
+peer that does demand it, not because it fixed anything here.
 
 ### Orientation — settled
 The owner cycled KEY until it read correctly in the enclosure and landed on

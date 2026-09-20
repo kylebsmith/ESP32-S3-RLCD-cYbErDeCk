@@ -51,5 +51,9 @@ void kbd_forget_all(void);
  * the whole editor path testable without a radio. */
 void kbd_inject(const kbd_event_t *ev);
 
+/* Called when a passkey must be shown so it can be typed on the keyboard.
+ * Implemented by the UI; a weak default does nothing. */
+void kbd_on_passkey(uint32_t passkey);
+
 /* Printable name of what we are doing, for the status line. */
 const char *kbd_state_name(void);

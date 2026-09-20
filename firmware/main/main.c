@@ -106,6 +106,24 @@ static void bench(void)
 
 static int64_t now_ms(void) { return esp_timer_get_time() / 1000; }
 
+/* Show the pairing passkey on the deck itself. A standalone device that can
+ * only tell you its passkey down a USB cable is not standalone. */
+void kbd_on_passkey(uint32_t passkey)
+{
+    char line[32];
+    snprintf(line, sizeof line, "%06u", (unsigned)passkey);
+
+    tg_clear();
+    tg_puts(1, 2, "PAIR THE KEYBOARD", TG_NORMAL);
+    tg_fill(1, 4, 12, ' ', TG_INVERSE);
+    tg_puts(4, 4, line, TG_INVERSE);
+    tg_puts(1, 6, "Type that on the", TG_NORMAL);
+    tg_puts(1, 7, "keyboard, then press", TG_NORMAL);
+    tg_puts(1, 8, "Enter.", TG_NORMAL);
+    tg_render();
+    st7305_flush_full();
+}
+
 void app_main(void)
 {
     ESP_LOGI(TAG, "cYbErDeCk OS  build %s", BUILD_ID);
