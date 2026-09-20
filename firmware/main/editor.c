@@ -55,7 +55,19 @@ static int  s_line_start[MAX_LINES];
 static int  s_line_count;
 static int  s_cursor_line;
 static int  s_cursor_col;
-static int  s_top_line;
+/* The view is anchored to a document OFFSET, not a line index. wrap() builds
+ * its table from a window starting at cursor-WRAP_BACK, so the origin moves
+ * as the document grows and every line index shifts underneath it. A line
+ * number was a coordinate in a sliding frame; an offset is not. */
+static int  s_top_offset;
+
+/* The sticky goal column. Vertical motion CONSUMES it but never overwrites
+ * it: goto_line_col clamps to the target line's width and the next wrap()
+ * re-derives the column from that clamped position, so without this a single
+ * short line passed through en route loses the column for good.
+ * -1 means "take it from wherever the cursor is now". */
+static int  s_goal_col = -1;
+
 static bool s_cursor_on = true;
 
 /* Where the cursor cell landed at the last draw, so a blink can repaint one
@@ -192,15 +204,27 @@ void editor_draw(void)
 {
     wrap(TEXT_COLS);
 
-    if (s_cursor_line < s_top_line) {
-        s_top_line = s_cursor_line;
+    /* Recover the top line from the anchored offset, then scroll to keep the
+     * cursor on screen, then re-anchor. */
+    int top = 0;
+    for (int i = 0; i < s_line_count; i++) {
+        if (s_line_start[i] <= s_top_offset) {
+            top = i;
+        } else {
+            break;
+        }
     }
-    if (s_cursor_line >= s_top_line + TEXT_ROWS) {
-        s_top_line = s_cursor_line - TEXT_ROWS + 1;
+    if (s_cursor_line < top) {
+        top = s_cursor_line;
     }
-    if (s_top_line < 0) {
-        s_top_line = 0;
+    if (s_cursor_line >= top + TEXT_ROWS) {
+        top = s_cursor_line - TEXT_ROWS + 1;
     }
+    if (top < 0) {
+        top = 0;
+    }
+    s_top_offset = s_line_start[top];
+    const int s_top_line = top;
 
     const size_t len = doc_len();
     s_cur_col = s_cur_row = -1;
@@ -297,9 +321,10 @@ void editor_cursor_solid(void)
  * the target line is long enough. This needs the wrap table, so it is rebuilt
  * first - the table from the last draw is stale the moment anything is
  * inserted. */
+/* Callers wrap first; this does not, because an arrow press was walking the
+ * gap buffer up to three times per keystroke. */
 static void goto_line_col(int line, int want_col)
 {
-    wrap(TEXT_COLS);
     if (line < 0) {
         line = 0;
     }
@@ -323,7 +348,6 @@ static void goto_line_col(int line, int want_col)
 
 static void line_bounds(int *start, int *end)
 {
-    wrap(TEXT_COLS);
     const int line = s_cursor_line;
     *start = s_line_start[line];
     *end   = (line + 1 < s_line_count)
@@ -339,6 +363,14 @@ static bool is_word_char(char c)
            (c >= '0' && c <= '9') || c == '_';
 }
 
+static void move_vertical(int delta)
+{
+    if (s_goal_col < 0) {
+        s_goal_col = s_cursor_col;
+    }
+    goto_line_col(s_cursor_line + delta, s_goal_col);
+}
+
 /* Ctrl chords. Chosen from readline rather than invented, because they are
  * already in a lot of people's fingers and cost no new keys on a thumb
  * keyboard - docs/OS.md is explicit that one held modifier plus one letter is
@@ -352,8 +384,8 @@ static void handle_ctrl(char c)
     case 'e': { int s, e; line_bounds(&s, &e); doc_move_to((size_t)e); break; }
     case 'b': doc_left();  break;
     case 'f': doc_right(); break;
-    case 'p': wrap(TEXT_COLS); goto_line_col(s_cursor_line - 1, s_cursor_col); break;
-    case 'n': wrap(TEXT_COLS); goto_line_col(s_cursor_line + 1, s_cursor_col); break;
+    case 'p': move_vertical(-1); break;
+    case 'n': move_vertical(+1); break;
     case 'k': {                      /* kill to end of line */
         int s, e;
         line_bounds(&s, &e);
@@ -379,16 +411,40 @@ static void handle_ctrl(char c)
 
 /* Motion is logged so navigation can be checked from the bench without
  * anyone having to read the panel over someone's shoulder. */
+#ifndef EDITOR_TRACE_MOTION
+#define EDITOR_TRACE_MOTION 0
+#endif
+
+/* Off by default. Each line costs the USB-serial VFS a mutex take and a
+ * ring-buffer send PER CHARACTER, which is real latency on the keystroke path
+ * for a trace nobody is reading during normal use. */
 static void log_motion(const char *what)
 {
-    wrap(TEXT_COLS);
+#if EDITOR_TRACE_MOTION
     ESP_LOGI("editor", "%s -> line %d col %d (offset %u of %u)",
              what, s_cursor_line + 1, s_cursor_col + 1,
              (unsigned)doc_cursor(), (unsigned)doc_len());
+#else
+    (void)what;
+#endif
 }
 
 void editor_handle(const kbd_event_t *ev)
 {
+    /* One wrap per event. Everything below reads the table; nothing below
+     * rebuilds it. */
+    wrap(TEXT_COLS);
+
+    /* Any motion that is not vertical, and any edit, drops the goal column. */
+    switch (ev->type) {
+    case KBD_EV_UP:
+    case KBD_EV_DOWN:
+        break;
+    default:
+        s_goal_col = -1;
+        break;
+    }
+
     if (ev->type == KBD_EV_CHAR && (ev->mods & (KBD_CTRL | KBD_ALT))) {
         handle_ctrl((char)(ev->ch >= 'A' && ev->ch <= 'Z'
                            ? ev->ch - 'A' + 'a' : ev->ch));
@@ -402,16 +458,8 @@ void editor_handle(const kbd_event_t *ev)
     case KBD_EV_BACKSPACE: doc_backspace();   break;
     case KBD_EV_LEFT:      doc_left();  log_motion("left");  break;
     case KBD_EV_RIGHT:     doc_right(); log_motion("right"); break;
-    case KBD_EV_UP:
-        wrap(TEXT_COLS);
-        goto_line_col(s_cursor_line - 1, s_cursor_col);
-        log_motion("up");
-        break;
-    case KBD_EV_DOWN:
-        wrap(TEXT_COLS);
-        goto_line_col(s_cursor_line + 1, s_cursor_col);
-        log_motion("down");
-        break;
+    case KBD_EV_UP:        move_vertical(-1); log_motion("up");    break;
+    case KBD_EV_DOWN:      move_vertical(+1); log_motion("down");  break;
     case KBD_EV_HOME: { int s, e; line_bounds(&s, &e); doc_move_to((size_t)s); break; }
     case KBD_EV_END:  { int s, e; line_bounds(&s, &e); doc_move_to((size_t)e); break; }
     default: break;
