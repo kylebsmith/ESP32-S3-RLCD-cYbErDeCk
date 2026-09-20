@@ -27,6 +27,7 @@
 #include <string.h>
 
 #include "docstore.h"
+#include "cmd.h"
 #include "kbd.h"
 #include "st7305.h"
 #include "esp_log.h"
@@ -76,6 +77,11 @@ static int  s_cur_col = -1, s_cur_row = -1;
 static char s_cur_ch  = ' ';
 
 static char s_status_shown[64];
+/* The result of the last command, shown in place of the status line for a
+ * few seconds. A command that reports nothing is indistinguishable from one
+ * that did not run. */
+static char    s_msg[64];
+static int64_t s_msg_until;
 static bool s_chrome_dirty = true;
 static uint32_t s_pushes, s_push_bytes;
 
@@ -174,9 +180,24 @@ static void wrap(int cols)
 
 /* The status bar is chrome, not part of the document grid, so it is drawn at
  * its own pixel row and only when its text actually changes. */
+int64_t editor_now_ms(void);
+
 static void status_bar(void)
 {
     char s[64];
+    if (s_msg[0] != '\0' && editor_now_ms() < s_msg_until) {
+        if (strcmp(s_msg, s_status_shown) == 0) {
+            return;
+        }
+        snprintf(s_status_shown, sizeof s_status_shown, "%s", s_msg);
+        st7305_fill(0, STATUS_Y, ST7305_WIDTH, STATUS_H, true);
+        tg_draw_text_px(MARGIN_X, STATUS_Y, s_msg, TG_INVERSE);
+        return;
+    }
+    if (s_msg[0] != '\0' && editor_now_ms() >= s_msg_until) {
+        s_msg[0] = '\0';
+        s_status_shown[0] = '\0';      /* force the real status back */
+    }
     const char *net = kbd_connected() ? "KEYBOARD" : kbd_state_name();
 
     /* Cursor position earns its place: a text editor that cannot tell you
@@ -378,6 +399,27 @@ static void move_vertical(int delta)
 static void handle_ctrl(char c)
 {
     switch (c) {
+    case 'g': {
+        /* Jump to the guide. Everything is reachable by name, but reaching
+         * the place where names are typed cannot itself require typing a
+         * name - that circle has to be broken by a gesture. */
+        for (int i = 0; i < DOC_MAX_BUFFERS; i++) {
+            if (strcmp(doc_buf_name(i), "guide") == 0) {
+                doc_buf_select(i);
+                doc_move_to(0);
+                s_goal_col = -1;
+                s_top_offset = 0;
+                editor_invalidate();
+                tg_invalidate();
+                snprintf(s_msg, sizeof s_msg, "guide - Enter runs a line");
+                s_msg_until = editor_now_ms() + 4000;
+                return;
+            }
+        }
+        snprintf(s_msg, sizeof s_msg, "no guide buffer");
+        s_msg_until = editor_now_ms() + 3000;
+        return;
+    }
     case 'z': doc_undo(); break;
     case 'y': doc_redo(); break;
     case 'a': { int s, e; line_bounds(&s, &e); doc_move_to((size_t)s); break; }
@@ -435,6 +477,41 @@ static void log_motion(const char *what)
 #endif
 }
 
+/* Copy the display line the cursor is on into out. */
+static void current_line(char *out, size_t max)
+{
+    int s, e;
+    line_bounds(&s, &e);
+    size_t n = 0;
+    for (int i = s; i < e && n + 1 < max; i++) {
+        const char ch = doc_at((size_t)i);
+        if (ch == '\n') {
+            break;
+        }
+        out[n++] = ch;
+    }
+    out[n] = '\0';
+}
+
+/* The Run verb from docs/SUBSTRATE.md. In a guide buffer this will be plain
+ * Enter; until buffer kinds exist, Ctrl+Enter runs the line under the cursor
+ * from anywhere, which is the same gesture without the mode. */
+static void run_current_line(void)
+{
+    char line[128];
+    current_line(line, sizeof line);
+    if (line[0] == '\0') {
+        return;
+    }
+    char msg[96] = "";
+    const cmd_status_t st = cmd_run_line(line, CMD_BY_HANDS, msg, sizeof msg);
+    snprintf(s_msg, sizeof s_msg, "%s", msg[0] ? msg : (st == CMD_DONE ? "ok" : "?"));
+    s_msg_until = editor_now_ms() + 4000;
+    /* A command may have switched buffers entirely. */
+    editor_invalidate();
+    tg_invalidate();
+}
+
 void editor_handle(const kbd_event_t *ev)
 {
     /* One wrap per event. Everything below reads the table; nothing below
@@ -459,7 +536,21 @@ void editor_handle(const kbd_event_t *ev)
 
     switch (ev->type) {
     case KBD_EV_CHAR:      doc_insert(ev->ch); break;
-    case KBD_EV_ENTER:     doc_insert('\n');   break;
+    case KBD_EV_ENTER: {
+        /* One bit of interpretation, exactly as docs/SUBSTRATE.md says: the
+         * kind decides only what Enter does. In a guide, Enter runs the line
+         * and Ctrl+Enter inserts one; in prose it is the other way round, so
+         * the Run verb is reachable from anywhere without a mode. */
+        const bool guide =
+            doc_buf_kind(doc_buf_current()) == DOC_KIND_GUIDE;
+        const bool ctrl = (ev->mods & KBD_CTRL) != 0;
+        if (guide != ctrl) {
+            run_current_line();
+        } else {
+            doc_insert('\n');
+        }
+        break;
+    }
     case KBD_EV_TAB:       doc_insert(' '); doc_insert(' '); break;
     case KBD_EV_BACKSPACE: doc_backspace();   break;
     case KBD_EV_LEFT:      doc_left();  log_motion("left");  break;

@@ -1,0 +1,165 @@
+# Commands, buffers and the archive
+
+*How the deck is driven. Downstream of [SUBSTRATE.md](SUBSTRATE.md), which
+argues that there is one data structure; this is what acts on it.*
+
+Claims are tagged `[FACT]` (verified on the hardware), `[JUDGEMENT]` (a
+decision, with its reason) or `[OPEN]`.
+
+## The calling convention `[JUDGEMENT]`
+
+Fixed deliberately and early, because it is the one part of this design that
+genuinely cannot be retrofitted. Adding quoting or flags later would change
+the meaning of guide files already written, and **guide files are user data** —
+that is the migration that hurts.
+
+```
+  the command      the first word of the line
+  the argument     the rest of the line, ONE unparsed string
+  the input        the selection, implicitly
+  the return       DONE, or PENDING with a job id
+```
+
+A command that wants structure parses its own argument. There is no argv, no
+flag grammar, no quoting. `name Rust Belt Lullaby` files a document under a
+name with spaces in it and needs no escaping to do so.
+
+**`PENDING` exists before anything uses it.** If commands were assumed
+synchronous now, the first network command would be written blocking and the
+run loop would have to be torn up to fix it. Declaring the return type up front
+costs one enum today and keeps SSH, an LLM call and a long export off the
+main loop later.
+
+## Capabilities `[JUDGEMENT]`
+
+Every command declares what it touches; every caller declares who it is.
+
+| Capability | Means |
+|---|---|
+| `READ` | inspects state, changes nothing |
+| `EDIT` | mutates a buffer |
+| `STORE` | writes flash or the card |
+| `NET` | reaches off the device |
+| `SYSTEM` | changes device state: pairing, power, orientation |
+
+| Caller | May reach |
+|---|---|
+| `HANDS` | everything — the owner is holding it |
+| `GUIDE` | READ, EDIT, STORE, NET — the owner, one step removed |
+| `AGENT` | READ, EDIT, STORE |
+
+The reason is the assistant. `docs/OS.md` demotes an LLM to "a filter in the
+table" — but a filter with access to the command table would otherwise hold
+**exactly the authority of the owner's hands**, including forgetting keyboard
+bonds and re-pointing the radio. Tagging the caller is what makes an on-device
+agent safe to add rather than something that has to be argued about later. It
+also un-forecloses it: without this the honest answer to "can the agent run
+commands?" is no.
+
+Tightening the table is easy. Loosening it is a decision somebody has to make
+on purpose, which is the point.
+
+## Buffer kinds: one bit of interpretation `[FACT]`
+
+`SUBSTRATE.md` says the kind of a buffer decides exactly one thing — what
+Enter does. That is implemented literally:
+
+| Kind | Enter | Ctrl+Enter |
+|---|---|---|
+| `prose` | splits the line, what follows reflows | runs the line |
+| `guide` | **runs the line** | inserts a newline |
+
+Nothing else differs. The same bytes, the same editor, the same keymap.
+
+The inversion is deliberate. Running a line has to be reachable from prose
+too, or the Run verb would require switching buffers to use — but a command
+typed into prose accumulates in the middle of somebody's writing, which is
+exactly what happened on the bench before guide buffers existed.
+
+## The guide is a text file `[FACT]`
+
+A `guide` buffer is a plain document where Enter executes the line under the
+cursor. There is no separate command surface, because the buffer already is
+one. Consequences, all of them the point:
+
+- **A menu is a text file.** Adding a menu item costs typing a line.
+- **The owner writes their own interface**, not "customises" it.
+- **Documentation is executable** — the example in the manual is the button.
+
+The deck writes a starter guide on first boot, because a device whose commands
+are undiscoverable has, in practice, no commands.
+
+**`Ctrl-G` jumps to the guide, and that binding is not a violation of the
+name-in-a-table discipline — it is what makes it possible.** Everything must
+be reachable by name, but *reaching the place where names are typed* cannot
+itself require typing a name. That circle has to be broken by a gesture.
+
+## The save model: scratch by default, save promotes `[JUDGEMENT]`
+
+Decided by the owner, and it is the right way round.
+
+**Every buffer is journalled and crash-safe from the first keystroke, named or
+not.** Naming a buffer is what files it in the archive; it is *not* what makes
+it durable.
+
+So:
+
+- "I did not want to save this" never costs data.
+- The archive only ever contains things deliberately put there.
+- There is no moment where work exists but is not yet safe — which is the
+  moment every classic editor has, and the one a power cut finds.
+
+`name <something>` promotes the current scratch buffer into the archive. That
+is the whole of "save as". `save` forces a write now; it is rarely needed,
+because autosave already ran.
+
+## The journal holds the archive `[FACT]`
+
+One append-only log holds every document. Records carry a name, and the scan
+takes **the newest valid record per name** — so each document has its own
+history in the same log and there is no second data structure to keep
+consistent.
+
+None of the power-cut properties depend on the name. They come from the sector
+alignment, the erase-before-write and the per-record CRC, all unchanged and
+all still verified by `main/selftest.c`.
+
+The header carries `kind` and seven reserved bytes. Every previous format
+change cost a migration and another reader; the reserved space means the next
+addition is ignored by an older build rather than shifting the payload
+underneath it.
+
+Readers exist for all three formats, so nothing written by an earlier build is
+stranded:
+
+| Magic | Header | Meaning |
+|---|---|---|
+| `DECK` | 16 B | pre-name; loads as the scratch buffer |
+| `DEK2` | 40 B | named, untyped; loads as prose |
+| `DEK3` | 48 B | named, typed, extensible — current |
+
+Buffers load **lazily**: a document restored at boot knows its name, length
+and record offset but holds no text until it is selected. Eight buffers cost
+eight small structs rather than a megabyte of PSRAM nobody asked for.
+
+## Verified on the hardware `[FACT]`
+
+Observed on the deck, 2026-09-20:
+
+```
+Ctrl-G  -> loaded 'guide' (25 bytes) on demand
+Enter   -> help / list / new / name / open / save / close / guide / prose
+arrow down, Enter -> *4 guide  25
+arrow down, Enter -> buffer 5 '(scratch)' selected
+```
+
+and, across a reset, `archive: 'lullaby'`, `'rustbelt'` restored by name.
+
+## Open questions `[OPEN]`
+
+| # | Question |
+|---|---|
+| 1 | Command output goes to the log and a status line. It should go to a buffer — the same primitive as everything else — so it can be scrolled, searched and piped. The `cmd_out` call site will not change; only its implementation. |
+| 2 | The selection does not exist yet, so the implicit input is always empty and `\|` (Pipe) cannot be implemented. Selection is the next primitive, not another command. |
+| 3 | Whole-buffer snapshots cost a flash sector per save. The undo log is already an operation log, which is already a redo log; deltas between periodic snapshots would cut writes by an order of magnitude. |
+| 4 | `DOC_MAX_BUFFERS` is 8 and `DOC_NAME_MAX` is 24. Both are arbitrary and neither is enforced anywhere a person would see a useful error. |

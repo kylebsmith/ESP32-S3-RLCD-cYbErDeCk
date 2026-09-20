@@ -19,6 +19,55 @@
 #include "esp_err.h"
 
 #define DOC_CAPACITY (128 * 1024)
+#define DOC_MAX_BUFFERS 8
+#define DOC_NAME_MAX    24
+
+/* ---- buffers --------------------------------------------------------------
+ *
+ * The document singleton is gone. Four things the deck needs are the SAME
+ * primitive and could not exist while there was only one buffer: the archive
+ * listing beside the file it opens, a scratch buffer beside a named one, a
+ * command's output sink, and later one session buffer per remote host.
+ *
+ * The save model is SCRATCH BY DEFAULT, SAVE PROMOTES. Every buffer is
+ * journalled and therefore crash-safe from the first keystroke, named or not.
+ * Naming a buffer is what files it in the archive - it is not what makes it
+ * durable. So "I did not want to save this" never costs data, and the archive
+ * only ever contains things deliberately put there.
+ *
+ * A buffer with an empty name is scratch. There is always at least one.
+ */
+
+/* A buffer's KIND is one bit of interpretation over the same bytes
+ * (docs/SUBSTRATE.md): it decides only what Enter does.
+ *
+ *   prose  Enter splits the line and what follows reflows
+ *   guide  Enter EXECUTES the line under the cursor
+ *
+ * That is what makes a menu a text file: adding a menu item costs typing a
+ * line. Commands live in a guide buffer rather than being typed into prose,
+ * which is also the only thing that stops a command line accumulating in the
+ * middle of somebody's writing. */
+typedef enum {
+    DOC_KIND_PROSE = 0,
+    DOC_KIND_GUIDE = 1,
+} doc_kind_t;
+
+doc_kind_t doc_buf_kind(int i);
+void       doc_buf_set_kind(doc_kind_t kind);
+
+/* All of the doc_* calls below act on the CURRENT buffer. */
+int         doc_buf_count(void);
+int         doc_buf_current(void);
+const char *doc_buf_name(int i);       /* "" for a scratch buffer */
+size_t      doc_buf_len(int i);
+bool        doc_buf_is_dirty(int i);
+
+esp_err_t   doc_buf_select(int i);
+esp_err_t   doc_buf_new(void);         /* a fresh scratch buffer           */
+esp_err_t   doc_buf_rename(const char *name);  /* promote current to filed */
+esp_err_t   doc_buf_close(int i);      /* forget it; the journal keeps it  */
+
 
 /* Load the newest valid snapshot, or start empty. */
 esp_err_t doc_init(void);

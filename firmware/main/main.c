@@ -19,6 +19,7 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 
+#include "cmd.h"
 #include "docstore.h"
 #include "editor.h"
 #include "kbd.h"
@@ -112,6 +113,32 @@ static void bench(void)
 
 static int64_t now_ms(void) { return esp_timer_get_time() / 1000; }
 
+/* The menu is a text file (docs/SUBSTRATE.md). If there is no guide yet,
+ * write one - a device whose commands are undiscoverable has, in practice,
+ * no commands. The owner can edit it like any other document, which is the
+ * whole point: adding a menu item costs typing a line. */
+static void ensure_guide_buffer(void)
+{
+    for (int i = 0; i < DOC_MAX_BUFFERS; i++) {
+        if (strcmp(doc_buf_name(i), "guide") == 0) {
+            return;
+        }
+    }
+    const int was = doc_buf_current();
+    if (doc_buf_new() != ESP_OK) {
+        return;
+    }
+    doc_set_text("help\nlist\nnew\nopen guide\n");
+    doc_buf_set_kind(DOC_KIND_GUIDE);
+    if (doc_buf_rename("guide") == ESP_OK) {
+        doc_save();
+        ESP_LOGI(TAG, "wrote a starter guide buffer");
+    }
+    doc_buf_select(was);
+}
+
+int64_t editor_now_ms(void) { return now_ms(); }
+
 /* The passkey arrives on the NimBLE host task. It is only RECORDED here; the
  * main task draws it on its next pass.
  *
@@ -179,6 +206,7 @@ void app_main(void)
     bench();
     vTaskDelay(pdMS_TO_TICKS(2500));
 
+    cmd_init();
     if (doc_init() != ESP_OK) {
         ESP_LOGE(TAG, "docstore init FAILED");
     }
@@ -187,6 +215,8 @@ void app_main(void)
     }
     sdmirror_init();                 /* a missing card is not fatal */
     report_memory("after docstore");
+
+    ensure_guide_buffer();
 
     if (kbd_init() != ESP_OK) {
         ESP_LOGE(TAG, "BLE keyboard init FAILED");

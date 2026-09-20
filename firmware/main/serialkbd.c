@@ -75,8 +75,15 @@ static void serial_task(void *arg)
 
         switch (b) {
         case 0x1B: esc = 1;                      break;
-        case '\r':
-        case '\n': push(KBD_EV_ENTER, 0);        break;
+        case '\r': push(KBD_EV_ENTER, 0);        break;
+        case '\n': {
+            /* A terminal sends CR for Enter, so LF is free - and it is the
+             * only way to reach Ctrl+Enter (the Run verb) down a cable. */
+            const kbd_event_t ev = { .type = KBD_EV_ENTER,
+                                     .mods = KBD_MOD_LCTRL };
+            kbd_inject(&ev);
+            break;
+        }
         case 0x08:
         case 0x7F: push(KBD_EV_BACKSPACE, 0);    break;
         case '\t': push(KBD_EV_TAB, 0);          break;
