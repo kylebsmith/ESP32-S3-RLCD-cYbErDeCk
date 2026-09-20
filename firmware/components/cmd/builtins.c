@@ -103,6 +103,15 @@ static cmd_status_t c_open(cmd_ctx_t *ctx)
 
 static cmd_status_t c_save(cmd_ctx_t *ctx)
 {
+    /* Say so rather than reporting a write that cannot happen. A '+' buffer
+     * is machine-written: doc_save() marks it clean and returns ESP_OK, so
+     * without this the status line read "saved 209 bytes" for a buffer that
+     * was never written anywhere. */
+    if (doc_current_is_transient()) {
+        snprintf(ctx->msg, sizeof ctx->msg, "%s is output, not a document",
+                 doc_buf_name(doc_buf_current()));
+        return CMD_DONE;
+    }
     const esp_err_t e = doc_save();
     if (e != ESP_OK) {
         cmd_out(ctx, "save failed");

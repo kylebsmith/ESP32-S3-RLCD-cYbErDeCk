@@ -418,6 +418,44 @@ type** — every cell is 0–35, so a 0–127 CC needs two cells. Keep a separat
 Add `$` (inject another patch at a coordinate) on day one: it is `#include`
 for a 2D language and the only composition mechanism Orca has.
 
+## The SD mirror, and what a backup is for
+
+The journal in flash is the source of truth. The SD card is an **export
+medium**: the owner copies it to a DGX at home and runs semantic analysis over
+the corpus, so what lands on that card is training and retrieval input, not
+just a safety copy. Two properties follow, and neither was true until they were
+found on hardware.
+
+**One file per document.** The mirror wrote every buffer to a single
+`/sdcard/notes.txt`, so switching documents overwrote the previous document's
+backup with the current one. The card held exactly one document — whichever was
+edited last — while appearing to hold a backup of the work. It is now
+`/sdcard/<name>.txt`, one per document, and the unnamed scratch buffer is
+mirrored as `scratch.txt` because that is where work starts and the buffer most
+likely to hold something unsaved. `[VERIFIED]` — three documents, three
+distinct files, read from the console.
+
+This forced `CONFIG_FATFS_LFN_HEAP` on. Under 8.3 short names the documents
+`rustbelt` and `rustbeltsave`, both of which exist on the device, truncate to
+the same `RUSTBELT.TXT`. `tools/test_mirror_path.c` asserts that collision case
+by name so the reason survives the next person reading the config.
+
+**Machine-written buffers are not mirrored.** `doc_save()` already refused to
+journal a `+` buffer, but the caller went on to mirror it anyway, so the
+contents of `+out` — command output, lane listings, error text — were written
+to the card as though they were a document. A corpus salted with command
+transcripts is a corpus that has been quietly poisoned, and the failure is
+invisible from the device. The guard is now in both paths, and `>save` on a
+`+` buffer says *"+out is output, not a document"* instead of reporting a write
+that did not happen. `[VERIFIED]` — `+out` current and dirty, save and autosave
+both produced no write and no mirror.
+
+Worth naming as a pattern, because it is the second time on this device: **a
+refusal that returns success is a refusal the caller cannot see.** `doc_save()`
+returned `ESP_OK` after declining to write, which is correct for its caller's
+purposes and was enough to make two separate callers announce a save that never
+happened.
+
 ## Apps and extension
 
 - **One exported symbol**, a pointer to a hierarchical const API struct in

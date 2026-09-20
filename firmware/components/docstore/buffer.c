@@ -282,6 +282,8 @@ bool buffer_is_transient(const char *name)
 }
 
 const char *buffer_current_name(void) { return cur()->name; }
+
+bool doc_current_is_transient(void) { return buffer_is_transient(cur()->name); }
 void        buffer_mark_clean(void)   { cur()->dirty = false; }
 
 /* ---- the gap buffer, now per-buffer --------------------------------------- */

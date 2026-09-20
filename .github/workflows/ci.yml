@@ -85,6 +85,18 @@ jobs:
              -o /tmp/test_st7305_addr tools/test_st7305_addr.c
           /tmp/test_st7305_addr
 
+      # The SD mirror wrote every buffer to one file, so switching documents
+      # overwrote the previous document's backup - and a '+out' command
+      # transcript was mirrored as though it were a document. Each case in
+      # this test fails against that behaviour. Same arrangement as above: it
+      # includes the shipping header, not a copy.
+      - name: Check the SD mirror paths
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror \
+             -I firmware/components/docstore/include \
+             -o /tmp/test_mirror_path tools/test_mirror_path.c
+          /tmp/test_mirror_path
+
       # The two bitmap faces are generated from reviewable art, never edited
       # by hand. If the committed C and the art disagree, someone edited the
       # wrong one.

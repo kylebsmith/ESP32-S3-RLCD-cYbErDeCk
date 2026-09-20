@@ -443,7 +443,13 @@ void app_main(void)
 
         /* Autosave: on newline, or once typing has paused. Never per
          * keystroke - docs/HANDOFF.md trap 6. */
-        if (doc_dirty()) {
+        /* A '+out' buffer is never written, so an autosave of one would log a
+         * save that did not happen - and did, until a mirror of command
+         * output showed up on the card. Clear the flag and say nothing. */
+        if (doc_dirty() && doc_current_is_transient()) {
+            doc_save();               /* marks clean, writes nothing */
+            saved_len = doc_len();
+        } else if (doc_dirty()) {
             const int64_t idle = now_ms() - last_edit_ms;
             const size_t len = doc_len();
             const size_t delta = len > saved_len ? len - saved_len

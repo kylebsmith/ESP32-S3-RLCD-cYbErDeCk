@@ -72,3 +72,7 @@ CONFIG_COMPILER_WARN_WRITE_STRINGS=y
 # ---------------------------------------------------------------------------
 CONFIG_ESP_TASK_WDT_PANIC=y
 CONFIG_ESP_TASK_WDT_TIMEOUT_S=10
+
+# The SD mirror names each file after its document; 8.3 would collide.
+CONFIG_FATFS_LFN_HEAP=y
+CONFIG_FATFS_MAX_LFN=64

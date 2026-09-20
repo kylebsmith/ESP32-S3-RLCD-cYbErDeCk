@@ -109,6 +109,11 @@ esp_err_t doc_save(void);
 /* Mirror to /sdcard/notes.txt, .tmp-then-rename. Safe to call with no card. */
 esp_err_t doc_mirror_sd(void);
 
+/* True when the current buffer is machine-written ('+name'). Such a buffer is
+ * neither journalled nor mirrored, so a caller that logs "saved" around
+ * doc_save() must ask first or it will report a write that did not happen. */
+bool     doc_current_is_transient(void);
+
 /* ---- undo ----------------------------------------------------------------
  * An operation log rather than a snapshot ring: a 128 KB document makes
  * snapshots far too expensive, and consecutive keystrokes coalesce into one

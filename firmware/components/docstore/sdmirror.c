@@ -2,9 +2,28 @@
  * The SD mirror. An export medium, never the source of truth.
  *
  * Written .tmp-then-rename so a cut during the write leaves either the old
- * complete file or an orphan .tmp, and never a half-written notes.txt.
+ * complete file or an orphan .tmp, and never a half-written document.
+ *
+ * TWO CORRECTIONS, both found on hardware by watching the log while driving
+ * the sequencer, and both of them silent data loss:
+ *
+ *  1. Every buffer was mirrored to the SAME FILE, notes.txt. Switching
+ *     documents therefore overwrote the previous document's backup with the
+ *     current one, so the card held exactly one document - whichever was
+ *     edited last - while appearing to hold a backup of the work. The mirror
+ *     is now one file per document name.
+ *
+ *  2. doc_save() refuses to journal a transient '+' buffer, but the caller
+ *     went on to mirror it anyway, so command output - the contents of +out -
+ *     was written to the card as though it were a document. docs/OS.md is
+ *     explicit that machine-written buffers are not archived, and the owner's
+ *     reason is concrete: these files are copied to a DGX for semantic
+ *     analysis, and a corpus salted with command transcripts is a corpus that
+ *     has been quietly poisoned. The guard belongs in both places, because
+ *     the two paths have failed apart once already.
  */
 #include "docstore.h"
+#include "mirror_path.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -24,6 +43,14 @@ static const char *TAG = "sdmirror";
 #define PIN_D0  39
 
 #define MOUNT "/sdcard"
+
+/* One fixed scratch name, renamed onto the target. Rename within a directory
+ * is the atomic step; the temp file never needs to be per-document. */
+#define MIRROR_TMP MOUNT "/mirror.tmp"
+
+/* The internal contract with buffer.c, declared the same way journal.c
+ * declares it - these are docstore internals, not public API. */
+const char *buffer_current_name(void);
 
 static sdmmc_card_t *s_card;
 
@@ -93,6 +120,15 @@ esp_err_t doc_mirror_sd(void)
         return ESP_ERR_INVALID_STATE;
     }
 
+    /* Machine-written buffers are not archived - see the note at the top. */
+    const char *name = buffer_current_name();
+    if (mirror_is_transient(name)) {
+        return ESP_OK;
+    }
+
+    char path[sizeof(MOUNT) + DOC_NAME_MAX + 8];
+    mirror_path(path, sizeof path, MOUNT, name);
+
     const size_t len = doc_len();
     char *buf = malloc(len > 0 ? len : 1);
     if (buf == NULL) {
@@ -100,10 +136,10 @@ esp_err_t doc_mirror_sd(void)
     }
     doc_read(buf, len);
 
-    FILE *f = fopen(MOUNT "/notes.tmp", "wb");
+    FILE *f = fopen(MIRROR_TMP, "wb");
     if (f == NULL) {
         free(buf);
-        ESP_LOGW(TAG, "cannot open notes.tmp");
+        ESP_LOGW(TAG, "cannot open " MIRROR_TMP);
         return ESP_FAIL;
     }
     const size_t wrote = len > 0 ? fwrite(buf, 1, len, f) : 0;
@@ -114,14 +150,16 @@ esp_err_t doc_mirror_sd(void)
 
     if (wrote != len) {
         ESP_LOGW(TAG, "short write %u of %u", (unsigned)wrote, (unsigned)len);
+        remove(MIRROR_TMP);
         return ESP_FAIL;
     }
 
-    remove(MOUNT "/notes.txt");
-    if (rename(MOUNT "/notes.tmp", MOUNT "/notes.txt") != 0) {
-        ESP_LOGW(TAG, "rename failed");
+    remove(path);
+    if (rename(MIRROR_TMP, path) != 0) {
+        ESP_LOGW(TAG, "rename to %s failed", path);
+        remove(MIRROR_TMP);
         return ESP_FAIL;
     }
-    ESP_LOGI(TAG, "mirrored %u bytes to " MOUNT "/notes.txt", (unsigned)len);
+    ESP_LOGI(TAG, "mirrored %u bytes to %s", (unsigned)len, path);
     return ESP_OK;
 }
