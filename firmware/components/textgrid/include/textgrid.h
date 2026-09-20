@@ -46,6 +46,18 @@ enum {
      * are a MASK, so TG_INVERSE|TG_UNDER is a cursor sitting on the playhead
      * and is legible as both - the bar inverts back out of the solid block. */
     TG_UNDER   = 2,
+    /* A bar across the TOP of the cell, for a recognised command word.
+     *
+     * The command word was TG_INVERSE - the same solid block as the cursor.
+     * The cursor XORs against it, so a cursor sitting on a command word turns
+     * that cell back to normal: technically visible, practically lost, and
+     * the owner reported exactly that ("the cursor gets lost navigating those
+     * as well unless it's flashing").
+     *
+     * Three marks, three distinct treatments, all composable because they are
+     * separate bits: solid block is the cursor and only the cursor, bottom bar
+     * is the playhead, top bar is "the machine recognises this word". */
+    TG_OVER    = 4,
 };
 
 /* Place a grid at an explicit pixel origin with an explicit size, so the UI

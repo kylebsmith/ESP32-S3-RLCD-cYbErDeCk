@@ -23,9 +23,11 @@
 
 #include "textgrid.h"
 
-static inline int cell_attr(bool inverse, bool under)
+static inline int cell_attr(bool inverse, bool under, bool over)
 {
-    return (inverse ? TG_INVERSE : TG_NORMAL) | (under ? TG_UNDER : 0);
+    return (inverse ? TG_INVERSE : TG_NORMAL)
+         | (under ? TG_UNDER : 0)
+         | (over  ? TG_OVER  : 0);
 }
 
 #endif /* CELL_ATTR_H */

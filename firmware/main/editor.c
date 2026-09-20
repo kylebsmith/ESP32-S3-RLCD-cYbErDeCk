@@ -89,6 +89,7 @@ static char s_cur_ch  = ' ';
 /* Whether the playhead is passing through the cursor cell. The blink has to
  * know, or it erases the bar every time it repaints that one cell. */
 static bool s_cur_under = false;
+static bool s_cur_over  = false;
 
 static char s_status_shown[64];
 /* The result of the last command, shown in place of the status line for a
@@ -438,15 +439,18 @@ void editor_draw(void)
              * know whether the playhead is passing through the cursor cell. */
             const bool playing = ph_off >= 0 && li < s_line_count &&
                                  (start + c) == ph_off && (start + c) < end;
+            const bool marked = mark_at >= 0 &&
+                                c >= mark_at && c < mark_at + mark_len;
             const bool is_cursor = (li == s_cursor_line && c == s_cursor_col);
             if (is_cursor) {
                 s_cur_col = c; s_cur_row = r; s_cur_ch = ch;
                 s_cur_under = playing;
+                s_cur_over  = marked;
             }
-            const bool marked = mark_at >= 0 &&
-                                c >= mark_at && c < mark_at + mark_len;
-            const bool inv = (is_cursor && s_cursor_on) != marked;
-            tg_put(c, r, ch, cell_attr(inv, playing));
+            /* The cursor keeps the solid block to itself. A recognised
+             * command word gets a bar on top instead of sharing it. */
+            const bool inv = is_cursor && s_cursor_on;
+            tg_put(c, r, ch, cell_attr(inv, playing, marked));
         }
     }
 
@@ -481,7 +485,8 @@ void editor_blink(bool on)
     /* cell_attr, not a second copy of the expression. The copy that used to
      * live here dropped the playhead bit, so a blink erased the bar from the
      * one cell where the cursor and the playhead meet. */
-    tg_put(s_cur_col, s_cur_row, s_cur_ch, cell_attr(on, s_cur_under));
+    tg_put(s_cur_col, s_cur_row, s_cur_ch,
+           cell_attr(on, s_cur_under, s_cur_over));
     tg_render();
 }
 

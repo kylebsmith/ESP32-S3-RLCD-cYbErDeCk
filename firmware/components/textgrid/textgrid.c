@@ -196,7 +196,9 @@ static void draw_cell(int col, int row)
     const uint8_t att = s_att[row][col];
     const bool inv   = (att & TG_INVERSE) != 0;
     const bool under = (att & TG_UNDER) != 0;
+    const bool over  = (att & TG_OVER) != 0;
     const int  ubar  = s_font->h - under_px();
+    const int  obar  = under_px();
     const int x0 = s_ox + col * s_cw;
     const int y0 = s_oy + row * s_ch;
     const int stride = s_font->stride;
@@ -206,7 +208,7 @@ static void draw_cell(int col, int row)
         /* The bar is applied AFTER the inverse, so it flips back out of a
          * solid block. That is what makes cursor-on-playhead readable as
          * both rather than as a slightly different block. */
-        const bool bar = under && gy >= ubar;
+        const bool bar = (under && gy >= ubar) || (over && gy < obar);
         for (int gx = 0; gx < s_font->w; gx++) {
             bool on = tg_font_bit(s_font, rowbits, gx) != 0;
             if (inv) {

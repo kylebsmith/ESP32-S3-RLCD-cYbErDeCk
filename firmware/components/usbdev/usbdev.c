@@ -145,9 +145,23 @@ static bool     s_host_seen_usj;
 static esp_timer_handle_t s_trial;
 
 static uint32_t s_msgs, s_packets;
+static uint32_t s_dropped;
 
 unsigned usbdev_tries(void) { return (unsigned)s_tries; }
 bool     usbdev_mounted(void) { return s_active && tud_midi_mounted(); }
+
+void usbdev_status(char *out, size_t max)
+{
+    /* tud_mounted() is the DEVICE; tud_midi_mounted() is the MIDI INTERFACE
+     * specifically. They differ exactly when the host accepted the descriptor
+     * but did not bind the MIDI class - which is the failure that produced a
+     * visible port sending nothing. */
+    snprintf(out, max, "act%d dev%d midi%d s%u d%u",
+             s_active ? 1 : 0,
+             tud_mounted() ? 1 : 0,
+             tud_midi_mounted() ? 1 : 0,
+             (unsigned)s_msgs, (unsigned)s_dropped);
+}
 
 void usbdev_packing(uint32_t *m, uint32_t *p)
 {
@@ -232,8 +246,6 @@ esp_err_t usbdev_want(bool on)
  * throttled reporter, never logged from this path: this runs on the MIDI
  * task, and logging that the transport is behind is a good way to put it
  * further behind. */
-static uint32_t s_dropped;
-
 void usbdev_midi_send(uint8_t status, uint8_t d1, uint8_t d2)
 {
     if (!usbdev_mounted()) {

@@ -45,3 +45,11 @@ unsigned  usbdev_tries(void);
 
 /* Messages sent, and how many USB packets carried them. */
 void usbdev_packing(uint32_t *msgs, uint32_t *packets);
+
+/* WHY IS USB MIDI SILENT? One line that answers it.
+ *
+ * USB MIDI delivered zero notes while BLE delivered 183, and there was no way
+ * to tell which link in the chain was broken: the destination not registered,
+ * the device not mounted, the MIDI interface specifically not mounted, or the
+ * writes failing. Each has a different fix and guessing cost hours. */
+void usbdev_status(char *out, size_t max);

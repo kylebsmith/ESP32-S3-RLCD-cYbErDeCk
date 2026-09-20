@@ -26,16 +26,24 @@ static void eq(const char *what, int got, int want)
 
 int main(void)
 {
-    eq("plain",              cell_attr(false, false), TG_NORMAL);
-    eq("cursor only",        cell_attr(true,  false), TG_INVERSE);
-    eq("playhead only",      cell_attr(false, true),  TG_UNDER);
+    eq("plain",               cell_attr(false, false, false), TG_NORMAL);
+    eq("cursor only",         cell_attr(true,  false, false), TG_INVERSE);
+    eq("playhead only",       cell_attr(false, true,  false), TG_UNDER);
+    eq("command word only",   cell_attr(false, false, true),  TG_OVER);
     /* THE ONE THAT WAS BROKEN. */
-    eq("cursor on playhead", cell_attr(true,  true),  TG_INVERSE | TG_UNDER);
+    eq("cursor on playhead",  cell_attr(true,  true,  false), TG_INVERSE | TG_UNDER);
+    /* AND THE ONE THE OWNER REPORTED: a cursor on a recognised command word.
+     * When the word was TG_INVERSE too, the cursor XORed against it and the
+     * cell went back to normal - lost. Three separate bits cannot cancel. */
+    eq("cursor on command",   cell_attr(true,  false, true),  TG_INVERSE | TG_OVER);
+    eq("all three",           cell_attr(true,  true,  true),
+       TG_INVERSE | TG_UNDER | TG_OVER);
 
     /* The bits must be independent, or one treatment can never be layered on
      * the other and the panel has no way to show both. */
-    if ((TG_INVERSE & TG_UNDER) != 0) {
-        printf("[FAIL] TG_INVERSE and TG_UNDER overlap; they cannot compose\n");
+    if ((TG_INVERSE & TG_UNDER) || (TG_INVERSE & TG_OVER) ||
+        (TG_UNDER & TG_OVER)) {
+        printf("[FAIL] the attribute bits overlap; they cannot compose\n");
         fails++;
     }
     if (TG_NORMAL != 0) {

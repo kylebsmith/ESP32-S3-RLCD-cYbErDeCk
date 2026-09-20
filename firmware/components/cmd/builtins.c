@@ -721,8 +721,14 @@ static cmd_status_t c_send(cmd_ctx_t *ctx)
         for (int i = 0; i < seq_dest_count(); i++) {
             cmd_out(ctx, "%-4s %s", seq_dest_name(i),
                     seq_dest_on(i) ? "ON" : "off");
-            cmd_out(ctx, "     %.24s", seq_dest_help(i));
+            cmd_out(ctx, "     %.25s", seq_dest_help(i));
         }
+        /* The USB MIDI chain, in one line, because "no notes arrive" has four
+         * possible causes and they need different fixes. */
+        char st[48];
+        usbdev_status(st, sizeof st);
+        cmd_out(ctx, "usb: %s", st);
+        cmd_out(ctx, "act=mode dev=host midi=bound");
         snprintf(ctx->msg, sizeof ctx->msg, "%d destination%s",
                  seq_dest_count(), seq_dest_count() == 1 ? "" : "s");
         return CMD_DONE;
