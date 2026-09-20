@@ -1,8 +1,17 @@
 # STATUS — night shift, 2026-09-20
 
-Firmware for steps 1–4 is written, on the board, and the acceptance test
-passes **except for the one part that needs the BLE keyboard** — which never
-came on air, so it could not be tested at all.
+**The acceptance test passes, in full, on the hardware.** Observed:
+
+```
+saved 220 bytes, seq 36            last save before the power was pulled
+--- Waiting for the device to reconnect...      the power cut
+restored 220 bytes, seq 36         byte-for-byte, same sequence number
+```
+
+Power on, the keyboard connects by itself, type a paragraph, pull the power,
+power on, the paragraph is still there. Every link in that chain is now
+observed rather than inferred, including the keyboard re-pairing and
+re-subscribing with no intervention.
 
 The single most important line in this file: **I could not see the screen.**
 Nothing about what the panel displays is verified below unless you told me so
@@ -55,6 +64,9 @@ Every row has log evidence from the board on your desk.
 | The journal appends across sectors and wraps | cursor walked 0 → 4096 → 8192 → 45056 |
 | BLE host starts, scans, decodes advertisements | ~48 distinct advertisers logged |
 | **Keystrokes decode and reach the document** | `report handle 36 len 8: 00 00 17 …` -> 't' |
+| **A real power cut, not a reset** | `saved 220 … seq 36` -> unplug -> `restored 220 bytes, seq 36` |
+| Keyboard re-pairs and re-subscribes unattended after a power cut | full discovery walk, twice, no button pressed |
+| **The SD card mounts** | `SD mounted: 00000, 14910 MB` |
 | Memory headroom with everything running | 212 KB internal free, 8.25 MB PSRAM free |
 
 ### The acceptance test, minus the radio
@@ -252,10 +264,13 @@ I built no transport; I just did not design it out.
   not bandwidth. Nowhere near mattering, but that is where to look if it does.
 - **`UP`/`DOWN` move by a whole line width rather than preserving the column.**
   An honest placeholder, not a considered design.
-- **Autosave-on-newline burns a flash sector per line.** Correct and cheap
-  (~3 ms, 128 slots, wraps safely), but a long writing session cycles the
-  partition every couple of minutes. Fine for now; worth revisiting before
-  this is someone's daily driver.
+- **Autosave burns a flash sector per save, and saves are frequent.** Observed
+  in the log: typing slowly produces one save per character (`saved 210`,
+  `211`, `212`, … one sector each). 128 slots wrap safely and each save costs
+  only ~3-5 ms, so nothing is at risk — but a slow typist cycles the whole
+  partition every 128 characters. The fix is a minimum-change or
+  minimum-interval threshold on top of the existing idle timer. Worth doing
+  before this is a daily driver, not urgent.
 
 ---
 
