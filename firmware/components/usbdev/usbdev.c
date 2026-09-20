@@ -186,6 +186,10 @@ bool usbdev_wanted(void) { return nvs_get_u8_or(KEY_WANT, 0) != 0; }
 
 esp_err_t usbdev_want(bool on)
 {
+    if (s_try_magic != TRY_MAGIC) {
+        s_try_magic = TRY_MAGIC;
+        s_tries = 0;
+    }
     if (on && s_tries >= MAX_TRIES) {
         return ESP_ERR_INVALID_STATE;
     }

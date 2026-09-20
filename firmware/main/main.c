@@ -340,6 +340,25 @@ void app_main(void)
     if (kbd_init() != ESP_OK) {
         ESP_LOGE(TAG, "BLE keyboard init FAILED");
     }
+    /* HOLD KEY AT BOOT TO FORCE USB MIDI OFF.
+     *
+     * The last resort that needs no console, no keyboard and no host - and
+     * that is the point. Every other way out of USB MIDI mode requires being
+     * able to type, which requires the very interface that mode replaces. If
+     * the composite ever comes up mute again, this is the way back, and it is
+     * a button the owner already knows because it cycles the orientation.
+     *
+     * Read here, after the GPIO is configured and before usbdev_boot(), and
+     * only ever used to turn something OFF - so a stuck button can cost the
+     * owner a feature but can never cost them the deck. */
+    if (gpio_get_level(PIN_KEY) == 0) {
+        if (usbdev_wanted()) {
+            usbdev_want(false);
+            ESP_LOGW(TAG, "KEY held at boot - USB MIDI forced off");
+            editor_message("KEY held - USB MIDI off");
+        }
+    }
+
     /* USB MIDI, if it is wanted and has not just failed three times. When it
      * comes up it owns the USB peripheral, so the USB-Serial-JTAG keyboard
      * must NOT also be started - the console moves to the CDC interface and
