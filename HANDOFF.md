@@ -24,13 +24,22 @@ flag that matters. Do not ask them to hold a button.
 
 ## Do this first
 
+**The repository is already cloned and you are already in it.** It sits at
+`/Distractions/ESP32-S3-RLCD-cYbErDeCk`, which is your working directory, and
+the branch `claude/firmware-night-1` has already been created off
+`claude/cyberdeck-enclosure-design-4vzwq6`. Do not clone anything.
+
+Confirm the state and pick up anything pushed after the clone:
+
 ```bash
-mkdir -p /Distractions && cd /Distractions
-git clone https://github.com/kylebsmith/ESP32-S3-RLCD-cYbErDeCk.git
-cd ESP32-S3-RLCD-cYbErDeCk
-git checkout claude/cyberdeck-enclosure-design-4vzwq6
-git checkout -b claude/firmware-night-1
+git status                                              # expect: on claude/firmware-night-1
+git fetch origin
+git merge --ff-only origin/claude/cyberdeck-enclosure-design-4vzwq6
 ```
+
+If that merge reports anything other than "Already up to date" or a clean
+fast-forward, stop and read what changed before continuing — the base branch
+moved after your clone.
 
 Then read, in this order, and **do not start coding until you have**:
 
