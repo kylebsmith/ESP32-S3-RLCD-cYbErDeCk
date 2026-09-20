@@ -31,3 +31,22 @@ void blemidi_start(void);
 void blemidi_send(uint8_t status, uint8_t d1, uint8_t d2);
 
 bool blemidi_connected(void);
+
+/* Send whatever has been accumulated since the last flush, as ONE packet.
+ *
+ * blemidi_send() no longer notifies; it appends. A BLE peripheral can only
+ * transmit during a connection event, so every notification is quantised to
+ * the connection interval - and one notification PER MESSAGE meant that a
+ * step containing a kick, a hat and a bass note could be spread across three
+ * connection events. At an interval of 15 ms that is up to 30 ms of flam
+ * inside a single step, from a sequencer whose own clock holds to under
+ * 100 us. BLE-MIDI 1.0 allows many messages in one packet precisely for this.
+ *
+ * Called by the sequencer's MIDI task once it has drained everything the
+ * clock queued for a step. */
+void blemidi_flush(void);
+
+/* How many MIDI messages went out in how many notifications. The ratio is
+ * the packing win, and it is the evidence for the claim rather than the
+ * claim itself. */
+void blemidi_packing(uint32_t *msgs, uint32_t *packets);

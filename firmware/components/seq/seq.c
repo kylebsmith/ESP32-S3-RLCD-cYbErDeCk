@@ -27,6 +27,7 @@ typedef struct {
     char        name[12];
     const char *help;
     seq_sink_t  fn;
+    seq_flush_t flush;
     bool        on;
 } dest_t;
 static dest_t s_dests[SEQ_MAX_DESTS];
@@ -42,9 +43,67 @@ static int    s_ndests;
  * So the clock only enqueues. A dedicated task with a real stack drains the
  * queue and talks to the transport, and a full queue drops the oldest event
  * rather than blocking the clock: a late note is worse than a lost one. */
-typedef struct { uint8_t status, d1, d2; } midi_ev_t;
+typedef struct {
+    uint8_t  status, d1, d2;
+    uint32_t queued_us;      /* for the transport-latency statistic */
+} midi_ev_t;
+
+/* The ideal grid. Re-anchored on play and on any tempo change, so the
+ * statistic measures dispatch jitter and never accumulated tempo error -
+ * those are different problems with different fixes. */
+static int64_t    s_grid_t0;
+static seq_stat_t s_clock_stat, s_xport_stat;
+
+static void stat_add(seq_stat_t *s, int32_t v)
+{
+    if (s->n == 0) {
+        s->min = s->max = v;
+    } else {
+        if (v < s->min) { s->min = v; }
+        if (v > s->max) {
+            s->max = v;
+            s->worst_ms = (uint32_t)(esp_timer_get_time() / 1000);
+        }
+    }
+    /* Late is measured against the TIGHTEST sample seen, not against zero. A
+     * constant phase offset is not jitter - the free-running alarm simply
+     * does not coincide with the instant play was pressed - and counting it
+     * as late would report a healthy clock as broken. */
+    const int32_t rel = v - s->min;
+    if (rel > SEQ_LATE_US) {
+        s->late++;
+    }
+    static const int32_t edge[SEQ_NBUCKETS - 1] = { 100, 250, 500, 1000, 2000, 5000 };
+    int b = SEQ_NBUCKETS - 1;
+    for (int i = 0; i < SEQ_NBUCKETS - 1; i++) {
+        if (rel < edge[i]) { b = i; break; }
+    }
+    s->bucket[b]++;
+    s->n++;
+    s->sum   += v;
+    s->sumsq += (int64_t)v * (int64_t)v;
+}
+
+void seq_stats(seq_stat_t *c, seq_stat_t *x)
+{
+    if (c != NULL) { *c = s_clock_stat; }
+    if (x != NULL) { *x = s_xport_stat; }
+}
+
+void seq_stats_reset(void)
+{
+    memset(&s_clock_stat, 0, sizeof s_clock_stat);
+    memset(&s_xport_stat, 0, sizeof s_xport_stat);
+}
+/* How many events one drain may take before flushing. The queue is 64 deep
+ * and a step on eight lanes is at most sixteen messages with note-offs, so
+ * this is a backstop against a pathological burst holding the flush open,
+ * not a limit anything normal reaches. */
+#define SEQ_BURST_MAX 32
 static QueueHandle_t s_midiq;
 static uint32_t      s_dropped;
+
+static uint64_t period_us(void);
 
 static void midi_task(void *arg)
 {
@@ -53,9 +112,34 @@ static void midi_task(void *arg)
     uint32_t said = 0;
     while (1) {
         if (xQueueReceive(s_midiq, &ev, portMAX_DELAY) == pdTRUE) {
+            /* DRAIN THE WHOLE STEP BEFORE FLUSHING.
+             *
+             * The clock queues every lane's note for a step in one pass, so
+             * by the time this task runs they are all sitting here. Handing
+             * them over together lets a transport that batches send them in
+             * one go - which on BLE is the difference between a kick, a hat
+             * and a bass note arriving in one connection event or spread
+             * across three. The loop is bounded by the queue depth and never
+             * waits, so it cannot delay anything. */
+            int burst = 0;
+            do {
+                /* How long this event sat in the queue. Measured HERE, where
+                 * the transport is actually about to be called, so it
+                 * includes the task switch the queue costs. */
+                stat_add(&s_xport_stat,
+                         (int32_t)((uint32_t)esp_timer_get_time() - ev.queued_us));
+                for (int i = 0; i < s_ndests; i++) {
+                    if (s_dests[i].on && s_dests[i].fn != NULL) {
+                        s_dests[i].fn(ev.status, ev.d1, ev.d2);
+                    }
+                }
+                burst++;
+            } while (burst < SEQ_BURST_MAX &&
+                     xQueueReceive(s_midiq, &ev, 0) == pdTRUE);
+
             for (int i = 0; i < s_ndests; i++) {
-                if (s_dests[i].on && s_dests[i].fn != NULL) {
-                    s_dests[i].fn(ev.status, ev.d1, ev.d2);
+                if (s_dests[i].on && s_dests[i].flush != NULL) {
+                    s_dests[i].flush();
                 }
             }
             /* Report the loss from HERE, never from emit(): emit() runs on
@@ -177,7 +261,7 @@ static void emit(uint8_t status, uint8_t d1, uint8_t d2)
     if (s_midiq == NULL) {
         return;                      /* before seq_init; nowhere to put it */
     }
-    const midi_ev_t ev = { status, d1, d2 };
+    const midi_ev_t ev = { status, d1, d2, (uint32_t)esp_timer_get_time() };
     if (xQueueSend(s_midiq, &ev, 0) != pdTRUE) {
         midi_ev_t drop;
         (void)xQueueReceive(s_midiq, &drop, 0);   /* make room */
@@ -276,6 +360,24 @@ static void tick(void *arg)
 
     if (!s_running) {
         return;
+    }
+
+    /* Dispatch deviation from the ideal grid. This is the number the owner
+     * is hearing when they say it feels jittery, and it is measured before
+     * any note is emitted so the measurement cannot be blamed on the notes. */
+    if (s_grid_t0 == 0) {
+        /* Anchor on the first tick after play, not on the press. The timer is
+         * free-running, so the gap between the two is an arbitrary constant
+         * phase - real, but not jitter, and reporting it as jitter buries the
+         * signal under a 6 ms offset. */
+        s_grid_t0 = now - (int64_t)s_tick * (int64_t)period_us();
+    }
+    {
+        const int64_t ideal = s_grid_t0 + (int64_t)s_tick * (int64_t)period_us();
+        int64_t d = now - ideal;
+        if (d >  1000000) { d =  1000000; }
+        if (d < -1000000) { d = -1000000; }
+        stat_add(&s_clock_stat, (int32_t)d);
     }
     if (s_sync) {
         emit(0xF8, 0, 0);            /* timing clock, no data bytes */
@@ -480,6 +582,11 @@ void seq_bpm(int bpm)
         esp_timer_stop(s_clock);
         esp_timer_start_periodic(s_clock, period_us());
     }
+    /* Re-anchor: the grid is a different grid now, and measuring the new
+     * clock against the old one would report a tempo change as jitter. */
+    s_grid_t0 = 0;
+    s_tick    = 0;
+    seq_stats_reset();
 }
 
 int  seq_get_bpm(void)  { return s_bpm; }
@@ -490,6 +597,8 @@ void seq_play(void)
 {
     s_pos  = 0;
     s_tick = 0;
+    s_grid_t0 = 0;               /* anchored on the first tick */
+    seq_stats_reset();
     s_running = true;
     if (s_sync) {
         /* Song-position-zero then start, which is what a DAW expects and what
@@ -535,16 +644,18 @@ const seq_lane_t *seq_lanes(int *count)
     return s_lanes;
 }
 
-esp_err_t seq_dest_add(const char *name, seq_sink_t fn, const char *help)
+esp_err_t seq_dest_add(const char *name, seq_sink_t fn, seq_flush_t flush,
+                       const char *help)
 {
     if (s_ndests >= SEQ_MAX_DESTS) {
         return ESP_ERR_NO_MEM;
     }
     dest_t *d = &s_dests[s_ndests++];
     snprintf(d->name, sizeof d->name, "%s", name);
-    d->fn   = fn;
-    d->help = help;
-    d->on   = false;
+    d->fn    = fn;
+    d->flush = flush;
+    d->help  = help;
+    d->on    = false;
     return ESP_OK;
 }
 

@@ -114,6 +114,44 @@ static void advertise(void)
     }
 }
 
+/* THE CONNECTION INTERVAL IS THE JITTER FLOOR, AND WE WERE NOT ASKING FOR ONE.
+ *
+ * A BLE peripheral can only transmit during a connection event, so the
+ * interval the central grants is a hard quantisation on every note: notes are
+ * delivered in buckets that wide, however precise the sequencer's own clock
+ * is. Measured on this device, the clock holds to well under a millisecond -
+ * so if the player hears jitter, this is where it is coming from.
+ *
+ * The BLE-MIDI specification asks for the shortest interval the central will
+ * grant, and THIS FIRMWARE NEVER REQUESTED ONE - it accepted whatever macOS
+ * chose. That is a spec violation and, on the evidence, the largest single
+ * term this device can control.
+ *
+ * 6 units x 1.25 ms = 7.5 ms, the minimum BLE permits. It is a REQUEST: the
+ * central may refuse or counter, which is why the granted value is logged
+ * rather than assumed. Logged on connect and again on every update, because
+ * a central may change it later - macOS is known to relax intervals to save
+ * power once a link looks idle. */
+static void report_and_request_interval(uint16_t conn)
+{
+    struct ble_gap_conn_desc d;
+    if (ble_gap_conn_find(conn, &d) == 0) {
+        ESP_LOGW(TAG, "link: interval %u us, latency %u, timeout %u ms",
+                 (unsigned)(d.conn_itvl * 1250), (unsigned)d.conn_latency,
+                 (unsigned)(d.supervision_timeout * 10));
+    }
+    const struct ble_gap_upd_params p = {
+        .itvl_min = 6, .itvl_max = 6,       /* 7.5 ms, the BLE minimum */
+        .latency = 0,
+        .supervision_timeout = 200,         /* 2 s */
+        .min_ce_len = 0, .max_ce_len = 0,
+    };
+    const int rc = ble_gap_update_params(conn, &p);
+    if (rc != 0) {
+        ESP_LOGW(TAG, "interval request refused locally: %d", rc);
+    }
+}
+
 static int adv_event(struct ble_gap_event *ev, void *arg)
 {
     (void)arg;
@@ -122,6 +160,7 @@ static int adv_event(struct ble_gap_event *ev, void *arg)
         if (ev->connect.status == 0) {
             s_conn = ev->connect.conn_handle;
             ESP_LOGI(TAG, "a host connected for MIDI");
+            report_and_request_interval(s_conn);
         } else {
             advertise();
         }
@@ -142,6 +181,17 @@ static int adv_event(struct ble_gap_event *ev, void *arg)
                      s_subscribed ? "wants" : "dropped");
         }
         return 0;
+
+    case BLE_GAP_EVENT_CONN_UPDATE: {
+        /* What the central actually granted. This is the number that belongs
+         * in a paper, not the one that was asked for. */
+        struct ble_gap_conn_desc d;
+        if (ble_gap_conn_find(ev->conn_update.conn_handle, &d) == 0) {
+            ESP_LOGW(TAG, "link updated: interval %u us, latency %u",
+                     (unsigned)(d.conn_itvl * 1250), (unsigned)d.conn_latency);
+        }
+        return 0;
+    }
 
     case BLE_GAP_EVENT_MTU:
         return 0;
@@ -173,20 +223,65 @@ void blemidi_start(void)
     advertise();
 }
 
+/* THE PACKET BUFFER.
+ *
+ * Bounded by the negotiated ATT MTU minus the three bytes of notification
+ * header. The default MTU is 23, so 20 bytes - a header, then up to five
+ * timestamped three-byte messages, which is more than any single step of a
+ * pattern can produce on eight lanes. If a step ever did overflow it, the
+ * buffer is flushed and a new packet started rather than anything being
+ * dropped: a note late by one connection interval is bad, a note gone is
+ * worse. */
+#define MIDI_PKT_MAX 64
+static uint8_t  s_pkt[MIDI_PKT_MAX];
+static int      s_pkt_n;
+static uint8_t  s_pkt_hdr;
+static uint32_t s_packed;      /* messages sent */
+static uint32_t s_packets;     /* notifications used to send them */
+
+void blemidi_packing(uint32_t *msgs, uint32_t *packets)
+{
+    if (msgs    != NULL) { *msgs    = s_packed;  }
+    if (packets != NULL) { *packets = s_packets; }
+}
+
+static int pkt_limit(void)
+{
+    const int mtu = (s_conn == BLE_HS_CONN_HANDLE_NONE)
+                    ? 23 : (int)ble_att_mtu(s_conn);
+    int lim = mtu - 3;
+    if (lim < 5)            { lim = 5; }
+    if (lim > MIDI_PKT_MAX) { lim = MIDI_PKT_MAX; }
+    return lim;
+}
+
+void blemidi_flush(void)
+{
+    if (s_pkt_n == 0 || !blemidi_connected()) {
+        s_pkt_n = 0;
+        return;
+    }
+    struct os_mbuf *om = ble_hs_mbuf_from_flat(s_pkt, (uint16_t)s_pkt_n);
+    s_pkt_n = 0;
+    if (om == NULL) {
+        return;                      /* out of mbufs; drop rather than block */
+    }
+    s_packets++;
+    ble_gatts_notify_custom(s_conn, s_chr_handle, om);
+}
+
 void blemidi_send(uint8_t status, uint8_t d1, uint8_t d2)
 {
     if (!blemidi_connected()) {
         return;
     }
     /* BLE-MIDI framing: a header byte carrying the top six bits of a 13-bit
-     * millisecond timestamp, then a timestamp byte, then the message. Both
-     * have the high bit set, which is what distinguishes them from data. */
+     * millisecond timestamp, then a timestamp byte before EVERY message, then
+     * the message. Both have the high bit set, which is what distinguishes
+     * them from data. */
     const uint32_t ts = (uint32_t)(esp_timer_get_time() / 1000) & 0x1FFF;
-    uint8_t pkt[5];
-    int n = 0;
-    pkt[n++] = (uint8_t)(0x80 | ((ts >> 7) & 0x3F));
-    pkt[n++] = (uint8_t)(0x80 | (ts & 0x7F));
-    pkt[n++] = status;
+    const uint8_t hdr = (uint8_t)(0x80 | ((ts >> 7) & 0x3F));
+
     /* How many data bytes follow is a property of the status byte, and
      * getting it wrong does not fail loudly - it shifts every later byte and
      * the far end reads garbage as notes. MIDI clock in particular is a
@@ -195,7 +290,7 @@ void blemidi_send(uint8_t status, uint8_t d1, uint8_t d2)
      *
      * System messages (0xF0 and up) are not channel messages and their
      * lengths do not follow the 0xF0 mask, so they are decided first. */
-    int data = 2;
+    int data;
     if (status >= 0xF0) {
         switch (status) {
         case 0xF1: case 0xF3: data = 1; break;   /* MTC, song select       */
@@ -206,12 +301,21 @@ void blemidi_send(uint8_t status, uint8_t d1, uint8_t d2)
         const uint8_t type = status & 0xF0;
         data = (type == 0xC0 || type == 0xD0) ? 1 : 2;
     }
-    if (data >= 1) { pkt[n++] = d1; }
-    if (data >= 2) { pkt[n++] = d2; }
 
-    struct os_mbuf *om = ble_hs_mbuf_from_flat(pkt, (uint16_t)n);
-    if (om == NULL) {
-        return;                      /* out of mbufs; drop rather than block */
+    const int need = 1 + 1 + data;               /* ts byte + status + data */
+    /* A packet carries ONE header, so every message in it must share the top
+     * six timestamp bits. When they stop agreeing - once every 128 ms - the
+     * packet is closed rather than mis-stamped. */
+    if (s_pkt_n > 0 && (s_pkt_hdr != hdr || s_pkt_n + need > pkt_limit())) {
+        blemidi_flush();
     }
-    ble_gatts_notify_custom(s_conn, s_chr_handle, om);
+    if (s_pkt_n == 0) {
+        s_pkt_hdr = hdr;
+        s_pkt[s_pkt_n++] = hdr;
+    }
+    s_pkt[s_pkt_n++] = (uint8_t)(0x80 | (ts & 0x7F));
+    s_pkt[s_pkt_n++] = status;
+    if (data >= 1) { s_pkt[s_pkt_n++] = d1; }
+    if (data >= 2) { s_pkt[s_pkt_n++] = d2; }
+    s_packed++;
 }

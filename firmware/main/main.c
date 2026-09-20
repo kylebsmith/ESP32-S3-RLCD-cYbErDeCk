@@ -305,8 +305,8 @@ void app_main(void)
      * pointer: BLE MIDI, USB MIDI and a UART all plug in here without the
      * musical core changing. */
     cmd_set_announce(announce);
-    seq_dest_add("ble", dest_ble, "BLE MIDI to a laptop or phone");
-    seq_dest_add("mon", dest_mon, "print notes on the console");
+    seq_dest_add("ble", dest_ble, blemidi_flush, "BLE MIDI to a laptop or phone");
+    seq_dest_add("mon", dest_mon, NULL, "print notes on the console");
     /* BLE MIDI on by default because the radio is already up for the
      * keyboard, so it costs nothing extra that is not already being paid. */
     seq_dest_enable("ble", true);

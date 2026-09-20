@@ -9,11 +9,13 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 #include <string.h>
 
 #include "docstore.h"
 #include "textgrid.h"
 #include "seq.h"
+#include "blemidi.h"
 #include "seq_pattern.h"
 
 #include "esp_system.h"
@@ -585,6 +587,80 @@ static cmd_status_t c_usbtest(cmd_ctx_t *ctx)
     return CMD_DONE;
 }
 
+/* '>jitter' - what the clock is actually doing, in microseconds.
+ *
+ * The owner reports perceptible timing jitter. Before optimising anything,
+ * measure it: the sequencer knows when each tick should have fired and when
+ * it did. CLOCK is dispatch deviation from the ideal grid; XPORT is how long
+ * a note waited between the clock queueing it and the transport being handed
+ * it. Different causes, different fixes, so they are never added together. */
+static void jitter_line(cmd_ctx_t *ctx, const char *what, const seq_stat_t *s)
+{
+    if (s->n == 0) {
+        cmd_out(ctx, "%-5s no samples yet", what);
+        return;
+    }
+    const double n    = (double)s->n;
+    const double mean = (double)s->sum / n;
+    double var = (double)s->sumsq / n - mean * mean;
+    if (var < 0) { var = 0; }
+    /* Everything relative to the tightest sample seen. That removes the
+     * constant phase offset and leaves only the spread, which is the part a
+     * listener can actually hear. */
+    cmd_out(ctx, "%-5s n%-6u sd%4d late%u", what, (unsigned)s->n,
+            (int)(var > 0 ? sqrt(var) : 0), (unsigned)s->late);
+    cmd_out(ctx, "      spread %d us  worst @%us",
+            (int)(s->max - s->min), (unsigned)(s->worst_ms / 1000));
+    /* The shape, not just the extremes. A single bad tick in two thousand is
+     * a different instrument from fifty a second, and min/max cannot tell
+     * them apart. */
+    static const char *lbl[SEQ_NBUCKETS] = {
+        "<.1", "<.25", "<.5", "<1", "<2", "<5", ">5"
+    };
+    char bar[64] = {0};
+    for (int i = 0; i < SEQ_NBUCKETS; i++) {
+        char one[16];
+        snprintf(one, sizeof one, "%s:%u ", lbl[i], (unsigned)s->bucket[i]);
+        strncat(bar, one, sizeof bar - strlen(bar) - 1);
+    }
+    cmd_out(ctx, "      %s", bar);
+}
+
+static cmd_status_t c_jitter(cmd_ctx_t *ctx)
+{
+    if (strcmp(ctx->arg, "reset") == 0) {
+        seq_stats_reset();
+        snprintf(ctx->msg, sizeof ctx->msg, "jitter counters cleared");
+        return CMD_DONE;
+    }
+    seq_stat_t clk, xp;
+    seq_stats(&clk, &xp);
+    jitter_line(ctx, "clock", &clk);
+    jitter_line(ctx, "xport", &xp);
+    /* The packing ratio. A step with three lanes should cost ONE BLE
+     * notification, not three - and a notification is quantised to the
+     * connection interval, so this ratio is a jitter number wearing a
+     * different hat. */
+    uint32_t msgs = 0, pkts = 0;
+    blemidi_packing(&msgs, &pkts);
+    if (pkts > 0) {
+        cmd_out(ctx, "ble   %u msgs in %u packets (%u.%02ux)",
+                (unsigned)msgs, (unsigned)pkts,
+                (unsigned)(msgs / pkts), (unsigned)((msgs * 100 / pkts) % 100));
+    }
+    cmd_out(ctx, "clock = tick vs the ideal grid");
+    cmd_out(ctx, "xport = queue wait before sending");
+    const uint32_t lost = seq_dropped();
+    if (lost > 0) {
+        cmd_out(ctx, "%u events dropped", (unsigned)lost);
+    }
+    snprintf(ctx->msg, sizeof ctx->msg, "clock sd %d us over %u ticks",
+             (int)(clk.n ? sqrt((double)clk.sumsq / clk.n -
+                   ((double)clk.sum / clk.n) * ((double)clk.sum / clk.n)) : 0),
+             (unsigned)clk.n);
+    return CMD_DONE;
+}
+
 static cmd_status_t c_send(cmd_ctx_t *ctx)
 {
     if (ctx->arg[0] == '\0') {
@@ -707,6 +783,7 @@ static const cmd_t s_builtins[] = {
     { "play",  c_play,  CMD_CAP_EDIT,  "start the clock" },
     { "stop",  c_stop,  CMD_CAP_EDIT,  "stop the clock" },
     { "lanes", c_lanes, CMD_CAP_READ,  "what is playing" },
+    { "jitter",c_jitter,CMD_CAP_READ,  "timing, measured in us" },
     { "panic", c_panic, CMD_CAP_EDIT,  "silence everything" },
     { "kick",  c_drum,  CMD_CAP_EDIT,  "x...x...x...x..." },
     { "snare", c_drum,  CMD_CAP_EDIT,  "....x.......x..." },

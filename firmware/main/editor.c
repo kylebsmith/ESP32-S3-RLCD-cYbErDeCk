@@ -429,15 +429,16 @@ void editor_draw(void)
             }
             const bool marked = mark_at >= 0 &&
                                 c >= mark_at && c < mark_at + mark_len;
-            /* OR, not XOR. XOR would cancel the playhead against the cursor
-             * and make it vanish exactly while the player is editing the lane
-             * they are watching. The cursor cell is already inverse, so OR
-             * loses nothing, and the playhead always falls inside the
-             * ARGUMENT so it can never collide with the marked command word. */
+            /* The playhead gets its OWN attribute rather than sharing the
+             * cursor's solid block. Two solid blocks on a one-ink panel are
+             * two things that look identical, and the owner lost their cursor
+             * inside a running lane because of it. They are independent bits,
+             * so a cursor sitting on the playhead shows as both. */
             const bool playing = ph_off >= 0 && li < s_line_count &&
                                  (start + c) == ph_off && (start + c) < end;
-            const bool inv = ((is_cursor && s_cursor_on) != marked) || playing;
-            tg_put(c, r, ch, inv ? TG_INVERSE : TG_NORMAL);
+            const bool inv = (is_cursor && s_cursor_on) != marked;
+            tg_put(c, r, ch,
+                   (inv ? TG_INVERSE : TG_NORMAL) | (playing ? TG_UNDER : 0));
         }
     }
 

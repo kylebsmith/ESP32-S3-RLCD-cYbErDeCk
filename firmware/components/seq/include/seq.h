@@ -158,7 +158,15 @@ typedef void (*seq_sink_t)(uint8_t status, uint8_t d1, uint8_t d2);
 /* Register a destination. `name` is what the player types. Registering does
  * not enable it: a destination that switched itself on at boot would be a
  * radio nobody asked for. */
-esp_err_t seq_dest_add(const char *name, seq_sink_t fn, const char *help);
+/* A destination may also declare a FLUSH. The MIDI task drains everything the
+ * clock queued for a step, hands each event to every enabled destination, and
+ * then flushes - so a transport that can batch knows exactly where the step
+ * ends. Pass NULL when there is nothing to batch; the log destination, for
+ * instance, has nothing to gain. */
+typedef void (*seq_flush_t)(void);
+
+esp_err_t seq_dest_add(const char *name, seq_sink_t fn, seq_flush_t flush,
+                       const char *help);
 
 /* Turn one on or off by name. Returns ESP_ERR_NOT_FOUND for a name that was
  * never registered, so a typo is reported rather than silently doing
@@ -174,6 +182,52 @@ bool        seq_dest_on(int i);
 
 /* Silence everything, immediately, from any context. */
 void seq_all_notes_off(void);
+
+/* SELF-MEASUREMENT.
+ *
+ * The owner perceives timing jitter, and the first rule of this project is
+ * that nothing is claimed without evidence. The sequencer knows exactly when
+ * each tick SHOULD have fired - the grid is t0 + n*period - and exactly when
+ * it did, so it can measure its own clock without any external instrument.
+ *
+ * Two separate numbers, because they have different causes and different
+ * fixes, and conflating them would send the optimisation in the wrong
+ * direction:
+ *
+ *   CLOCK   dispatch time minus the ideal grid position. This is esp_timer,
+ *           FreeRTOS scheduling, and anything that stalls the CPU - notably a
+ *           flash write, which disables the instruction cache.
+ *   XPORT   how long a note waited between being queued by the clock and
+ *           being handed to the transport by the MIDI task.
+ *
+ * Microseconds throughout. Reading these perturbs nothing; the accumulation
+ * is three integer operations on a systimer value the tick already has. */
+typedef struct {
+    uint32_t n;
+    int64_t  sum;        /* of deviations, us            */
+    int64_t  sumsq;      /* for the standard deviation   */
+    int32_t  min, max;
+    uint32_t late;       /* samples more than LATE_US from the tightest    */
+    /* A HISTOGRAM, NOT JUST MIN AND MAX.
+     *
+     * min/max says the worst tick was 12 ms late. It does not say whether
+     * that happened once in forty seconds or fifty times a second, and those
+     * are completely different instruments. Seven buckets, relative to the
+     * tightest sample: <100us, <250, <500, <1ms, <2ms, <5ms, >=5ms. */
+    uint32_t bucket[7];
+    uint32_t worst_ms;   /* uptime at which `max` happened, for correlating
+                          * an excursion against the log - which is how the
+                          * CAUSE gets found rather than guessed */
+} seq_stat_t;
+
+/* What counts as audibly late. A 16th at 124 bpm is 121,000 us; a millisecond
+ * is under 1% of that and well inside what the perception literature treats
+ * as inaudible for a percussive onset. It is a counter, not a verdict. */
+#define SEQ_LATE_US 1000
+#define SEQ_NBUCKETS 7
+
+void seq_stats(seq_stat_t *clock_out, seq_stat_t *xport_out);
+void seq_stats_reset(void);
 
 /* Events dropped because the transport could not keep up. A late note is
  * worse than a lost one, so the clock never blocks - but the count must be

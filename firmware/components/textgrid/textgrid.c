@@ -180,19 +180,39 @@ void tg_draw_text_px(int px, int py, const char *s, int attr)
     }
 }
 
+/* How tall the TG_UNDER bar is, in font pixels before scaling. A single row
+ * disappears on a low-contrast reflective panel at arm's length; a third of
+ * the cell would read as a block again. Proportional to the face so the
+ * 6x12 and 12x24 fonts look like the same idea. */
+static int under_px(void)
+{
+    const int n = s_font->h / 6;
+    return n < 2 ? 2 : n;
+}
+
 static void draw_cell(int col, int row)
 {
     const uint8_t *g = tg_font_glyph(s_font, (unsigned char)s_txt[row][col]);
-    const bool inv = s_att[row][col] == TG_INVERSE;
+    const uint8_t att = s_att[row][col];
+    const bool inv   = (att & TG_INVERSE) != 0;
+    const bool under = (att & TG_UNDER) != 0;
+    const int  ubar  = s_font->h - under_px();
     const int x0 = s_ox + col * s_cw;
     const int y0 = s_oy + row * s_ch;
     const int stride = s_font->stride;
 
     for (int gy = 0; gy < s_font->h; gy++) {
         const uint8_t *rowbits = &g[(size_t)gy * stride];
+        /* The bar is applied AFTER the inverse, so it flips back out of a
+         * solid block. That is what makes cursor-on-playhead readable as
+         * both rather than as a slightly different block. */
+        const bool bar = under && gy >= ubar;
         for (int gx = 0; gx < s_font->w; gx++) {
             bool on = tg_font_bit(s_font, rowbits, gx) != 0;
             if (inv) {
+                on = !on;
+            }
+            if (bar) {
                 on = !on;
             }
             if (s_scale == 1) {

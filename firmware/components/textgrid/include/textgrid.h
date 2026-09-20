@@ -28,7 +28,24 @@
 
 enum {
     TG_NORMAL  = 0,
+    /* A solid inverted block. THE EDIT CURSOR OWNS THIS and nothing else
+     * should take it: on a one-bit panel there is no second colour, so the
+     * loudest treatment must belong to the thing you can least afford to lose
+     * track of. */
     TG_INVERSE = 1,
+    /* A bar across the bottom of the cell, leaving the glyph readable.
+     *
+     * The sequencer playhead used TG_INVERSE and the owner's report was
+     * immediate: "it being full black is clashing with the cursor, so when
+     * you're trying to edit something while it's running it's very easy to
+     * lose your cursor". Two solid blocks on a screen with one ink is two
+     * things that look identical.
+     *
+     * This is the tracker convention, and the terminal one: the playing
+     * position is marked differently from the thing you are editing. The bits
+     * are a MASK, so TG_INVERSE|TG_UNDER is a cursor sitting on the playhead
+     * and is legible as both - the bar inverts back out of the solid block. */
+    TG_UNDER   = 2,
 };
 
 /* Place a grid at an explicit pixel origin with an explicit size, so the UI
