@@ -682,8 +682,16 @@ static cmd_status_t c_usb(cmd_ctx_t *ctx)
         snprintf(ctx->msg, sizeof ctx->msg, "usb: too many failures");
         return CMD_ERROR;
     }
-    if (off) {
-        usbdev_want(false);
+    if (off && usbdev_want(false) != ESP_OK) {
+        /* DO NOT REBOOT IF THE CHANGE DID NOT PERSIST. Rebooting here would
+         * come back into the mode the owner just asked to leave, which is
+         * exactly what happened: '>usb off' appeared to work, the deck
+         * restarted, and it was still a USB MIDI device with no console. */
+        cmd_out(ctx, "could not save the setting.");
+        cmd_out(ctx, "not rebooting - you would come");
+        cmd_out(ctx, "back into USB mode. see the log.");
+        snprintf(ctx->msg, sizeof ctx->msg, "usb off FAILED to save");
+        return CMD_ERROR;
     }
 
     doc_save_all_dirty();

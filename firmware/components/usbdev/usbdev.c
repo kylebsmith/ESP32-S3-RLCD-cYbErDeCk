@@ -155,16 +155,39 @@ void usbdev_packing(uint32_t *m, uint32_t *p)
     if (p != NULL) { *p = s_packets; }
 }
 
+/* WRITE IT, AND SAY SO IF IT DID NOT WRITE.
+ *
+ * This returned an error that '>usb off' then ignored, which is the leading
+ * explanation for the deck refusing to leave USB MIDI mode: the command
+ * rebooted having changed nothing, and came straight back into the mode it
+ * was asked to leave. The namespace is shared with the keyboard's bond
+ * storage, so a full NVS page is not hypothetical.
+ *
+ * On failure the key is erased and the write retried - an absent key reads as
+ * the default, and for usb_want the default is OFF, which is the safe
+ * direction. Every outcome is logged, because a silent failure here costs the
+ * owner their console. */
 static esp_err_t nvs_put_u8(const char *key, uint8_t v)
 {
     nvs_handle_t h;
     esp_err_t err = nvs_open(NVS_NS, NVS_READWRITE, &h);
     if (err != ESP_OK) {
+        ESP_LOGE(TAG, "nvs_open failed: %s", esp_err_to_name(err));
         return err;
     }
     err = nvs_set_u8(h, key, v);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "nvs_set %s failed: %s - erasing and retrying",
+                 key, esp_err_to_name(err));
+        nvs_erase_key(h, key);
+        err = nvs_set_u8(h, key, v);
+    }
     if (err == ESP_OK) {
         err = nvs_commit(h);
+    }
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "could not persist %s=%u: %s", key, (unsigned)v,
+                 esp_err_to_name(err));
     }
     nvs_close(h);
     return err;
