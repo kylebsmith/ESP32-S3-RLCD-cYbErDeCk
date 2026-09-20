@@ -1,0 +1,27 @@
+cYbErDeCk OS firmware
+Copyright 2026 the cYbErDeCk authors
+
+------------------------------------------------------------------------------
+This product includes software derived from SolarOS.
+
+  SolarOS - https://github.com/nilseuropa/solar_os
+  Copyright 2026 nilseuropa
+  Licensed under the Apache License, Version 2.0
+
+Specifically, firmware/components/st7305/st7305.c is derived from SolarOS's
+src/drivers/rlcd_st7305.c. The following are taken from that work:
+
+  * the ST7305 power-on register values and the order they are sent in
+    (rlcd_waveshare_settings and rlcd_apply_controller_profile);
+  * the CASET address-mirroring rule
+        CASET = { mirror_base - addr_end, mirror_base - addr_start }
+    with mirror_base = address_start + address_end = 0x3C, which is the one
+    piece of knowledge about this panel that is not in any datasheet;
+  * the OSCSET/FRCTRL frame-rate pairs for HPM and LPM;
+  * the 4x2 pixel-per-byte packing, with the smaller-y pixel in the higher bit.
+
+The framebuffer layout, the landscape coordinate mapping, the damage model,
+the gather-on-flush path and the read-back probe are not from SolarOS.
+
+A copy of the Apache License 2.0 is at http://www.apache.org/licenses/LICENSE-2.0
+------------------------------------------------------------------------------

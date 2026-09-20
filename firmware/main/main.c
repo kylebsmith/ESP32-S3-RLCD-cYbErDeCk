@@ -1,0 +1,213 @@
+/*
+ * cYbErDeCk OS - entry point.
+ *
+ * Steps 1-4 of the build order in docs/OS.md: display, text grid, BLE HID
+ * keyboard, and a text buffer that survives power loss.
+ *
+ * The acceptance test is: power on, the keyboard connects by itself, type a
+ * paragraph, pull the power, power on, the paragraph is still there.
+ */
+#include <stdio.h>
+#include <string.h>
+
+#include "driver/gpio.h"
+#include "esp_heap_caps.h"
+#include "esp_log.h"
+#include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "nvs.h"
+#include "nvs_flash.h"
+
+#include "docstore.h"
+#include "editor.h"
+#include "kbd.h"
+#include "selftest.h"
+#include "st7305.h"
+#include "testcard.h"
+#include "textgrid.h"
+
+static const char *TAG = "cyberdeck";
+
+#define PIN_KEY        18
+#define KEY_LONG_MS  2000        /* >= 180 ms thresholds, per the BLE caveat */
+#define AUTOSAVE_MS  1000
+#define BUILD_ID (__DATE__ " " __TIME__)
+#define NVS_NS "deck"
+
+esp_err_t sdmirror_init(void);
+
+static void report_memory(const char *when)
+{
+    ESP_LOGI(TAG, "%s: internal free %u B, largest %u B, PSRAM free %u B", when,
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+}
+
+static uint8_t orient_load(void)
+{
+    nvs_handle_t h;
+    uint8_t v = ST7305_ORIENT_1;
+    if (nvs_open(NVS_NS, NVS_READONLY, &h) == ESP_OK) {
+        nvs_get_u8(h, "orient", &v);
+        nvs_close(h);
+    }
+    return v > 3 ? ST7305_ORIENT_1 : v;
+}
+
+static void orient_save(uint8_t v)
+{
+    nvs_handle_t h;
+    if (nvs_open(NVS_NS, NVS_READWRITE, &h) == ESP_OK) {
+        nvs_set_u8(h, "orient", v);
+        nvs_commit(h);
+        nvs_close(h);
+    }
+}
+
+static void bench(void)
+{
+    const int runs = 20;
+    int64_t t0 = esp_timer_get_time();
+    for (int i = 0; i < runs; i++) {
+        st7305_flush_full();
+    }
+    ESP_LOGI(TAG, "BENCH full frame: %lld us (%d B)",
+             (esp_timer_get_time() - t0) / runs, ST7305_FB_SIZE);
+}
+
+static int64_t now_ms(void) { return esp_timer_get_time() / 1000; }
+
+void app_main(void)
+{
+    ESP_LOGI(TAG, "cYbErDeCk OS  build %s", BUILD_ID);
+    report_memory("boot");
+
+    esp_err_t err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        err = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(err);
+
+    if (st7305_init() != ESP_OK) {
+        ESP_LOGE(TAG, "display init FAILED - stopping");
+        return;
+    }
+    uint8_t orient = orient_load();
+    st7305_set_orientation((st7305_orient_t)orient);
+    ESP_ERROR_CHECK(tg_set_font(&tg_font_12x24, 1));     /* 12x24 -> 33x12 */
+    ESP_LOGI(TAG, "orientation %d (from NVS)", orient);
+
+    /* Show the card briefly so a boot is visibly a boot, then get out of the
+     * way. If the text reads mirrored, KEY cycles the orientation. */
+    testcard_draw(BUILD_ID);
+    bench();
+    vTaskDelay(pdMS_TO_TICKS(2500));
+
+    if (doc_init() != ESP_OK) {
+        ESP_LOGE(TAG, "docstore init FAILED");
+    }
+    if (selftest_run()) {
+        ESP_LOGW(TAG, "a self-test stage ran; reset to advance it");
+    }
+    sdmirror_init();                 /* a missing card is not fatal */
+    report_memory("after docstore");
+
+    if (kbd_init() != ESP_OK) {
+        ESP_LOGE(TAG, "BLE keyboard init FAILED");
+    }
+    report_memory("after BLE");
+
+    const gpio_config_t key = {
+        .pin_bit_mask = 1ULL << PIN_KEY,
+        .mode         = GPIO_MODE_INPUT,
+        .pull_up_en   = GPIO_PULLUP_ENABLE,
+        .intr_type    = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&key);
+
+    tg_invalidate();
+    editor_draw();
+    size_t bytes = 0;
+    tg_flush(&bytes);
+    ESP_LOGI(TAG, "editor up - KEY taps cycle orientation, KEY held %d ms "
+                  "forgets all keyboard bonds", KEY_LONG_MS);
+
+    int64_t key_down_at = 0;
+    bool    key_was_down = false;
+    bool    long_fired = false;
+    int64_t last_edit_ms = now_ms();
+    bool    need_draw = false;
+    bool    force_save = false;
+
+    while (1) {
+        kbd_event_t ev;
+        bool acted = false;
+
+        /* Input is drained tightly so a burst of keystrokes costs one redraw
+         * rather than one redraw each. */
+        while (kbd_poll(&ev, 5)) {
+            if (ev.type == KBD_EV_CONNECTED || ev.type == KBD_EV_DISCONNECTED) {
+                need_draw = true;
+                continue;
+            }
+            editor_handle(&ev);
+            acted = true;
+            need_draw = true;
+            if (ev.type == KBD_EV_ENTER) {
+                force_save = true;         /* a finished line is worth flash */
+            }
+        }
+        if (acted) {
+            last_edit_ms = now_ms();
+        }
+
+        /* KEY: tap cycles orientation, long hold forgets bonds. */
+        const bool down = gpio_get_level(PIN_KEY) == 0;
+        if (down && !key_was_down) {
+            key_down_at = now_ms();
+            long_fired = false;
+        } else if (down && !long_fired && now_ms() - key_down_at >= KEY_LONG_MS) {
+            kbd_forget_all();
+            long_fired = true;
+            need_draw = true;
+        } else if (!down && key_was_down && !long_fired) {
+            orient = (uint8_t)((orient + 1) & 3);
+            st7305_set_orientation((st7305_orient_t)orient);
+            orient_save(orient);
+            ESP_LOGI(TAG, "orientation -> %d (saved)", orient);
+            tg_invalidate();
+            need_draw = true;
+        }
+        key_was_down = down;
+
+        if (need_draw) {
+            editor_draw();
+            tg_flush(&bytes);
+            need_draw = false;
+        }
+
+        /* Autosave: on newline, or once typing has paused. Never per
+         * keystroke - docs/HANDOFF.md trap 6. */
+        if (doc_dirty()) {
+            const int64_t idle = now_ms() - last_edit_ms;
+            if (force_save || idle >= AUTOSAVE_MS) {
+                const int64_t t0 = esp_timer_get_time();
+                const esp_err_t se = doc_save();
+                const int64_t dt = esp_timer_get_time() - t0;
+                if (se == ESP_OK) {
+                    ESP_LOGI(TAG, "saved %u bytes, seq %u, %lld us",
+                             (unsigned)doc_len(), (unsigned)doc_save_seq(), dt);
+                    doc_mirror_sd();
+                } else {
+                    ESP_LOGE(TAG, "save failed: %s", esp_err_to_name(se));
+                }
+                force_save = false;
+                last_edit_ms = now_ms();
+                need_draw = true;
+            }
+        }
+    }
+}

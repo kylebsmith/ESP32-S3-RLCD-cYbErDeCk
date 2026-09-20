@@ -29,3 +29,8 @@ _*.scad
 # docs/PROVENANCE.md: no Waveshare file is redistributed by this repo.
 # Rebuild with: tools/fetch_reference.sh
 reference/
+
+# ESP-IDF build output and per-machine configuration.
+firmware/build/
+firmware/sdkconfig
+firmware/sdkconfig.old

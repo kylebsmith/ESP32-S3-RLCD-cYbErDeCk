@@ -144,6 +144,48 @@ An 80-column mode is now clearly the wrong trade: `5 × 10` is misaligned on
 | One full-width 12 px line | 600 | 240 µs |
 | Full frame | 15,000 | 6.0 ms |
 
+### Measured on the bench, 2026-09-20 `[MEASURED]`
+
+First numbers taken from the real board rather than derived. Method:
+`esp_timer_get_time()` either side of a 20-run loop, ESP-IDF v5.5.4, SPI3
+unused and SPI2 driving the panel at 24 MHz.
+
+| Quantity | Derived above | **Measured** |
+|---|---|---|
+| Full-frame push, 15,000 B | 6.0 ms @ 20 MHz (5.0 @ 24) | **4.75 ms @ 24 MHz** |
+| One 6 x 12 character, bytes on the wire | 9 | **9** |
+| One 12 x 24 character, bytes on the wire | 36 | **36** |
+
+The two byte counts are the load-bearing result. They are produced by the
+window arithmetic in *Window addressing* below, running against a real
+controller, at two different cell sizes — which corroborates the address model
+by a route independent of the driver it was read from. Had the CASET mirroring
+been wrong, a narrow window would not have come out at exactly 9 and 36 bytes.
+
+The full-frame figure beats the derivation because the derivation assumed no
+overlap between SPI setup and transfer. Per-character wall time is ~390 us
+against 3.6 us of wire time, so the **cost of a keystroke is transaction
+overhead, not bandwidth** — which is where to look if latency ever matters.
+
+**Still unmeasured: everything optical.** Nobody has photographed the panel
+under this firmware. Contrast, the LC response ceiling and whether the image
+is even the right way round are open below.
+
+### The 6 x 12 recommendation did not survive contact `[MEASURED]`
+
+*Character-cell geometry* above recommends 6 x 12 giving 66 x 25, on the
+grounds that it is aligned on both axes and cheapest per character. Both facts
+hold. The recommendation still failed, for a reason arithmetic could not
+reach: on the real panel, at 0.212 mm pixel pitch and with no backlight, a
+5 x 7 glyph body is too small and too thin to read comfortably. The owner's
+first look at it was "the text is too small ... with such a naturally low
+contrast screen we gotta have sexy chunky letters."
+
+The firmware therefore defaults to **12 x 24 giving 33 x 12**, and keeps 6 x 12
+available. The alignment analysis is what made the swap free: cell height must
+be a multiple of 12, but **cell width only has to be even**, so widths are
+cheap and the grid can be re-proportioned without new constraints.
+
 ### Refresh: three different numbers, and only two govern how it feels `[OPEN]`
 
 This is the sharpest unresolved question in the prior art and it must not be

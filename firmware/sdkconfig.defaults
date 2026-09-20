@@ -1,0 +1,61 @@
+# ---------------------------------------------------------------------------
+# Target and flash
+# ---------------------------------------------------------------------------
+CONFIG_IDF_TARGET="esp32s3"
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# ---------------------------------------------------------------------------
+# THE ONE THAT RUINS SEQUENCERS
+# docs/OS.md "Clock discipline": CONFIG_FREERTOS_HZ defaults to 100, so
+# vTaskDelay(1) sleeps 10 ms. Set it now, not later.
+# ---------------------------------------------------------------------------
+CONFIG_FREERTOS_HZ=1000
+
+# ---------------------------------------------------------------------------
+# PSRAM - octal, 8 MB. Documents and scrollback live here.
+# The framebuffer does NOT: SPI DMA requires internal SRAM.
+# ---------------------------------------------------------------------------
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+CONFIG_SPIRAM_USE_MALLOC=y
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=4096
+CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
+
+# ---------------------------------------------------------------------------
+# Console on the built-in USB-Serial/JTAG, so that flashing and monitoring
+# need no buttons and no external adapter.
+# ---------------------------------------------------------------------------
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
+# ---------------------------------------------------------------------------
+# Bluetooth: NimBLE, central role (we are the HID *host*), no BR/EDR because
+# the ESP32-S3 has no Classic radio at all.
+# ---------------------------------------------------------------------------
+CONFIG_BT_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_NIMBLE_ROLE_CENTRAL=y
+CONFIG_BT_NIMBLE_ROLE_OBSERVER=y
+CONFIG_BT_NIMBLE_ROLE_PERIPHERAL=n
+CONFIG_BT_NIMBLE_ROLE_BROADCASTER=n
+CONFIG_BT_NIMBLE_MAX_CONNECTIONS=2
+CONFIG_BT_NIMBLE_MAX_BONDS=4
+CONFIG_BT_NIMBLE_MAX_CCCDS=16
+CONFIG_BT_NIMBLE_NVS_PERSIST=y
+CONFIG_BT_NIMBLE_SM_LEGACY=y
+CONFIG_BT_NIMBLE_SM_SC=y
+CONFIG_BT_NIMBLE_LOG_LEVEL_WARNING=y
+
+# ---------------------------------------------------------------------------
+# Main task needs room for the editor and the BLE callbacks.
+# ---------------------------------------------------------------------------
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE=4096
+
+# Compiler
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+CONFIG_COMPILER_WARN_WRITE_STRINGS=y
