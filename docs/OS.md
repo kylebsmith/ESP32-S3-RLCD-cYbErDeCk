@@ -17,12 +17,23 @@ plane with a dead API key. The panel is reflective, so it is readable in
 sunlight and costs almost nothing to hold an image — the machine is never
 really off, it is just idle.
 
-Three jobs, in priority order:
+It is an **idea machine**, and it sits at the centre of a creative-technology
+art practice rather than at the edge of one.
 
-1. **Capture** — type or speak an idea, and never lose it.
-2. **Compose** — edit prose and structure with a grammar suited to a thumb
-   keyboard.
-3. **Perform** — live-code patterns and emit MIDI.
+**Three co-equal jobs.** None is a side feature of another, and the ordering
+below is a lifecycle, not a priority:
+
+1. **Capture** — type or speak an idea, and never lose it. A real text editor
+   is central, not a notepad bolted onto an instrument.
+2. **Compose** — develop prose, structure and patterns with a grammar suited
+   to a thumb keyboard.
+3. **Perform** — live-code, emit MIDI to hardware and software, and host the
+   network that the rest of the practice connects to.
+
+**Text is the shared substrate**, and that is what makes it one machine rather
+than three apps. A note, an Orca patch (literally a rectangular block of
+ASCII), a guide file of executable lines, a routing table and an OSC address
+map are all text on the same grid. The editor is the OS.
 
 ## What the hardware decides
 
@@ -281,7 +292,12 @@ remember is a feature you do not have.
   fetches, `C#4` previews, `120bpm` sets the clock, and **a bare word degrades
   to literal search — it never fails.**
 
-## Daemon
+## Assistants, as one filter among many
+
+**Demoted deliberately.** An LLM assistant is *a* filter in the table below,
+not a pillar of the device. It must never be on the critical path of capture,
+composition or performance, and the machine must be fully useful with the
+radio off. What follows is the shape it takes **if** it is wired up at all.
 
 **The device never talks to an LLM directly** `[JUDGEMENT]`. It ships text or
 audio to **one endpoint under your control**, which does STT, prompting and
@@ -293,7 +309,8 @@ re-pointed without reflashing; and the firmware speaks exactly one protocol,
 which is the only way the TLS budget above stays affordable.
 
 Surface area on the device is the `|` filter table plus the palette. Nothing
-else needs to know Daemon exists.
+else needs to know an assistant exists, which is the point: the feature can be
+removed entirely without the OS noticing.
 
 ## Voice
 
@@ -323,7 +340,15 @@ before writing code.
 The board's advertised "echo cancellation" is a marketing description of
 spare ADC channels, not silicon `[FACT]`. Design for near-field and it works.
 
-## MIDI and live coding
+## Performance, MIDI and the network
+
+> **Under active revision.** The brief widened: the device is also a
+> **performance instrument and a network mothership** — DIN MIDI into an
+> interface, USB MIDI to a laptop or an Ableton Move, BLE MIDI as a wireless
+> option, and its own Wi-Fi network carrying OSC so a laptop and a Raspberry
+> Pi can join it. Transport coexistence, clock architecture, routing and the
+> hub design are being researched now; what follows is the settled core and
+> will be extended rather than replaced.
 
 ### Transports
 
