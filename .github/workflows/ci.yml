@@ -121,6 +121,27 @@ jobs:
              -o /tmp/test_ui_text tools/test_ui_text.c
           /tmp/test_ui_text
 
+      # USB MIDI will move the console and the serial keyboard from
+      # USB-Serial-JTAG onto a TinyUSB CDC interface. That is a transport
+      # change that must not alter a single key - and the mapping most likely
+      # to be lost is the one nobody would guess: a terminal sends CR for
+      # Enter, so LF is free, and LF is the ONLY way to reach Ctrl+Enter, the
+      # Run verb, down a cable. Every automated test here drives the deck that
+      # way. The second check asserts the mapper's constants still equal
+      # kbd.h's enum, because a renumbering there would silently turn arrows
+      # into characters.
+      - name: Check the serial keymap
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror \
+             -I firmware/main \
+             -o /tmp/test_serialkbd_map tools/test_serialkbd_map.c
+          /tmp/test_serialkbd_map
+          cc -std=c11 -Wall -Wextra -Werror \
+             -I firmware/main -I firmware/components/kbd/include \
+             -I tools/hostshim \
+             -o /tmp/test_keymap_agree tools/test_keymap_agree.c
+          /tmp/test_keymap_agree
+
       # The two bitmap faces are generated from reviewable art, never edited
       # by hand. If the committed C and the art disagree, someone edited the
       # wrong one.

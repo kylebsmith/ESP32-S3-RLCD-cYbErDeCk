@@ -21,79 +21,33 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "kbd.h"
+#include "serialkbd_map.h"
 
 static const char *TAG = "serialkbd";
 
-static void push(kbd_ev_type_t t, char ch)
-{
-    const kbd_event_t ev = { .type = t, .ch = ch, .repeat = false };
-    kbd_inject(&ev);
-}
 
 /* A terminal sends Ctrl-A..Ctrl-Z as bytes 1..26. Turning them back into a
  * character plus a modifier means the serial keyboard reaches the same chords
  * as the BLE one, through the same event taxonomy - so undo is testable over
  * the cable and usable when no keyboard is paired. */
-static void push_ctrl(char ch)
-{
-    const kbd_event_t ev = { .type = KBD_EV_CHAR, .ch = ch,
-                             .mods = KBD_MOD_LCTRL, .repeat = false };
-    kbd_inject(&ev);
-}
 
 static void serial_task(void *arg)
 {
     (void)arg;
     uint8_t b;
-    int esc = 0;               /* 0 none, 1 saw ESC, 2 saw ESC [ */
+    skb_state_t st = { 0 };
 
     while (1) {
         const int n = usb_serial_jtag_read_bytes(&b, 1, portMAX_DELAY);
         if (n <= 0) {
             continue;
         }
-
-        /* Arrow keys arrive as ESC [ A..D from any terminal. */
-        if (esc == 1) {
-            esc = (b == '[') ? 2 : 0;
-            if (esc == 0 && b == 0x1B) {
-                push(KBD_EV_ESC, 0);
-            }
-            continue;
-        }
-        if (esc == 2) {
-            esc = 0;
-            switch (b) {
-            case 'A': push(KBD_EV_UP, 0);    break;
-            case 'B': push(KBD_EV_DOWN, 0);  break;
-            case 'C': push(KBD_EV_RIGHT, 0); break;
-            case 'D': push(KBD_EV_LEFT, 0);  break;
-            default: break;
-            }
-            continue;
-        }
-
-        switch (b) {
-        case 0x1B: esc = 1;                      break;
-        case '\r': push(KBD_EV_ENTER, 0);        break;
-        case '\n': {
-            /* A terminal sends CR for Enter, so LF is free - and it is the
-             * only way to reach Ctrl+Enter (the Run verb) down a cable. */
-            const kbd_event_t ev = { .type = KBD_EV_ENTER,
-                                     .mods = KBD_MOD_LCTRL };
+        const skb_ev_t e = skb_feed(&st, b);
+        if (e.emit) {
+            const kbd_event_t ev = { .type = (kbd_ev_type_t)e.type,
+                                     .ch = e.ch, .mods = e.mods,
+                                     .repeat = false };
             kbd_inject(&ev);
-            break;
-        }
-        case 0x08:
-        case 0x7F: push(KBD_EV_BACKSPACE, 0);    break;
-        case '\t': push(KBD_EV_TAB, 0);          break;
-        default:
-            if (b >= 0x20 && b < 0x7F) {
-                push(KBD_EV_CHAR, (char)b);
-            } else if (b >= 1 && b <= 26) {
-                push_ctrl((char)('a' + b - 1));
-            }
-            break;
         }
     }
 }
