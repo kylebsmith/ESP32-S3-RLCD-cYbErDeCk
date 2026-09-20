@@ -30,6 +30,17 @@ static void push(kbd_ev_type_t t, char ch)
     kbd_inject(&ev);
 }
 
+/* A terminal sends Ctrl-A..Ctrl-Z as bytes 1..26. Turning them back into a
+ * character plus a modifier means the serial keyboard reaches the same chords
+ * as the BLE one, through the same event taxonomy - so undo is testable over
+ * the cable and usable when no keyboard is paired. */
+static void push_ctrl(char ch)
+{
+    const kbd_event_t ev = { .type = KBD_EV_CHAR, .ch = ch,
+                             .mods = KBD_MOD_LCTRL, .repeat = false };
+    kbd_inject(&ev);
+}
+
 static void serial_task(void *arg)
 {
     (void)arg;
@@ -72,6 +83,8 @@ static void serial_task(void *arg)
         default:
             if (b >= 0x20 && b < 0x7F) {
                 push(KBD_EV_CHAR, (char)b);
+            } else if (b >= 1 && b <= 26) {
+                push_ctrl((char)('a' + b - 1));
             }
             break;
         }

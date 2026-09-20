@@ -59,6 +59,7 @@ static const char   *s_state = "starting";
 static int           s_adv_logged;
 static int           s_adv_seen;
 static int           s_reports_logged;
+static int           s_dropped;
 static bool          s_clear_bonds_on_sync;
 
 /* Bumped when the pairing scheme changes. */
@@ -75,12 +76,20 @@ static void scan_start(void);
 bool kbd_connected(void)      { return s_connected; }
 const char *kbd_state_name(void) { return s_state; }
 
+static void emit_m(kbd_ev_type_t t, char ch, uint8_t mods, bool repeat)
+{
+    const kbd_event_t ev = { .type = t, .ch = ch, .mods = mods, .repeat = repeat };
+    if (s_q != NULL && xQueueSend(s_q, &ev, 0) != pdTRUE) {
+        s_dropped++;
+        if ((s_dropped % 16) == 1) {
+            ESP_LOGW(TAG, "input queue full - %d event(s) dropped", s_dropped);
+        }
+    }
+}
+
 static void emit(kbd_ev_type_t t, char ch, bool repeat)
 {
-    const kbd_event_t ev = { .type = t, .ch = ch, .repeat = repeat };
-    if (s_q != NULL) {
-        xQueueSend(s_q, &ev, 0);
-    }
+    emit_m(t, ch, 0, repeat);
 }
 
 void kbd_inject(const kbd_event_t *ev)
@@ -105,19 +114,24 @@ static void dispatch_usage(uint8_t usage, uint8_t mods, bool repeat)
     const bool shift = (mods & 0x22) != 0;    /* either shift */
 
     switch (usage) {
-    case 0x28: emit(KBD_EV_ENTER,     0, repeat); return;
-    case 0x29: emit(KBD_EV_ESC,       0, repeat); return;
-    case 0x2A: emit(KBD_EV_BACKSPACE, 0, repeat); return;
-    case 0x2B: emit(KBD_EV_TAB,       0, repeat); return;
-    case 0x4F: emit(KBD_EV_RIGHT,     0, repeat); return;
-    case 0x50: emit(KBD_EV_LEFT,      0, repeat); return;
-    case 0x51: emit(KBD_EV_DOWN,      0, repeat); return;
-    case 0x52: emit(KBD_EV_UP,        0, repeat); return;
+    case 0x28: emit_m(KBD_EV_ENTER,     0, mods, repeat); return;
+    case 0x29: emit_m(KBD_EV_ESC,       0, mods, repeat); return;
+    case 0x2A: emit_m(KBD_EV_BACKSPACE, 0, mods, repeat); return;
+    case 0x2B: emit_m(KBD_EV_TAB,       0, mods, repeat); return;
+    case 0x4F: emit_m(KBD_EV_RIGHT,     0, mods, repeat); return;
+    case 0x50: emit_m(KBD_EV_LEFT,      0, mods, repeat); return;
+    case 0x51: emit_m(KBD_EV_DOWN,      0, mods, repeat); return;
+    case 0x52: emit_m(KBD_EV_UP,        0, mods, repeat); return;
+    case 0x4A: emit_m(KBD_EV_HOME,      0, mods, repeat); return;
+    case 0x4D: emit_m(KBD_EV_END,       0, mods, repeat); return;
     default: break;
     }
+    /* A character with Ctrl or Alt held is a command, not text. It still
+     * travels as KBD_EV_CHAR carrying its modifiers, so there is exactly one
+     * event taxonomy and the editor decides what it means. */
     const char c = keymap_char(usage, shift);
     if (c != 0) {
-        emit(KBD_EV_CHAR, c, repeat);
+        emit_m(KBD_EV_CHAR, c, mods, repeat);
     }
 }
 
@@ -762,7 +776,11 @@ void kbd_forget_all(void)
 
 esp_err_t kbd_init(void)
 {
-    s_q = xQueueCreate(64, sizeof(kbd_event_t));
+    /* 64 was too shallow: a burst of input - autorepeat, a paste down the
+     * serial line, a fast typist - overran it and xQueueSend drops silently
+     * when full, so keystrokes simply vanished. Deeper, and a drop is now
+     * counted and reported rather than lost in silence. */
+    s_q = xQueueCreate(256, sizeof(kbd_event_t));
     if (s_q == NULL) {
         return ESP_ERR_NO_MEM;
     }

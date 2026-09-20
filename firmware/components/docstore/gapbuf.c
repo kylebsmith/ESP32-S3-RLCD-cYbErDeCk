@@ -46,11 +46,15 @@ char doc_at(size_t i)
     return i < s_gs ? s_buf[i] : s_buf[i + (s_ge - s_gs)];
 }
 
+void undo_record_insert(size_t pos, char c);
+void undo_record_delete(size_t pos, char c);
+
 void doc_insert(char c)
 {
     if (s_gs == s_ge) {
         return;                       /* full - drop rather than overwrite */
     }
+    undo_record_insert(s_gs, c);
     s_buf[s_gs++] = c;
     s_dirty = true;
 }
@@ -59,6 +63,7 @@ void doc_backspace(void)
 {
     if (s_gs > 0) {
         s_gs--;
+        undo_record_delete(s_gs, s_buf[s_gs]);
         s_dirty = true;
     }
 }
@@ -73,6 +78,20 @@ void doc_left(void)
 void doc_right(void)
 {
     if (s_ge < s_cap) {
+        s_buf[s_gs++] = s_buf[s_ge++];
+    }
+}
+
+void doc_move_to(size_t pos)
+{
+    const size_t len = doc_len();
+    if (pos > len) {
+        pos = len;
+    }
+    while (s_gs > pos) {
+        s_buf[--s_ge] = s_buf[--s_gs];
+    }
+    while (s_gs < pos) {
         s_buf[s_gs++] = s_buf[s_ge++];
     }
 }
@@ -110,4 +129,5 @@ void gapbuf_load(const char *data, size_t len)
 void doc_set_text(const char *s)
 {
     gapbuf_load(s, strlen(s));
+    doc_undo_reset();
 }

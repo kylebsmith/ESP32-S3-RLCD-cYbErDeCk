@@ -33,6 +33,12 @@ static const char *TAG = "cyberdeck";
 #define PIN_KEY        18
 #define KEY_LONG_MS  2000        /* >= 180 ms thresholds, per the BLE caveat */
 #define AUTOSAVE_MS  1000
+/* A save costs a whole flash sector, and the idle timer alone fires once per
+ * character for a slow typist - 128 characters cycles the entire partition.
+ * A save is therefore also gated on enough having changed, unless a newline
+ * or a long pause says the thought is finished. */
+#define AUTOSAVE_MIN_CHARS  24
+#define AUTOSAVE_IDLE_MS  6000
 /* The cursor blinks while you are typing and for a while after, then goes
  * solid so the idle-LPM policy can fire. docs/OS.md bans blink outright for a
  * slow panel; the cost is not the 36 bytes a blink puts on the wire, it is
@@ -199,6 +205,7 @@ void app_main(void)
     bool    blink_on = true;
     bool    need_draw = false;
     bool    force_save = false;
+    size_t  saved_len = doc_len();
 
     while (1) {
         kbd_event_t ev;
@@ -269,11 +276,18 @@ void app_main(void)
          * keystroke - docs/HANDOFF.md trap 6. */
         if (doc_dirty()) {
             const int64_t idle = now_ms() - last_edit_ms;
-            if (force_save || idle >= AUTOSAVE_MS) {
+            const size_t len = doc_len();
+            const size_t delta = len > saved_len ? len - saved_len
+                                                 : saved_len - len;
+            const bool worth_it = force_save ||
+                                  delta >= AUTOSAVE_MIN_CHARS ||
+                                  idle >= AUTOSAVE_IDLE_MS;
+            if (worth_it && idle >= AUTOSAVE_MS) {
                 const int64_t t0 = esp_timer_get_time();
                 const esp_err_t se = doc_save();
                 const int64_t dt = esp_timer_get_time() - t0;
                 if (se == ESP_OK) {
+                    saved_len = doc_len();
                     ESP_LOGI(TAG, "saved %u bytes, seq %u, %lld us",
                              (unsigned)doc_len(), (unsigned)doc_save_seq(), dt);
                     doc_mirror_sd();

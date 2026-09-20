@@ -26,13 +26,30 @@ typedef enum {
     KBD_EV_RIGHT,
     KBD_EV_UP,
     KBD_EV_DOWN,
+    KBD_EV_HOME,
+    KBD_EV_END,
     KBD_EV_CONNECTED,
     KBD_EV_DISCONNECTED,
 } kbd_ev_type_t;
 
+/* HID modifier bits, as they arrive in byte 0 of a report. */
+#define KBD_MOD_LCTRL  0x01
+#define KBD_MOD_LSHIFT 0x02
+#define KBD_MOD_LALT   0x04
+#define KBD_MOD_LGUI   0x08
+#define KBD_MOD_RCTRL  0x10
+#define KBD_MOD_RSHIFT 0x20
+#define KBD_MOD_RALT   0x40
+#define KBD_MOD_RGUI   0x80
+
+#define KBD_CTRL  (KBD_MOD_LCTRL  | KBD_MOD_RCTRL)
+#define KBD_SHIFT (KBD_MOD_LSHIFT | KBD_MOD_RSHIFT)
+#define KBD_ALT   (KBD_MOD_LALT   | KBD_MOD_RALT)
+
 typedef struct {
     kbd_ev_type_t type;
     char          ch;
+    uint8_t       mods;      /* modifiers held when the key went down */
     bool          repeat;    /* synthesised by us, not sent by the keyboard */
 } kbd_event_t;
 

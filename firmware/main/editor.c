@@ -135,10 +135,11 @@ static void status_bar(void)
     char s[64];
     const char *net = kbd_connected() ? "KEYBOARD" : kbd_state_name();
 
-    snprintf(s, sizeof s, "%-9.9s %4u%c %s",
+    snprintf(s, sizeof s, "%-8.8s %4u%c u%-2d %s",
              net,
              (unsigned)doc_len(),
              doc_dirty() ? '*' : ' ',
+             doc_undo_depth(),
              doc_sd_present() ? "SD" : "  ");
 
     if (strcmp(s, s_status_shown) == 0) {
@@ -221,8 +222,98 @@ void editor_cursor_solid(void)
     editor_blink(true);
 }
 
+/* Move the cursor to a display line and column, preserving the column where
+ * the target line is long enough. This needs the wrap table, so it is rebuilt
+ * first - the table from the last draw is stale the moment anything is
+ * inserted. */
+static void goto_line_col(int line, int want_col)
+{
+    wrap(TEXT_COLS);
+    if (line < 0) {
+        line = 0;
+    }
+    if (line >= s_line_count) {
+        line = s_line_count - 1;
+    }
+    const int start = s_line_start[line];
+    const int end   = (line + 1 < s_line_count)
+                      ? s_line_start[line + 1] : (int)doc_len();
+    int width = end - start;
+    /* A hard newline is part of the line but not a column you can sit past. */
+    while (width > 0 && doc_at((size_t)(start + width - 1)) == '\n') {
+        width--;
+    }
+    int col = want_col;
+    if (col > width) {
+        col = width;
+    }
+    doc_move_to((size_t)(start + col));
+}
+
+static void line_bounds(int *start, int *end)
+{
+    wrap(TEXT_COLS);
+    const int line = s_cursor_line;
+    *start = s_line_start[line];
+    *end   = (line + 1 < s_line_count)
+             ? s_line_start[line + 1] : (int)doc_len();
+    while (*end > *start && doc_at((size_t)(*end - 1)) == '\n') {
+        (*end)--;
+    }
+}
+
+static bool is_word_char(char c)
+{
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+           (c >= '0' && c <= '9') || c == '_';
+}
+
+/* Ctrl chords. Chosen from readline rather than invented, because they are
+ * already in a lot of people's fingers and cost no new keys on a thumb
+ * keyboard - docs/OS.md is explicit that one held modifier plus one letter is
+ * the ceiling for a thumb. */
+static void handle_ctrl(char c)
+{
+    switch (c) {
+    case 'z': doc_undo(); break;
+    case 'y': doc_redo(); break;
+    case 'a': { int s, e; line_bounds(&s, &e); doc_move_to((size_t)s); break; }
+    case 'e': { int s, e; line_bounds(&s, &e); doc_move_to((size_t)e); break; }
+    case 'b': doc_left();  break;
+    case 'f': doc_right(); break;
+    case 'p': wrap(TEXT_COLS); goto_line_col(s_cursor_line - 1, s_cursor_col); break;
+    case 'n': wrap(TEXT_COLS); goto_line_col(s_cursor_line + 1, s_cursor_col); break;
+    case 'k': {                      /* kill to end of line */
+        int s, e;
+        line_bounds(&s, &e);
+        const size_t cur = doc_cursor();
+        doc_move_to((size_t)e);
+        while (doc_cursor() > cur) {
+            doc_backspace();
+        }
+        break;
+    }
+    case 'w': {                      /* delete the word before the cursor */
+        while (doc_cursor() > 0 && !is_word_char(doc_at(doc_cursor() - 1))) {
+            doc_backspace();
+        }
+        while (doc_cursor() > 0 && is_word_char(doc_at(doc_cursor() - 1))) {
+            doc_backspace();
+        }
+        break;
+    }
+    default: break;
+    }
+}
+
 void editor_handle(const kbd_event_t *ev)
 {
+    if (ev->type == KBD_EV_CHAR && (ev->mods & (KBD_CTRL | KBD_ALT))) {
+        handle_ctrl((char)(ev->ch >= 'A' && ev->ch <= 'Z'
+                           ? ev->ch - 'A' + 'a' : ev->ch));
+        return;
+    }
+
     switch (ev->type) {
     case KBD_EV_CHAR:      doc_insert(ev->ch); break;
     case KBD_EV_ENTER:     doc_insert('\n');   break;
@@ -231,14 +322,15 @@ void editor_handle(const kbd_event_t *ev)
     case KBD_EV_LEFT:      doc_left();        break;
     case KBD_EV_RIGHT:     doc_right();       break;
     case KBD_EV_UP:
-    case KBD_EV_DOWN:
-        /* Column-preserving vertical motion needs the wrap table, which is
-         * rebuilt on draw. A whole-line jump never loses the cursor and is
-         * honestly a placeholder. */
-        for (int i = 0; i < TEXT_COLS; i++) {
-            if (ev->type == KBD_EV_UP) { doc_left(); } else { doc_right(); }
-        }
+        wrap(TEXT_COLS);
+        goto_line_col(s_cursor_line - 1, s_cursor_col);
         break;
+    case KBD_EV_DOWN:
+        wrap(TEXT_COLS);
+        goto_line_col(s_cursor_line + 1, s_cursor_col);
+        break;
+    case KBD_EV_HOME: { int s, e; line_bounds(&s, &e); doc_move_to((size_t)s); break; }
+    case KBD_EV_END:  { int s, e; line_bounds(&s, &e); doc_move_to((size_t)e); break; }
     default: break;
     }
 }

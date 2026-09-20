@@ -24,6 +24,10 @@
 esp_err_t doc_init(void);
 
 void   doc_insert(char c);
+
+/* Move the gap so the cursor sits at pos. Used by undo, which has to apply an
+ * edit somewhere other than where the cursor happens to be. */
+void   doc_move_to(size_t pos);
 void   doc_backspace(void);
 void   doc_left(void);
 void   doc_right(void);
@@ -43,6 +47,16 @@ esp_err_t doc_save(void);
 
 /* Mirror to /sdcard/notes.txt, .tmp-then-rename. Safe to call with no card. */
 esp_err_t doc_mirror_sd(void);
+
+/* ---- undo ----------------------------------------------------------------
+ * An operation log rather than a snapshot ring: a 128 KB document makes
+ * snapshots far too expensive, and consecutive keystrokes coalesce into one
+ * step so undo moves by words rather than by letters.
+ */
+void doc_undo_reset(void);
+bool doc_undo(void);          /* false when there is nothing left to undo */
+bool doc_redo(void);
+int  doc_undo_depth(void);
 
 /* Replace the whole document (used to seed the self-test). */
 void doc_set_text(const char *s);
