@@ -274,8 +274,25 @@ static void status_bar(void)
                  doc_sd_present() ? "S" : "-");
     }
     snprintf(s, sizeof s, "%-*.*s", TEXT_COLS, TEXT_COLS, wide);
+
+    /* THE BAR ITSELF SAYS WHICH KIND OF BUFFER YOU ARE IN.
+     *
+     * A command with more than one line of output moves you into '+out'. That
+     * is deliberate - output is a buffer, not a scrollback - but the move was
+     * unannounced: the block above SKIPS the name field entirely while a
+     * message is live, and every command sets a message for several seconds.
+     * So during the exact window in which you were just teleported, nothing
+     * on the screen said where you had landed.
+     *
+     * The owner hit this. They ran a command, were moved into '+out', tried to
+     * run the lines they could see - which were command OUTPUT, formatted with
+     * a line-number prefix - and got "not a command" with no explanation.
+     *
+     * Inverting the whole bar costs no columns, cannot be missed, and does not
+     * expire with the message. Dark bar: your document. Light bar: output. */
+    const int att = doc_current_is_transient() ? TG_NORMAL : TG_INVERSE;
     for (int c = 0; c < TEXT_COLS; c++) {
-        tg_put(c, STATUS_ROW, s[c] ? s[c] : ' ', TG_INVERSE);
+        tg_put(c, STATUS_ROW, s[c] ? s[c] : ' ', att);
     }
 }
 
