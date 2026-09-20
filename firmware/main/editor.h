@@ -6,6 +6,9 @@
 #include "kbd.h"
 
 esp_err_t editor_init(void);
+
+/* 0 = 12x24 chunky, 1 = 6x12 dense. Both faces are already in the binary. */
+esp_err_t editor_set_density(int dense);
 void editor_draw(void);
 
 /* Forget cached chrome so the next draw repaints all of it. */

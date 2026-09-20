@@ -36,12 +36,17 @@
 
 #define MARGIN_X     20
 #define MARGIN_TOP   12
-#define TEXT_COLS    30
-#define TEXT_ROWS    10
-#define STATUS_ROW   10          /* the grid is 11 rows; the last is status */
-#define GRID_ROWS    11
 #define CELL_W       12
 #define CELL_H       24
+
+/* The grid is chosen at runtime, because both faces are already compiled in
+ * and the right density is not the same for writing prose and for reading a
+ * list of ten commands. Chunky is the default because the panel is
+ * reflective with no backlight; dense is there when the screen is the
+ * constraint rather than the eyes. */
+static int TEXT_COLS  = 30;
+static int TEXT_ROWS  = 10;
+static int STATUS_ROW = 10;
 
 #define STATUS_Y    264
 #define STATUS_H     24
@@ -112,16 +117,34 @@ void editor_invalidate(void)
     s_status_shown[0] = '\0';
 }
 
+esp_err_t editor_set_density(int dense)
+{
+    const tg_font_t *face = dense ? &tg_font_6x12 : &tg_font_12x24;
+    const int cw = dense ? 6 : 12;
+    const int ch = dense ? 12 : 24;
+
+    const int cols = (ST7305_WIDTH - 2 * MARGIN_X) / cw;
+    /* One row of the grid is the status line; the rest is text. */
+    const int rows = (ST7305_HEIGHT - MARGIN_TOP) / ch;
+
+    const esp_err_t err = tg_set_layout(face, 1, MARGIN_X, MARGIN_TOP,
+                                        cols, rows);
+    if (err != ESP_OK) {
+        return err;
+    }
+    TEXT_COLS  = cols;
+    TEXT_ROWS  = rows - 1;
+    STATUS_ROW = rows - 1;
+    s_top_offset = 0;
+    s_goal_col = -1;
+    editor_invalidate();
+    tg_invalidate();
+    return ESP_OK;
+}
+
 esp_err_t editor_init(void)
 {
-    /* The status line is row 10 of the grid, not chrome painted beside it.
-     * As chrome it was ~17,000 coordinate transforms and ~7,500 damage
-     * insertions on EVERY keystroke, because the string carries the cursor
-     * column and so changes on nearly every key. On the grid, tg_put's own
-     * change filter repaints the two digits that actually moved. The fix is
-     * a deletion. */
-    return tg_set_layout(&tg_font_12x24, 1,
-                         MARGIN_X, MARGIN_TOP, TEXT_COLS, GRID_ROWS);
+    return editor_set_density(0);
 }
 
 /* Greedy word wrap. Records where each display line starts and where the
@@ -225,7 +248,7 @@ static void status_bar(void)
                  kbd_connected() ? "K" : "-",
                  doc_sd_present() ? "S" : "-");
     }
-    snprintf(s, sizeof s, "%-*.*s", STATUS_MAX, STATUS_MAX, wide);
+    snprintf(s, sizeof s, "%-*.*s", TEXT_COLS, TEXT_COLS, wide);
     for (int c = 0; c < TEXT_COLS; c++) {
         tg_put(c, STATUS_ROW, s[c] ? s[c] : ' ', TG_INVERSE);
     }

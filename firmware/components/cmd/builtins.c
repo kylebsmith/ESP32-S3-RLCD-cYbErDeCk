@@ -149,6 +149,33 @@ static cmd_status_t c_out(cmd_ctx_t *ctx)
     return CMD_DONE;
 }
 
+esp_err_t editor_set_density(int dense);
+
+/* Both faces are compiled in, so this costs no flash and no assets. Dense is
+ * also CHEAPER to draw - a 6x12 cell is 9 bytes on the wire against 36 for a
+ * 12x24 one - so the readable default is the expensive one, which is the
+ * right way round. */
+static cmd_status_t c_density(cmd_ctx_t *ctx)
+{
+    /* Strict, not defaulting. A command that silently does the opposite of
+     * what a typo asked for is worse than one that refuses. */
+    int dense;
+    if (ctx->arg[0] == 'd' || ctx->arg[0] == '6') {
+        dense = 1;
+    } else if (ctx->arg[0] == 'c' || ctx->arg[0] == '1') {
+        dense = 0;
+    } else {
+        cmd_out(ctx, "density chunky | density dense");
+        return CMD_ERROR;
+    }
+    if (editor_set_density(dense) != ESP_OK) {
+        cmd_out(ctx, "density: layout refused");
+        return CMD_ERROR;
+    }
+    snprintf(ctx->msg, sizeof ctx->msg, dense ? "dense 60x20" : "chunky 30x11");
+    return CMD_DONE;
+}
+
 static const cmd_t s_builtins[] = {
     { "help",  c_help,  CMD_CAP_READ,                   "list the commands" },
     { "list",  c_list,  CMD_CAP_READ,                   "list open buffers" },
@@ -160,6 +187,7 @@ static const cmd_t s_builtins[] = {
     { "guide", c_guide, CMD_CAP_EDIT,                   "mark as a guide" },
     { "prose", c_prose, CMD_CAP_EDIT,                   "mark as prose" },
     { "out",   c_out,   CMD_CAP_READ,                   "read command output" },
+    { "density", c_density, CMD_CAP_SYSTEM,             "chunky | dense" },
 };
 
 void cmd_register(const cmd_t *table, int count);
