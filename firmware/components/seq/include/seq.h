@@ -128,7 +128,10 @@ int  seq_get_bpm(void);
 void seq_play(void);
 void seq_stop(void);
 bool seq_running(void);
-int  seq_position(void);
+/* The global step counter since play. UNMASKED: a lane finds its own step
+ * with `seq_position() % lane->steps`, and any mask that is not a multiple of
+ * every possible lane length introduces a phase jump when it rolls. */
+uint32_t seq_position(void);
 
 const seq_lane_t *seq_lanes(int *count);
 

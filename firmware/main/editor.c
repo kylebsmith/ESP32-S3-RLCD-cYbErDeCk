@@ -335,7 +335,7 @@ static int playhead_offset(int line_off, const char *lbuf, int at, int len)
     }
     /* The global step is not the lane's step the moment one lane is not the
      * same length as another - which is the point of having lanes. */
-    const int off = seq_pattern_offset(lbuf + a, seq_position() % l->steps,
+    const int off = seq_pattern_offset(lbuf + a, (int)(seq_position() % (uint32_t)l->steps),
                                        SEQ_MAX_STEPS);
     return (off < 0) ? -1 : line_off + a + off;
 }

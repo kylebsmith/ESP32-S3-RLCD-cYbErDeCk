@@ -18,7 +18,7 @@ static bool       s_running;
 /* volatile: written by the clock on the esp_timer task, read by the editor
  * task to place the playhead. Aligned 32-bit does not tear on Xtensa, so this
  * is about the compiler not hoisting the read out of the draw loop. */
-static volatile int s_pos;
+static volatile uint32_t s_pos;
 static uint32_t   s_tick;            /* 24 PPQN pulses since play */
 static int        s_swing = 50;      /* per cent; 50 is straight   */
 static bool       s_sync;            /* send MIDI clock            */
@@ -387,7 +387,15 @@ static void tick(void *arg)
     const int phase = (int)(s_tick % SEQ_TICKS_PER_STEP);
     const int want  = (step & 1) ? swing_ticks() : 0;
     if (phase == want) {
-        s_pos = step & 0x7FFF;
+        /* NO MASK. It used to be `step & 0x7FFF`, and 32768 is a power of
+         * two: 8-, 16- and 32-step lanes wrapped cleanly, but a 5-, 6- or
+         * 12-step lane took a PHASE JUMP of (32768 % steps) every time the
+         * counter rolled - once every 66 minutes at 124 bpm. A pattern
+         * silently moving off the beat, once an hour, in the middle of a set.
+         *
+         * The counter is 32 bits and advances at the step rate, so it now
+         * rolls after about eight years of continuous playing. */
+        s_pos = step;
         fire_step(s_pos);
     }
     s_tick++;
@@ -591,7 +599,7 @@ void seq_bpm(int bpm)
 
 int  seq_get_bpm(void)  { return s_bpm; }
 bool seq_running(void)  { return s_running; }
-int  seq_position(void) { return s_pos; }
+uint32_t seq_position(void) { return s_pos; }
 
 void seq_play(void)
 {

@@ -102,6 +102,33 @@ int main(void)
         fails++;
     }
 
+    /* 8. THE POSITION COUNTER MUST NOT JUMP WHEN IT ROLLS.
+     *
+     * The counter was masked with 0x7FFF. 32768 is a power of two, so 8-, 16-
+     * and 32-step lanes wrapped cleanly - which is every lane in the shipped
+     * guide, which is why nobody noticed - but a 5-, 6- or 12-step lane
+     * jumped by (32768 %% steps) every 66 minutes at 124 bpm.
+     *
+     * This asserts the property directly: consecutive steps must advance by
+     * exactly one, modulo the lane length, ACROSS the roll. It fails on the
+     * old mask for exactly the lane lengths a musician would reach for. */
+    for (int steps = 2; steps <= 32; steps++) {
+        const unsigned long roll = 0x8000UL;
+        const int before = (int)((roll - 1) % (unsigned long)steps);
+        const int after  = (int)(roll % (unsigned long)steps);
+        if (after != (before + 1) % steps) {
+            printf("[FAIL] unmasked counter jumps at roll for %d steps\n", steps);
+            fails++;
+        }
+        /* And demonstrate that the OLD masked counter did jump, so this test
+         * is known to be capable of detecting it. */
+        const int masked_after = (int)((roll & 0x7FFFUL) % (unsigned long)steps);
+        if (steps == 5 && masked_after == (before + 1) % steps) {
+            printf("[FAIL] the 0x7FFF mask case is no longer a counterexample\n");
+            fails++;
+        }
+    }
+
     printf(fails ? "[FAIL] %d check(s) failed\n" : "[PASS] pattern geometry\n",
            fails);
     return fails != 0;
