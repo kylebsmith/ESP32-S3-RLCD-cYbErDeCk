@@ -1,0 +1,13 @@
+## The project's first managed component.
+##
+## esp_tinyusb is Espressif's wrapper around TinyUSB. It is needed because the
+## deck must be a USB MIDI device AND keep a USB CDC serial interface: the
+## console and the serial keyboard both live on USB today, and giving them up
+## to gain MIDI would cost the troubleshooting path this project is built on.
+## The endpoint budget allows both - CDC costs 2 IN + 1 OUT, MIDI 1 IN + 1 OUT,
+## against 5 IN TX FIFOs - so it does not have to be a trade.
+##
+## Pinned to a major version, and dependencies.lock is committed, so a build
+## six months from now is the build that was tested.
+dependencies:
+  espressif/esp_tinyusb: "^2.0.0"

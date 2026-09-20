@@ -34,3 +34,8 @@ reference/
 firmware/build/
 firmware/sdkconfig
 firmware/sdkconfig.old
+
+# Fetched by the IDF component manager. dependencies.lock pins the versions
+# and IS committed, so a build six months from now is the build that was
+# tested; the sources themselves do not belong in this repository.
+firmware/managed_components/

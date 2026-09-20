@@ -65,11 +65,19 @@ static void stat_add(seq_stat_t *s, int32_t v)
             s->worst_ms = (uint32_t)(esp_timer_get_time() / 1000);
         }
     }
-    /* Late is measured against the TIGHTEST sample seen, not against zero. A
-     * constant phase offset is not jitter - the free-running alarm simply
-     * does not coincide with the instant play was pressed - and counting it
-     * as late would report a healthy clock as broken. */
-    const int32_t rel = v - s->min;
+    /* Relative to a FIXED baseline - the first sample - not to the running
+     * minimum. Bucketing against a running minimum means a late-arriving new
+     * minimum retroactively invalidates every bucket counted before it, so
+     * the histogram describes a distribution that was never measured. The
+     * standard deviation and the spread are unaffected (both are computed
+     * from absolute sums and are shift-invariant); only the histogram and the
+     * late count were wrong, and those are the two numbers anyone would
+     * quote. */
+    if (!s->based) {
+        s->base  = v;
+        s->based = true;
+    }
+    const int32_t rel = v - s->base;
     if (rel > SEQ_LATE_US) {
         s->late++;
     }
@@ -130,7 +138,7 @@ static void midi_task(void *arg)
                          (int32_t)((uint32_t)esp_timer_get_time() - ev.queued_us));
                 for (int i = 0; i < s_ndests; i++) {
                     if (s_dests[i].on && s_dests[i].fn != NULL) {
-                        s_dests[i].fn(ev.status, ev.d1, ev.d2);
+                        s_dests[i].fn(ev.status, ev.d1, ev.d2, ev.queued_us);
                     }
                 }
                 burst++;
@@ -418,7 +426,14 @@ esp_err_t seq_init(void)
     }
     /* Priority above the editor, below the BLE host. 4 KB because NimBLE's
      * notify path is the deepest thing this task calls. */
-    if (xTaskCreate(midi_task, "midi", 4096, NULL, 6, NULL) != pdPASS) {
+    /* Pinned to core 1. NimBLE's host and controller are both on core 0
+     * (CONFIG_BT_NIMBLE_PINNED_TO_CORE=0, CONFIG_BT_CTRL_PINNED_TO_CORE_0),
+     * as is the editor, so core 1 is comparatively idle and the drain does
+     * not queue behind the radio. Priority 6 stays above the editor and below
+     * the BLE host: this task enqueues and blocks, so it hands the core
+     * straight back. */
+    if (xTaskCreatePinnedToCore(midi_task, "midi", 4096, NULL, 6, NULL, 1)
+        != pdPASS) {
         return ESP_ERR_NO_MEM;
     }
     const esp_timer_create_args_t args = {

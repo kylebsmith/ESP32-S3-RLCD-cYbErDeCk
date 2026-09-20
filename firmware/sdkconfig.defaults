@@ -76,3 +76,15 @@ CONFIG_ESP_TASK_WDT_TIMEOUT_S=10
 # The SD mirror names each file after its document; 8.3 would collide.
 CONFIG_FATFS_LFN_HEAP=y
 CONFIG_FATFS_MAX_LFN=64
+
+# USB MIDI as a CDC + MIDI composite. The console and the serial keyboard move
+# to CDC; MIDI is the second interface. esp_tinyusb wraps CDC but not MIDI -
+# TINYUSB_MIDI_COUNT > 0 simply sets CFG_TUD_MIDI and the tud_midi_* API is
+# called directly, so no fork and no custom tusb_config.h.
+#
+# CONFIG_ESP_CONSOLE_USB_CDC is deliberately NOT set: it depends on !TINY_USB
+# because it drives the ROM's own CDC driver, which is a different stack
+# competing for the same controller.
+CONFIG_TINYUSB_CDC_ENABLED=y
+CONFIG_TINYUSB_CDC_COUNT=1
+CONFIG_TINYUSB_MIDI_COUNT=1

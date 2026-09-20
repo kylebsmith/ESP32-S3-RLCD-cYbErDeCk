@@ -130,6 +130,20 @@ jobs:
       # way. The second check asserts the mapper's constants still equal
       # kbd.h's enum, because a renumbering there would silently turn arrows
       # into characters.
+      # The cursor is a solid inverse block and the playhead is a bar; they
+      # must compose, because the cell where they meet is exactly the cell the
+      # owner is looking at while editing a running lane. The composition was
+      # an expression written twice and the blink copy dropped the playhead
+      # bit, so every blink erased the bar. Now it is one function, and this
+      # binds to it.
+      - name: Check the cell attribute composition
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror -Wno-unused-parameter \
+             -I firmware/main -I firmware/components/textgrid/include \
+             -I firmware/components/st7305/include -I tools/hostshim \
+             -o /tmp/test_cell_attr tools/test_cell_attr.c
+          /tmp/test_cell_attr
+
       - name: Check the serial keymap
         run: |
           cc -std=c11 -Wall -Wextra -Werror \

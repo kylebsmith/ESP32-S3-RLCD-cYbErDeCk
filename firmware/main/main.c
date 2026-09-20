@@ -135,13 +135,14 @@ static void announce(const char *line)
     st7305_flush(NULL);
 }
 
-static void dest_ble(uint8_t status, uint8_t d1, uint8_t d2)
+static void dest_ble(uint8_t status, uint8_t d1, uint8_t d2, uint32_t when_us)
 {
-    blemidi_send(status, d1, d2);
+    blemidi_send(status, d1, d2, when_us);
 }
 
-static void dest_mon(uint8_t status, uint8_t d1, uint8_t d2)
+static void dest_mon(uint8_t status, uint8_t d1, uint8_t d2, uint32_t when_us)
 {
+    (void)when_us;
     /* Note-ons only. Clock is 48 messages a second and would bury the thing
      * the player is actually looking for. */
     if ((status & 0xF0) == 0x90 && d2 > 0) {
@@ -514,6 +515,18 @@ void app_main(void)
         /* A '+out' buffer is never written, so an autosave of one would log a
          * save that did not happen - and did, until a mirror of command
          * output showed up on the card. Clear the flag and say nothing. */
+        /* The instant the transport stops, write. The autosave above is
+         * suppressed while playing, so this is what bounds how long an edit
+         * can live only in RAM: one keystroke of latency after '>stop'. */
+        {
+            static bool was_running;
+            const bool now_running = seq_running();
+            if (was_running && !now_running) {
+                force_save = true;
+            }
+            was_running = now_running;
+        }
+
         if (doc_dirty() && doc_current_is_transient()) {
             doc_save();               /* marks clean, writes nothing */
             saved_len = doc_len();
@@ -522,9 +535,25 @@ void app_main(void)
             const size_t len = doc_len();
             const size_t delta = len > saved_len ? len - saved_len
                                                  : saved_len - len;
-            const bool worth_it = force_save ||
-                                  delta >= AUTOSAVE_MIN_CHARS ||
-                                  idle >= AUTOSAVE_IDLE_MS;
+            /* NOT WHILE THE TRANSPORT IS RUNNING.
+             *
+             * A journal write was MEASURED at 13,000-18,600 us, and it
+             * suspends both cores' schedulers with the instruction cache off,
+             * so the sequencer's clock callback - which lives in flash -
+             * cannot run. It is the only term this device produces that is
+             * above the ~6 ms at which a listener hears a percussive onset as
+             * displaced (Friberg & Sundberg 1995). Every other CPU-side
+             * source measured here is individually inaudible.
+             *
+             * So the deck does not write to flash while it is playing. The
+             * cost is bounded and stated: edits made during a performance are
+             * held in RAM until the transport stops, and seq_stop() forces
+             * the save. The document is still journalled on every other
+             * path - naming, closing, '>save', '>flash'. */
+            const bool worth_it = (force_save ||
+                                   delta >= AUTOSAVE_MIN_CHARS ||
+                                   idle >= AUTOSAVE_IDLE_MS) &&
+                                  !seq_running();
             if (worth_it && idle >= AUTOSAVE_MS) {
                 const int64_t t0 = esp_timer_get_time();
                 const esp_err_t se = doc_save();

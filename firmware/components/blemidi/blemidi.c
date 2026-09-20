@@ -236,6 +236,7 @@ void blemidi_start(void)
 static uint8_t  s_pkt[MIDI_PKT_MAX];
 static int      s_pkt_n;
 static uint8_t  s_pkt_hdr;
+static uint32_t s_last_ts;
 static uint32_t s_packed;      /* messages sent */
 static uint32_t s_packets;     /* notifications used to send them */
 
@@ -270,7 +271,7 @@ void blemidi_flush(void)
     ble_gatts_notify_custom(s_conn, s_chr_handle, om);
 }
 
-void blemidi_send(uint8_t status, uint8_t d1, uint8_t d2)
+void blemidi_send(uint8_t status, uint8_t d1, uint8_t d2, uint32_t when_us)
 {
     if (!blemidi_connected()) {
         return;
@@ -278,8 +279,26 @@ void blemidi_send(uint8_t status, uint8_t d1, uint8_t d2)
     /* BLE-MIDI framing: a header byte carrying the top six bits of a 13-bit
      * millisecond timestamp, then a timestamp byte before EVERY message, then
      * the message. Both have the high bit set, which is what distinguishes
-     * them from data. */
-    const uint32_t ts = (uint32_t)(esp_timer_get_time() / 1000) & 0x1FFF;
+     * them from data.
+     *
+     * THE TIMESTAMP IS THE CLOCK'S, NOT THE RADIO'S. It used to be read here,
+     * at send time, which is after the queue, the task switch and whatever
+     * the scheduler was doing - so the packet asserted that the note happened
+     * at the moment it was transmitted. That is exactly the jitter a receiver
+     * would have used the timestamp to remove. `when_us` is when the tick
+     * fired.
+     *
+     * The +500 rounds to nearest rather than truncating, which removes a
+     * constant half-millisecond bias. That is latency, not jitter, and it is
+     * named here so nobody later reads the shift as an improvement. */
+    uint32_t ts = ((when_us + 500u) / 1000u) & 0x1FFF;
+    /* BLE-MIDI 1.0 requires timestamps within a packet to be non-decreasing.
+     * Scheduled note-offs are emitted from a table and can be queued slightly
+     * out of order relative to a note-on in the same drain, so clamp rather
+     * than emit a packet a receiver is entitled to reject. */
+    if (s_pkt_n > 0 && (int16_t)(((uint16_t)ts) - ((uint16_t)s_last_ts)) < 0) {
+        ts = s_last_ts;
+    }
     const uint8_t hdr = (uint8_t)(0x80 | ((ts >> 7) & 0x3F));
 
     /* How many data bytes follow is a property of the status byte, and
@@ -314,6 +333,7 @@ void blemidi_send(uint8_t status, uint8_t d1, uint8_t d2)
         s_pkt[s_pkt_n++] = hdr;
     }
     s_pkt[s_pkt_n++] = (uint8_t)(0x80 | (ts & 0x7F));
+    s_last_ts = ts;
     s_pkt[s_pkt_n++] = status;
     if (data >= 1) { s_pkt[s_pkt_n++] = d1; }
     if (data >= 2) { s_pkt[s_pkt_n++] = d2; }

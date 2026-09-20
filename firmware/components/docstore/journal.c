@@ -30,6 +30,7 @@
 
 #include <string.h>
 
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_partition.h"
 #include "esp_rom_crc.h"
@@ -397,7 +398,19 @@ esp_err_t doc_save(void)
     }
     const size_t s_cursor = start * SECTOR;
 
-    char *tmp = malloc(len > 0 ? len : 1);
+    /* INTERNAL RAM, NOT PSRAM, AND IT IS A TIMING DECISION.
+     *
+     * With SPIRAM_MALLOC_ALWAYSINTERNAL at 4096, a document over 4 KB lands
+     * in PSRAM - and esp_flash's write path checks esp_ptr_in_dram() on its
+     * source buffer. A PSRAM source is copied through a 32-byte stack bounce
+     * buffer, so a single 5 KB write becomes ~160 separate flash operations,
+     * each with its own cache-disable bracket. One stall becomes a hundred
+     * and sixty, and the sequencer's clock cannot run through any of them.
+     *
+     * The buffer is transient and at most DOC_CAPACITY, so internal RAM can
+     * afford it. */
+    char *tmp = heap_caps_malloc(len > 0 ? len : 1,
+                                 MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     if (tmp == NULL) {
         return ESP_ERR_NO_MEM;
     }

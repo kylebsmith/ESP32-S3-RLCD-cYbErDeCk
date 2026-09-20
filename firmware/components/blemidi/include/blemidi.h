@@ -28,7 +28,7 @@ void blemidi_register(void);
 void blemidi_start(void);
 
 /* Send one MIDI message. Safe to call when nothing is connected. */
-void blemidi_send(uint8_t status, uint8_t d1, uint8_t d2);
+void blemidi_send(uint8_t status, uint8_t d1, uint8_t d2, uint32_t when_us);
 
 bool blemidi_connected(void);
 

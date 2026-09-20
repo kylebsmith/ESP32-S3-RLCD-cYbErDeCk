@@ -41,7 +41,12 @@ WORDS = {21: "twenty-one", 22: "twenty-two", 30: "thirty", 31: "thirty-one",
          35: "thirty-five", 36: "thirty-six", 5: "five", 6: "six",
          7: "seven", 8: "eight", 9: "nine", 10: "ten", 11: "eleven"}
 
-SKIP_DIRS = {".git", "reference", "build", "stl", "__pycache__", ".github"}
+# "managed_components" is third-party code fetched by the IDF component
+# manager. Its documentation links point into Espressif's own repository
+# layout and cannot resolve here, and it is not ours to correct. The version
+# is pinned by dependencies.lock, which IS committed.
+SKIP_DIRS = {".git", "reference", "build", "stl", "__pycache__", ".github",
+             "managed_components"}
 
 
 def repo_files():

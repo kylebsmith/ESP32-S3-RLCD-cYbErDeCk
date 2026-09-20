@@ -22,6 +22,7 @@
  * dumped.
  */
 #include "editor.h"
+#include "cell_attr.h"
 #include "ui_text.h"
 #include "seq.h"
 #include "seq_pattern.h"
@@ -85,6 +86,9 @@ static bool s_cursor_on = true;
  * cell instead of the frame. */
 static int  s_cur_col = -1, s_cur_row = -1;
 static char s_cur_ch  = ' ';
+/* Whether the playhead is passing through the cursor cell. The blink has to
+ * know, or it erases the bar every time it repaints that one cell. */
+static bool s_cur_under = false;
 
 static char s_status_shown[64];
 /* The result of the last command, shown in place of the status line for a
@@ -368,6 +372,7 @@ void editor_draw(void)
 
     const size_t len = doc_len();
     s_cur_col = s_cur_row = -1;
+    s_cur_under = false;
 
     /* Declared outside the row loop ON PURPOSE: it is computed once per
      * LOGICAL line and must survive across that line's continuation rows, so
@@ -423,22 +428,25 @@ void editor_draw(void)
                     ch = (d == '\n') ? ' ' : d;
                 }
             }
-            const bool is_cursor = (li == s_cursor_line && c == s_cursor_col);
-            if (is_cursor) {
-                s_cur_col = c; s_cur_row = r; s_cur_ch = ch;
-            }
-            const bool marked = mark_at >= 0 &&
-                                c >= mark_at && c < mark_at + mark_len;
             /* The playhead gets its OWN attribute rather than sharing the
              * cursor's solid block. Two solid blocks on a one-ink panel are
              * two things that look identical, and the owner lost their cursor
              * inside a running lane because of it. They are independent bits,
-             * so a cursor sitting on the playhead shows as both. */
+             * so a cursor sitting on the playhead shows as both.
+             *
+             * Computed BEFORE the cursor capture, because the blink needs to
+             * know whether the playhead is passing through the cursor cell. */
             const bool playing = ph_off >= 0 && li < s_line_count &&
                                  (start + c) == ph_off && (start + c) < end;
+            const bool is_cursor = (li == s_cursor_line && c == s_cursor_col);
+            if (is_cursor) {
+                s_cur_col = c; s_cur_row = r; s_cur_ch = ch;
+                s_cur_under = playing;
+            }
+            const bool marked = mark_at >= 0 &&
+                                c >= mark_at && c < mark_at + mark_len;
             const bool inv = (is_cursor && s_cursor_on) != marked;
-            tg_put(c, r, ch,
-                   (inv ? TG_INVERSE : TG_NORMAL) | (playing ? TG_UNDER : 0));
+            tg_put(c, r, ch, cell_attr(inv, playing));
         }
     }
 
@@ -470,7 +478,10 @@ void editor_blink(bool on)
         return;
     }
     s_cursor_on = on;
-    tg_put(s_cur_col, s_cur_row, s_cur_ch, on ? TG_INVERSE : TG_NORMAL);
+    /* cell_attr, not a second copy of the expression. The copy that used to
+     * live here dropped the playhead bit, so a blink erased the bar from the
+     * one cell where the cursor and the playhead meet. */
+    tg_put(s_cur_col, s_cur_row, s_cur_ch, cell_attr(on, s_cur_under));
     tg_render();
 }
 
