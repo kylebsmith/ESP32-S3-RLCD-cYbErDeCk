@@ -31,11 +31,28 @@ enum {
     TG_INVERSE = 1,
 };
 
-/* Select the face and integer scale. cell = font->w * scale by font->h * scale.
- * Returns ESP_ERR_INVALID_ARG if the cell height is not a multiple of 12 or
- * the cell width is odd - the two alignment rules above, enforced rather than
+/* Place a grid at an explicit pixel origin with an explicit size, so the UI
+ * can have real margins instead of starting hard against the glass edge.
+ *
+ * The origin is constrained the same way the cell is: origin_y and cell height
+ * must be multiples of 12, origin_x and cell width must be even. Break either
+ * and one cell's damage window quantises outward into its neighbour, which
+ * turns a one-character redraw into a three-character one. Enforced, not
  * documented. */
+esp_err_t tg_set_layout(const tg_font_t *font, int scale,
+                        int origin_x, int origin_y, int cols, int rows);
+
+/* Convenience: the largest grid that fits, flush at the origin. */
 esp_err_t tg_set_font(const tg_font_t *font, int scale);
+
+int tg_origin_x(void);
+int tg_origin_y(void);
+
+/* Draw a string at an arbitrary pixel position, straight into the
+ * framebuffer, for chrome that does not live on the document grid - the
+ * status bar, rules, labels. Damages what it touches. */
+void tg_draw_text_px(int px, int py, const char *s, int attr);
+int  tg_text_width_px(const char *s);
 
 int tg_cols(void);
 int tg_rows(void);

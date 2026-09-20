@@ -1,14 +1,25 @@
 /*
  * The editor view.
  *
- * One buffer, soft-wrapped to the grid, with the last row given to a status
- * line. docs/SUBSTRATE.md calls the grid the substrate and this is the first
- * instance of it: a rectangle of characters with a cursor in it.
+ * LAYOUT, in logical pixels on the 400 x 300 landscape panel. Every vertical
+ * figure is a multiple of 12 and every horizontal one is even, because those
+ * are the CASET and RASET quanta - a margin that breaks them turns a
+ * one-character redraw into a three-character one.
  *
- * Wrapping is greedy word wrap - "prose" kind, where Enter splits and the
- * text below reflows. The "grid" kind, where position is the meaning and
- * reflow is destruction, is the same array with one bit of interpretation
- * changed; it is not implemented tonight but nothing here forecloses it.
+ *     y   0..11    top margin                          12
+ *     y  12..251   text, 10 rows of 24                240
+ *     y 252..263   gap                                 12
+ *     y 264..287   status bar, one row                 24
+ *     y 288..299   bottom margin                       12
+ *
+ *     x   0..19    left margin                         20
+ *     x  20..379   text, 30 columns of 12             360
+ *     x 380..399   right margin                        20
+ *
+ * 30 x 10 is 300 characters on screen. Narrower than the 66 x 25 that
+ * docs/HARDWARE.md planned for, but that grid was unreadable on the real
+ * panel, and margins are most of what makes a page look composed rather than
+ * dumped.
  */
 #include "editor.h"
 
@@ -20,16 +31,41 @@
 #include "st7305.h"
 #include "textgrid.h"
 
-#define MAX_LINES 2048
+#define MARGIN_X     20
+#define MARGIN_TOP   12
+#define TEXT_COLS    30
+#define TEXT_ROWS    10
+#define CELL_W       12
+#define CELL_H       24
 
-static int    s_line_start[MAX_LINES];
-static int    s_line_count;
-static int    s_cursor_line;
-static int    s_cursor_col;
-static int    s_top_line;       /* first visible line */
+#define STATUS_Y    264
+#define STATUS_H     24
+#define RULE_Y      254        /* a hairline between text and status */
 
-/* Greedy word wrap over the document. Records where each display line starts
- * and where the cursor lands. */
+#define MAX_LINES  2048
+
+static int  s_line_start[MAX_LINES];
+static int  s_line_count;
+static int  s_cursor_line;
+static int  s_cursor_col;
+static int  s_top_line;
+static bool s_cursor_on = true;
+
+/* Where the cursor cell landed at the last draw, so a blink can repaint one
+ * cell instead of the frame. */
+static int  s_cur_col = -1, s_cur_row = -1;
+static char s_cur_ch  = ' ';
+
+static char s_status_shown[64];
+
+esp_err_t editor_init(void)
+{
+    return tg_set_layout(&tg_font_12x24, 1,
+                         MARGIN_X, MARGIN_TOP, TEXT_COLS, TEXT_ROWS);
+}
+
+/* Greedy word wrap. Records where each display line starts and where the
+ * cursor lands. Prose kind: Enter splits and what follows reflows. */
 static void wrap(int cols)
 {
     const size_t len = doc_len();
@@ -42,7 +78,7 @@ static void wrap(int cols)
     size_t i = 0;
     int line_begin = 0;
     int col = 0;
-    int last_space = -1;          /* index of the last space on this line */
+    int last_space = -1;
 
     s_line_start[s_line_count++] = 0;
 
@@ -66,21 +102,17 @@ static void wrap(int cols)
             }
             continue;
         }
-
         if (c == ' ') {
             last_space = (int)i;
         }
-
         col++;
         i++;
 
         if (col >= cols) {
-            /* Break after the last space if there was one, so words stay whole. */
             int brk = (last_space > line_begin) ? last_space + 1 : (int)i;
             if (brk <= line_begin) {
                 brk = (int)i;
             }
-            /* The cursor may belong to the line we just closed. */
             if ((size_t)brk > cur && cur >= (size_t)line_begin) {
                 s_cursor_line = s_line_count - 1;
                 s_cursor_col  = (int)(cur - line_begin);
@@ -96,49 +128,48 @@ static void wrap(int cols)
     }
 }
 
-static void status_line(int row, int cols)
+/* The status bar is chrome, not part of the document grid, so it is drawn at
+ * its own pixel row and only when its text actually changes. */
+static void status_bar(void)
 {
-    char s[80];
-    const char *net = kbd_connected() ? "KB" : kbd_state_name();
+    char s[64];
+    const char *net = kbd_connected() ? "KEYBOARD" : kbd_state_name();
 
-    snprintf(s, sizeof s, " %-9.9s %4uc s%-3u %s",
+    snprintf(s, sizeof s, "%-9.9s %4u%c %s",
              net,
              (unsigned)doc_len(),
-             (unsigned)doc_save_seq(),
-             doc_sd_present() ? "SD" : "--");
+             doc_dirty() ? '*' : ' ',
+             doc_sd_present() ? "SD" : "  ");
 
-    tg_fill(0, row, cols, ' ', TG_INVERSE);
-    tg_puts(0, row, s, TG_INVERSE);
+    if (strcmp(s, s_status_shown) == 0) {
+        return;                       /* nothing changed - do not touch flash */
+    }
+    snprintf(s_status_shown, sizeof s_status_shown, "%s", s);
 
-    /* A dirty marker on the right edge: this is the only signal that a save
-     * is still owed, and it costs nothing to hold on a reflective panel. */
-    tg_put(cols - 2, row, doc_dirty() ? '*' : ' ', TG_INVERSE);
+    st7305_fill(0, STATUS_Y, ST7305_WIDTH, STATUS_H, true);      /* ink bar */
+    tg_draw_text_px(MARGIN_X, STATUS_Y, s, TG_INVERSE);
 }
 
 void editor_draw(void)
 {
-    const int cols = tg_cols();
-    const int rows = tg_rows();
-    const int text_rows = rows - 1;
+    wrap(TEXT_COLS);
 
-    wrap(cols);
-
-    /* Keep the cursor on screen. */
     if (s_cursor_line < s_top_line) {
         s_top_line = s_cursor_line;
     }
-    if (s_cursor_line >= s_top_line + text_rows) {
-        s_top_line = s_cursor_line - text_rows + 1;
+    if (s_cursor_line >= s_top_line + TEXT_ROWS) {
+        s_top_line = s_cursor_line - TEXT_ROWS + 1;
     }
     if (s_top_line < 0) {
         s_top_line = 0;
     }
 
     const size_t len = doc_len();
+    s_cur_col = s_cur_row = -1;
 
-    for (int r = 0; r < text_rows; r++) {
+    for (int r = 0; r < TEXT_ROWS; r++) {
         const int li = s_top_line + r;
-        for (int c = 0; c < cols; c++) {
+        for (int c = 0; c < TEXT_COLS; c++) {
             char ch = ' ';
             if (li < s_line_count) {
                 const int start = s_line_start[li];
@@ -150,14 +181,44 @@ void editor_draw(void)
                     ch = (d == '\n') ? ' ' : d;
                 }
             }
-            /* The cursor is drawn as an inverse cell - no blink, because a
-             * slow panel must never animate (docs/OS.md). */
             const bool is_cursor = (li == s_cursor_line && c == s_cursor_col);
-            tg_put(c, r, ch, is_cursor ? TG_INVERSE : TG_NORMAL);
+            if (is_cursor) {
+                s_cur_col = c; s_cur_row = r; s_cur_ch = ch;
+            }
+            tg_put(c, r, ch,
+                   (is_cursor && s_cursor_on) ? TG_INVERSE : TG_NORMAL);
         }
     }
 
-    status_line(rows - 1, cols);
+    tg_render();
+
+    /* Chrome, drawn over the grid. */
+    st7305_fill(MARGIN_X, RULE_Y, ST7305_WIDTH - 2 * MARGIN_X, 2, true);
+    status_bar();
+}
+
+/* Repaint only the cursor cell. One 12 x 24 cell is 36 bytes on the wire
+ * against 15,000 for a frame, so a blink is close to free on the bus.
+ *
+ * docs/OS.md bans cursor blink outright, on the grounds that a slow panel
+ * must never animate. The real cost is not the bus, it is that a blink keeps
+ * kicking the panel into HPM and the idle-LPM policy never fires. So the
+ * blink is bounded: main stops calling this once typing has paused, the
+ * cursor is left solid, and the panel is allowed to drop to 1 Hz.
+ */
+void editor_blink(bool on)
+{
+    if (s_cur_col < 0 || on == s_cursor_on) {
+        return;
+    }
+    s_cursor_on = on;
+    tg_put(s_cur_col, s_cur_row, s_cur_ch, on ? TG_INVERSE : TG_NORMAL);
+    tg_render();
+}
+
+void editor_cursor_solid(void)
+{
+    editor_blink(true);
 }
 
 void editor_handle(const kbd_event_t *ev)
@@ -171,10 +232,10 @@ void editor_handle(const kbd_event_t *ev)
     case KBD_EV_RIGHT:     doc_right();       break;
     case KBD_EV_UP:
     case KBD_EV_DOWN:
-        /* Vertical motion needs the wrap table, which editor_draw rebuilds.
-         * Moving by a display line is a column-preserving walk; for tonight a
-         * whole-line jump is close enough and never loses the cursor. */
-        for (int i = 0; i < tg_cols(); i++) {
+        /* Column-preserving vertical motion needs the wrap table, which is
+         * rebuilt on draw. A whole-line jump never loses the cursor and is
+         * honestly a placeholder. */
+        for (int i = 0; i < TEXT_COLS; i++) {
             if (ev->type == KBD_EV_UP) { doc_left(); } else { doc_right(); }
         }
         break;

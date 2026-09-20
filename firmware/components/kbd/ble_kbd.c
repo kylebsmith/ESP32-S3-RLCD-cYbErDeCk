@@ -51,6 +51,7 @@ static bool          s_connected;
 static bool          s_subscribed;
 static const char   *s_state = "starting";
 static int           s_adv_logged;
+static int           s_reports_logged;
 
 /* Held-key tracking for synthesised repeat. */
 static uint8_t  s_held_usage;
@@ -165,25 +166,59 @@ static void repeat_task(void *arg)
     }
 }
 
-/* --------------------------------------------------------------- discovery */
+/* --------------------------------------------------------------- discovery
+ *
+ * NimBLE allows exactly ONE GATT procedure in flight per connection. Starting
+ * descriptor discovery from inside the characteristic-discovery callback -
+ * the obvious way to write this - fails with BLE_HS_EBUSY, the CCCD is never
+ * written, and the keyboard connects perfectly and then types nothing. So
+ * discovery is a sequential state machine: each step is kicked off only by
+ * the completion callback of the one before it.
+ */
 
-struct disc_ctx {
-    uint16_t svc_start, svc_end;
+#define MAX_REPORT_CHRS 8
+
+struct chr_rec {
+    uint16_t def_handle;
+    uint16_t val_handle;
+    uint16_t uuid;
 };
-static struct disc_ctx s_disc;
+
+static uint16_t       s_svc_start, s_svc_end;
+static struct chr_rec s_chrs[MAX_REPORT_CHRS];
+static int            s_chr_count;
+static uint16_t       s_protocol_mode_handle;
+static int            s_sub_index;        /* which report we are subscribing */
+static int            s_sub_done;
+
+static void subscribe_next(uint16_t conn);
+
+/* The end of a characteristic's descriptor range is just before the next
+ * characteristic's declaration, or the end of the service for the last one. */
+static uint16_t dsc_end_for(int i)
+{
+    for (int j = 0; j < s_chr_count; j++) {
+        if (s_chrs[j].def_handle > s_chrs[i].val_handle) {
+            return (uint16_t)(s_chrs[j].def_handle - 1);
+        }
+    }
+    return s_svc_end;
+}
 
 static int on_cccd_write(uint16_t conn, const struct ble_gatt_error *err,
                          struct ble_gatt_attr *attr, void *arg)
 {
-    (void)conn; (void)attr; (void)arg;
+    (void)attr; (void)arg;
     if (err->status == 0) {
-        s_subscribed = true;
-        s_state = "connected";
-        ESP_LOGI(TAG, "subscribed to keyboard reports");
-        emit(KBD_EV_CONNECTED, 0, false);
+        s_sub_done++;
+        ESP_LOGI(TAG, "subscribed to report %d of %d",
+                 s_sub_index + 1, s_chr_count);
     } else {
-        ESP_LOGW(TAG, "CCCD write failed, status %d", err->status);
+        ESP_LOGW(TAG, "CCCD write for report %d failed, status %d",
+                 s_sub_index + 1, err->status);
     }
+    s_sub_index++;
+    subscribe_next(conn);
     return 0;
 }
 
@@ -192,13 +227,64 @@ static int on_dsc(uint16_t conn, const struct ble_gatt_error *err,
                   void *arg)
 {
     (void)chr_val_handle; (void)arg;
-    if (err->status != 0 || dsc == NULL) {
-        return 0;
+
+    if (err->status == 0 && dsc != NULL &&
+        ble_uuid_u16(&dsc->uuid.u) == UUID_CCCD) {
+        static const uint8_t on[2] = { 0x01, 0x00 };
+        const int rc = ble_gattc_write_flat(conn, dsc->handle,
+                                            on, sizeof on, on_cccd_write, NULL);
+        if (rc != 0) {
+            ESP_LOGW(TAG, "CCCD write could not start: %d", rc);
+            s_sub_index++;
+            subscribe_next(conn);
+        }
+        return 0;                      /* on_cccd_write drives the next step */
     }
-    if (ble_uuid_u16(&dsc->uuid.u) == UUID_CCCD) {
-        static const uint8_t on[2] = { 0x01, 0x00 };   /* notifications */
-        ble_gattc_write_flat(conn, dsc->handle, on, sizeof on, on_cccd_write, NULL);
+
+    if (err->status == BLE_HS_EDONE) {
+        /* No CCCD on this one - move along. */
+        ESP_LOGW(TAG, "report %d has no CCCD", s_sub_index + 1);
+        s_sub_index++;
+        subscribe_next(conn);
     }
+    return 0;
+}
+
+static void subscribe_next(uint16_t conn)
+{
+    if (s_sub_index >= s_chr_count) {
+        if (s_sub_done > 0) {
+            s_subscribed = true;
+            s_state = "connected";
+            ESP_LOGI(TAG, "keyboard ready - %d report(s) subscribed", s_sub_done);
+            emit(KBD_EV_CONNECTED, 0, false);
+        } else {
+            ESP_LOGE(TAG, "connected but NOTHING subscribed - the keyboard "
+                          "exposed no notifiable report characteristic");
+            s_state = "no reports";
+        }
+        return;
+    }
+    const int i = s_sub_index;
+    ESP_LOGI(TAG, "discovering descriptors of report %d (val %u, range %u..%u)",
+             i + 1, s_chrs[i].val_handle,
+             (unsigned)(s_chrs[i].val_handle + 1), dsc_end_for(i));
+    const int rc = ble_gattc_disc_all_dscs(conn,
+                                           s_chrs[i].val_handle,
+                                           dsc_end_for(i), on_dsc, NULL);
+    if (rc != 0) {
+        ESP_LOGW(TAG, "descriptor discovery could not start: %d", rc);
+        s_sub_index++;
+        subscribe_next(conn);
+    }
+}
+
+static int on_protocol_mode_write(uint16_t conn, const struct ble_gatt_error *err,
+                                  struct ble_gatt_attr *attr, void *arg)
+{
+    (void)attr; (void)arg;
+    ESP_LOGI(TAG, "boot protocol requested, status %d", err->status);
+    subscribe_next(conn);              /* proceed regardless */
     return 0;
 }
 
@@ -206,25 +292,60 @@ static int on_chr(uint16_t conn, const struct ble_gatt_error *err,
                   const struct ble_gatt_chr *chr, void *arg)
 {
     (void)arg;
+
+    if (err->status == BLE_HS_EDONE) {
+        ESP_LOGI(TAG, "characteristic discovery done: %d report(s), "
+                      "protocol mode %s",
+                 s_chr_count, s_protocol_mode_handle ? "present" : "absent");
+
+        /* Prefer the boot keyboard report if the keyboard has one: it is a
+         * fixed 8-byte layout and needs no report-descriptor parsing. */
+        int boot = -1;
+        for (int i = 0; i < s_chr_count; i++) {
+            if (s_chrs[i].uuid == UUID_BOOT_KBD_IN) { boot = i; break; }
+        }
+        if (boot >= 0) {
+            ESP_LOGI(TAG, "using the boot keyboard report");
+            s_chrs[0] = s_chrs[boot];
+            s_chr_count = 1;
+        }
+
+        s_sub_index = 0;
+        s_sub_done  = 0;
+
+        if (s_protocol_mode_handle != 0) {
+            static const uint8_t bootmode = 0x00;
+            const int rc = ble_gattc_write_flat(conn, s_protocol_mode_handle,
+                                                &bootmode, 1,
+                                                on_protocol_mode_write, NULL);
+            if (rc == 0) {
+                return 0;              /* its callback continues the chain */
+            }
+            ESP_LOGW(TAG, "protocol mode write could not start: %d", rc);
+        }
+        subscribe_next(conn);
+        return 0;
+    }
+
     if (err->status != 0 || chr == NULL) {
         return 0;
     }
-    const uint16_t u = ble_uuid_u16(&chr->uuid.u);
 
+    const uint16_t u = ble_uuid_u16(&chr->uuid.u);
     if (u == UUID_PROTOCOL_MODE) {
-        /* 0 = Boot Protocol. Write without response, per the HOGP spec. */
-        static const uint8_t boot = 0x00;
-        ble_gattc_write_no_rsp_flat(conn, chr->val_handle, &boot, 1);
-        ESP_LOGI(TAG, "requested boot protocol");
+        s_protocol_mode_handle = chr->val_handle;
         return 0;
     }
-
     const bool notifiable = (chr->properties & BLE_GATT_CHR_PROP_NOTIFY) != 0;
-    if (notifiable && (u == UUID_BOOT_KBD_IN || u == UUID_REPORT)) {
-        ESP_LOGI(TAG, "subscribing to %s (handle %u)",
+    if (notifiable && (u == UUID_BOOT_KBD_IN || u == UUID_REPORT) &&
+        s_chr_count < MAX_REPORT_CHRS) {
+        s_chrs[s_chr_count].def_handle = chr->def_handle;
+        s_chrs[s_chr_count].val_handle = chr->val_handle;
+        s_chrs[s_chr_count].uuid       = u;
+        s_chr_count++;
+        ESP_LOGI(TAG, "found %s at val %u",
                  u == UUID_BOOT_KBD_IN ? "boot keyboard report" : "report",
                  chr->val_handle);
-        ble_gattc_disc_all_dscs(conn, chr->val_handle, s_disc.svc_end, on_dsc, NULL);
     }
     return 0;
 }
@@ -233,29 +354,41 @@ static int on_svc(uint16_t conn, const struct ble_gatt_error *err,
                   const struct ble_gatt_svc *svc, void *arg)
 {
     (void)arg;
+
     if (err->status == BLE_HS_EDONE) {
-        if (s_disc.svc_start == 0) {
-            ESP_LOGW(TAG, "peer has no HID service - disconnecting");
+        if (s_svc_start == 0) {
+            ESP_LOGE(TAG, "peer has no HID service - disconnecting");
             ble_gap_terminate(conn, BLE_ERR_REM_USER_CONN_TERM);
+            return 0;
+        }
+        s_chr_count = 0;
+        s_protocol_mode_handle = 0;
+        const int rc = ble_gattc_disc_all_chrs(conn, s_svc_start, s_svc_end,
+                                               on_chr, NULL);
+        if (rc != 0) {
+            ESP_LOGE(TAG, "characteristic discovery could not start: %d", rc);
         }
         return 0;
     }
     if (err->status != 0 || svc == NULL) {
         return 0;
     }
-    s_disc.svc_start = svc->start_handle;
-    s_disc.svc_end   = svc->end_handle;
+    s_svc_start = svc->start_handle;
+    s_svc_end   = svc->end_handle;
     ESP_LOGI(TAG, "HID service at %u..%u", svc->start_handle, svc->end_handle);
-    ble_gattc_disc_all_chrs(conn, svc->start_handle, svc->end_handle, on_chr, NULL);
     return 0;
 }
 
 static void discover_hid(uint16_t conn)
 {
-    s_disc.svc_start = 0;
+    s_svc_start = 0;
+    s_svc_end   = 0;
     s_state = "discovering";
     const ble_uuid16_t hid = BLE_UUID16_INIT(UUID_HID_SVC);
-    ble_gattc_disc_svc_by_uuid(conn, &hid.u, on_svc, NULL);
+    const int rc = ble_gattc_disc_svc_by_uuid(conn, &hid.u, on_svc, NULL);
+    if (rc != 0) {
+        ESP_LOGE(TAG, "service discovery could not start: %d", rc);
+    }
 }
 
 /* --------------------------------------------------------------------- GAP */
@@ -371,12 +504,22 @@ static int gap_event(struct ble_gap_event *ev, void *arg)
     case BLE_GAP_EVENT_NOTIFY_RX: {
         const int len = OS_MBUF_PKTLEN(ev->notify_rx.om);
         uint8_t buf[16];
-        if (len >= 8 && len <= (int)sizeof buf &&
+        if (len >= 1 && len <= (int)sizeof buf &&
             ble_hs_mbuf_to_flat(ev->notify_rx.om, buf, sizeof buf, NULL) == 0) {
             if (!s_connected) {
                 s_connected = true;
+                ESP_LOGI(TAG, "first report received - the keyboard is live");
+            }
+            if (s_reports_logged < 12) {
+                ESP_LOGI(TAG, "report[%d] %02x %02x %02x %02x %02x %02x %02x %02x",
+                         len, buf[0], buf[1], buf[2], buf[3],
+                         len > 4 ? buf[4] : 0, len > 5 ? buf[5] : 0,
+                         len > 6 ? buf[6] : 0, len > 7 ? buf[7] : 0);
+                s_reports_logged++;
             }
             handle_report(buf, len);
+        } else if (len > 0) {
+            ESP_LOGW(TAG, "ignoring a %d-byte report", len);
         }
         return 0;
     }

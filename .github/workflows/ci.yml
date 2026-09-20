@@ -94,6 +94,7 @@ jobs:
           diff -u firmware/components/textgrid/font6x12.c /tmp/font6x12.c
           python3 tools/make_font.py --12x24 > /tmp/font12x24.c
           diff -u firmware/components/textgrid/font12x24.c /tmp/font12x24.c
+          python3 tools/check_fonts.py
 
       - name: Check the documentation is self-consistent
         run: python3 tools/check_docs.py

@@ -33,6 +33,13 @@ static const char *TAG = "cyberdeck";
 #define PIN_KEY        18
 #define KEY_LONG_MS  2000        /* >= 180 ms thresholds, per the BLE caveat */
 #define AUTOSAVE_MS  1000
+/* The cursor blinks while you are typing and for a while after, then goes
+ * solid so the idle-LPM policy can fire. docs/OS.md bans blink outright for a
+ * slow panel; the cost is not the 36 bytes a blink puts on the wire, it is
+ * that an endless blink keeps the panel pinned in HPM. Bounding it keeps both
+ * the affordance and the power behaviour. */
+#define BLINK_MS       500
+#define BLINK_WINDOW  15000
 #define BUILD_ID (__DATE__ " " __TIME__)
 #define NVS_NS "deck"
 
@@ -46,15 +53,35 @@ static void report_memory(const char *when)
              (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
 }
 
+/* Bumped whenever the shipped default changes. A stored orientation from an
+ * older build is replaced rather than honoured, so a corrected default takes
+ * effect on flash instead of waiting for someone to find the button. */
+#define ORIENT_DEFAULT  ST7305_ORIENT_3
+#define ORIENT_VERSION  2
+
+static void orient_save(uint8_t v);
+
 static uint8_t orient_load(void)
 {
     nvs_handle_t h;
-    uint8_t v = ST7305_ORIENT_1;
+    uint8_t v = ORIENT_DEFAULT;
+    uint8_t ver = 0;
+
     if (nvs_open(NVS_NS, NVS_READONLY, &h) == ESP_OK) {
-        nvs_get_u8(h, "orient", &v);
+        nvs_get_u8(h, "orient_ver", &ver);
+        if (ver == ORIENT_VERSION) {
+            nvs_get_u8(h, "orient", &v);
+        }
         nvs_close(h);
     }
-    return v > 3 ? ST7305_ORIENT_1 : v;
+    if (v > 3) {
+        v = ORIENT_DEFAULT;
+    }
+    if (ver != ORIENT_VERSION) {
+        ESP_LOGW(TAG, "orientation reset to the new default %d", v);
+        orient_save(v);
+    }
+    return v;
 }
 
 static void orient_save(uint8_t v)
@@ -62,6 +89,7 @@ static void orient_save(uint8_t v)
     nvs_handle_t h;
     if (nvs_open(NVS_NS, NVS_READWRITE, &h) == ESP_OK) {
         nvs_set_u8(h, "orient", v);
+        nvs_set_u8(h, "orient_ver", ORIENT_VERSION);
         nvs_commit(h);
         nvs_close(h);
     }
@@ -107,7 +135,7 @@ void app_main(void)
 
     uint8_t orient = orient_load();
     st7305_set_orientation((st7305_orient_t)orient);
-    ESP_ERROR_CHECK(tg_set_font(&tg_font_12x24, 1));     /* 12x24 -> 33x12 */
+    ESP_ERROR_CHECK(tg_set_font(&tg_font_12x24, 1));     /* test card: flush grid */
     ESP_LOGI(TAG, "orientation %d (from NVS)", orient);
 
     /* Show the card briefly so a boot is visibly a boot, then get out of the
@@ -139,7 +167,9 @@ void app_main(void)
     };
     gpio_config(&key);
 
+    ESP_ERROR_CHECK(editor_init());      /* margins; 30 x 10 inside them */
     tg_invalidate();
+    st7305_clear(false);
     editor_draw();
     size_t bytes = 0;
     tg_flush(&bytes);
@@ -150,6 +180,8 @@ void app_main(void)
     bool    key_was_down = false;
     bool    long_fired = false;
     int64_t last_edit_ms = now_ms();
+    int64_t last_blink_ms = now_ms();
+    bool    blink_on = true;
     bool    need_draw = false;
     bool    force_save = false;
 
@@ -172,7 +204,10 @@ void app_main(void)
             }
         }
         if (acted) {
-            last_edit_ms = now_ms();
+            last_edit_ms  = now_ms();
+            last_blink_ms = now_ms();
+            blink_on = true;
+            editor_cursor_solid();   /* never blink away mid-keystroke */
         }
 
         /* KEY: tap cycles orientation, long hold forgets bonds. */
@@ -198,6 +233,21 @@ void app_main(void)
             editor_draw();
             tg_flush(&bytes);
             need_draw = false;
+        }
+
+        /* Blink, bounded. One cell, 36 bytes. */
+        const int64_t since_edit = now_ms() - last_edit_ms;
+        if (since_edit < BLINK_WINDOW) {
+            if (now_ms() - last_blink_ms >= BLINK_MS) {
+                last_blink_ms = now_ms();
+                blink_on = !blink_on;
+                editor_blink(blink_on);
+                tg_flush(&bytes);
+            }
+        } else if (!blink_on) {
+            blink_on = true;
+            editor_cursor_solid();
+            tg_flush(&bytes);
         }
 
         /* Autosave: on newline, or once typing has paused. Never per
