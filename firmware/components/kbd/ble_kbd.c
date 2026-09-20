@@ -51,6 +51,15 @@ static const char *TAG = "kbd";
 #define REPEAT_PERIOD_MS   45
 #define REPEAT_MAX        400   /* ~18 s; a lost key-up must not run for ever */
 
+/* How long a silent-but-connected link is tolerated before the keyboard is
+ * nudged out of HID suspend. A HOGP keyboard may park itself, stay bonded,
+ * stay subscribed, keep the connection up - and simply stop notifying. It
+ * looks exactly like a healthy link that types nothing, which is why SolarOS
+ * ships a periodic Exit Suspend for the same reason. Writing it once at
+ * subscribe time only fixes the first silence. */
+#define KEEPALIVE_IDLE_MS  4000
+#define KEEPALIVE_MIN_GAP  2000
+
 static QueueHandle_t s_q;
 static uint16_t      s_conn = BLE_HS_CONN_HANDLE_NONE;
 static uint8_t       s_own_addr_type;
@@ -61,7 +70,25 @@ static int           s_adv_logged;
 static int           s_adv_seen;
 static int           s_reports_logged;
 static int           s_dropped;
+static uint16_t      s_ctrl_point_handle;
+static volatile int64_t s_last_report_ms;
+static int64_t       s_last_keepalive_ms;
 static bool          s_clear_bonds_on_sync;
+
+/* The identity address of the keyboard we already know.
+ *
+ * Scanning for it by advertisement does not work once it is bonded: a
+ * reconnecting HID peripheral advertises DIRECTED, and a directed advert
+ * carries no name, no service UUIDs and no appearance - nothing the
+ * new-keyboard filter can match. Its address rotates too (observed going from
+ * ...68 to ...69 between sessions), so matching the address in the advert
+ * fails as well unless the controller has already resolved it.
+ *
+ * So do not hunt adverts at all. Ask the controller to connect to the known
+ * identity and let it do the resolution: that is what identity addresses are
+ * for. Scanning stays as the path for meeting a NEW keyboard. */
+static ble_addr_t    s_peer;
+static bool          s_have_peer;
 
 /* Bumped when the pairing scheme changes. */
 #define KBD_PAIR_SCHEME 2
@@ -73,6 +100,9 @@ static int64_t  s_held_since_ms;
 static int64_t  s_next_repeat_ms;
 
 static void scan_start(void);
+static void connect_known_peer(void);
+static void peer_save(const ble_addr_t *addr);
+static bool s_trying_known;
 
 bool kbd_connected(void)      { return s_connected; }
 const char *kbd_state_name(void) { return s_state; }
@@ -195,12 +225,34 @@ static void repeat_task(void *arg)
     int     repeats = 0;
     while (1) {
         const int64_t nowb = esp_timer_get_time() / 1000;
+
+        /* Keep the keyboard awake. Only when it has actually gone quiet, and
+         * never more often than KEEPALIVE_MIN_GAP, so an active typist costs
+         * nothing extra on the air. */
+        if (s_subscribed && s_ctrl_point_handle != 0 &&
+            s_conn != BLE_HS_CONN_HANDLE_NONE &&
+            nowb - s_last_report_ms >= KEEPALIVE_IDLE_MS &&
+            nowb - s_last_keepalive_ms >= KEEPALIVE_MIN_GAP) {
+            static const uint8_t exit_suspend = 0x01;
+            s_last_keepalive_ms = nowb;
+            const int rc = ble_gattc_write_no_rsp_flat(s_conn,
+                                                       s_ctrl_point_handle,
+                                                       &exit_suspend, 1);
+            static int nudges;
+            if ((nudges++ % 10) == 0) {
+                ESP_LOGI(TAG, "keyboard quiet %llds - exit-suspend nudge (rc %d)",
+                         (long long)((nowb - s_last_report_ms) / 1000), rc);
+            }
+        }
+
         if (nowb - last_beat >= 10000) {
             last_beat = nowb;
             if (!s_connected) {
-                ESP_LOGW(TAG, "%s - %d adverts heard, no keyboard yet "
-                              "(put the keyboard into PAIRING mode)",
+                ESP_LOGW(TAG, "%s - %d adverts heard, no keyboard connected",
                          s_state, s_adv_seen);
+            } else if (nowb - s_last_report_ms > 15000) {
+                ESP_LOGW(TAG, "keyboard connected but silent for %llds",
+                         (long long)((nowb - s_last_report_ms) / 1000));
             }
         }
         /* Read the shared held-key state once into locals. It is written by
@@ -262,7 +314,6 @@ static int            s_chr_count;
 static uint16_t       s_all_defs[16];
 static int            s_all_def_count;
 static uint16_t       s_protocol_mode_handle;
-static uint16_t       s_ctrl_point_handle;
 static int            s_sub_index;        /* which report we are subscribing */
 static int            s_sub_done;
 /* Descriptor discovery reports a CCCD and THEN reports completion. If both
@@ -413,6 +464,10 @@ static void subscribe_next(uint16_t conn)
                 ESP_LOGI(TAG, "keyboard ready - %d report(s) subscribed",
                          s_sub_done);
                 emit(KBD_EV_CONNECTED, 0, false);
+                struct ble_gap_conn_desc d;
+                if (ble_gap_conn_find(conn, &d) == 0) {
+                    peer_save(&d.peer_id_addr);
+                }
                 after_subscribe(conn);
             }
         } else {
@@ -633,7 +688,12 @@ static int gap_event(struct ble_gap_event *ev, void *arg)
             }
             s_adv_seen++;
         }
-        if (!adv_is_keyboard(&f) && !addr_is_bonded(&ev->disc.addr)) {
+        /* A directed advert is addressed to this device specifically, so it
+         * is for us whatever it does or does not carry in its payload. */
+        const bool directed =
+            ev->disc.event_type == BLE_HCI_ADV_RPT_EVTYPE_DIR_IND;
+        if (!directed && !adv_is_keyboard(&f) &&
+            !addr_is_bonded(&ev->disc.addr)) {
             return 0;
         }
         ESP_LOGI(TAG, "found a keyboard (%s), connecting",
@@ -665,8 +725,14 @@ static int gap_event(struct ble_gap_event *ev, void *arg)
                 discover_hid(s_conn);
             }
         } else {
-            ESP_LOGW(TAG, "connect failed (status %d)", ev->connect.status);
-            scan_start();
+            if (s_trying_known) {
+                s_trying_known = false;
+                ESP_LOGI(TAG, "no answer from the known keyboard - scanning");
+                scan_start();
+            } else {
+                ESP_LOGW(TAG, "connect failed (status %d)", ev->connect.status);
+                connect_known_peer();
+            }
         }
         return 0;
 
@@ -683,7 +749,7 @@ static int gap_event(struct ble_gap_event *ev, void *arg)
         s_held_usage = 0;
         s_conn = BLE_HS_CONN_HANDLE_NONE;
         emit(KBD_EV_DISCONNECTED, 0, false);
-        scan_start();
+        connect_known_peer();
         return 0;
 
     case BLE_GAP_EVENT_NOTIFY_RX: {
@@ -706,6 +772,7 @@ static int gap_event(struct ble_gap_event *ev, void *arg)
         }
         if (len >= 1 && len <= (int)sizeof buf &&
             ble_hs_mbuf_to_flat(ev->notify_rx.om, buf, sizeof buf, NULL) == 0) {
+            s_last_report_ms = esp_timer_get_time() / 1000;
             if (!s_connected) {
                 s_connected = true;
                 ESP_LOGI(TAG, "first report received - the keyboard is live");
@@ -764,7 +831,7 @@ static int gap_event(struct ble_gap_event *ev, void *arg)
 
     case BLE_GAP_EVENT_DISC_COMPLETE:
         if (!s_connected && s_conn == BLE_HS_CONN_HANDLE_NONE) {
-            scan_start();
+            connect_known_peer();
         }
         return 0;
 
@@ -790,6 +857,58 @@ static void scan_start(void)
     }
 }
 
+static void peer_save(const ble_addr_t *addr)
+{
+    nvs_handle_t h;
+    if (nvs_open("deck", NVS_READWRITE, &h) == ESP_OK) {
+        nvs_set_blob(h, "peer", addr, sizeof *addr);
+        nvs_commit(h);
+        nvs_close(h);
+    }
+    s_peer = *addr;
+    s_have_peer = true;
+    ESP_LOGI(TAG, "remembered keyboard %02x:%02x:%02x:%02x:%02x:%02x type %d",
+             addr->val[5], addr->val[4], addr->val[3],
+             addr->val[2], addr->val[1], addr->val[0], addr->type);
+}
+
+static void peer_load(void)
+{
+    nvs_handle_t h;
+    size_t len = sizeof s_peer;
+    if (nvs_open("deck", NVS_READONLY, &h) == ESP_OK) {
+        s_have_peer = nvs_get_blob(h, "peer", &s_peer, &len) == ESP_OK &&
+                      len == sizeof s_peer;
+        nvs_close(h);
+    }
+    if (s_have_peer) {
+        ESP_LOGI(TAG, "known keyboard %02x:%02x:%02x:%02x:%02x:%02x type %d",
+                 s_peer.val[5], s_peer.val[4], s_peer.val[3],
+                 s_peer.val[2], s_peer.val[1], s_peer.val[0], s_peer.type);
+    }
+}
+
+/* Alternate between the two ways of meeting a keyboard: a directed connect to
+ * the one we know, and a scan for one we do not. Either can be the right
+ * answer at any moment and neither can be relied on alone. */
+static void connect_known_peer(void)
+{
+    if (!s_have_peer) {
+        scan_start();
+        return;
+    }
+    ble_gap_disc_cancel();
+    s_trying_known = true;
+    s_state = "reconnecting";
+    const int rc = ble_gap_connect(s_own_addr_type, &s_peer, 20000,
+                                   NULL, gap_event, NULL);
+    if (rc != 0) {
+        ESP_LOGW(TAG, "directed connect could not start (%d) - scanning", rc);
+        s_trying_known = false;
+        scan_start();
+    }
+}
+
 static void on_sync(void)
 {
     if (s_clear_bonds_on_sync) {
@@ -798,8 +917,9 @@ static void on_sync(void)
     }
     ble_hs_util_ensure_addr(0);
     ble_hs_id_infer_auto(0, &s_own_addr_type);
-    ESP_LOGI(TAG, "BLE ready, scanning for a keyboard");
-    scan_start();
+    peer_load();
+    ESP_LOGI(TAG, "BLE ready");
+    connect_known_peer();
 }
 
 static void on_reset(int reason)
@@ -822,6 +942,15 @@ void kbd_forget_all(void)
         ble_gap_terminate(s_conn, BLE_ERR_REM_USER_CONN_TERM);
     }
     ble_store_clear();
+    s_have_peer = false;
+    {
+        nvs_handle_t h;
+        if (nvs_open("deck", NVS_READWRITE, &h) == ESP_OK) {
+            nvs_erase_key(h, "peer");
+            nvs_commit(h);
+            nvs_close(h);
+        }
+    }
     s_connected  = false;
     s_subscribed = false;
     scan_start();
