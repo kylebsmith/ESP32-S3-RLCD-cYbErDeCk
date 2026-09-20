@@ -35,6 +35,9 @@ than three apps. A note, an Orca patch (literally a rectangular block of
 ASCII), a guide file of executable lines, a routing table and an OSC address
 map are all text on the same grid. The editor is the OS.
 
+That claim is developed properly in **[SUBSTRATE.md](SUBSTRATE.md)** — one data
+structure, one noun, three verbs — and everything below is downstream of it.
+
 ## What the hardware decides
 
 These are not preferences. Each one closes off a design that would otherwise
