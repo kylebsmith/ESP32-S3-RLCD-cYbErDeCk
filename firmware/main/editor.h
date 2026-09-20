@@ -12,7 +12,8 @@ void editor_draw(void);
 void editor_invalidate(void);
 
 /* Pushes and bytes since the last call, for the liveness heartbeat. */
-void editor_vitals(uint32_t *pushes, uint32_t *bytes);
+void editor_vitals(uint32_t *pushes, uint32_t *bytes,
+                   uint32_t *render_us, uint32_t *cells);
 
 /* Push what editor_draw/editor_blink rendered. Rendering does not push. */
 void editor_present(size_t *bytes);

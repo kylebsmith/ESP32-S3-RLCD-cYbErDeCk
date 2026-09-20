@@ -82,8 +82,16 @@ conversion — **any buffer can change kind without its bytes moving.**
 |---|---|---|---|
 | `prose` | sequence | splits and reflows | a note, a lyric, a plan |
 | `grid` | position | moves down | an Orca patch |
-| `guide` | sequence | **executes the line** | a menu you wrote by typing |
+| `guide` | sequence | splits, like prose — see below | a menu you wrote by typing |
 | `table` | both | next row | routing, parameter maps |
+
+**One correction from building it.** This table originally had `guide` make
+Enter *execute* the line. Implemented, that made a guide impossible to edit:
+at the end of a command there was no way to add a line after it. Execution is
+now marked in the text — a command line begins with `>` — and run with
+Ctrl+Enter, in any buffer. The kind still decides reflow, which is what the
+two-axes argument above is really about; it no longer decides execution. See
+[COMMANDS.md](COMMANDS.md).
 
 `guide` is the one that does the most work, and it is stolen wholesale from
 Plan 9's Acme. A guide is a plain buffer of command lines where Enter runs the

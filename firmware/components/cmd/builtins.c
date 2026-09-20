@@ -71,6 +71,19 @@ static cmd_status_t c_name(cmd_ctx_t *ctx)
 
 static cmd_status_t c_open(cmd_ctx_t *ctx)
 {
+    /* >list already prints an index against every buffer, and an unnamed
+     * scratch buffer has no name to match - so the index has to work, or the
+     * listing is showing something that cannot be acted on. */
+    if (ctx->arg[0] >= '0' && ctx->arg[0] <= '9') {
+        const int n = ctx->arg[0] - '0';
+        if (doc_buf_select(n) == ESP_OK) {
+            const char *nm = doc_buf_name(n);
+            snprintf(ctx->msg, sizeof ctx->msg, "%s", nm[0] ? nm : "scratch");
+            return CMD_DONE;
+        }
+        cmd_out(ctx, "no buffer %d", n);
+        return CMD_ERROR;
+    }
     for (int i = 0; i < DOC_MAX_BUFFERS; i++) {
         if (strcmp(doc_buf_name(i), ctx->arg) == 0 && ctx->arg[0] != '\0') {
             if (doc_buf_select(i) != ESP_OK) {

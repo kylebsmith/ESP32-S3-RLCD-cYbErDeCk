@@ -367,14 +367,15 @@ void app_main(void)
          * which cost real debugging time. */
         if (now_ms() - last_beat_ms >= 10000) {
             last_beat_ms = now_ms();
-            uint32_t pushes = 0, pbytes = 0;
-            editor_vitals(&pushes, &pbytes);
+            uint32_t pushes = 0, pbytes = 0, rus = 0, cells = 0;
+            editor_vitals(&pushes, &pbytes, &rus, &cells);
             ESP_LOGI(TAG, "alive: doc %u%s, undo %d, kbd %s, %u push/%u B, "
-                          "heap %u",
+                          "render %u us/%u cells, heap %u",
                      (unsigned)doc_len(), doc_dirty() ? "*" : "",
                      doc_undo_depth(),
                      kbd_connected() ? "up" : kbd_state_name(),
                      (unsigned)pushes, (unsigned)pbytes,
+                     (unsigned)rus, (unsigned)cells,
                      (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
         }
 

@@ -31,12 +31,15 @@
 #include "kbd.h"
 #include "st7305.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "textgrid.h"
 
 #define MARGIN_X     20
 #define MARGIN_TOP   12
 #define TEXT_COLS    30
 #define TEXT_ROWS    10
+#define STATUS_ROW   10          /* the grid is 11 rows; the last is status */
+#define GRID_ROWS    11
 #define CELL_W       12
 #define CELL_H       24
 
@@ -81,16 +84,26 @@ static char s_status_shown[64];
  * few seconds. A command that reports nothing is indistinguishable from one
  * that did not run. */
 static char    s_msg[64];
+/* Where we came from, so a jump to +out is never a one-way door. An unnamed
+ * scratch buffer has no name for >open to match, so without this a command
+ * run from fresh writing strands that writing with no key and no command to
+ * get back to it. */
+static int     s_prev_buf = -1;
 static int64_t s_msg_until;
 static bool s_chrome_dirty = true;
-static uint32_t s_pushes, s_push_bytes;
+static uint32_t s_pushes, s_push_bytes, s_render_us, s_cells;
 
-void editor_vitals(uint32_t *pushes, uint32_t *bytes)
+void editor_vitals(uint32_t *pushes, uint32_t *bytes,
+                   uint32_t *render_us, uint32_t *cells)
 {
     *pushes = s_pushes;
     *bytes  = s_push_bytes;
+    *render_us = s_render_us;
+    *cells = s_cells;
     s_pushes = 0;
     s_push_bytes = 0;
+    s_render_us = 0;
+    s_cells = 0;
 }
 
 void editor_invalidate(void)
@@ -101,8 +114,14 @@ void editor_invalidate(void)
 
 esp_err_t editor_init(void)
 {
+    /* The status line is row 10 of the grid, not chrome painted beside it.
+     * As chrome it was ~17,000 coordinate transforms and ~7,500 damage
+     * insertions on EVERY keystroke, because the string carries the cursor
+     * column and so changes on nearly every key. On the grid, tg_put's own
+     * change filter repaints the two digits that actually moved. The fix is
+     * a deletion. */
     return tg_set_layout(&tg_font_12x24, 1,
-                         MARGIN_X, MARGIN_TOP, TEXT_COLS, TEXT_ROWS);
+                         MARGIN_X, MARGIN_TOP, TEXT_COLS, GRID_ROWS);
 }
 
 /* Greedy word wrap. Records where each display line starts and where the
@@ -182,46 +201,34 @@ static void wrap(int cols)
  * its own pixel row and only when its text actually changes. */
 int64_t editor_now_ms(void);
 
+/* Messages must fit. tg_draw_text_px used to clip silently at the screen
+ * edge, so "not a command - start the line with >" rendered as "not a command
+ * - start the line" and lost the entire point of the sentence. */
+#define STATUS_MAX TEXT_COLS
+
 static void status_bar(void)
 {
-    char s[64];
+    char wide[96];
+    char s[STATUS_MAX + 1];
+
     if (s_msg[0] != '\0' && editor_now_ms() < s_msg_until) {
-        if (strcmp(s_msg, s_status_shown) == 0) {
-            return;
+        snprintf(wide, sizeof wide, "%s", s_msg);
+    } else {
+        if (s_msg[0] != '\0') {
+            s_msg[0] = '\0';
         }
-        snprintf(s_status_shown, sizeof s_status_shown, "%s", s_msg);
-        st7305_fill(0, STATUS_Y, ST7305_WIDTH, STATUS_H, true);
-        tg_draw_text_px(MARGIN_X, STATUS_Y, s_msg, TG_INVERSE);
-        return;
+        const char *nm = doc_buf_name(doc_buf_current());
+        snprintf(wide, sizeof wide, "%-12.12s%c %3d:%-3d %s%s",
+                 nm[0] ? nm : "scratch",
+                 doc_dirty() ? '*' : ' ',
+                 s_cursor_line + 1, s_cursor_col + 1,
+                 kbd_connected() ? "K" : "-",
+                 doc_sd_present() ? "S" : "-");
     }
-    if (s_msg[0] != '\0' && editor_now_ms() >= s_msg_until) {
-        s_msg[0] = '\0';
-        s_status_shown[0] = '\0';      /* force the real status back */
+    snprintf(s, sizeof s, "%-*.*s", STATUS_MAX, STATUS_MAX, wide);
+    for (int c = 0; c < TEXT_COLS; c++) {
+        tg_put(c, STATUS_ROW, s[c] ? s[c] : ' ', TG_INVERSE);
     }
-    const char *net = kbd_connected() ? "KEYBOARD" : kbd_state_name();
-
-    /* Cursor position earns its place: a text editor that cannot tell you
-     * where the cursor is makes every navigation bug invisible, and on a
-     * 30-column screen the cursor is easy to lose. */
-    /* Where you are comes first. On a thirty-column screen the byte count was
-     * taking room from the one fact the owner actually needs, which is which
-     * document they are looking at. */
-    const char *nm = doc_buf_name(doc_buf_current());
-    snprintf(s, sizeof s, "%-12.12s%c %3d:%-3d %s%s",
-             nm[0] ? nm : "scratch",
-             doc_dirty() ? '*' : ' ',
-             s_cursor_line + 1, s_cursor_col + 1,
-             kbd_connected() ? "K" : "-",
-             doc_sd_present() ? "S" : "-");
-    (void)net;
-
-    if (strcmp(s, s_status_shown) == 0) {
-        return;                       /* nothing changed - do not touch flash */
-    }
-    snprintf(s_status_shown, sizeof s_status_shown, "%s", s);
-
-    st7305_fill(0, STATUS_Y, ST7305_WIDTH, STATUS_H, true);      /* ink bar */
-    tg_draw_text_px(MARGIN_X, STATUS_Y, s, TG_INVERSE);
 }
 
 void editor_draw(void)
@@ -279,16 +286,14 @@ void editor_draw(void)
     /* Cells first, then sub-cell chrome on top of them. Note that this
      * RENDERS but does not PUSH: the caller pushes once, with editor_present,
      * after the chrome is in the framebuffer too. */
-    tg_render();
-
-    /* Chrome, drawn over the grid. The rule is static, so it is painted only
-     * when the whole screen is being repainted anyway - redrawing it every
-     * frame dragged the damage rectangle down across the entire panel. */
-    if (s_chrome_dirty) {
-        st7305_fill(MARGIN_X, RULE_Y, ST7305_WIDTH - 2 * MARGIN_X, 2, true);
-        s_chrome_dirty = false;
-    }
     status_bar();
+    /* The CPU side has never been measured - only the bytes on the wire.
+     * Drawing a 12x24 cell is 288 pixel writes, each of which is a coordinate
+     * transform; that is the cost that competes with live coding, not the
+     * SPI. */
+    const int64_t t0 = esp_timer_get_time();
+    s_cells += (uint32_t)tg_render();
+    s_render_us += (uint32_t)(esp_timer_get_time() - t0);
 }
 
 /* Repaint only the cursor cell. One 12 x 24 cell is 36 bytes on the wire
@@ -423,12 +428,22 @@ static void handle_ctrl(char c)
         s_msg_until = editor_now_ms() + 3000;
         return;
     }
-    case 'o': {                      /* jump to command output */
-        const int i = doc_buf_find("+out");
-        if (i >= 0 && doc_buf_select(i) == ESP_OK) {
+    case 'o': {
+        /* A toggle, not a jump. From anywhere it shows the output; from the
+         * output it returns you to what you were writing. */
+        const int here = doc_buf_current();
+        int target;
+        if (strcmp(doc_buf_name(here), "+out") == 0 && s_prev_buf >= 0) {
+            target = s_prev_buf;
+        } else {
+            target = doc_buf_find("+out");
+        }
+        if (target >= 0 && target != here && doc_buf_select(target) == ESP_OK) {
+            s_prev_buf = here;
             editor_invalidate();
             tg_invalidate();
-            snprintf(s_msg, sizeof s_msg, "+out");
+            const char *nm = doc_buf_name(target);
+            snprintf(s_msg, sizeof s_msg, "%s", nm[0] ? nm : "scratch");
             s_msg_until = editor_now_ms() + 2500;
         }
         return;
@@ -490,14 +505,33 @@ static void log_motion(const char *what)
 #endif
 }
 
-/* Copy the display line the cursor is on into out. */
+/* Copy the LOGICAL line the cursor is on - the run between newlines in the
+ * document, not the run between soft wraps on the screen.
+ *
+ * This used the wrap table, and a command longer than thirty columns was
+ * therefore cut at the wrap and its PREFIX executed, silently:
+ * ">name Rust Belt Lullaby and the" filed the document as "Rust Belt Lullaby
+ * and". No error, no mark, wrong name in the archive. It is the same class of
+ * defect as the trailing-whitespace trap docs/SUBSTRATE.md is proud of
+ * engineering out of existence - destructive, silent, discovered later - and
+ * every MIDI command in the brief is long enough to hit it.
+ *
+ * A logical line also means a wrapped command runs identically from any of
+ * its display rows, which removes the confusing "not a command" error when
+ * standing on a continuation row. */
 static void current_line(char *out, size_t max)
 {
-    int s, e;
-    line_bounds(&s, &e);
+    const size_t len = doc_len();
+    size_t s = doc_cursor();
+    if (s > len) {
+        s = len;
+    }
+    while (s > 0 && doc_at(s - 1) != '\n') {
+        s--;
+    }
     size_t n = 0;
-    for (int i = s; i < e && n + 1 < max; i++) {
-        const char ch = doc_at((size_t)i);
+    for (size_t i = s; i < len && n + 1 < max; i++) {
+        const char ch = doc_at(i);
         if (ch == '\n') {
             break;
         }
@@ -524,6 +558,13 @@ static void run_current_line(void)
         return;
     }
 
+    /* Where the output buffer ended BEFORE the command, so the view can land
+     * on the first line this command wrote rather than the last line of
+     * everything ever written. `help` was scrolling to the bottom and hiding
+     * its own first three entries with nothing to say so. */
+    const int outb = doc_buf_find("+out");
+    const size_t out_was = outb >= 0 ? doc_buf_len(outb) : 0;
+
     char msg[96] = "";
     cmd_run_line(line, CMD_BY_HANDS, msg, sizeof msg);
     const int lines = cmd_last_output_lines();
@@ -533,9 +574,11 @@ static void run_current_line(void)
      * owner has to know to look for is not minimalism, it is hiding. */
     if (lines > 1) {
         const int out = doc_buf_find("+out");
-        if (out >= 0 && doc_buf_select(out) == ESP_OK) {
-            doc_move_to(doc_len());
-            s_top_offset = 0;
+        const int here = doc_buf_current();
+        if (out >= 0 && out != here && doc_buf_select(out) == ESP_OK) {
+            s_prev_buf = here;
+            doc_move_to(out_was);
+            s_top_offset = (int)out_was;
             s_goal_col = -1;
             snprintf(s_msg, sizeof s_msg, "%s", msg[0] ? msg : "output");
             s_msg_until = editor_now_ms() + 2500;

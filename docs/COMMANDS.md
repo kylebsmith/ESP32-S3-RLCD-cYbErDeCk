@@ -64,17 +64,27 @@ on purpose, which is the point.
 `SUBSTRATE.md` says the kind of a buffer decides exactly one thing — what
 Enter does. That is implemented literally:
 
-| Kind | Enter | Ctrl+Enter |
+**Superseded, and recorded rather than rewritten.** The kind used to decide
+what Enter did: in a `guide`, Enter ran the line. That shipped, and it made
+the guide uneditable — standing at the end of a command there was no way to
+add a line after it, because the key that adds lines was busy running things.
+An editor whose Enter key sometimes does not insert a line is not an editor.
+
+The rule now:
+
+| Key | Does | Where |
 |---|---|---|
-| `prose` | splits the line, what follows reflows | runs the line |
-| `guide` | **runs the line** | inserts a newline |
+| `Enter` | inserts a newline | everywhere, always |
+| `Ctrl+Enter` | runs the line, if it begins with `>` | everywhere |
 
-Nothing else differs. The same bytes, the same editor, the same keymap.
+The **sigil** replaced the kind for this purpose. Once a command is marked in
+the text, the machine can tell a command from prose by reading, and does not
+need a mode; two mechanisms for one distinction was one too many.
 
-The inversion is deliberate. Running a line has to be reachable from prose
-too, or the Run verb would require switching buffers to use — but a command
-typed into prose accumulates in the middle of somebody's writing, which is
-exactly what happened on the bench before guide buffers existed.
+The kind survives because it still has to decide prose-versus-grid reflow for
+Orca patches, which is the distinction `SUBSTRATE.md` actually cares about —
+does Enter reflow, or does it move? That question is still live. "Does Enter
+execute?" is not.
 
 ## The guide is a text file `[FACT]`
 

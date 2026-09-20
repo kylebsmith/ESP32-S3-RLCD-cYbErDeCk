@@ -153,13 +153,15 @@ static void blit_glyph(int px, int py, char ch, bool inv)
                 on = !on;
             }
             if (s_scale == 1) {
-                st7305_pixel(px + gx, py + gy, on);
+                st7305_pixel_raw(px + gx, py + gy, on);
             } else {
-                st7305_fill(px + gx * s_scale, py + gy * s_scale,
-                            s_scale, s_scale, on);
+                st7305_fill_raw(px + gx * s_scale, py + gy * s_scale,
+                                s_scale, s_scale, on);
             }
         }
     }
+    /* One rectangle for the whole glyph, declared once. */
+    st7305_damage(px, py, s_font->w * s_scale, s_font->h * s_scale);
 }
 
 int tg_text_width_px(const char *s)
@@ -194,13 +196,14 @@ static void draw_cell(int col, int row)
                 on = !on;
             }
             if (s_scale == 1) {
-                st7305_pixel(x0 + gx, y0 + gy, on);
+                st7305_pixel_raw(x0 + gx, y0 + gy, on);
             } else {
-                st7305_fill(x0 + gx * s_scale, y0 + gy * s_scale,
-                            s_scale, s_scale, on);
+                st7305_fill_raw(x0 + gx * s_scale, y0 + gy * s_scale,
+                                s_scale, s_scale, on);
             }
         }
     }
+    st7305_damage(x0, y0, s_cw, s_ch);
 }
 
 int tg_render(void)

@@ -424,6 +424,27 @@ void st7305_damage(int x, int y, int w, int h)
     s_dmg[s_dmg_count - 1] = r;
 }
 
+void st7305_pixel_raw(int x, int y, bool on)
+{
+    if ((unsigned)x >= ST7305_WIDTH || (unsigned)y >= ST7305_HEIGHT) {
+        return;
+    }
+    int nx, ny;
+    to_native(x, y, &nx, &ny);
+    const uint8_t m = fb_mask_n(nx, ny);
+    uint8_t *p = &s_fb[fb_index_n(nx, ny)];
+    if (on) { *p |= m; } else { *p = (uint8_t)(*p & ~m); }
+}
+
+void st7305_fill_raw(int x, int y, int w, int h, bool on)
+{
+    for (int yy = y; yy < y + h; yy++) {
+        for (int xx = x; xx < x + w; xx++) {
+            st7305_pixel_raw(xx, yy, on);
+        }
+    }
+}
+
 void st7305_pixel(int x, int y, bool on)
 {
     if ((unsigned)x >= ST7305_WIDTH || (unsigned)y >= ST7305_HEIGHT) {

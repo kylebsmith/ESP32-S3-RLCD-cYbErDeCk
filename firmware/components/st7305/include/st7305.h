@@ -78,6 +78,13 @@ void st7305_pixel(int x, int y, bool on);
 /* Fill a logical rectangle. */
 void st7305_fill(int x, int y, int w, int h, bool on);
 
+/* The same, WITHOUT touching the damage list. For callers that know the
+ * rectangle they are about to fill and will declare it once: a 12x24 glyph is
+ * 288 pixels and was issuing 288 damage insertions to produce one rectangle,
+ * which was most of what drawing a character cost. */
+void st7305_pixel_raw(int x, int y, bool on);
+void st7305_fill_raw(int x, int y, int w, int h, bool on);
+
 void st7305_clear(bool on);
 
 /* Mark a logical rectangle damaged without drawing (for callers that write
