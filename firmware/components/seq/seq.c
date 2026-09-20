@@ -1,4 +1,5 @@
 #include "seq.h"
+#include "seq_pattern.h"
 
 #include <ctype.h>
 #include <string.h>
@@ -14,7 +15,10 @@ static const char *TAG = "seq";
 static seq_lane_t s_lanes[SEQ_MAX_LANES];
 static int        s_bpm = 120;
 static bool       s_running;
-static int        s_pos;
+/* volatile: written by the clock on the esp_timer task, read by the editor
+ * task to place the playhead. Aligned 32-bit does not tear on Xtensa, so this
+ * is about the compiler not hoisting the read out of the draw loop. */
+static volatile int s_pos;
 static uint32_t   s_tick;            /* 24 PPQN pulses since play */
 static int        s_swing = 50;      /* per cent; 50 is straight   */
 static bool       s_sync;            /* send MIDI clock            */
@@ -321,12 +325,40 @@ esp_err_t seq_init(void)
     return esp_timer_start_periodic(s_clock, period_us());
 }
 
-static seq_lane_t *find(const char *name, bool create)
+static seq_lane_t *lane_find(const char *name, int len)
 {
+    if (name == NULL) {
+        return NULL;
+    }
+    if (len < 0) {
+        len = (int)strlen(name);
+    }
+    if (len <= 0 || len >= SEQ_NAME_MAX) {
+        return NULL;
+    }
+    /* Iterate the whole array and test `used`. An empty pattern clears `used`
+     * IN PLACE, so the array is sparse and a loop bounded by the lane COUNT
+     * would stop at the first hole and miss every lane after it. */
     for (int i = 0; i < SEQ_MAX_LANES; i++) {
-        if (s_lanes[i].used && strncmp(s_lanes[i].name, name, SEQ_NAME_MAX) == 0) {
+        if (s_lanes[i].used &&
+            strncmp(s_lanes[i].name, name, (size_t)len) == 0 &&
+            s_lanes[i].name[len] == '\0') {
             return &s_lanes[i];
         }
+    }
+    return NULL;
+}
+
+const seq_lane_t *seq_lane_find(const char *name, int len)
+{
+    return lane_find(name, len);
+}
+
+static seq_lane_t *find(const char *name, bool create)
+{
+    seq_lane_t *hit = lane_find(name, -1);
+    if (hit != NULL) {
+        return hit;
     }
     if (!create) {
         return NULL;
@@ -357,8 +389,8 @@ esp_err_t seq_lane(const char *name, const char *steps)
     memset(deg, 0xFF, sizeof deg);
     int n = 0;
     for (const char *p = steps; *p != '\0' && n < SEQ_MAX_STEPS; p++) {
-        if (*p == ' ') {
-            continue;                /* spacing for the eye, ignored */
+        if (seq_pattern_is_spacing(*p)) {
+            continue;    /* spacing for the eye - seq_pattern.h owns this rule */
         }
         /* Anything that is not a rest is a hit. Nobody should have to
          * remember whether the hit character is x, o or *. */
@@ -380,6 +412,10 @@ esp_err_t seq_lane(const char *name, const char *steps)
     l->ghost  = ghost;
     memcpy(l->deg, deg, sizeof l->deg);
     l->steps  = (uint8_t)n;
+    /* The text this lane was compiled from, so a later press can tell "run
+     * this again unchanged" from "I edited it". After the empty-pattern early
+     * return above, so a removed lane carries no source. */
+    l->src    = seq_pattern_hash(steps);
     return ESP_OK;
 }
 

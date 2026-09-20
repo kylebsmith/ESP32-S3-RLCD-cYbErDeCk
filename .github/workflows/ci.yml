@@ -97,6 +97,30 @@ jobs:
              -o /tmp/test_mirror_path tools/test_mirror_path.c
           /tmp/test_mirror_path
 
+      # The step -> column mapping the playhead draws with. Like the CASET
+      # check above, its job is to tell the correct mapping apart from the
+      # naive one (step index == character offset) that every UNSPACED
+      # pattern makes look right by accident - which is every pattern in the
+      # shipped guide. Run against the naive version it fails 13 ways.
+      - name: Check the pattern geometry
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror \
+             -I firmware/components/seq/include \
+             -o /tmp/test_seq_pattern tools/test_seq_pattern.c
+          /tmp/test_seq_pattern
+
+      # The status bar is 30 columns and clips with snprintf, so an over-long
+      # message is truncated at the edge of the SENTENCE, not the screen -
+      # "not a command - start the line with >" rendered as "not a command -
+      # start the line" and the owner could not tell why a line would not run.
+      # This reads the shipping header, not a copy.
+      - name: Check the on-device strings fit
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror \
+             -I firmware/main \
+             -o /tmp/test_ui_text tools/test_ui_text.c
+          /tmp/test_ui_text
+
       # The two bitmap faces are generated from reviewable art, never edited
       # by hand. If the committed C and the art disagree, someone edited the
       # wrong one.

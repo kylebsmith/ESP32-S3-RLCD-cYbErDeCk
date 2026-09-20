@@ -14,6 +14,7 @@
 #include "docstore.h"
 #include "textgrid.h"
 #include "seq.h"
+#include "seq_pattern.h"
 
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
@@ -209,6 +210,42 @@ static const struct { const char *name; uint8_t note; } s_drums[] = {
     { "clap",  39 }, { "tom",   45 }, { "rim",   37 }, { "crash", 49 },
 };
 
+/* RE-RUNNING A LINE YOU HAVE NOT TOUCHED SILENCES THE LANE.
+ *
+ * The rule in one sentence: Ctrl+Enter always compiles the line and starts
+ * the lane, EXCEPT when the transport is running and the line is byte-for-byte
+ * what you last ran for that lane, in which case it silences it instead.
+ *
+ * Why that does not surprise anyone on stage:
+ *
+ *  - The only way in is pressing Run on a line you did not edit. The obvious
+ *    objection to a toggle - "I tweaked it and re-ran it and it went silent" -
+ *    cannot happen, because an edited line is excluded by definition.
+ *  - It is self-inverse. The lane is now muted, so the guard fails on the next
+ *    press and the same key brings it back. A fumbled double-press in a loud
+ *    room is a no-op, not a coin flip.
+ *  - It is unreachable while stopped, so it can never leave the deck in a
+ *    state the screen is not showing.
+ *  - The result is visible immediately: the playhead stops sweeping that line.
+ *    That is why this shipped WITH the playhead and not before it - an
+ *    invisible toggle is the one version of this that is genuinely bad.
+ *
+ * "Changed" means the CHARACTERS changed, not the compiled bitmask. Comparing
+ * compiled form would treat "x...x...x...x..." and "x... x... x... x..." as
+ * the same line and silence the lane the moment the player re-spaced it for
+ * readability. The rule fails toward compiling, never toward silence.
+ *
+ * BY_HANDS only. A guide replayed by an agent must not silence every lane on
+ * its second pass. */
+static bool rerun_silences(const cmd_ctx_t *ctx)
+{
+    if (ctx->caller != CMD_BY_HANDS || !seq_running()) {
+        return false;
+    }
+    const seq_lane_t *l = seq_lane_find(ctx->name, -1);
+    return l != NULL && !l->muted && l->src == seq_pattern_hash(ctx->arg);
+}
+
 static cmd_status_t c_drum(cmd_ctx_t *ctx)
 {
     uint8_t note = 36;
@@ -218,7 +255,7 @@ static cmd_status_t c_drum(cmd_ctx_t *ctx)
             break;
         }
     }
-    if (ctx->arg[0] == '\0') {
+    if (ctx->arg[0] == '\0' || rerun_silences(ctx)) {
         seq_mute(ctx->name, true);
         snprintf(ctx->msg, sizeof ctx->msg, "%s silent", ctx->name);
         return CMD_DONE;
@@ -260,7 +297,7 @@ static cmd_status_t c_voice(cmd_ctx_t *ctx)
     if (oct == NULL) {
         return CMD_ERROR;
     }
-    if (ctx->arg[0] == '\0') {
+    if (ctx->arg[0] == '\0' || rerun_silences(ctx)) {
         seq_mute(ctx->name, true);
         snprintf(ctx->msg, sizeof ctx->msg, "%s silent", ctx->name);
         return CMD_DONE;
@@ -356,10 +393,39 @@ static cmd_status_t c_sync(cmd_ctx_t *ctx)
  * it goes. */
 static cmd_status_t c_flash(cmd_ctx_t *ctx)
 {
-    if (!doc_current_is_transient()) {
-        doc_save();
-        doc_mirror_sd();
+    /* CONFIRMATION, because the cost of a mistake here is the whole session.
+     *
+     * '>help' prints a row reading "flash   reboot into the ROM loader", and
+     * running that row is one typed '>' away. With the deck live on stage
+     * over BLE MIDI, an accidental '>flash' ends the performance and needs a
+     * power cycle to come back. Every other command on this device is
+     * recoverable; this one is not, so it is the one command that asks. */
+    if (strcmp(ctx->arg, "now") != 0) {
+        cmd_out(ctx, "this reboots the deck into the");
+        cmd_out(ctx, "ROM loader and ends the session.");
+        cmd_out(ctx, "type:  >flash now");
+        snprintf(ctx->msg, sizeof ctx->msg, "flash needs: >flash now");
+        return CMD_ERROR;
     }
+
+    /* Save EVERY dirty document, not just the current one.
+     *
+     * This used to save only the current buffer, and skip even that when the
+     * buffer was transient - so running '>flash' from '+out', which is where
+     * any multi-line command leaves you, rebooted the deck having written
+     * nothing, while its own comment claimed the buffer was written first. */
+    const int was = doc_buf_current();
+    for (int i = 0; i < DOC_MAX_BUFFERS; i++) {
+        const char *nm = doc_buf_name(i);
+        if (nm == NULL || nm[0] == '+') {
+            continue;
+        }
+        if (doc_buf_select(i) == ESP_OK && doc_dirty()) {
+            doc_save();
+            doc_mirror_sd();
+        }
+    }
+    doc_buf_select(was);
     seq_stop();
     cmd_out(ctx, "download mode. flash now:");
     cmd_out(ctx, "  idf.py -p PORT flash");
@@ -385,6 +451,27 @@ static cmd_status_t c_dump(cmd_ctx_t *ctx)
         cmd_out(ctx, "no document called '%s'", ctx->arg);
         return CMD_ERROR;
     }
+    /* '>dump' WRITES INTO +out THROUGH cmd_out, so dumping +out feeds its own
+     * input: the loop appends a line, the buffer grows, and the bound - read
+     * afresh every pass - grows with it. Replayed on the host, the old loop
+     * ran 131,073 iterations and emitted 3,311 log lines before the 128 KB
+     * buffer capped it.
+     *
+     * That is not merely slow. Every one of those cmd_out calls is a
+     * synchronous ESP_LOGI on the main task, and for that entire stretch the
+     * loop never reaches esp_task_wdt_reset() - which is armed at 10 s with
+     * trigger_panic = true. So the deck freezes and then very plausibly
+     * panic-reboots, losing whatever was not saved.
+     *
+     * Two guards. The name test is the courtesy: it says what went wrong. The
+     * length test is the INVARIANT - it catches any writer that grows the
+     * document mid-walk, whatever route it arrived by, including ones that do
+     * not exist yet. */
+    const int out = doc_buf_find("+out");
+    if (out >= 0 && want == out) {
+        cmd_out(ctx, "dump writes into %s", doc_buf_name(out));
+        return CMD_ERROR;
+    }
     const int was = doc_buf_current();
     if (want != was && doc_buf_select(want) != ESP_OK) {
         return CMD_ERROR;
@@ -392,11 +479,16 @@ static cmd_status_t c_dump(cmd_ctx_t *ctx)
     char line[96];
     size_t k = 0;
     int    ln = 1;
-    for (size_t i = 0; i <= doc_len(); i++) {
-        const char ch = (i < doc_len()) ? doc_at(i) : '\n';
+    const size_t n = doc_len();          /* ONCE, before the walk */
+    for (size_t i = 0; i <= n; i++) {
+        if (doc_len() != n) {
+            cmd_out(ctx, "document grew under dump");
+            break;
+        }
+        const char ch = (i < n) ? doc_at(i) : '\n';
         if (ch == '\n' || k == sizeof line - 1) {
             line[k] = '\0';
-            if (i < doc_len() || k > 0) {
+            if (i < n || k > 0) {
                 cmd_out(ctx, "%3d|%s", ln++, line);
             }
             k = 0;
@@ -528,7 +620,7 @@ static const cmd_t s_builtins[] = {
     { "swing", c_swing, CMD_CAP_EDIT,  "50 straight, 67 triplet" },
     { "sync",  c_sync,  CMD_CAP_EDIT,  "midi clock out on | off" },
     { "send",  c_send,  CMD_CAP_SYSTEM,"where events go; send mon on" },
-    { "flash", c_flash, CMD_CAP_SYSTEM,"reboot into the ROM loader" },
+    { "flash", c_flash, CMD_CAP_SYSTEM,"flash now - reboot to ROM loader" },
     { "dump",  c_dump,  CMD_CAP_READ,  "print a document to the console" },
     { "play",  c_play,  CMD_CAP_EDIT,  "start the clock" },
     { "stop",  c_stop,  CMD_CAP_EDIT,  "stop the clock" },

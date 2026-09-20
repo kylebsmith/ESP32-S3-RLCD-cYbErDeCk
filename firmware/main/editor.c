@@ -22,6 +22,9 @@
  * dumped.
  */
 #include "editor.h"
+#include "ui_text.h"
+#include "seq.h"
+#include "seq_pattern.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -50,10 +53,6 @@ static void line_at(size_t from, char *out, size_t max);
 static int TEXT_COLS  = 30;
 static int TEXT_ROWS  = 10;
 static int STATUS_ROW = 10;
-
-#define STATUS_Y    264
-#define STATUS_H     24
-#define RULE_Y      254        /* a hairline between text and status */
 
 #define MAX_LINES  2048
 /* How far back from the cursor the wrap window starts. The old code wrapped
@@ -236,9 +235,14 @@ static void wrap(int cols)
  * its own pixel row and only when its text actually changes. */
 static void line_at(size_t from, char *out, size_t max);
 
-/* Messages must fit. tg_draw_text_px used to clip silently at the screen
- * edge, so "not a command - start the line with >" rendered as "not a command
- * - start the line" and lost the entire point of the sentence. */
+/* Messages must fit, and "fit" is checked at BUILD time now, not hoped for.
+ *
+ * tg_draw_text_px used to clip silently at the screen edge, so "not a command
+ * - start the line with >" rendered as "not a command - start the line" and
+ * lost the entire point of the sentence. That was "fixed" by moving the clip
+ * into the snprintf below - which truncates just as silently, at exactly the
+ * same column, and the owner hit it. Fixed messages now live in ui_text.h
+ * behind _Static_assert. See the note at the top of that file. */
 #define STATUS_MAX TEXT_COLS
 
 static void status_bar(void)
@@ -275,6 +279,50 @@ static void status_bar(void)
     }
 }
 
+/* Document offset of the step that is sounding on a lane line, or -1.
+ *
+ * WHY AN OFFSET AND NOT A COLUMN. A 32-step lane written out is 38 characters
+ * against a 30-column grid, so it wraps - and a mark derived from a display
+ * row's column would land on the wrong row the moment it did. That is exactly
+ * the bug that was fixed once already in current_line(), which read the wrap
+ * table instead of the document. Compute in document space, project through
+ * the wrap table, never the other way round.
+ *
+ * THE PLAYHEAD MARKS THE STEP, NOT THE HIT. Three reasons. It reads as one
+ * transport sweeping the document rather than four lamps blinking
+ * independently; it shows where you are in the bar even on a lane that is
+ * resting; and it stays truthful under editing, because changing 'x...' to
+ * '..x.' changes which steps sound but not the step-to-column mapping. */
+static int playhead_offset(int line_off, const char *lbuf, int at, int len)
+{
+    if (!seq_running()) {
+        return -1;
+    }
+    const seq_lane_t *l = seq_lane_find(lbuf + at, len);
+    /* Exactly fire_step's skip test. If it would not sound, it must not be
+     * marked - that makes "the playhead is sweeping this line" and "this lane
+     * is sounding" the same statement, which is what the toggle relies on. */
+    if (l == NULL || l->muted || l->steps == 0) {
+        return -1;
+    }
+    /* The argument, delimited the way the dispatcher delimits it. */
+    int a = at + len;
+    while (lbuf[a] == ' ' || lbuf[a] == '\t') {
+        a++;
+    }
+    /* A lane compiled from text that has since been edited would put the mark
+     * on a character that is not the one sounding. The step COUNT is the whole
+     * of what the mapping depends on, so it is the whole of the test. */
+    if (seq_pattern_steps(lbuf + a, SEQ_MAX_STEPS) != l->steps) {
+        return -1;
+    }
+    /* The global step is not the lane's step the moment one lane is not the
+     * same length as another - which is the point of having lanes. */
+    const int off = seq_pattern_offset(lbuf + a, seq_position() % l->steps,
+                                       SEQ_MAX_STEPS);
+    return (off < 0) ? -1 : line_off + a + off;
+}
+
 void editor_draw(void)
 {
     wrap(TEXT_COLS);
@@ -304,6 +352,11 @@ void editor_draw(void)
     const size_t len = doc_len();
     s_cur_col = s_cur_row = -1;
 
+    /* Declared outside the row loop ON PURPOSE: it is computed once per
+     * LOGICAL line and must survive across that line's continuation rows, so
+     * a wrapped lane keeps its playhead. Every logical-line start resets it. */
+    int ph_off = -1;
+
     for (int r = 0; r < TEXT_ROWS; r++) {
         const int li = s_top_line + r;
         const int start = (li < s_line_count) ? s_line_start[li] : 0;
@@ -321,11 +374,27 @@ void editor_draw(void)
         int mark_at = -1, mark_len = 0;
         if (li < s_line_count &&
             (start == 0 || doc_at((size_t)start - 1) == '\n')) {
-            char lbuf[96];
+            char lbuf[128];
             line_at((size_t)start, lbuf, sizeof lbuf);
             if (cmd_recognise(lbuf, &mark_at, &mark_len) == NULL) {
                 mark_at = -1;
+                ph_off  = -1;
+            } else {
+                ph_off = playhead_offset(start, lbuf, mark_at, mark_len);
             }
+        } else if (r == 0 && li < s_line_count) {
+            /* The top row can be the CONTINUATION of a line that begins above
+             * the viewport. Walk back to its start once, so a wrapped lane
+             * does not lose its playhead the moment it scrolls. */
+            size_t s = (size_t)start;
+            while (s > 0 && doc_at(s - 1) != '\n') {
+                s--;
+            }
+            char lbuf[128];
+            int a, n;
+            line_at(s, lbuf, sizeof lbuf);
+            ph_off = (cmd_recognise(lbuf, &a, &n) != NULL)
+                     ? playhead_offset((int)s, lbuf, a, n) : -1;
         }
 
         for (int c = 0; c < TEXT_COLS; c++) {
@@ -343,7 +412,14 @@ void editor_draw(void)
             }
             const bool marked = mark_at >= 0 &&
                                 c >= mark_at && c < mark_at + mark_len;
-            const bool inv = (is_cursor && s_cursor_on) != marked;
+            /* OR, not XOR. XOR would cancel the playhead against the cursor
+             * and make it vanish exactly while the player is editing the lane
+             * they are watching. The cursor cell is already inverse, so OR
+             * loses nothing, and the playhead always falls inside the
+             * ARGUMENT so it can never collide with the marked command word. */
+            const bool playing = ph_off >= 0 && li < s_line_count &&
+                                 (start + c) == ph_off && (start + c) < end;
+            const bool inv = ((is_cursor && s_cursor_on) != marked) || playing;
             tg_put(c, r, ch, inv ? TG_INVERSE : TG_NORMAL);
         }
     }
@@ -484,12 +560,12 @@ static void handle_ctrl(char c)
                 s_top_offset = 0;
                 editor_invalidate();
                 tg_invalidate();
-                snprintf(s_msg, sizeof s_msg, "guide - Enter runs a line");
+                snprintf(s_msg, sizeof s_msg, "%s", UI_GUIDE_HINT);
                 s_msg_until = editor_now_ms() + 4000;
                 return;
             }
         }
-        snprintf(s_msg, sizeof s_msg, "no guide buffer");
+        snprintf(s_msg, sizeof s_msg, "%s", UI_NO_GUIDE);
         s_msg_until = editor_now_ms() + 3000;
         return;
     }
@@ -633,7 +709,7 @@ static void run_current_line(void)
         p++;
     }
     if (*p != '>') {
-        snprintf(s_msg, sizeof s_msg, "not a command - start the line with >");
+        snprintf(s_msg, sizeof s_msg, "%s", UI_NOT_A_COMMAND);
         s_msg_until = editor_now_ms() + 3000;
         return;
     }

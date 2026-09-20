@@ -54,6 +54,7 @@ typedef struct {
     uint8_t  chan;          /* 0-15                                           */
     uint8_t  vel;
     int8_t   octave;        /* melodic lanes only                             */
+    uint32_t src;           /* hash of the pattern AS TYPED - see the toggle  */
     uint16_t gate_ms;
     bool     used;
     bool     muted;
@@ -108,6 +109,15 @@ int  seq_get_swing(void);
  * 48 messages a second at 120 bpm and nobody should pay for it unmeasured. */
 void seq_sync(bool on);
 bool seq_get_sync(void);
+
+/* Find a lane by name without creating one. `len` < 0 means NUL-terminated;
+ * otherwise it is a span, because the editor holds a name inside a line of
+ * text rather than a string of its own.
+ *
+ * The span form compares the terminator too. Without that test "kick" would
+ * match a lane named "kickdrum", and the playhead would sweep the wrong line.
+ */
+const seq_lane_t *seq_lane_find(const char *name, int len);
 
 /* A lane's destination. Names are remembered from the drum table. */
 esp_err_t seq_lane_note(const char *name, int note, int chan);

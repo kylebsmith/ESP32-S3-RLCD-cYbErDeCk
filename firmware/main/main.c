@@ -26,6 +26,7 @@
 #include "seq.h"
 #include "docstore.h"
 #include "editor.h"
+#include "ui_text.h"
 #include "kbd.h"
 #include "selftest.h"
 #include "serialkbd.h"
@@ -153,48 +154,6 @@ static int64_t now_ms(void) { return esp_timer_get_time() / 1000; }
  * write one - a device whose commands are undiscoverable has, in practice,
  * no commands. The owner can edit it like any other document, which is the
  * whole point: adding a menu item costs typing a line. */
-/* THE GUIDE IS THE TUTORIAL AND THE INSTRUMENT AT THE SAME TIME.
- *
- * The complaint about live coding environments is not that they are hard, it
- * is that they are hard ON PURPOSE - the syntax is a membrane, and getting
- * through it is treated as the point. That is a choice, and this is the
- * opposite choice: the first thing the owner sees is a track that plays, and
- * every line in it is a line they can edit while it is playing.
- *
- * Nothing here has to be memorised, because the guide is a document and the
- * document is the menu. Nothing here is a toy version of a real syntax
- * either - these are the actual commands.
- *
- * Thirty columns, because that is the grid. */
-#define GUIDE_TEXT \
-    "Lines starting with > are\n" \
-    "commands. Ctrl+Enter runs\n" \
-    "the one under the cursor.\n" \
-    "Enter always makes a line.\n" \
-    "\n" \
-    "RUN THESE, TOP TO BOTTOM\n" \
-    ">bpm 124\n" \
-    ">scale dmin\n" \
-    ">kick X...x...X...x...\n" \
-    ">hat x,x,x,x,x,x,x,x,\n" \
-    ">bass 0...3...5...3...\n" \
-    ">play\n" \
-    "\n" \
-    "x hit  X loud  , quiet\n" \
-    ". rest  0-9 is a degree\n" \
-    "0 is the root. Edit any\n" \
-    "line and run it again -\n" \
-    "it changes as it plays.\n" \
-    "\n" \
-    ">swing 58\n" \
-    ">scale fmin\n" \
-    ">stop\n" \
-    "\n" \
-    ">lanes  what is playing\n" \
-    ">send   where it goes\n" \
-    ">help   all the commands\n" \
-    ">list   your documents\n"
-
 static void ensure_guide_buffer(void)
 {
     for (int i = 0; i < DOC_MAX_BUFFERS; i++) {
@@ -390,6 +349,7 @@ void app_main(void)
     int64_t last_beat_ms  = now_ms();
     bool    blink_on = true;
     bool    need_draw = false;
+    int     shown_pos = -1;   /* last playhead step drawn; -1 = stopped */
     bool    force_save = false;
     size_t  saved_len = doc_len();
 
@@ -473,6 +433,24 @@ void app_main(void)
             need_draw = true;
         }
         key_was_down = down;
+
+        /* The playhead moves on the sequencer's clock, so the document has to
+         * be redrawn on it - need_draw is otherwise set only by keys, the
+         * keyboard reset and the orientation button.
+         *
+         * No new task, no new timer, no poll loop. kbd_poll below already
+         * blocks 5 ms on a queue, so this loop turns at roughly 200 Hz and the
+         * worst-case lag is 5 ms against a 121 ms step at 124 bpm.
+         *
+         * pos becomes -1 on stop, which differs from whatever was last shown,
+         * so the final redraw clears every mark. A stale inverted cell left
+         * after a stop reads as "still running", which is a lie the screen
+         * must not tell. */
+        const int pos = seq_running() ? seq_position() : -1;
+        if (pos != shown_pos) {
+            shown_pos = pos;
+            need_draw = true;
+        }
 
         if (need_draw) {
             editor_draw();
