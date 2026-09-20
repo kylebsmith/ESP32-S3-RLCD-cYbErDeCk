@@ -27,6 +27,7 @@
 #include "docstore.h"
 #include "editor.h"
 #include "ui_text.h"
+#include "usbdev.h"
 #include "usbmux.h"
 #include "kbd.h"
 #include "selftest.h"
@@ -138,6 +139,15 @@ static void announce(const char *line)
 static void dest_ble(uint8_t status, uint8_t d1, uint8_t d2, uint32_t when_us)
 {
     blemidi_send(status, d1, d2, when_us);
+}
+
+static void dest_usb(uint8_t status, uint8_t d1, uint8_t d2, uint32_t when_us)
+{
+    /* USB MIDI carries no timestamp: the host renders on arrival, and a
+     * full-speed frame is 1 ms wide. That is the whole reason USB is the
+     * answer to jitter rather than a second way to have the same problem. */
+    (void)when_us;
+    usbdev_midi_send(status, d1, d2);
 }
 
 static void dest_mon(uint8_t status, uint8_t d1, uint8_t d2, uint32_t when_us)
@@ -330,7 +340,16 @@ void app_main(void)
     if (kbd_init() != ESP_OK) {
         ESP_LOGE(TAG, "BLE keyboard init FAILED");
     }
-    serialkbd_init();                /* the cable is a keyboard too */
+    /* USB MIDI, if it is wanted and has not just failed three times. When it
+     * comes up it owns the USB peripheral, so the USB-Serial-JTAG keyboard
+     * must NOT also be started - the console moves to the CDC interface and
+     * reaches the editor through the same key mapper. */
+    if (usbdev_boot()) {
+        seq_dest_add("usb", dest_usb, usbdev_midi_flush, "USB MIDI, one cable");
+        seq_dest_enable("usb", true);
+    } else {
+        serialkbd_init();            /* the cable is a keyboard too */
+    }
     report_memory("after BLE");
 
     const gpio_config_t key = {

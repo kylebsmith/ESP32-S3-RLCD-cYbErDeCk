@@ -403,3 +403,18 @@ void doc_set_text(const char *s)
     gapbuf_load(s, strlen(s));
     doc_undo_reset();
 }
+
+void doc_save_all_dirty(void)
+{
+    const int was = s_cur;
+    for (int i = 0; i < DOC_MAX_BUFFERS; i++) {
+        if (!s_bufs[i].used || s_bufs[i].name[0] == '+') {
+            continue;
+        }
+        if (doc_buf_select(i) == ESP_OK && doc_dirty()) {
+            doc_save();
+            doc_mirror_sd();
+        }
+    }
+    doc_buf_select(was);
+}

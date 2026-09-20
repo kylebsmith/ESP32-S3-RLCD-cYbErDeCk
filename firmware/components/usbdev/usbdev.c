@@ -33,22 +33,32 @@
 
 #include <string.h>
 
+#include "esp_attr.h"
 #include "esp_log.h"
+#include "esp_system.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "driver/usb_serial_jtag.h"
 #include "nvs.h"
 #include "nvs_flash.h"
 
 #include "tinyusb.h"
 #include "tinyusb_cdc_acm.h"
+#include "tinyusb_console.h"
 #include "tusb.h"
 
+#include "docstore.h"
 #include "kbd.h"
+#include "soc/rtc_cntl_reg.h"
 #include "serialkbd_map.h"
 #include "usbmux.h"
 
 static const char *TAG = "usbdev";
+
+static void cdc_line_state(int itf, cdcacm_event_t *event);
+static void usb_event(tinyusb_event_t *ev, void *arg);
+static void usb_confirm(void);
 
 #define NVS_NS       "deck"
 #define KEY_WANT     "usb_want"
@@ -118,7 +128,8 @@ static RTC_NOINIT_ATTR uint32_t s_try_magic;
 static RTC_NOINIT_ATTR uint32_t s_tries;
 
 static bool     s_active;          /* this boot is running USB MIDI */
-static bool     s_confirmed;
+static bool     s_attached;        /* a host is there - NOT that it works */
+static bool     s_confirmed;       /* the CDC actually carried data       */
 static bool     s_host_seen_usj;
 static esp_timer_handle_t s_trial;
 
@@ -226,6 +237,9 @@ static void cdc_rx(int itf, cdcacm_event_t *event)
     if (tinyusb_cdcacm_read(itf, buf, sizeof buf, &got) != ESP_OK) {
         return;
     }
+    if (got > 0) {
+        usb_confirm();           /* bytes crossed the CDC: it works */
+    }
     for (size_t i = 0; i < got; i++) {
         const skb_ev_t e = skb_feed(&st, buf[i]);
         if (e.emit) {
@@ -235,6 +249,92 @@ static void cdc_rx(int itf, cdcacm_event_t *event)
             kbd_inject(&ev);
         }
     }
+}
+
+/* --------------------------------------------- esptool over our own CDC
+ *
+ * Borrowed in mechanism from ESP-IDF's own USB console
+ * (esp_system/port/usb_console.c): esptool's '--before default_reset' drives
+ * a FALLING edge on RTS, and the state of DTR at that instant selects
+ * bootloader versus normal boot.
+ *
+ * Without this, taking the USB peripheral would mean 'idf.py flash' no longer
+ * resets the chip - the USB-Serial-JTAG block's reset logic goes with the
+ * PHY. '>flash now' would still work, but only if the owner can type, and the
+ * whole point of the rule is that flashing must never depend on that.
+ *
+ * NOT restarted from the callback: this runs on the TinyUSB task and the
+ * reply still has to drain. A 50 ms one-shot, exactly as usb_console.c does.
+ *
+ * Deliberately NOT copied from that file: usb_dc_prepare_persist() and
+ * chip_usb_set_persist_flags(), which keep the ROM CDC's enumeration alive
+ * across the reset. They do not apply to TinyUSB. The deck WILL re-enumerate:
+ * the CDC node disappears and the USB-Serial-JTAG node appears in its place. */
+static esp_timer_handle_t s_reboot_timer;
+static bool               s_reboot_to_loader;
+static int                s_prev_rts;
+
+static void reboot_now(void *arg)
+{
+    (void)arg;
+    /* ARM THE ESCAPE HATCH FIRST, BEFORE ANY WORK THAT CAN BLOCK.
+     *
+     * This used to save every dirty document and then set the bits. Saving
+     * touches flash and can take 18 ms per buffer - or hang. If it hangs, the
+     * task watchdog reboots the deck, and on that reboot NONE of this has
+     * been set, so it comes straight back into the mode nobody could escape.
+     *
+     * Setting the register and the mux first costs two stores and means that
+     * every route out of here - orderly restart, watchdog, panic - lands in
+     * download mode on a PHY the flasher owns. */
+    usbmux_release_to_usj();
+    if (s_reboot_to_loader) {
+        REG_WRITE(RTC_CNTL_OPTION1_REG, RTC_CNTL_FORCE_DOWNLOAD_BOOT);
+    }
+    /* NO SAVE HERE, AND THAT IS THE WHOLE POINT.
+     *
+     * This used to call doc_save_all_dirty() before restarting. It runs on an
+     * esp_timer dispatch task, and saving touches both the flash journal and
+     * the SD card - each of which takes a lock and can block indefinitely.
+     * That is exactly what happened: the deck wedged inside this function
+     * with the timer task blocked, TinyUSB's own task still happily
+     * enumerating, so the device looked alive to the host while the console,
+     * the keyboard and the sequencer were all stopped. Nothing tripped the
+     * task watchdog either, because the idle tasks were still running.
+     *
+     * esp_restart() runs the registered shutdown handlers, which is where
+     * work belongs. Unsaved edits are bounded by the autosave in the main
+     * loop; a reboot that always completes is worth more than a save that
+     * sometimes does not. */
+    esp_restart();
+}
+
+static void cdc_line_state(int itf, cdcacm_event_t *event)
+{
+    (void)itf;
+    const bool rts = event->line_state_changed_data.rts;
+    const bool dtr = event->line_state_changed_data.dtr;
+    /* Logged because this is how esptool asks for a reset, and if it ever
+     * stops arriving the failure is silent and looks like a dead board. */
+    ESP_LOGW(TAG, "cdc line state: dtr=%d rts=%d (prev rts=%d)",
+             (int)dtr, (int)rts, s_prev_rts);
+    if (!rts && s_prev_rts) {
+        s_reboot_to_loader = dtr;
+        ESP_LOGW(TAG, "esptool reset -> %s",
+                 dtr ? "download mode" : "normal boot");
+        if (s_reboot_timer == NULL) {
+            const esp_timer_create_args_t a = {
+                .callback = reboot_now, .name = "usbreboot",
+                .dispatch_method = ESP_TIMER_TASK,
+            };
+            if (esp_timer_create(&a, &s_reboot_timer) != ESP_OK) {
+                s_prev_rts = rts;
+                return;
+            }
+        }
+        esp_timer_start_once(s_reboot_timer, 50 * 1000);
+    }
+    s_prev_rts = rts;
 }
 
 /* ------------------------------------------------------------ the trial */
@@ -251,30 +351,66 @@ static void revert(const char *why)
 static void trial_expired(void *arg)
 {
     (void)arg;
-    if (s_confirmed || tud_mounted()) {
-        return;
+    if (s_confirmed) {
+        return;                     /* the CDC carried data; it works */
+    }
+    if (s_attached) {
+        /* A host is there and the CDC still has not carried a byte. That is
+         * the failure that stranded this deck once: enumerated, listed by the
+         * OS, and mute. Revert. */
+        revert("host attached but the console never spoke");
     }
     if (!s_host_seen_usj) {
-        /* There was no host when we started, so nothing has been proven
-         * broken and no console was lost - there was nobody to lose it to.
-         * Stay up and wait; the timer is re-armed when a bus reset says a
-         * host has arrived. This closes the otherwise fatal case of arming on
-         * battery and only discovering the failure on stage. */
+        /* No host at all - nothing is proven broken and no console was lost,
+         * because there was nobody to lose it to. Keep waiting rather than
+         * reverting on a deck that is simply running on battery. */
         ESP_LOGW(TAG, "no host yet; staying armed");
+        esp_timer_start_once(s_trial, (uint64_t)TRIAL_MS * 1000);
         return;
     }
     revert("USB did not enumerate");
 }
 
-void tud_mount_cb(void)
+/* Confirmation comes through esp_tinyusb's own event callback rather than by
+ * overriding tud_mount_cb() - the component already defines that symbol, and
+ * two definitions is a link error at best and a silently ignored callback at
+ * worst. TINYUSB_EVENT_ATTACHED is the component's name for the same edge. */
+static void usb_event(tinyusb_event_t *ev, void *arg)
 {
+    (void)arg;
+    if (ev->id != TINYUSB_EVENT_ATTACHED) {
+        return;
+    }
+    /* ATTACHMENT IS NOT PROOF THAT ANYTHING WORKS, and treating it as proof
+     * is how this went wrong the first time it was tried.
+     *
+     * The deck enumerated perfectly - macOS listed it, a /dev node appeared -
+     * and the CDC carried no data in either direction. Because ATTACHED had
+     * cancelled the trial and cleared `armed`, the automatic revert that
+     * exists for exactly this case had already been switched off. The deck
+     * was left with no console, no serial keyboard, and therefore no way to
+     * type the command that would undo it.
+     *
+     * So attachment only notes that a host is THERE. Confirmation waits for
+     * evidence that the CDC actually carries a byte - see cdc_rx. */
+    s_attached = true;
+    ESP_LOGW(TAG, "host attached; waiting for the console to prove itself");
+    return;
+}
+
+/* The real confirmation: the CDC carried data. Called from the RX path. */
+static void usb_confirm(void)
+{
+    if (s_confirmed) {
+        return;
+    }
     s_confirmed = true;
     if (s_trial != NULL) {
         esp_timer_stop(s_trial);
     }
     s_tries = 0;
     nvs_put_u8(KEY_ARMED, 0);
-    ESP_LOGW(TAG, "USB MIDI live - a host mounted us");
+    ESP_LOGW(TAG, "USB MIDI live - a host attached");
 }
 
 bool usbdev_boot(void)
@@ -306,6 +442,7 @@ bool usbdev_boot(void)
         .port = TINYUSB_PORT_FULL_SPEED_0,
         .phy = { .skip_setup = false, .self_powered = false, .vbus_monitor_io = -1 },
         .task = { .size = 4096, .priority = 5, .xCoreID = 1 },
+        .event_cb = usb_event,
         .descriptor = {
             .device            = &s_dev_desc,
             .string            = s_strings,
@@ -321,13 +458,35 @@ bool usbdev_boot(void)
         return false;                       /* fall back, no reboot needed */
     }
 
+    /* Hand the PHY back on ANY orderly restart, and register it AFTER
+     * tinyusb_driver_install so it runs after TinyUSB's own teardown -
+     * handlers run in registration order, and a release that runs before
+     * TinyUSB shuts down is a release TinyUSB undoes.
+     *
+     * This is belt and braces over the clear at the top of app_main, which is
+     * the one that survives a panic. */
+    esp_register_shutdown_handler(usbmux_release_to_usj);
+
     const tinyusb_config_cdcacm_t acm = {
-        .usb_dev = TINYUSB_USBDEV_0,
         .cdc_port = TINYUSB_CDC_ACM_0,
         .callback_rx = cdc_rx,
+        .callback_line_state_changed = cdc_line_state,
     };
     if (tinyusb_cdcacm_init(&acm) != ESP_OK) {
         ESP_LOGE(TAG, "CDC init failed");
+    }
+
+    /* Move the console - stdout, stderr and therefore every ESP_LOG - onto
+     * the CDC interface. Without this the logs keep going to a
+     * USB-Serial-JTAG peripheral that no longer owns the PHY, which is to say
+     * nowhere, and the deck becomes undiagnosable at exactly the moment it is
+     * doing something new.
+     *
+     * NEVER call tinyusb_console_deinit() on this project: it reopens
+     * /dev/uart/ + CONFIG_ESP_CONSOLE_UART_NUM, which is -1 here, so the
+     * freopen fails and leaves stdout NULL. */
+    if (tinyusb_console_init(TINYUSB_CDC_ACM_0) != ESP_OK) {
+        ESP_LOGE(TAG, "console did not move to CDC");
     }
 
     const esp_timer_create_args_t targs = {

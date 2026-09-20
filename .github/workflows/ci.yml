@@ -147,12 +147,11 @@ jobs:
       - name: Check the serial keymap
         run: |
           cc -std=c11 -Wall -Wextra -Werror \
-             -I firmware/main \
+             -I firmware/components/kbd/include \
              -o /tmp/test_serialkbd_map tools/test_serialkbd_map.c
           /tmp/test_serialkbd_map
           cc -std=c11 -Wall -Wextra -Werror \
-             -I firmware/main -I firmware/components/kbd/include \
-             -I tools/hostshim \
+             -I firmware/components/kbd/include -I tools/hostshim \
              -o /tmp/test_keymap_agree tools/test_keymap_agree.c
           /tmp/test_keymap_agree
 

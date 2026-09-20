@@ -114,6 +114,13 @@ esp_err_t doc_mirror_sd(void);
  * doc_save() must ask first or it will report a write that did not happen. */
 bool     doc_current_is_transient(void);
 
+/* Write every dirty non-transient document and mirror it. Used by anything
+ * that is about to reboot the machine: saving only the CURRENT buffer misses
+ * work, and skipping the save because the current buffer happens to be
+ * '+out' - which is where any multi-line command leaves you - misses all of
+ * it. Restores the selected buffer before returning. */
+void     doc_save_all_dirty(void);
+
 /* ---- undo ----------------------------------------------------------------
  * An operation log rather than a snapshot ring: a 128 KB document makes
  * snapshots far too expensive, and consecutive keystrokes coalesce into one

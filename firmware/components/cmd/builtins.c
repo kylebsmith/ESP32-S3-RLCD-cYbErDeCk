@@ -23,6 +23,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "soc/rtc_cntl_reg.h"
+#include "usbdev.h"
 #include "usbmux.h"
 
 static cmd_status_t c_help(cmd_ctx_t *ctx)
@@ -422,24 +423,11 @@ static cmd_status_t c_flash(cmd_ctx_t *ctx)
  * a test of the lookalike. */
 static cmd_status_t flash_now(cmd_ctx_t *ctx)
 {
-    /* Save EVERY dirty document, not just the current one.
-     *
-     * This used to save only the current buffer, and skip even that when the
-     * buffer was transient - so running '>flash' from '+out', which is where
-     * any multi-line command leaves you, rebooted the deck having written
-     * nothing, while its own comment claimed the buffer was written first. */
-    const int was = doc_buf_current();
-    for (int i = 0; i < DOC_MAX_BUFFERS; i++) {
-        const char *nm = doc_buf_name(i);
-        if (nm == NULL || nm[0] == '+') {
-            continue;
-        }
-        if (doc_buf_select(i) == ESP_OK && doc_dirty()) {
-            doc_save();
-            doc_mirror_sd();
-        }
-    }
-    doc_buf_select(was);
+    /* Save EVERY dirty document, not just the current one - see
+     * doc_save_all_dirty(). This used to save only the current buffer and
+     * skip even that when it was transient, so running '>flash' from '+out'
+     * rebooted having written nothing while claiming otherwise. */
+    doc_save_all_dirty();
     seq_stop();
     cmd_out(ctx, "download mode. flash now:");
     cmd_out(ctx, "  idf.py -p PORT flash");
@@ -661,6 +649,52 @@ static cmd_status_t c_jitter(cmd_ctx_t *ctx)
     return CMD_DONE;
 }
 
+/* '>usb' - become a USB MIDI device, or stop being one.
+ *
+ * Both directions reboot, and neither can lose a document: every dirty buffer
+ * is written first. Turning it ON is the risky direction and is ARMED rather
+ * than set - if no host mounts the deck within eight seconds it reverts by
+ * itself, and three failed boots give up permanently. The owner is never
+ * asked to confirm anything, because the confirmation that matters is a host
+ * actually attaching, and the deck can see that for itself. */
+static cmd_status_t c_usb(cmd_ctx_t *ctx)
+{
+    const bool on  = (strcmp(ctx->arg, "on") == 0);
+    const bool off = (strcmp(ctx->arg, "off") == 0);
+
+    if (!on && !off) {
+        cmd_out(ctx, "usb is %s%s", usbdev_wanted() ? "on" : "off",
+                usbdev_mounted() ? ", host attached" : "");
+        cmd_out(ctx, "usb on   one cable: MIDI + console");
+        cmd_out(ctx, "usb off  back to serial only");
+        if (usbdev_tries() > 0) {
+            cmd_out(ctx, "%u failed attempt(s) this power cycle",
+                    usbdev_tries());
+        }
+        snprintf(ctx->msg, sizeof ctx->msg, "usb %s",
+                 usbdev_wanted() ? "on" : "off");
+        return CMD_DONE;
+    }
+
+    if (on && usbdev_want(true) != ESP_OK) {
+        cmd_out(ctx, "USB failed 3x this power cycle.");
+        cmd_out(ctx, "unplug the deck and try again.");
+        snprintf(ctx->msg, sizeof ctx->msg, "usb: too many failures");
+        return CMD_ERROR;
+    }
+    if (off) {
+        usbdev_want(false);
+    }
+
+    doc_save_all_dirty();
+    seq_stop();
+    cmd_announce(on ? "USB MIDI - back in a moment"
+                    : "serial console - back in a moment");
+    vTaskDelay(pdMS_TO_TICKS(600));
+    esp_restart();
+    return CMD_DONE;                 /* not reached */
+}
+
 static cmd_status_t c_send(cmd_ctx_t *ctx)
 {
     if (ctx->arg[0] == '\0') {
@@ -777,6 +811,7 @@ static const cmd_t s_builtins[] = {
     { "swing", c_swing, CMD_CAP_EDIT,  "50 straight, 67 triplet" },
     { "sync",  c_sync,  CMD_CAP_EDIT,  "midi clock out on | off" },
     { "send",  c_send,  CMD_CAP_SYSTEM,"where events go; send mon on" },
+    { "usb",   c_usb,   CMD_CAP_SYSTEM,"usb on | off - MIDI over the cable" },
     { "flash", c_flash, CMD_CAP_SYSTEM,"flash now - reboot to ROM loader" },
     { "usbtest", c_usbtest, CMD_CAP_SYSTEM, "prove the USB PHY restore" },
     { "dump",  c_dump,  CMD_CAP_READ,  "print a document to the console" },
