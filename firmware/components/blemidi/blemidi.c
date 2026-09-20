@@ -187,13 +187,27 @@ void blemidi_send(uint8_t status, uint8_t d1, uint8_t d2)
     pkt[n++] = (uint8_t)(0x80 | ((ts >> 7) & 0x3F));
     pkt[n++] = (uint8_t)(0x80 | (ts & 0x7F));
     pkt[n++] = status;
-    pkt[n++] = d1;
-    /* Program change and channel pressure are two bytes; everything the
-     * sequencer emits is three. */
-    const uint8_t type = status & 0xF0;
-    if (type != 0xC0 && type != 0xD0) {
-        pkt[n++] = d2;
+    /* How many data bytes follow is a property of the status byte, and
+     * getting it wrong does not fail loudly - it shifts every later byte and
+     * the far end reads garbage as notes. MIDI clock in particular is a
+     * SINGLE byte; sending it as three would inject two zero bytes into the
+     * stream, which a receiver reads as a note-off on channel 1.
+     *
+     * System messages (0xF0 and up) are not channel messages and their
+     * lengths do not follow the 0xF0 mask, so they are decided first. */
+    int data = 2;
+    if (status >= 0xF0) {
+        switch (status) {
+        case 0xF1: case 0xF3: data = 1; break;   /* MTC, song select       */
+        case 0xF2:            data = 2; break;   /* song position pointer  */
+        default:              data = 0; break;   /* clock, start, stop ... */
+        }
+    } else {
+        const uint8_t type = status & 0xF0;
+        data = (type == 0xC0 || type == 0xD0) ? 1 : 2;
     }
+    if (data >= 1) { pkt[n++] = d1; }
+    if (data >= 2) { pkt[n++] = d2; }
 
     struct os_mbuf *om = ble_hs_mbuf_from_flat(pkt, (uint16_t)n);
     if (om == NULL) {

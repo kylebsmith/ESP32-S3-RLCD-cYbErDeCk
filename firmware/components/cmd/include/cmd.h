@@ -103,3 +103,11 @@ const cmd_t *cmd_table(int *count);
 
 /* Register the built-in commands. Called once at start-up. */
 void cmd_init(void);
+
+/* The app supplies this. A component cannot reach into main/editor.h, and
+ * should not: '>flash' needs the panel to say what is about to happen before
+ * the chip reboots, and only the app knows how to draw. Same shape as the
+ * sequencer's destinations - the layer that knows sets the hook. */
+typedef void (*cmd_announce_t)(const char *line);
+void cmd_set_announce(cmd_announce_t fn);
+void cmd_announce(const char *line);

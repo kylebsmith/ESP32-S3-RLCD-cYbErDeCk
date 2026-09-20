@@ -13,6 +13,7 @@
 #include "driver/gpio.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "soc/rtc_cntl_reg.h"
 #include "esp_task_wdt.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -114,14 +115,34 @@ static void bench(void)
              (esp_timer_get_time() - t0) / runs, ST7305_FB_SIZE);
 }
 
-static void midi_sink(uint8_t status, uint8_t d1, uint8_t d2)
+/* The destinations. Each is a function and a name the player can type; none
+ * of them is privileged and none is compiled in as "the" output.
+ *
+ * 'mon' was a rate limit - the first 64 note-ons went to the console and the
+ * rest were dropped, silently, forever. That is fine for proving the thing
+ * boots and useless the moment you want to check what you are actually
+ * sending, which is the second thing anyone wants. It is a destination now,
+ * off by default, and it can be turned on for as long as it is wanted. */
+/* '>flash' needs the panel to say so before the chip goes away. The editor
+ * owns the status line and the draw, so the app is the only layer that can
+ * do this - which is why cmd takes it as a hook. */
+static void announce(const char *line)
+{
+    editor_message(line);
+    editor_draw();
+    st7305_flush(NULL);
+}
+
+static void dest_ble(uint8_t status, uint8_t d1, uint8_t d2)
 {
     blemidi_send(status, d1, d2);
+}
 
-    /* Note-on only, and rate-limited: a 16th-note grid at 120 bpm is eight
-     * events a second and the console is also the keyboard. */
-    static int n;
-    if ((status & 0xF0) == 0x90 && d2 > 0 && n++ < 64) {
+static void dest_mon(uint8_t status, uint8_t d1, uint8_t d2)
+{
+    /* Note-ons only. Clock is 48 messages a second and would bury the thing
+     * the player is actually looking for. */
+    if ((status & 0xF0) == 0x90 && d2 > 0) {
         ESP_LOGI("midi", "note %3u vel %3u ch %u", d1, d2, (status & 0x0F) + 1);
     }
 }
@@ -132,22 +153,47 @@ static int64_t now_ms(void) { return esp_timer_get_time() / 1000; }
  * write one - a device whose commands are undiscoverable has, in practice,
  * no commands. The owner can edit it like any other document, which is the
  * whole point: adding a menu item costs typing a line. */
+/* THE GUIDE IS THE TUTORIAL AND THE INSTRUMENT AT THE SAME TIME.
+ *
+ * The complaint about live coding environments is not that they are hard, it
+ * is that they are hard ON PURPOSE - the syntax is a membrane, and getting
+ * through it is treated as the point. That is a choice, and this is the
+ * opposite choice: the first thing the owner sees is a track that plays, and
+ * every line in it is a line they can edit while it is playing.
+ *
+ * Nothing here has to be memorised, because the guide is a document and the
+ * document is the menu. Nothing here is a toy version of a real syntax
+ * either - these are the actual commands.
+ *
+ * Thirty columns, because that is the grid. */
 #define GUIDE_TEXT \
-    "This guide is a document.\n" \
     "Lines starting with > are\n" \
     "commands. Ctrl+Enter runs\n" \
     "the one under the cursor.\n" \
     "Enter always makes a line.\n" \
     "\n" \
-    ">help\n" \
-    ">list\n" \
+    "RUN THESE, TOP TO BOTTOM\n" \
+    ">bpm 124\n" \
+    ">scale dmin\n" \
+    ">kick X...x...X...x...\n" \
+    ">hat x,x,x,x,x,x,x,x,\n" \
+    ">bass 0...3...5...3...\n" \
+    ">play\n" \
     "\n" \
-    "Writing\n" \
-    ">new\n" \
-    ">name today\n" \
+    "x hit  X loud  , quiet\n" \
+    ". rest  0-9 is a degree\n" \
+    "0 is the root. Edit any\n" \
+    "line and run it again -\n" \
+    "it changes as it plays.\n" \
     "\n" \
-    "Output\n" \
-    ">out\n"
+    ">swing 58\n" \
+    ">scale fmin\n" \
+    ">stop\n" \
+    "\n" \
+    ">lanes  what is playing\n" \
+    ">send   where it goes\n" \
+    ">help   all the commands\n" \
+    ">list   your documents\n"
 
 static void ensure_guide_buffer(void)
 {
@@ -160,15 +206,39 @@ static void ensure_guide_buffer(void)
             if (doc_buf_select(i) != ESP_OK) {
                 return;
             }
-            bool has_sigil = false;
-            for (size_t k = 0; k < doc_len(); k++) {
-                if (doc_at(k) == '>') { has_sigil = true; break; }
+            /* Has this guide seen the music layer? '>play' is the marker.
+             *
+             * PREPEND, DO NOT REPLACE. The guide is the owner's menu - the
+             * whole claim of docs/SUBSTRATE.md is that they write their own
+             * interface - so firmware that overwrites it destroys exactly the
+             * thing the design is for. The new track goes on top, where it is
+             * read first, and whatever was there stays underneath. */
+            bool has_play = false;
+            for (size_t k = 0; k + 5 <= doc_len(); k++) {
+                if (doc_at(k) == '>' && doc_at(k+1) == 'p' && doc_at(k+2) == 'l' &&
+                    doc_at(k+3) == 'a' && doc_at(k+4) == 'y') {
+                    has_play = true;
+                    break;
+                }
             }
-            if (!has_sigil) {
+            if (!has_play) {
+                const size_t had = doc_len();
+                char *keep = malloc(had + 1);
+                if (keep != NULL) {
+                    doc_read(keep, had);
+                    keep[had] = '\0';
+                }
                 doc_set_text(GUIDE_TEXT);
+                doc_move_to(doc_len());     /* append, not prepend */
+                if (keep != NULL && had > 0) {
+                    static const char sep[] = "\n-- previously in this guide --\n";
+                    for (const char *q = sep; *q != '\0'; q++) { doc_insert(*q); }
+                    for (const char *q = keep; *q != '\0'; q++) { doc_insert(*q); }
+                }
+                free(keep);
                 doc_buf_set_kind(DOC_KIND_GUIDE);
                 doc_save();
-                ESP_LOGW(TAG, "rewrote the guide for the '>' sigil");
+                ESP_LOGW(TAG, "guide updated; the old text is kept below it");
             }
             doc_buf_select(was);
             return;
@@ -223,6 +293,13 @@ static void draw_passkey(uint32_t passkey)
 
 void app_main(void)
 {
+    /* Belt and braces after '>flash'. The force-download bit lives in the RTC
+     * domain and survives a CPU reset, so it can only be cleared by code that
+     * is running - which means here, at the first opportunity the app gets.
+     * Without this, a system reset that happened to preserve the domain would
+     * send the deck back into download mode with no explanation. */
+    REG_WRITE(RTC_CNTL_OPTION1_REG, 0);
+
     ESP_LOGI(TAG, "cYbErDeCk OS  build %s", BUILD_ID);
     report_memory("boot");
 
@@ -260,7 +337,12 @@ void app_main(void)
      * know the difference, which is the point of the sink being a function
      * pointer: BLE MIDI, USB MIDI and a UART all plug in here without the
      * musical core changing. */
-    seq_set_sink(midi_sink);
+    cmd_set_announce(announce);
+    seq_dest_add("ble", dest_ble, "BLE MIDI to a laptop or phone");
+    seq_dest_add("mon", dest_mon, "print notes on the console");
+    /* BLE MIDI on by default because the radio is already up for the
+     * keyboard, so it costs nothing extra that is not already being paid. */
+    seq_dest_enable("ble", true);
     if (seq_init() != ESP_OK) {
         ESP_LOGE(TAG, "sequencer init failed");
     }

@@ -172,3 +172,14 @@ cmd_status_t cmd_run_line(const char *line, cmd_caller_t caller,
     }
     return CMD_ERROR;
 }
+
+static cmd_announce_t s_announce;
+
+void cmd_set_announce(cmd_announce_t fn) { s_announce = fn; }
+
+void cmd_announce(const char *line)
+{
+    if (s_announce != NULL) {
+        s_announce(line);
+    }
+}

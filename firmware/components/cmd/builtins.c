@@ -15,6 +15,11 @@
 #include "textgrid.h"
 #include "seq.h"
 
+#include "esp_system.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "soc/rtc_cntl_reg.h"
+
 static cmd_status_t c_help(cmd_ctx_t *ctx)
 {
     int n = 0;
@@ -228,6 +233,219 @@ static cmd_status_t c_drum(cmd_ctx_t *ctx)
     return CMD_DONE;
 }
 
+/* The melodic lanes. Four names, because four is how many parts a person can
+ * actually hold in their head while performing, and because each one carries
+ * a default octave and gate that make it sound like what it is called before
+ * anything is configured. A bass that arrives an octave too high is a bass
+ * nobody uses. */
+static const struct {
+    const char *name; int8_t oct; uint8_t chan; uint16_t gate;
+} s_voices[] = {
+    { "bass", 2, 0, 180 },
+    { "lead", 4, 1, 120 },
+    { "pad",  3, 2, 420 },
+    { "arp",  5, 3,  90 },
+};
+
+static cmd_status_t c_voice(cmd_ctx_t *ctx)
+{
+    const int8_t *oct = NULL;
+    size_t v = 0;
+    for (; v < sizeof s_voices / sizeof s_voices[0]; v++) {
+        if (strcmp(s_voices[v].name, ctx->name) == 0) {
+            oct = &s_voices[v].oct;
+            break;
+        }
+    }
+    if (oct == NULL) {
+        return CMD_ERROR;
+    }
+    if (ctx->arg[0] == '\0') {
+        seq_mute(ctx->name, true);
+        snprintf(ctx->msg, sizeof ctx->msg, "%s silent", ctx->name);
+        return CMD_DONE;
+    }
+    seq_lane_melodic(ctx->name, s_voices[v].oct, s_voices[v].chan,
+                     s_voices[v].gate);
+    if (seq_lane(ctx->name, ctx->arg) != ESP_OK) {
+        cmd_out(ctx, "no room for another lane");
+        return CMD_ERROR;
+    }
+    seq_mute(ctx->name, false);
+    snprintf(ctx->msg, sizeof ctx->msg, "%s %s in %s", ctx->name, ctx->arg,
+             seq_scale_name());
+    return CMD_DONE;
+}
+
+static cmd_status_t c_scale(cmd_ctx_t *ctx)
+{
+    if (ctx->arg[0] != '\0' && seq_scale(ctx->arg) != ESP_OK) {
+        cmd_out(ctx, "a root a-g, then # or b, then one of:");
+        cmd_out(ctx, "  maj min dor phr lyd mix loc");
+        cmd_out(ctx, "  pent maj5 blues chrom");
+        cmd_out(ctx, "e.g. dmin  c  f#mix  apent  ebblues");
+        return CMD_ERROR;
+    }
+    snprintf(ctx->msg, sizeof ctx->msg, "key of %s", seq_scale_name());
+    return CMD_DONE;
+}
+
+static cmd_status_t c_swing(cmd_ctx_t *ctx)
+{
+    if (ctx->arg[0] != '\0') {
+        seq_swing(atoi(ctx->arg));
+    }
+    const int s = seq_get_swing();
+    snprintf(ctx->msg, sizeof ctx->msg, "swing %d%s", s,
+             s == 50 ? " (straight)" : s >= 66 && s <= 68 ? " (triplet)" : "");
+    return CMD_DONE;
+}
+
+static cmd_status_t c_sync(cmd_ctx_t *ctx)
+{
+    if (strcmp(ctx->arg, "on") == 0)       { seq_sync(true); }
+    else if (strcmp(ctx->arg, "off") == 0) { seq_sync(false); }
+    else if (ctx->arg[0] != '\0') {
+        cmd_out(ctx, "sync on | sync off");
+        return CMD_ERROR;
+    }
+    snprintf(ctx->msg, sizeof ctx->msg, "midi clock %s",
+             seq_get_sync() ? "out" : "off");
+    return CMD_DONE;
+}
+
+/* '>send' with no argument lists the destinations and their state; with a
+ * name and on/off it switches one. One command, because "what are my outputs"
+ * and "turn that output off" are the same question asked twice. */
+/* '>flash' - hand the chip to the ROM loader without touching a button.
+ *
+ * THIS COMMAND IS A PRECONDITION FOR EVERYTHING ELSE THIS DEVICE MIGHT DO
+ * WITH ITS USB PORT, and it is written before any of it.
+ *
+ * The one hard rule on this project is that the owner is never asked to hold
+ * BOOT. Today that holds because the ESP32-S3's USB-Serial-JTAG has reset
+ * logic in hardware and esptool drives it over DTR/RTS. Any firmware that
+ * reconfigures the USB peripheral - a USB MIDI device, say - takes that
+ * hardware away, and the first bad flash after that point bricks the deck
+ * into needing a paperclip.
+ *
+ * Setting RTC_CNTL_FORCE_DOWNLOAD_BOOT and restarting reaches the ROM loader
+ * from software, through no peripheral at all. It is the same register
+ * ESP-IDF's own USB console uses for its reboot-to-bootloader command, so it
+ * is not a trick - it is the supported route.
+ *
+ * The buffer is written first. A command that reboots the machine and loses
+ * the document is not a convenience.
+ *
+ * ONE PROPERTY THE OWNER HAS TO KNOW, found by testing it rather than by
+ * reading about it. RTC_CNTL_OPTION1_REG is in the RTC power domain, and
+ * esp_restart() is a CPU reset - rst:0xc, RTC_SW_CPU_RST - which does not
+ * touch that domain. So the bit SURVIVES, and the deck re-enters download
+ * mode on every subsequent reset until something clears it. Nothing in
+ * ESP-IDF clears it; the only writers in the whole tree are IDF's own USB
+ * console and this file.
+ *
+ * What clears it is a full system reset, which is what esptool's
+ * '--before default_reset' performs and therefore what a plain
+ * 'idf.py flash' does. That was verified both ways on hardware: flashing
+ * with '--before no_reset' left the deck silent in download mode, and a
+ * plain 'idf.py flash' brought it straight back up.
+ *
+ * So the deck is never stuck - but it does WAIT, and a deck waiting silently
+ * in download mode looks exactly like a dead one. The panel says so before
+ * it goes. */
+static cmd_status_t c_flash(cmd_ctx_t *ctx)
+{
+    if (!doc_current_is_transient()) {
+        doc_save();
+        doc_mirror_sd();
+    }
+    seq_stop();
+    cmd_out(ctx, "download mode. flash now:");
+    cmd_out(ctx, "  idf.py -p PORT flash");
+    cmd_out(ctx, "no button, no paperclip. the deck STAYS in");
+    cmd_out(ctx, "download mode until it is flashed or unplugged:");
+    cmd_out(ctx, "RTC_CNTL_FORCE_DOWNLOAD_BOOT survives a CPU reset.");
+    cmd_announce("DOWNLOAD MODE - flash now");
+    /* Long enough for the panel to show it and the log to drain. */
+    vTaskDelay(pdMS_TO_TICKS(600));
+    REG_WRITE(RTC_CNTL_OPTION1_REG, RTC_CNTL_FORCE_DOWNLOAD_BOOT);
+    esp_restart();
+    return CMD_DONE;                 /* not reached */
+}
+
+/* Put a document on the console. The deck has a 30-column window onto a
+ * buffer and no other way to see the whole of one; when something is wrong
+ * with a document - and something was, because testing over the cable types
+ * into whatever is open - there was no way to look at it. */
+static cmd_status_t c_dump(cmd_ctx_t *ctx)
+{
+    const int want = (ctx->arg[0] != '\0') ? doc_buf_find(ctx->arg) : doc_buf_current();
+    if (want < 0) {
+        cmd_out(ctx, "no document called '%s'", ctx->arg);
+        return CMD_ERROR;
+    }
+    const int was = doc_buf_current();
+    if (want != was && doc_buf_select(want) != ESP_OK) {
+        return CMD_ERROR;
+    }
+    char line[96];
+    size_t k = 0;
+    int    ln = 1;
+    for (size_t i = 0; i <= doc_len(); i++) {
+        const char ch = (i < doc_len()) ? doc_at(i) : '\n';
+        if (ch == '\n' || k == sizeof line - 1) {
+            line[k] = '\0';
+            if (i < doc_len() || k > 0) {
+                cmd_out(ctx, "%3d|%s", ln++, line);
+            }
+            k = 0;
+            continue;
+        }
+        line[k++] = ch;
+    }
+    const size_t len = doc_len();
+    if (want != was) {
+        doc_buf_select(was);
+    }
+    snprintf(ctx->msg, sizeof ctx->msg, "%u bytes", (unsigned)len);
+    return CMD_DONE;
+}
+
+static cmd_status_t c_send(cmd_ctx_t *ctx)
+{
+    if (ctx->arg[0] == '\0') {
+        for (int i = 0; i < seq_dest_count(); i++) {
+            cmd_out(ctx, "%-5s %-3s %s", seq_dest_name(i),
+                    seq_dest_on(i) ? "on" : "off", seq_dest_help(i));
+        }
+        snprintf(ctx->msg, sizeof ctx->msg, "%d destination%s",
+                 seq_dest_count(), seq_dest_count() == 1 ? "" : "s");
+        return CMD_DONE;
+    }
+    char name[16] = {0};
+    char state[8] = {0};
+    if (sscanf(ctx->arg, "%15s %7s", name, state) < 1) {
+        return CMD_ERROR;
+    }
+    if (state[0] == '\0') {
+        snprintf(ctx->msg, sizeof ctx->msg, "%s is %s", name,
+                 seq_dest_is_on(name) ? "on" : "off");
+        return CMD_DONE;
+    }
+    const bool on = strcmp(state, "on") == 0;
+    if (!on && strcmp(state, "off") != 0) {
+        cmd_out(ctx, "send <name> on | off");
+        return CMD_ERROR;
+    }
+    if (seq_dest_enable(name, on) != ESP_OK) {
+        cmd_out(ctx, "no destination called '%s'. try just: send", name);
+        return CMD_ERROR;
+    }
+    snprintf(ctx->msg, sizeof ctx->msg, "%s %s", name, on ? "on" : "off");
+    return CMD_DONE;
+}
+
 static cmd_status_t c_bpm(cmd_ctx_t *ctx)
 {
     if (ctx->arg[0] != '\0') {
@@ -259,13 +477,37 @@ static cmd_status_t c_lanes(cmd_ctx_t *ctx)
         if (!l[i].used) {
             continue;
         }
+        /* Print what was typed, not a normalised version of it. A listing
+         * that silently rewrites 'X' as 'x' teaches the player that accents
+         * did not register. */
         char bar[SEQ_MAX_STEPS + 1];
         int k = 0;
         for (; k < l[i].steps && k < SEQ_MAX_STEPS; k++) {
-            bar[k] = (l[i].mask & (1u << k)) ? 'x' : '.';
+            const uint32_t b = 1u << k;
+            if (!(l[i].mask & b))            { bar[k] = '.'; }
+            else if (l[i].accent & b)        { bar[k] = 'X'; }
+            else if (l[i].ghost & b)         { bar[k] = ','; }
+            else if (l[i].melodic && l[i].deg[k] != 0xFF) {
+                bar[k] = (char)('0' + l[i].deg[k]);
+            } else                           { bar[k] = 'x'; }
         }
         bar[k] = '\0';
-        cmd_out(ctx, "%c%-6s %s", l[i].muted ? '-' : ' ', l[i].name, bar);
+        cmd_out(ctx, "%c%-5s %s", l[i].muted ? '-' : ' ', l[i].name, bar);
+    }
+    cmd_out(ctx, "%d bpm  swing %d  key %s  clock %s", seq_get_bpm(),
+            seq_get_swing(), seq_scale_name(), seq_get_sync() ? "out" : "off");
+    char dests[64] = {0};
+    for (int i = 0; i < seq_dest_count(); i++) {
+        if (seq_dest_on(i)) {
+            strncat(dests, seq_dest_name(i), sizeof dests - strlen(dests) - 2);
+            strncat(dests, " ", sizeof dests - strlen(dests) - 1);
+        }
+    }
+    cmd_out(ctx, "to: %s", dests[0] ? dests : "nowhere - try: send ble on");
+    const uint32_t lost = seq_dropped();
+    if (lost > 0) {
+        cmd_out(ctx, "%u events dropped - the transport is behind",
+                (unsigned)lost);
     }
     snprintf(ctx->msg, sizeof ctx->msg, "%d lane%s %s", n, n == 1 ? "" : "s",
              seq_running() ? "playing" : "stopped");
@@ -282,6 +524,12 @@ static cmd_status_t c_panic(cmd_ctx_t *ctx)
 
 static const cmd_t s_builtins[] = {
     { "bpm",   c_bpm,   CMD_CAP_EDIT,  "tempo" },
+    { "scale", c_scale, CMD_CAP_EDIT,  "dmin | c | f#mix | apent" },
+    { "swing", c_swing, CMD_CAP_EDIT,  "50 straight, 67 triplet" },
+    { "sync",  c_sync,  CMD_CAP_EDIT,  "midi clock out on | off" },
+    { "send",  c_send,  CMD_CAP_SYSTEM,"where events go; send mon on" },
+    { "flash", c_flash, CMD_CAP_SYSTEM,"reboot into the ROM loader" },
+    { "dump",  c_dump,  CMD_CAP_READ,  "print a document to the console" },
     { "play",  c_play,  CMD_CAP_EDIT,  "start the clock" },
     { "stop",  c_stop,  CMD_CAP_EDIT,  "stop the clock" },
     { "lanes", c_lanes, CMD_CAP_READ,  "what is playing" },
@@ -294,6 +542,10 @@ static const cmd_t s_builtins[] = {
     { "tom",   c_drum,  CMD_CAP_EDIT,  "tom" },
     { "rim",   c_drum,  CMD_CAP_EDIT,  "rim" },
     { "crash", c_drum,  CMD_CAP_EDIT,  "crash" },
+    { "bass",  c_voice, CMD_CAP_EDIT,  "0..0..3..0..5..." },
+    { "lead",  c_voice, CMD_CAP_EDIT,  "degrees 0-9, 0 is the root" },
+    { "pad",   c_voice, CMD_CAP_EDIT,  "long notes" },
+    { "arp",   c_voice, CMD_CAP_EDIT,  "short notes, high" },
     { "help",  c_help,  CMD_CAP_READ,                   "list the commands" },
     { "list",  c_list,  CMD_CAP_READ,                   "list open buffers" },
     { "new",   c_new,   CMD_CAP_EDIT,                   "a fresh scratch buffer" },

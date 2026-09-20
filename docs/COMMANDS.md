@@ -196,6 +196,99 @@ vanishes the moment it runs. **Your commands are a document you keep** —
 there is no history mechanism because the document *is* the history, and it is
 yours to organise, rename and archive like any other writing.
 
+## Patterns: one grammar, whatever the destination `[FACT]`
+
+A lane is a line of characters. The characters are the same whether the lane
+is a kick drum, a bassline or — when the destination exists — a frame trigger
+on another board.
+
+| Char | Means |
+|---|---|
+| `.` `-` `_` | rest |
+| `x` and anything else | a hit at the lane's velocity |
+| `X` | accent — three-quarters of the way to full |
+| `,` | ghost — a third |
+| `0`–`9` | on a melodic lane, the scale degree; `0` is the root |
+
+```
+>bpm 124
+>scale dmin
+>kick X...x...X...x...
+>hat  x,x,x,x,x,x,x,x,
+>bass 0...3...5...3...
+>play
+```
+
+**Degrees, not note names.** A degree cannot be out of key, so the player
+chooses shape — the musical decision — and the key is one word changed once.
+`>scale fmin` transposes every melodic lane on the next step, because the
+degrees are what is stored and the note is resolved when it sounds.
+
+Spaces inside a pattern are ignored, so `x... x... x... x...` is legal and
+reads better at four-column groupings.
+
+### Swing `[VERIFIED]`
+
+`>swing 50` is straight; `67` is triplet; `75` is the limit. Only **odd**
+sixteenths move — the downbeat never does, which is the difference between a
+groove and a tempo change. A pattern that only hits even steps is unaffected
+by swing, which is correct and surprises people.
+
+Measured on the deck at 124 bpm, as inter-onset intervals in ms:
+
+| `>swing` | Intervals | Offbeat sits at |
+|---|---|---|
+| 50 | 125 / 125 | 50.0 % |
+| 67 | 83 / 167 | 66.8 % |
+| 75 | 62 / 188 | 75.2 % |
+
+### Destinations `[FACT]`
+
+Max/MSP splits its world in half: `~` objects are audio, `jit.` objects are
+video, and the two halves have different rules and, in practice, different
+users. That split is an artefact of how the two subsystems were built, not a
+law of nature, and it is why a patch that makes sound cannot easily make a
+picture.
+
+There is no audio path and no visual path here. There is a **lane**, and there
+are **destinations**, and the destination decides what a lane means. The same
+`x...x...x...x...` is a kick on a MIDI destination and a frame trigger on a
+network one. Adding live visuals is adding a destination, not adding a second
+half of the system.
+
+```
+>send            list them and their state
+>send mon on     print notes to the console
+>send ble off    stop paying for a radio you are not using
+```
+
+Registering a destination does not enable it: a destination that switched
+itself on at boot would be a radio nobody asked for. `ble` is the exception,
+because the radio is already up for the keyboard.
+
+### `>flash` — the escape hatch, written before it is needed `[VERIFIED]`
+
+The rule on this project is that the owner is never asked to hold BOOT. Today
+that holds because the ESP32-S3's USB-Serial-JTAG has reset logic in hardware
+and esptool drives it. **Any firmware that reconfigures the USB peripheral —
+a USB MIDI device, say — takes that hardware away.** So the software route to
+the ROM loader exists and is proven *before* anything touches USB.
+
+`>flash` saves the buffer, sets `RTC_CNTL_FORCE_DOWNLOAD_BOOT` and restarts.
+Verified on hardware: `rst:0xc (RTC_SW_CPU_RST), boot:0x2 (DOWNLOAD(USB/UART0))`,
+then flashed with `--before no_reset` — nothing in that path uses the
+USB-Serial-JTAG reset logic.
+
+**One property the owner has to know, found by testing rather than reading.**
+`RTC_CNTL_OPTION1_REG` is in the RTC power domain and `esp_restart()` is a CPU
+reset, so the bit *survives*. The deck re-enters download mode on every
+subsequent reset until a full system reset clears it — which is what
+`--before default_reset`, and therefore a plain `idf.py flash`, performs.
+Nothing in ESP-IDF clears it; the only writers in the whole tree are IDF's own
+USB console and this firmware. The deck is therefore never stuck, but it does
+**wait**, silently, and a deck waiting in download mode looks exactly like a
+dead one. The panel says so before it goes, and the app clears the bit at boot.
+
 ## Verified on the hardware `[FACT]`
 
 Observed on the deck, 2026-09-20:

@@ -15,8 +15,18 @@ static seq_lane_t s_lanes[SEQ_MAX_LANES];
 static int        s_bpm = 120;
 static bool       s_running;
 static int        s_pos;
+static uint32_t   s_tick;            /* 24 PPQN pulses since play */
+static int        s_swing = 50;      /* per cent; 50 is straight   */
+static bool       s_sync;            /* send MIDI clock            */
 static esp_timer_handle_t s_clock;
-static seq_sink_t s_sink;
+typedef struct {
+    char        name[12];
+    const char *help;
+    seq_sink_t  fn;
+    bool        on;
+} dest_t;
+static dest_t s_dests[SEQ_MAX_DESTS];
+static int    s_ndests;
 
 /* The clock callback must not call the transport directly.
  *
@@ -36,16 +46,116 @@ static void midi_task(void *arg)
 {
     (void)arg;
     midi_ev_t ev;
+    uint32_t said = 0;
     while (1) {
         if (xQueueReceive(s_midiq, &ev, portMAX_DELAY) == pdTRUE) {
-            if (s_sink != NULL) {
-                s_sink(ev.status, ev.d1, ev.d2);
+            for (int i = 0; i < s_ndests; i++) {
+                if (s_dests[i].on && s_dests[i].fn != NULL) {
+                    s_dests[i].fn(ev.status, ev.d1, ev.d2);
+                }
+            }
+            /* Report the loss from HERE, never from emit(): emit() runs on
+             * the clock, and a log call on the clock to announce that the
+             * clock is overloaded makes it worse. */
+            if (s_dropped != said) {
+                said = s_dropped;
+                ESP_LOGW(TAG, "%u events dropped - transport behind",
+                         (unsigned)said);
             }
         }
     }
 }
 
 uint32_t seq_dropped(void) { return s_dropped; }
+
+/* THE KEY, AND WHY A SCALE IS A TABLE AND NOT A PARSER.
+ *
+ * A degree is resolved to a note by indexing this table and adding. That is
+ * the entire pitch system: no note names in the realtime path, no string
+ * anywhere near the clock, and a wrong note is not expressible. The modes are
+ * the seven diatonic ones plus the three a performer actually reaches for
+ * under pressure - minor pentatonic, which cannot sound wrong; blues, which
+ * is pentatonic plus the flat five; and chromatic, for when the whole point
+ * is to leave the key.
+ *
+ * Order matters: the longest names must be tested first or "maj" swallows
+ * "maj5" and "b" swallows "blues". That is a real bug this table's layout is
+ * chosen to prevent rather than a comment about one. */
+typedef struct { const char *name; uint8_t n; uint8_t iv[12]; } mode_t;
+static const mode_t s_modes[] = {
+    { "chrom", 12, {0,1,2,3,4,5,6,7,8,9,10,11} },
+    { "blues",  6, {0,3,5,6,7,10} },
+    { "pent",   5, {0,3,5,7,10} },       /* minor pentatonic - the safe one */
+    { "maj5",   5, {0,2,4,7,9} },        /* major pentatonic                */
+    { "maj",    7, {0,2,4,5,7,9,11} },
+    { "min",    7, {0,2,3,5,7,8,10} },
+    { "dor",    7, {0,2,3,5,7,9,10} },
+    { "phr",    7, {0,1,3,5,7,8,10} },
+    { "lyd",    7, {0,2,4,6,7,9,11} },
+    { "mix",    7, {0,2,4,5,7,9,10} },
+    { "loc",    7, {0,1,3,5,6,8,10} },
+};
+
+static uint8_t     s_root = 0;                  /* pitch class, C = 0 */
+static const mode_t *s_mode = &s_modes[5];      /* min */
+static char        s_scale_name[12] = "cmin";
+
+const char *seq_scale_name(void) { return s_scale_name; }
+
+esp_err_t seq_scale(const char *spec)
+{
+    if (spec == NULL || spec[0] == '\0') {
+        return ESP_ERR_INVALID_ARG;
+    }
+    const char *p = spec;
+    int pc;
+    switch (*p | 0x20) {          /* tolerate either case; nobody should care */
+    case 'c': pc = 0;  break;
+    case 'd': pc = 2;  break;
+    case 'e': pc = 4;  break;
+    case 'f': pc = 5;  break;
+    case 'g': pc = 7;  break;
+    case 'a': pc = 9;  break;
+    case 'b': pc = 11; break;
+    default: return ESP_ERR_INVALID_ARG;
+    }
+    p++;
+    if (*p == '#') { pc = (pc + 1) % 12; p++; }
+    else if (*p == 'b') { pc = (pc + 11) % 12; p++; }
+
+    const mode_t *m = &s_modes[5];              /* a bare root means minor */
+    if (*p != '\0') {
+        m = NULL;
+        for (size_t i = 0; i < sizeof s_modes / sizeof s_modes[0]; i++) {
+            if (strncmp(p, s_modes[i].name, strlen(s_modes[i].name)) == 0) {
+                m = &s_modes[i];
+                break;
+            }
+        }
+        if (m == NULL) {
+            return ESP_ERR_INVALID_ARG;
+        }
+    }
+    s_root = (uint8_t)pc;
+    s_mode = m;
+    snprintf(s_scale_name, sizeof s_scale_name, "%s", spec);
+    return ESP_OK;
+}
+
+/* Degree to MIDI note. Degrees past the top of the scale keep climbing into
+ * the next octave, so "0123456789" is a run and not a wrap - which is what
+ * anyone typing it expects, and the reason degrees go to 9 rather than to the
+ * size of the mode. */
+static uint8_t degree_note(uint8_t deg, int octave)
+{
+    const int n = s_mode->n;
+    const int up = deg / n;
+    const int idx = deg % n;
+    int note = 12 * (octave + 1 + up) + s_root + s_mode->iv[idx];
+    if (note < 0)   { note = 0; }
+    if (note > 127) { note = 127; }
+    return (uint8_t)note;
+}
 
 /* Note-offs are scheduled rather than sent with the note, so a lane can never
  * leave a note hanging: there is no "on" a performer could forget to pair.
@@ -61,10 +171,7 @@ static pending_off_t s_offs[SEQ_MAX_LANES * 4];
 static void emit(uint8_t status, uint8_t d1, uint8_t d2)
 {
     if (s_midiq == NULL) {
-        if (s_sink != NULL) {
-            s_sink(status, d1, d2);
-        }
-        return;
+        return;                      /* before seq_init; nowhere to put it */
     }
     const midi_ev_t ev = { status, d1, d2 };
     if (xQueueSend(s_midiq, &ev, 0) != pdTRUE) {
@@ -102,9 +209,61 @@ static void service_offs(int64_t now)
     }
 }
 
+/* Swing, in ticks. A sixteenth is six ticks, so an eighth is twelve; a
+ * shuffle puts the offbeat at `swing` per cent of the way through that
+ * eighth instead of at the halfway point. 67 per cent lands on 8 of 12,
+ * which is two ticks late - triplet swing, exactly.
+ *
+ * Only ODD sixteenths move. The downbeat staying put is the whole difference
+ * between a groove and a tempo change. */
+static int swing_ticks(void)
+{
+    int d = (s_swing * 2 * SEQ_TICKS_PER_STEP) / 100 - SEQ_TICKS_PER_STEP;
+    if (d < 0) { d = 0; }
+    if (d > SEQ_TICKS_PER_STEP - 2) { d = SEQ_TICKS_PER_STEP - 2; }
+    return d;
+}
+
+static void fire_step(int step)
+{
+    for (int i = 0; i < SEQ_MAX_LANES; i++) {
+        const seq_lane_t *l = &s_lanes[i];
+        if (!l->used || l->muted || l->steps == 0) {
+            continue;
+        }
+        const int s = step % l->steps;
+        if (!(l->mask & (1u << s))) {
+            continue;
+        }
+        /* Accent and ghost are a ratio of the lane's own velocity, not fixed
+         * numbers, so setting a lane quiet keeps its accents in proportion
+         * instead of flattening the whole pattern against a ceiling. */
+        int vel = l->vel;
+        if (l->accent & (1u << s)) { vel = vel + (127 - vel) * 3 / 4; }
+        if (l->ghost  & (1u << s)) { vel = vel / 3; }
+        if (vel < 1)   { vel = 1; }
+        if (vel > 127) { vel = 127; }
+
+        /* On a melodic lane an 'x' - or an 'X', or a ',' - is the ROOT, not
+         * MIDI note 0. Falling through to l->note here would emit C-1 at the
+         * bottom of the range, which on most synths is inaudible and on a few
+         * is a thump nobody asked for, and the player would reasonably
+         * conclude the lane was broken. */
+        const uint8_t note = l->melodic
+            ? degree_note(l->deg[s] == 0xFF ? 0 : l->deg[s], l->octave)
+            : l->note;
+        emit((uint8_t)(0x90 | (l->chan & 0x0F)), note, (uint8_t)vel);
+        schedule_off(l->chan, note, l->gate_ms);
+    }
+}
+
 /* The clock. A hardware timer, never a task delay - docs/OS.md: "Never
- * sequence from a task delay. Use a hardware timer." A 16th note at 120 bpm
- * is 125,000 us exactly. */
+ * sequence from a task delay. Use a hardware timer."
+ *
+ * It ticks at 24 PPQN, not at the step rate, because that is the rate MIDI
+ * clock is defined at: sync costs one message on a tick that already exists.
+ * At 120 bpm a tick is 20,833 us and a sixteenth is six of them, 125,000 us
+ * exactly. */
 static void tick(void *arg)
 {
     (void)arg;
@@ -114,24 +273,24 @@ static void tick(void *arg)
     if (!s_running) {
         return;
     }
-    for (int i = 0; i < SEQ_MAX_LANES; i++) {
-        const seq_lane_t *l = &s_lanes[i];
-        if (!l->used || l->muted || l->steps == 0) {
-            continue;
-        }
-        const int step = s_pos % l->steps;
-        if (l->mask & (1u << step)) {
-            emit((uint8_t)(0x90 | (l->chan & 0x0F)), l->note, l->vel);
-            schedule_off(l->chan, l->note, l->gate_ms);
-        }
+    if (s_sync) {
+        emit(0xF8, 0, 0);            /* timing clock, no data bytes */
     }
-    s_pos = (s_pos + 1) & 0x7FFF;
+
+    const int step  = (int)(s_tick / SEQ_TICKS_PER_STEP);
+    const int phase = (int)(s_tick % SEQ_TICKS_PER_STEP);
+    const int want  = (step & 1) ? swing_ticks() : 0;
+    if (phase == want) {
+        s_pos = step & 0x7FFF;
+        fire_step(s_pos);
+    }
+    s_tick++;
 }
 
 static uint64_t period_us(void)
 {
-    /* Sixteenth notes. 60,000,000 / bpm / 4. */
-    return (uint64_t)(60000000.0 / (double)s_bpm / 4.0);
+    /* One MIDI clock pulse. 60,000,000 / bpm / 24. */
+    return (uint64_t)(60000000.0 / (double)s_bpm / (double)SEQ_PPQN);
 }
 
 esp_err_t seq_init(void)
@@ -193,7 +352,9 @@ esp_err_t seq_lane(const char *name, const char *steps)
     if (l == NULL) {
         return ESP_ERR_NO_MEM;
     }
-    uint32_t mask = 0;
+    uint32_t mask = 0, accent = 0, ghost = 0;
+    uint8_t  deg[SEQ_MAX_STEPS];
+    memset(deg, 0xFF, sizeof deg);
     int n = 0;
     for (const char *p = steps; *p != '\0' && n < SEQ_MAX_STEPS; p++) {
         if (*p == ' ') {
@@ -203,6 +364,9 @@ esp_err_t seq_lane(const char *name, const char *steps)
          * remember whether the hit character is x, o or *. */
         if (*p != '.' && *p != '-' && *p != '_') {
             mask |= (1u << n);
+            if (*p == 'X') { accent |= (1u << n); }
+            if (*p == ',') { ghost  |= (1u << n); }
+            if (*p >= '0' && *p <= '9') { deg[n] = (uint8_t)(*p - '0'); }
         }
         n++;
     }
@@ -211,10 +375,44 @@ esp_err_t seq_lane(const char *name, const char *steps)
         return ESP_OK;
     }
     /* Compiled. The clock callback never sees this string again. */
-    l->mask = mask;
-    l->steps = (uint8_t)n;
+    l->mask   = mask;
+    l->accent = accent;
+    l->ghost  = ghost;
+    memcpy(l->deg, deg, sizeof l->deg);
+    l->steps  = (uint8_t)n;
     return ESP_OK;
 }
+
+esp_err_t seq_lane_melodic(const char *name, int octave, int chan, int gate_ms)
+{
+    seq_lane_t *l = find(name, true);
+    if (l == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
+    l->melodic = true;
+    l->octave  = (int8_t)octave;
+    if (chan >= 0 && chan < 16) { l->chan = (uint8_t)chan; }
+    if (gate_ms > 0)            { l->gate_ms = (uint16_t)gate_ms; }
+    return ESP_OK;
+}
+
+void seq_swing(int percent)
+{
+    if (percent < 50) { percent = 50; }
+    if (percent > 75) { percent = 75; }
+    s_swing = percent;
+}
+int seq_get_swing(void) { return s_swing; }
+
+void seq_sync(bool on)
+{
+    /* Start and stop are sent by seq_play/seq_stop, so turning sync on while
+     * already running must announce the fact or the far end sits waiting. */
+    if (on && !s_sync && s_running) { emit(0xFA, 0, 0); }
+    if (!on && s_sync && s_running) { emit(0xFC, 0, 0); }
+    s_sync = on;
+}
+bool seq_get_sync(void) { return s_sync; }
 
 esp_err_t seq_lane_note(const char *name, int note, int chan)
 {
@@ -254,12 +452,22 @@ int  seq_position(void) { return s_pos; }
 
 void seq_play(void)
 {
-    s_pos = 0;
+    s_pos  = 0;
+    s_tick = 0;
     s_running = true;
+    if (s_sync) {
+        /* Song-position-zero then start, which is what a DAW expects and what
+         * makes the deck the master rather than a thing that drifts. */
+        emit(0xF2, 0, 0);
+        emit(0xFA, 0, 0);
+    }
 }
 
 void seq_stop(void)
 {
+    if (s_sync && s_running) {
+        emit(0xFC, 0, 0);
+    }
     s_running = false;
     seq_all_notes_off();
 }
@@ -291,4 +499,46 @@ const seq_lane_t *seq_lanes(int *count)
     return s_lanes;
 }
 
-void seq_set_sink(seq_sink_t sink) { s_sink = sink; }
+esp_err_t seq_dest_add(const char *name, seq_sink_t fn, const char *help)
+{
+    if (s_ndests >= SEQ_MAX_DESTS) {
+        return ESP_ERR_NO_MEM;
+    }
+    dest_t *d = &s_dests[s_ndests++];
+    snprintf(d->name, sizeof d->name, "%s", name);
+    d->fn   = fn;
+    d->help = help;
+    d->on   = false;
+    return ESP_OK;
+}
+
+static dest_t *dest_find(const char *name)
+{
+    for (int i = 0; i < s_ndests; i++) {
+        if (strcmp(s_dests[i].name, name) == 0) {
+            return &s_dests[i];
+        }
+    }
+    return NULL;
+}
+
+esp_err_t seq_dest_enable(const char *name, bool on)
+{
+    dest_t *d = dest_find(name);
+    if (d == NULL) {
+        return ESP_ERR_NOT_FOUND;
+    }
+    d->on = on;
+    return ESP_OK;
+}
+
+bool seq_dest_is_on(const char *name)
+{
+    const dest_t *d = dest_find(name);
+    return d != NULL && d->on;
+}
+
+int         seq_dest_count(void)      { return s_ndests; }
+const char *seq_dest_name(int i)      { return (i >= 0 && i < s_ndests) ? s_dests[i].name : ""; }
+const char *seq_dest_help(int i)      { return (i >= 0 && i < s_ndests) ? s_dests[i].help : ""; }
+bool        seq_dest_on(int i)        { return (i >= 0 && i < s_ndests) && s_dests[i].on; }
