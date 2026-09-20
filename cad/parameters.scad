@@ -44,8 +44,17 @@ $fn = 64;
 
 // Nozzle diameter. Wall thicknesses below are integer multiples of this so
 // that every wall prints as solid perimeters with no weak sparse infill.
-nozzle = 0.4;                       // [DESIGN]
-layer_h = 0.2;                      // [DESIGN]
+//  0.8 mm NOZZLE. This deck is printed on a 0.8 nozzle, not a 0.4, and that is
+//  not a slicer setting - it changes what "thin" means in every wall on the
+//  object. A wall that was three comfortable extrusions at 0.4 is 1.2 at 0.8,
+//  which the slicer resolves as a single bead with a gap beside it. The whole
+//  PRINT class is written against this number, so raising it is what turns
+//  "chunky and overbuilt" from an intention into a gate.
+nozzle = 0.8;                       // [DESIGN]
+layer_h = 0.3;                      // [DESIGN] typical for a 0.8 nozzle
+//  The floor every structural wall has to clear: two full beads. One bead is
+//  printable but single-walled, and single-walled is not what this object is.
+min_wall = 2 * nozzle;              // [DERIVED] = 1.60
 
 // Structural preset:
 //   "overbuilt" - 3.2 mm walls (8 perimeters). Default. Impact-tolerant.
@@ -95,7 +104,14 @@ back_t   = 3.2;                                  // [DESIGN] 16 layers @0.2, and
 board_w        = 92.50;   // [VENDOR] drawing text "92.5 PCB OD"
 board_h        = 69.10;   // [VENDOR] drawing text "69.1 PCB OD"
 board_pcb_t    = 1.60;    // [VENDOR] STEP BOARD solid
-board_corner_r = 0.50;    // [VENDOR] R0.5, all four corners
+//  CORRECTED FROM A PRINTED PART. The drawing says R0.5; the board in hand is
+//  a PERFECT RECTANGLE, square to the eye and to a straightedge at all four
+//  corners. This is the same class of error as the 18650 holder (C-21): a
+//  vendor radius that the real part does not have. It matters because the
+//  pocket was sized on the assumption that its own corner arc could tuck
+//  inside the board's - it cannot, because there is nothing to tuck into.
+//  See docs/DATUMS.md C-34.
+board_corner_r = 0.00;    // [MEASURED] square, all four corners
 
 //  CORRECTION, recorded deliberately. Earlier revisions of this file carried
 //  board_h = 70.1 from a distributor spec line, tagged [PROVISIONAL]. The
@@ -133,14 +149,36 @@ batt_protrusion = board_w_standoff_end - board_w_battery_end;     // = 8.20
 //  and the pocket is asserted against the measured figure instead.
 board_w_measured = 92.70;  // [MEASURED] calipers on a real board
 board_h_measured = 69.10;  // [MEASURED] exact agreement with the drawing
-board_pocket_w = board_w + 1.0;   // [DESIGN] 0.5 mm per side
-board_pocket_h = board_h + 1.0;   // [DESIGN] 0.5 mm per side
+//  SIZED ON THE BOARD THAT EXISTS, not the drawing. board_w is Waveshare's
+//  92.50; the owner's board measures 92.70, so a pocket built on the drawing
+//  gave 0.400 mm per side in X, not the 0.500 it claimed. Both the datum and
+//  the tolerance now come off the larger of the two, and the clearance is
+//  raised to 0.60 because this is a part that has to SLIDE in past 11 mm of
+//  depth, not merely fit.
+board_w_max    = max(board_w, board_w_measured);   // [DERIVED] = 92.70
+board_h_max    = max(board_h, board_h_measured);   // [DERIVED] = 69.10
+board_fit      = 0.60;            // [DESIGN] per side, a sliding fit
+board_pocket_w = board_w_max + 2 * board_fit;
+board_pocket_h = board_h_max + 2 * board_fit;
 //  The pocket's corner radius is NOT free. The PCB's corners are R0.50, so a
 //  generously rounded pocket corner leaves material exactly where the board's
 //  much sharper corner wants to be. With 0.5 mm per-side clearance the pocket
 //  radius must not exceed about 2.2 mm; an earlier revision used 3.0 and the
 //  board fouled all four corners by 0.33 mm. Asserted in section 6.
-board_pocket_r = 2.0;             // [DESIGN]
+//  A ROUNDED POCKET CANNOT ACCEPT A SQUARE PART unless its radius is small
+//  enough. For a square corner with c mm of clearance per side the pocket's
+//  corner arc clears it only while
+//        r <= c * sqrt(2) / (sqrt(2) - 1)
+//  which at the old c = 0.40 (the drawing's 92.50 against a real 92.70) allowed
+//  1.37 against a modelled 2.00 - so the arc left material 0.193 mm inside
+//  where the board's corner had to be, and the board would not slide in.
+//
+//  Corner reliefs were tried first and are worse here: a circle at each
+//  theoretical corner reaches x = 48.55, and the lower fastener bosses start at
+//  47.94, so the relief chewed into them and left CGAL a sliver. Shrinking the
+//  radius needs no extra geometry at all, and an FDM inside corner is rounded
+//  to about nozzle/2 regardless of what the model says.
+board_pocket_r = 1.20;            // [DESIGN] well inside the square-corner limit
 
 // --- mounting --------------------------------------------------------------
 //  Not four plain holes. The PCB carries four Ø4.20 through-holes, each with a
@@ -303,8 +341,14 @@ btn_post_dy  = (btn_band_lo + btn_band_hi) / 2;   // [DERIVED] = -0.2008
 mic_offset_x = 32.50;  // [VENDOR] +/-32.500 from the PCB centre. Independently
                        //   measured from the reference caseback as exactly
                        //   +/-32.500 - see docs/DATUMS.md D-07.
-mic_aper_w   = 5.4;    // [MEASURED] reference aperture
-mic_aper_h   = 2.5;    // [MEASURED]
+//  ENLARGED, DELIBERATELY. The reference's 5.4 x 2.5 slot is a 0.4-nozzle
+//  feature: at 0.8 the roof of a 2.5 mm hole is a single bridged bead and it
+//  printed rough enough to need support, which then had to be dug out of a
+//  3.2 mm tunnel. Taller and longer fixes it twice over - the stadium roof
+//  becomes a proper self-supporting arch, and there is more open area for the
+//  microphone. Still one clean slot per mic, not a perforation.
+mic_aper_w   = 8.0;    // [DESIGN] was 5.4 (reference, 0.4-nozzle)
+mic_aper_h   = 3.2;    // [DESIGN] was 2.5; 4 beads, arch self-supports
 mic_w_centre = -0.50;  // [VENDOR] mic body W 0 to -1.00
 
 // 18650 holder, on the PCB back face, running ACROSS the device.
@@ -472,9 +516,13 @@ batt_cowl_cap_ri = 1.5;    // [DESIGN] INNER cap radius. Kept small on purpose:
 //  same 10.45 mm. Finer perforation on a tighter pitch is the Braun grille
 //  idiom, and it is the one perforated element on the object.
 grille_slot_w  = 14.0;    // [DESIGN] within Waveshare's 14.70 field
-grille_slot_h  = 1.2;     // [DESIGN] 3 extrusions
-grille_pitch   = 2.3125;  // [DESIGN] 4 gaps x 2.3125 + 1.2 = 10.45 exactly
-grille_count   = 5;       // [DESIGN]
+//  RESTRUCK FOR THE 0.8 NOZZLE. Five slots at 1.2 on a 2.3125 pitch left
+//  1.11 mm webs - 1.4 beads - so the grille printed as a row of ragged bridges.
+//  Three slots at two beads each, with 2.825 mm webs, span the same field
+//  exactly and are the same Braun idiom with fewer, cleaner teeth.
+grille_slot_h  = 1.6;     // [DESIGN] 2 beads at 0.8
+grille_pitch   = 4.425;   // [DESIGN] 2 gaps x 4.425 + 1.6 = 10.45 exactly
+grille_count   = 3;       // [DESIGN]
 grille_field_h = 10.45;   // [VENDOR] Waveshare's grille height, matched exactly
 //  PORT MOUTHS. A square-edged slot only accepts a slim cable: a normal USB-C
 //  plug's overmould lands on the outside of the shell and holds the plug proud
@@ -849,12 +897,20 @@ fit_free   = 0.50;   // [DESIGN] per side, generous, for cables and ports
 //  enclosure is as small as the two components allow, and no smaller.
 
 body_w = wall + max(kbd_pocket_w, board_pocket_w) + wall;
-body_h = wall + kbd_pocket_h + spine + board_pocket_h + wall;
+//  THE BOTTOM WALL IS THICKER THAN THE REST, AND HAS TO BE. It carries the
+//  back plate's tongue groove, and the shell's edge roll withdraws the outer
+//  face by up to 0.94 mm exactly where that groove sits. At wall = 3.2 the
+//  material left outboard of a 1.3 mm groove measured 0.96 mm on the printed
+//  part - 1.2 beads at 0.8. No groove depth fixes that and no roll setting
+//  fixes it without flattening the edge everywhere: the wall itself is the
+//  variable. See docs/DATUMS.md C-33.
+bottom_wall = wall + 1.2;   // [DESIGN] = 4.40, the groove's wall
+body_h = bottom_wall + kbd_pocket_h + spine + board_pocket_h + wall;
 body_t = back_t + board_depth + front_t;
 
 // Bay centres in the device frame.
 board_bay_cy =  body_h/2 - wall - board_pocket_h/2;
-kbd_bay_cy   = -body_h/2 + wall + kbd_pocket_h/2;
+kbd_bay_cy   = -body_h/2 + bottom_wall + kbd_pocket_h/2;
 
 // The board's mount-pattern centre coincides with the board bay centre.
 board_cx = 0;
@@ -1015,6 +1071,13 @@ accessory_bracket_min_t = accessory_screw_len_rig - back_t - shell_screw_bore_de
 //  set, including the ones that need geometry.
 
 assert(wall >= 4 * nozzle, "wall must be at least 4 extrusions wide");
+assert(bottom_wall >= wall, "bottom wall thinner than the rest of the shell");
+assert(mic_aper_h >= 4 * nozzle,
+       "microphone slot roof is too shallow to arch; it will need support");
+assert(grille_pitch - grille_slot_h >= 2 * nozzle,
+       "speaker grille webs are under two beads wide");
+assert(grille_slot_h >= 2 * nozzle,
+       "speaker grille slots are under two beads wide");
 assert(shell_screw_boss_d > shell_screw_insert_bore + 2, "insert boss wall too thin");
 //  Largest pocket radius that still clears a board corner of radius
 //  board_corner_r with c mm of per-side clearance:  r <= (c + (sqrt(2)-1)*
@@ -1022,8 +1085,8 @@ assert(shell_screw_boss_d > shell_screw_insert_bore + 2, "insert boss wall too t
 //  actual clearance rather than hard-coded.
 pocket_clear   = (board_pocket_w - board_w) / 2;
 pocket_r_limit = (board_corner_r + pocket_clear * sqrt(2)) / (sqrt(2) - 1) - board_corner_r / (sqrt(2) - 1) + pocket_clear;
-assert(board_pocket_r <= 2.2,
-       "board pocket corner radius will foul the PCB's R0.5 corners");
+assert(board_pocket_r <= board_fit * sqrt(2) / (sqrt(2) - 1),
+       "board pocket corner arc leaves material where the board's SQUARE corner goes");
 assert(expansion_win_h > 6.603, "expansion window will not clear the header body");
 assert(board_pocket_w >= board_w, "board pocket narrower than the board");
 assert(board_pocket_h >= board_h, "board pocket shorter than the board");
@@ -1045,7 +1108,17 @@ assert(kbd_pocket_w >= kbd_pocket_w_ata + 0.6,
 inner_w           = body_w - 2 * wall;                     // clear interior width
 boss_flank        = (inner_w - board_pocket_w) / 2;        // free strip each side
 boss_cx           = board_pocket_w/2 + boss_flank/2 + 0.4; // outboard of the bay
-plate_half_h      = (body_h - 2*wall - 2*fit_slide) / 2;
+//  Half-height of the back opening, which is not centred on the part: the
+//  bottom wall is thicker. See backplate() in cyberdeck.scad.
+plate_half_h      = (body_h - bottom_wall - wall - 2*fit_slide) / 2;
+plate_cy          = (bottom_wall - wall) / 2;
+//  The back opening itself, which the plate sits in with fit_slide all round.
+//  It is NOT centred on the part either, and cutting it symmetrically about
+//  y = 0 ate 1.2 mm of the thicker bottom wall - taking the tongue groove's
+//  whole lower lip with it, so the groove opened straight through to the back
+//  face and the tongue was captured by nothing.
+cavity_h          = body_h - bottom_wall - wall;
+cavity_cy         = plate_cy;
 plate_edge_margin = 0.6;   // [DESIGN] material left outboard of a countersink
 
 //  THE UPPER ROW IS NOT plate_half_h MINUS A MARGIN, AND WAS BREAKING OUT.
@@ -1380,7 +1453,13 @@ assert(window_w > board_pocket_w,
        "reference acrylic is WIDER than this board pocket: provenance, not a part (DATUMS C-09)");
 assert(form_n > 2.0, "form_n <= 2 is a plain arc, not a continuous corner");
 assert(corner_blend < min(body_w, body_h) / 2, "corner blend larger than the part");
-assert(wall - edge_soft >= 5 * nozzle,
+//  2.0 mm, stated as a LENGTH rather than as a bead count. It was written as
+//  "5 * nozzle", which was 2.00 mm at a 0.4 nozzle and silently became a demand
+//  for 4.00 mm the moment the nozzle changed - a check that moves its own goal
+//  posts is not a check. The physical quantity it protects, the material left
+//  at the shell's arris once the roll has withdrawn the face, is unchanged;
+//  2.00 mm is 2.5 beads at 0.8 and was 5 at 0.4.
+assert(wall - edge_soft >= 2.0,
        "edge roll thins the shell arris below 5 extrusions");
 assert(cavity_blend < corner_blend, "cavity corner is fuller than the shell corner");
 //  The display aperture's corner must not cut into the panel's SQUARE active

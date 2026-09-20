@@ -347,6 +347,64 @@ a wider recess behind it. This back plate is 3.2 mm thick and the header stands
 8.603 mm off the PCB back — **1.60 mm proud of the standoff plane** — so the
 body itself must pass through. The window here is sized from the body.
 
+### C-34 — The board is a perfect rectangle, and the pocket assumed a radius
+
+The drawing gives the PCB R0.5 corners. **The board in hand is square at all
+four.** Same class of error as the 18650 holder (C-21): a vendor radius the real
+part does not have.
+
+It mattered because a rounded pocket only accepts a square part while
+
+    r <= c * sqrt(2) / (sqrt(2) - 1)
+
+and the pocket was modelled at R2.0. Worse, `board_pocket_w` was built on the
+drawing's 92.50 while the owner's board measures **92.70**, so c was 0.400 in X,
+not the 0.500 it claimed — which caps r at 1.37. The arc left material
+**0.193 mm** inside where the board's corner had to go and it would not slide in.
+
+Fixed at the datum, not with a workaround: the pocket is sized on
+`max(drawing, measured)` with `board_fit` = 0.60 per side, and the radius is
+1.20. A square 92.70 × 69.10 board now clears everywhere with 0.351 mm at the
+corners. Corner reliefs were tried first and are worse here — a circle at each
+theoretical corner reaches x = 48.55 and the lower fastener bosses start at
+47.94, so it chewed into them.
+
+Three degeneracies surfaced with it, all the same shape — two cutters meeting on
+exactly the same plane: the groove against the back opening's edge, and the
+keyboard bay's wall against it at exactly z = back_t. Both now overlap by 0.2–0.4
+mm. `rbox` also rendered a hull of four zero-radius cylinders, which is not a
+solid, so it takes a square box when r <= 0.
+
+### C-33 — Every wall was measured against the wrong nozzle
+
+The deck prints on a **0.8 mm nozzle**, and `nozzle` said 0.4. That is not a
+slicer setting: a wall that was three comfortable beads at 0.4 is 1.2 at 0.8,
+which the slicer lays down as one bead with a gap beside it. Measured on the
+printed part, against a floor of two beads (1.60 mm):
+
+| | was | now |
+|---|---|---|
+| tongue groove, outboard wall | 0.96 | **2.14** |
+| speaker grille webs | 1.11 | **2.83** |
+| microphone slot | 5.4 × 2.5 | **8.0 × 3.2** |
+
+The groove could not be fixed by depth or by the roll: at `wall` = 3.2 the edge
+roll withdraws the outer face by 0.94 mm exactly where the groove sits, so the
+wall itself was the variable. `bottom_wall` is now `wall + 1.2`, which also
+means the back opening and the plate are **not centred on the part** — cutting
+them symmetrically ate 1.2 mm of the thicker wall and took the groove's entire
+lower lip with it, so the tongue was captured by nothing at all.
+
+Two asserts were also moving their own goal posts: `wall - edge_soft >= 5 *
+nozzle` and `cowl wall >= 4 * nozzle` were 2.00 and 1.60 mm at a 0.4 nozzle and
+silently became demands for 4.00 and 3.20 when it changed. Both are stated as
+lengths now.
+
+`validate.py` gained a `MIN WALL` class that sweeps sections and reports the
+closest approach between any two boundaries in each part — which is what found
+the grille webs and the magnet shaft against the microSD tunnel, neither of
+which any named check was looking at.
+
 ### C-32 — The plate's bed face was a pad over open air
 
 `docs/ASSEMBLY.md` prints the back plate **cowl up**, so its inner face is the

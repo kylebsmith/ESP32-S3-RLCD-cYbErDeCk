@@ -6,12 +6,19 @@
 // Rounded rectangular prism, centred on X/Y, sitting on Z=0.
 // Built from a hull of four cylinders: far cheaper to render than minkowski()
 // and it produces exact vertical corner radii.
+//  r <= 0 means a SQUARE box, not a degenerate one. A hull of four zero-radius
+//  cylinders is not a solid: it rendered the board mock as nine bodies the
+//  moment board_corner_r was corrected from the drawing's R0.5 to the square
+//  corners the real board has. A radius of zero is a legitimate input.
 module rbox(w, h, t, r) {
     rr = min(r, w/2 - 0.01, h/2 - 0.01);
-    hull()
-        for (sx = [-1, 1], sy = [-1, 1])
-            translate([sx * (w/2 - rr), sy * (h/2 - rr), 0])
-                cylinder(h = t, r = rr);
+    if (rr <= 0.005)
+        translate([-w/2, -h/2, 0]) cube([w, h, t]);
+    else
+        hull()
+            for (sx = [-1, 1], sy = [-1, 1])
+                translate([sx * (w/2 - rr), sy * (h/2 - rr), 0])
+                    cylinder(h = t, r = rr);
 }
 
 // Rounded rectangular prism with a chamfer on the top and/or bottom arris.

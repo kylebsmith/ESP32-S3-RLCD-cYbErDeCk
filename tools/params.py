@@ -118,12 +118,12 @@ def load_with_defaults(path=PARAMS):
     p.setdefault("wall", 3.2)
     p.setdefault("spine", p["wall"])
     for name, expr in (("body_w", lambda q: q["wall"] + max(q["kbd_pocket_w"], q["board_pocket_w"]) + q["wall"]),
-                       ("body_h", lambda q: q["wall"] + q["kbd_pocket_h"] + q["spine"] + q["board_pocket_h"] + q["wall"]),
+                       ("body_h", lambda q: q.get("bottom_wall", q["wall"]) + q["kbd_pocket_h"] + q["spine"] + q["board_pocket_h"] + q["wall"]),
                        ("body_t", lambda q: q["back_t"] + q["board_depth"] + q["front_t"])):
         if name not in p:
             p[name] = expr(p)
     p.setdefault("board_bay_cy", p["body_h"] / 2 - p["wall"] - p["board_pocket_h"] / 2)
-    p.setdefault("kbd_bay_cy", -p["body_h"] / 2 + p["wall"] + p["kbd_pocket_h"] / 2)
+    p.setdefault("kbd_bay_cy", -p["body_h"] / 2 + p.get("bottom_wall", p["wall"]) + p["kbd_pocket_h"] / 2)
     p.setdefault("z_front_inner", p["body_t"] - p["front_t"])
     p.setdefault("kbd_keeper", p["board_depth"] - p["kbd_depth"])
     p["_provisional"] = prov

@@ -414,7 +414,7 @@ This is a real constraint honestly resolved, not a feature quietly dropped.
 
 ## What is not proven
 
-Internal consistency is asserted by 111 automated checks, and the structural
+Internal consistency is asserted by 113 automated checks, and the structural
 claims by classical section analysis in `tools/structure.py`. **Fit against
 physical hardware is not, and neither is drop survival** — section analysis
 gives ratios, not absolute stress, and nothing here models layer adhesion,

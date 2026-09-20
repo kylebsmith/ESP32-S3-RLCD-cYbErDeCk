@@ -195,6 +195,7 @@ module chassis() {
             // 1.4 mm of a 2.4 mm panel. See docs/DATUMS.md C-08.
             rbox(board_pocket_w, board_pocket_h, board_depth + 0.01, board_pocket_r);
 
+
         // --- keyboard bay ---------------------------------------------------
         // Stops kbd_keeper_t short of the panel, leaving a 0.25 mm band across
         // the bay that the keyboard bears on. That band used to be a raised pad
@@ -205,9 +206,17 @@ module chassis() {
         // leaves the plate's inner face one flat plane. Nothing about the
         // keyboard's clear depth, bearing area or lip changes.
         // See docs/DATUMS.md C-32.
-        translate([0, kbd_bay_cy, z_back_inner])
+        //  Starts 0.2 mm BELOW the seating plane. The keyboard bay's -Y wall and
+        //  the back opening's bottom edge both land on y = -body_h/2 +
+        //  bottom_wall, and both cutters stopped at z = z_back_inner exactly -
+        //  so the two shared an edge and CGAL left three degenerate slivers
+        //  there. The bay's clear depth is unchanged; only where the cutter
+        //  starts moved, and it starts inside material the opening already
+        //  removes.
+        translate([0, kbd_bay_cy, z_back_inner - 0.2])
             rbox(kbd_pocket_w, kbd_pocket_h,
-                 z_front_inner - kbd_keeper_t - z_back_inner, kbd_pocket_corner_r);
+                 z_front_inner - kbd_keeper_t - z_back_inner + 0.2,
+                 kbd_pocket_corner_r);
 
         // --- display aperture, with the reference's draft angle --------------
         translate([board_cx + display_off_x, board_bay_cy + display_off_y,
@@ -360,15 +369,21 @@ module chassis() {
             }
 
         // --- bottom-edge tongue groove ---------------------------------------
-        translate([0, -body_h/2 + wall - tongue_depth/2 + 0.01, tongue_z])
-            cube([inner_w - 2*corner_gusset, tongue_depth + 0.02, tongue_t],
+        //  The groove runs 0.4 mm PAST the back opening's edge, not 0.02. At a
+        //  0.02 overlap the cutter's inboard face landed on the cavity boundary
+        //  within CGAL's tolerance and left four zero-width slivers at the
+        //  groove's ends - the chassis rendered as one body and was not
+        //  watertight. The groove's OUTER edge, which is what sets the wall, is
+        //  unchanged.
+        translate([0, -body_h/2 + bottom_wall - tongue_depth/2 + 0.2, tongue_z])
+            cube([inner_w - 2*corner_gusset, tongue_depth + 0.4, tongue_t],
                  center = true);
 
         // --- back face is open ------------------------------------------------
         // Everything rearward of the back plate's seating plane is removed,
         // except the bosses and gussets added above.
-        translate([0, 0, -0.01])
-            rse_plate(inner_w, body_h - 2*wall, z_back_inner + 0.01,
+        translate([0, cavity_cy, -0.01])
+            rse_plate(inner_w, cavity_h, z_back_inner + 0.01,
                       cavity_blend, form_n);
 
         // --- heat-set insert bores, drilled from the back ---------------------
@@ -488,7 +503,14 @@ module cover() {
 
 module backplate() {
     plate_w = inner_w - 2 * fit_slide;
-    plate_h = body_h - 2*wall - 2 * fit_slide;
+    //  THE OPENING IS NO LONGER CENTRED. bottom_wall is 1.2 mm thicker than the
+    //  rest of the shell, so the back opening runs from -body_h/2 + bottom_wall
+    //  to +body_h/2 - wall, and its centre sits (bottom_wall - wall)/2 above
+    //  the part's. A plate built symmetrically about y = 0 overlaps the bottom
+    //  wall by exactly that much - 101 mm3 of interference, which is what the
+    //  clash check caught. Height and centre both follow the two walls.
+    plate_h  = body_h - bottom_wall - wall - 2 * fit_slide;
+    plate_cy = (bottom_wall - wall) / 2;
 
     difference() {
         union() {
@@ -500,8 +522,9 @@ module backplate() {
             // shrinking it means the gap opens slightly at the corners
             // (0.42 mm against 0.30 mm on the straight edges) instead of
             // closing, so the plate can never bind on a corner.
-            rse_soft(plate_w, plate_h, back_t, cavity_blend, form_n,
-                     plate_edge_soft, plate_edge_roll);
+            translate([0, plate_cy, 0])
+                rse_soft(plate_w, plate_h, back_t, cavity_blend, form_n,
+                         plate_edge_soft, plate_edge_roll);
 
             // --- bottom tongue ----------------------------------------------
             // Engages the groove in the chassis bottom wall. Length is set so
@@ -516,7 +539,7 @@ module backplate() {
             //  the capture plane, not by the groove's depth. The value stays
             //  2.20 and the tip does not move in y.
             tongue_len = tongue_depth - 0.4 + 1.0 + fit_slide;
-            translate([0, -plate_h/2 - tongue_len/2 + 1.0, tongue_z])
+            translate([0, plate_cy - plate_h/2 - tongue_len/2 + 1.0, tongue_z])
                 cube([inner_w - 2*corner_gusset - 2*fit_slide,
                       tongue_len, tongue_t - 2*0.15], center = true);
 

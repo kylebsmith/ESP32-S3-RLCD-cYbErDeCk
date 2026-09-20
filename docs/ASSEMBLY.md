@@ -3,7 +3,7 @@
 Read this before printing. The RLCD panel is fragile and must never be used as
 leverage while fitting a cable, a cell or a printed part.
 
-> **This design has not been built.** All **111** automated checks pass, but
+> **This design has not been built.** All **113** automated checks pass, but
 > nobody has held these components against a printed chassis. Print the
 > **chassis alone** first, offer the board and keyboard up to it, and check the
 > four measurements in
