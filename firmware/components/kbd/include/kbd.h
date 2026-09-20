@@ -53,6 +53,13 @@ typedef struct {
     bool          repeat;    /* synthesised by us, not sent by the keyboard */
 } kbd_event_t;
 
+/* NimBLE is initialised here because the keyboard needs it first. Anything
+ * else wanting a GATT service registers through these: `gatt` runs after
+ * nimble_port_init and before the host task starts, which is the only window
+ * in which services may be added; `synced` runs once the controller is up and
+ * is where advertising may begin. */
+void kbd_set_ble_hooks(void (*gatt)(void), void (*synced)(void));
+
 esp_err_t kbd_init(void);
 
 /* Block up to timeout_ms for an event. */

@@ -118,6 +118,8 @@ static void scan_start(void);
 static void connect_known_peer(void);
 static void peer_save(const ble_addr_t *addr);
 static bool s_trying_known;
+static void (*s_gatt_hook)(void);
+static void (*s_sync_hook)(void);
 
 bool kbd_connected(void)      { return s_connected; }
 const char *kbd_state_name(void) { return s_state; }
@@ -935,8 +937,17 @@ static void connect_known_peer(void)
     }
 }
 
+void kbd_set_ble_hooks(void (*gatt)(void), void (*synced)(void))
+{
+    s_gatt_hook = gatt;
+    s_sync_hook = synced;
+}
+
 static void on_sync(void)
 {
+    if (s_sync_hook != NULL) {
+        s_sync_hook();
+    }
     if (s_clear_bonds_on_sync) {
         ble_store_clear();
         s_clear_bonds_on_sync = false;
@@ -1041,6 +1052,9 @@ esp_err_t kbd_init(void)
     /* No GAP service is registered: we are a central only, we never
      * advertise, and the peripheral role is compiled out entirely. */
 
+    if (s_gatt_hook != NULL) {
+        s_gatt_hook();
+    }
     nimble_port_freertos_init(host_task);
     xTaskCreate(repeat_task, "kbd_repeat", 2560, NULL, 5, NULL);
     return ESP_OK;

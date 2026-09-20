@@ -21,6 +21,7 @@
 #include "nvs_flash.h"
 
 #include "cmd.h"
+#include "blemidi.h"
 #include "seq.h"
 #include "docstore.h"
 #include "editor.h"
@@ -113,8 +114,10 @@ static void bench(void)
              (esp_timer_get_time() - t0) / runs, ST7305_FB_SIZE);
 }
 
-static void midi_log_sink(uint8_t status, uint8_t d1, uint8_t d2)
+static void midi_sink(uint8_t status, uint8_t d1, uint8_t d2)
 {
+    blemidi_send(status, d1, d2);
+
     /* Note-on only, and rate-limited: a 16th-note grid at 120 bpm is eight
      * events a second and the console is also the keyboard. */
     static int n;
@@ -257,7 +260,7 @@ void app_main(void)
      * know the difference, which is the point of the sink being a function
      * pointer: BLE MIDI, USB MIDI and a UART all plug in here without the
      * musical core changing. */
-    seq_set_sink(midi_log_sink);
+    seq_set_sink(midi_sink);
     if (seq_init() != ESP_OK) {
         ESP_LOGE(TAG, "sequencer init failed");
     }
@@ -273,6 +276,7 @@ void app_main(void)
 
     ensure_guide_buffer();
 
+    kbd_set_ble_hooks(blemidi_register, blemidi_start);
     if (kbd_init() != ESP_OK) {
         ESP_LOGE(TAG, "BLE keyboard init FAILED");
     }
