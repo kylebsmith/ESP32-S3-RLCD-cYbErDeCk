@@ -22,6 +22,7 @@ tools/fetch_reference.sh --code   # also the example repos, ~900 MB
 | H5 | `github.com/waveshareteam/ESP32-S3-RLCD-4.2` — vendor example code | 2026-09-20 |
 | H6 | H5 → `02_Example/XiaoZhi/XiaoZhiCode_V2.1.0/main/boards/waveshare-s3-rlcd-4.2/config.h` | 2026-09-20 |
 | H7 | H5 → `02_Example/ESP-IDF/11_U8G2_Test/components/port_bsp/display_bsp.{h,cpp}` | 2026-09-20 |
+| H8 | `documentation.espressif.com/esp32-s3_datasheet_en.pdf` — Espressif ESP32-S3 datasheet | 2026-09-20 |
 
 Tags: `[VENDOR]` vendor states it · `[CODE]` read from vendor source ·
 `[DERIVED]` computed here from tagged values · `[OPEN]` not yet established.
@@ -174,6 +175,40 @@ Audio runs at 24 kHz in/out in the vendor's own voice application. `[CODE]` H6
 (so MIDI-over-USB to a host is available) or a host, but not both at once, and
 it is the same port used for flashing and logs.
 
+## USB, power role and expansion
+
+| Item | Value | Source |
+|------|-------|--------|
+| USB-C CC1 / CC2 | **5.1 kΩ pulldown on each** → sink (device) role only | `[VENDOR]` H4 |
+| Charger | ETA6098 switching charger; SW / PMID / BATS with L1 = 2.2 µH, 3 A | `[VENDOR]` H4 |
+| USB-OTG ↔ USB-Serial/JTAG | share the **integrated transceiver by time-division multiplexing** when only the internal PHY is used | `[VENDOR]` H8 |
+| Both at once | possible **only with an external PHY** — "USB OTG using one of the transceivers while USB Serial/JTAG using the other" | `[VENDOR]` H8 |
+| USB Serial/JTAG class | **hardwired CDC-ACM + JTAG**, fixed function | `[VENDOR]` H8 |
+
+### What this means for the design `[DERIVED]`
+
+- **USB MIDI out works.** MIDI to a host needs USB-OTG in *device* mode, which
+  is exactly what the port already is. No PHY conflict, no VBUS sourcing, no
+  extra parts. The creative-coding goal is unobstructed.
+- **USB Serial/JTAG can never carry MIDI** — it is fixed-function CDC-ACM. A
+  MIDI device must come from USB-OTG, which means giving up the console on the
+  internal PHY while MIDI is enumerated. That is a mode switch, not a blocker.
+- **USB host for a wired keyboard is the expensive path**, and it is the one
+  path this design does not need: it would contend for the same PHY *and*
+  require sourcing 5 V that the port's CC resistors say the board does not
+  offer. Since the keyboard is BLE HID, the conflict never arises.
+
+### 2 × 8 expansion header (P1, 2.54 mm) `[VENDOR]` H4
+
+Exposed nets: `VCC3V3`, `VBUS`, `GND` ×2, `GPIO0`, `GPIO1`, `GPIO2`, `GPIO3`,
+`GPIO17`, `GPIO18`, `U0TXD`, `U0RXD`, `ESP32_SDA`, `ESP32_SCL`, `USB'_N`,
+`USB'_P`.
+
+`GPIO0` is shared with BOOT and `GPIO18` with KEY, so the genuinely
+uncommitted lines are few. Both **I²C and UART0 are broken out**, which is the
+practical expansion route — any future peripheral should prefer one of those
+two buses over claiming raw GPIOs.
+
 ## Prior art on this exact board `[VENDOR]` H2
 
 Waveshare's own resource page lists community projects. Two are directly
@@ -204,5 +239,10 @@ keyboard-first writing device.
 2. **Measured current** in HPM vs LPM vs sleep is not given in H3 and has not
    been measured on the bench. The power argument for LPM is currently
    qualitative.
-3. **Schematic net names** have not been cross-read against the pin map above;
+3. **Can the ETA6098 boost VBUS?** Its SW / PMID pins and the 2.2 µH inductor
+   are the topology of a part that *may* support an OTG boost, but the ETA6098
+   datasheet has not been read and the CC resistors configure the port as a
+   sink regardless. Only matters if USB host is ever wanted; it is not wanted
+   today. **Do not assume either answer.**
+4. **Schematic net names** have not been fully cross-read against the pin map above;
    the pin map rests on vendor example code, which is strong but secondary.

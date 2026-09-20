@@ -239,7 +239,8 @@ counted among the audited rows.
 
 | | |
 |---|---|
-| **[DATUMS.md](docs/DATUMS.md)** | every dimension, its provenance, twenty-one recorded corrections, seven open items |
+| **[DATUMS.md](docs/DATUMS.md)** | every dimension, its provenance, thirty-four recorded corrections, nine open items |
+| **[HARDWARE.md](docs/HARDWARE.md)** | the board itself: panel, controller, pin map, USB and power, all traced to vendor sources |
 | **[DESIGN.md](docs/DESIGN.md)** | form language, why it is shaped this way, material and finish |
 | **[METHODOLOGY.md](docs/METHODOLOGY.md)** | how the numbers were obtained and how to reproduce them |
 | **[MEASURE.md](docs/MEASURE.md)** | caliper checklist for someone holding the actual hardware |
@@ -252,12 +253,15 @@ counted among the audited rows.
 |---|---|
 | `tools/params.py` | the single reader for `parameters.scad`; every other tool goes through it |
 | `tools/measure_reference.py` | metrology harness — regenerates every measured datum |
-| `tools/validate.py` | 90-check design audit — the build gate |
+| `tools/validate.py` | 113-check design audit — the build gate |
 | `tools/audit_reference.py` | component-facing accuracy against the reference |
 | `tools/test_primitives.py` | unit tests for the geometry helpers; catches a primitive that lies |
 | `tools/structure.py` | section properties from the mesh; stiffness against the reference |
 | `tools/drawing.py` | dimensioned GA sheets, measured from the mesh |
 | `tools/render.sh` | every published view, with its camera stated in the script |
+| `tools/check_golden.py` | proves v1 still reproduces exactly, parameter-for-parameter |
+| `tools/check_docs.py` | proves the documentation still says true things about itself |
+| `tools/fetch_reference.sh` | rebuilds `reference/` from vendor URLs; nothing vendored |
 | `tools/build.sh` | render everything and gate; what CI runs |
 
 ## Repository layout
@@ -271,7 +275,7 @@ cad/
 tools/
   params.py             the single reader for parameters.scad
   measure_reference.py  metrology harness — regenerates every measured datum
-  validate.py           90-check design audit — the build gate
+  validate.py           113-check design audit — the build gate
   audit_reference.py    component-facing accuracy against the reference
   test_primitives.py    unit tests for the geometry helpers
   structure.py          section properties, stiffness, weak-point location

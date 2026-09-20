@@ -68,6 +68,15 @@ jobs:
       # hypothetical - backplate-rear.png did, at byte 29806, and failed this
       # step. A gate whose result depends on how an image happens to compress
       # is worse than no gate, because it teaches you to ignore it.
+      # Citations to records that do not exist, holes in the correction
+      # sequence, broken cross-document links, and advertised counts that have
+      # drifted from what the documents actually contain. C-22, C-23 and C-24
+      # were cited by name in the CAD for the whole life of the button and
+      # keyboard-rib work and none of the three was ever written; nothing
+      # noticed, because nothing was looking.
+      - name: Check the documentation is self-consistent
+        run: python3 tools/check_docs.py
+
       - name: Check no stale TODOs in source or docs
         run: |
           if grep -rnIE '\b(TODO|FIXME|XXX)\b' \

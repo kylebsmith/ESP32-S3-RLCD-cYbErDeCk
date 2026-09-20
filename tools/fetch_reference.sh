@@ -48,6 +48,7 @@ echo "-- datasheets and hardware --"
 get "$FILES/common/ST_7305_V0_2.pdf"                        ST7305_datasheet.pdf
 get "$FILES/common/ES8311.DS.pdf"                           ES8311.pdf
 get "$FILES/common/SHTC3_Datasheet.pdf"                     SHTC3.pdf
+get "https://documentation.espressif.com/esp32-s3_datasheet_en.pdf"      esp32-s3_datasheet.pdf
 get "$FILES/ESP32-S3-RLCD-4.2/ESP32-S3-RLCD-4.2-schematic.pdf" ESP32-S3-RLCD-4.2-schematic.pdf
 get "$FILES/ESP32-S3-RLCD-4.2/ESP32-S3-RLCD-4.2-3dFile.rar"    ESP32-S3-RLCD-4.2-3dFile.rar
 
