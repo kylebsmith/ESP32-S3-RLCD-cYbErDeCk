@@ -107,17 +107,21 @@ static cmd_status_t c_close(cmd_ctx_t *ctx)
     return CMD_DONE;
 }
 
+/* The kind no longer decides whether Enter runs a line - the '>' sigil marks
+ * a command and Ctrl+Enter runs it, in any buffer. The kind is kept because
+ * it still has to decide prose-versus-grid reflow for Orca patches, which is
+ * the distinction docs/SUBSTRATE.md actually cares about. */
 static cmd_status_t c_guide(cmd_ctx_t *ctx)
 {
     doc_buf_set_kind(DOC_KIND_GUIDE);
-    snprintf(ctx->msg, sizeof ctx->msg, "guide: Enter runs the line");
+    snprintf(ctx->msg, sizeof ctx->msg, "kind: guide");
     return CMD_DONE;
 }
 
 static cmd_status_t c_prose(cmd_ctx_t *ctx)
 {
     doc_buf_set_kind(DOC_KIND_PROSE);
-    snprintf(ctx->msg, sizeof ctx->msg, "prose: Enter splits the line");
+    snprintf(ctx->msg, sizeof ctx->msg, "kind: prose");
     return CMD_DONE;
 }
 
@@ -140,8 +144,8 @@ static const cmd_t s_builtins[] = {
     { "open",  c_open,  CMD_CAP_READ,                   "switch to a named document" },
     { "save",  c_save,  CMD_CAP_STORE,                  "write this buffer now" },
     { "close", c_close, CMD_CAP_EDIT,                   "forget this buffer" },
-    { "guide", c_guide, CMD_CAP_EDIT,                   "Enter runs lines here" },
-    { "prose", c_prose, CMD_CAP_EDIT,                   "Enter splits lines here" },
+    { "guide", c_guide, CMD_CAP_EDIT,                   "mark as a guide" },
+    { "prose", c_prose, CMD_CAP_EDIT,                   "mark as prose" },
     { "out",   c_out,   CMD_CAP_READ,                   "read command output" },
 };
 

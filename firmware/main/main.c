@@ -117,10 +117,45 @@ static int64_t now_ms(void) { return esp_timer_get_time() / 1000; }
  * write one - a device whose commands are undiscoverable has, in practice,
  * no commands. The owner can edit it like any other document, which is the
  * whole point: adding a menu item costs typing a line. */
+#define GUIDE_TEXT \
+    "This guide is a document.\n" \
+    "Lines starting with > are\n" \
+    "commands. Ctrl+Enter runs\n" \
+    "the one under the cursor.\n" \
+    "Enter always makes a line.\n" \
+    "\n" \
+    ">help\n" \
+    ">list\n" \
+    "\n" \
+    "Writing\n" \
+    ">new\n" \
+    ">name today\n" \
+    "\n" \
+    "Output\n" \
+    ">out\n"
+
 static void ensure_guide_buffer(void)
 {
     for (int i = 0; i < DOC_MAX_BUFFERS; i++) {
         if (strcmp(doc_buf_name(i), "guide") == 0) {
+            /* A guide written before the sigil existed holds lines that will
+             * never run again. Rewrite it once rather than leaving a menu
+             * whose buttons silently do nothing. */
+            const int was = doc_buf_current();
+            if (doc_buf_select(i) != ESP_OK) {
+                return;
+            }
+            bool has_sigil = false;
+            for (size_t k = 0; k < doc_len(); k++) {
+                if (doc_at(k) == '>') { has_sigil = true; break; }
+            }
+            if (!has_sigil) {
+                doc_set_text(GUIDE_TEXT);
+                doc_buf_set_kind(DOC_KIND_GUIDE);
+                doc_save();
+                ESP_LOGW(TAG, "rewrote the guide for the '>' sigil");
+            }
+            doc_buf_select(was);
             return;
         }
     }
@@ -128,7 +163,7 @@ static void ensure_guide_buffer(void)
     if (doc_buf_new() != ESP_OK) {
         return;
     }
-    doc_set_text("help\nlist\nnew\nopen guide\n");
+    doc_set_text(GUIDE_TEXT);
     doc_buf_set_kind(DOC_KIND_GUIDE);
     if (doc_buf_rename("guide") == ESP_OK) {
         doc_save();

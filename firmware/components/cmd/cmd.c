@@ -26,6 +26,10 @@ static uint32_t caller_caps(cmd_caller_t who)
     }
 }
 
+static int s_out_lines;
+
+int cmd_last_output_lines(void) { return s_out_lines; }
+
 static const cmd_t *s_table;
 static int          s_count;
 
@@ -59,6 +63,7 @@ void cmd_out(cmd_ctx_t *ctx, const char *fmt, ...)
      * false. */
     ESP_LOGI(TAG, "%s", line);
     doc_buf_append(doc_buf_ensure("+out"), line);
+    s_out_lines++;
     if (ctx != NULL && ctx->msg[0] == '\0') {
         snprintf(ctx->msg, sizeof ctx->msg, "%.*s",
                  (int)(sizeof ctx->msg - 1), line);
@@ -70,6 +75,19 @@ cmd_status_t cmd_run_line(const char *line, cmd_caller_t caller,
 {
     cmd_ctx_t ctx = { .arg = "", .caller = caller };
     ctx.msg[0] = '\0';
+    s_out_lines = 0;
+
+    /* The sigil. A command line is marked, so a document can hold prose and
+     * runnable lines side by side without either pretending to be the other -
+     * which is what makes documentation executable rather than merely
+     * illustrative. docs/SUBSTRATE.md already assigns '>' to commands. */
+    while (*line == ' ' || *line == '\t') {
+        line++;
+    }
+    if (*line != '>') {
+        return CMD_DONE;            /* prose: not addressed to the machine */
+    }
+    line++;
 
     if (line == NULL) {
         return CMD_ERROR;

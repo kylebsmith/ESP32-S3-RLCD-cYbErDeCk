@@ -203,13 +203,16 @@ static void status_bar(void)
     /* Cursor position earns its place: a text editor that cannot tell you
      * where the cursor is makes every navigation bug invisible, and on a
      * 30-column screen the cursor is easy to lose. */
-    snprintf(s, sizeof s, "%-3.3s%5u%c %2d:%-2d u%-2d %s",
-             kbd_connected() ? "KBD" : "...",
-             (unsigned)doc_len(),
+    /* Where you are comes first. On a thirty-column screen the byte count was
+     * taking room from the one fact the owner actually needs, which is which
+     * document they are looking at. */
+    const char *nm = doc_buf_name(doc_buf_current());
+    snprintf(s, sizeof s, "%-12.12s%c %3d:%-3d %s%s",
+             nm[0] ? nm : "scratch",
              doc_dirty() ? '*' : ' ',
              s_cursor_line + 1, s_cursor_col + 1,
-             doc_undo_depth(),
-             doc_sd_present() ? "SD" : "  ");
+             kbd_connected() ? "K" : "-",
+             doc_sd_present() ? "S" : "-");
     (void)net;
 
     if (strcmp(s, s_status_shown) == 0) {
@@ -510,14 +513,39 @@ static void run_current_line(void)
 {
     char line[128];
     current_line(line, sizeof line);
-    if (line[0] == '\0') {
+
+    const char *p = line;
+    while (*p == ' ' || *p == '\t') {
+        p++;
+    }
+    if (*p != '>') {
+        snprintf(s_msg, sizeof s_msg, "not a command - start the line with >");
+        s_msg_until = editor_now_ms() + 3000;
         return;
     }
+
     char msg[96] = "";
-    const cmd_status_t st = cmd_run_line(line, CMD_BY_HANDS, msg, sizeof msg);
-    snprintf(s_msg, sizeof s_msg, "%s", msg[0] ? msg : (st == CMD_DONE ? "ok" : "?"));
+    cmd_run_line(line, CMD_BY_HANDS, msg, sizeof msg);
+    const int lines = cmd_last_output_lines();
+
+    /* A result of more than one line shows itself. Reporting "10 commands" at
+     * the bottom of the screen and leaving the actual answer somewhere the
+     * owner has to know to look for is not minimalism, it is hiding. */
+    if (lines > 1) {
+        const int out = doc_buf_find("+out");
+        if (out >= 0 && doc_buf_select(out) == ESP_OK) {
+            doc_move_to(doc_len());
+            s_top_offset = 0;
+            s_goal_col = -1;
+            snprintf(s_msg, sizeof s_msg, "%s", msg[0] ? msg : "output");
+            s_msg_until = editor_now_ms() + 2500;
+            editor_invalidate();
+            tg_invalidate();
+            return;
+        }
+    }
+    snprintf(s_msg, sizeof s_msg, "%s", msg[0] ? msg : "ok");
     s_msg_until = editor_now_ms() + 4000;
-    /* A command may have switched buffers entirely. */
     editor_invalidate();
     tg_invalidate();
 }
@@ -538,6 +566,11 @@ void editor_handle(const kbd_event_t *ev)
         break;
     }
 
+    if (ev->type == KBD_EV_ENTER && (ev->mods & (KBD_CTRL | KBD_ALT))) {
+        run_current_line();
+        return;
+    }
+
     if (ev->type == KBD_EV_CHAR && (ev->mods & (KBD_CTRL | KBD_ALT))) {
         handle_ctrl((char)(ev->ch >= 'A' && ev->ch <= 'Z'
                            ? ev->ch - 'A' + 'a' : ev->ch));
@@ -546,21 +579,22 @@ void editor_handle(const kbd_event_t *ev)
 
     switch (ev->type) {
     case KBD_EV_CHAR:      doc_insert(ev->ch); break;
-    case KBD_EV_ENTER: {
-        /* One bit of interpretation, exactly as docs/SUBSTRATE.md says: the
-         * kind decides only what Enter does. In a guide, Enter runs the line
-         * and Ctrl+Enter inserts one; in prose it is the other way round, so
-         * the Run verb is reachable from anywhere without a mode. */
-        const bool guide =
-            doc_buf_kind(doc_buf_current()) == DOC_KIND_GUIDE;
-        const bool ctrl = (ev->mods & KBD_CTRL) != 0;
-        if (guide != ctrl) {
-            run_current_line();
-        } else {
-            doc_insert('\n');
-        }
+    case KBD_EV_ENTER:
+        /* Enter ALWAYS inserts a newline. Always, in every buffer.
+         *
+         * It used to run the line in a guide buffer, which is what
+         * docs/SUBSTRATE.md describes - and it made the guide uneditable:
+         * standing at the end of a command with no way to add a line after
+         * it, because the key that adds lines was busy running things. An
+         * editor whose Enter key sometimes does not insert a line is not an
+         * editor.
+         *
+         * The sigil made the kind redundant here anyway. A command is marked
+         * by '>' in the text, so the machine can tell a command from prose
+         * without a mode; the only remaining question is WHEN to run one, and
+         * that is a modifier, not a property of the buffer. */
+        doc_insert('\n');
         break;
-    }
     case KBD_EV_TAB:       doc_insert(' '); doc_insert(' '); break;
     case KBD_EV_BACKSPACE: doc_backspace();   break;
     case KBD_EV_LEFT:      doc_left();  log_motion("left");  break;

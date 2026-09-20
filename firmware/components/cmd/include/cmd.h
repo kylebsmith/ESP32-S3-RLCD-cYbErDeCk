@@ -10,7 +10,9 @@
  * thing that cannot be retrofitted: adding quoting or flags later would change
  * the meaning of guide files already written, and guide files are user data.
  *
- *   - The command is the FIRST WORD of the line.
+ *   - A command line BEGINS WITH '>'. Anything else is prose, so a document
+ *     can carry explanation and runnable lines together.
+ *   - The command is the first word after the sigil.
  *   - The rest of the line is ONE UNPARSED STRING. Commands that want
  *     structure parse it themselves.
  *   - The selection, when there is one, is the implicit input.
@@ -78,6 +80,10 @@ cmd_status_t cmd_run_line(const char *line, cmd_caller_t caller,
 /* Command output. Goes to the log today and to an output buffer when one
  * exists; the call site does not change either way. */
 void cmd_out(cmd_ctx_t *ctx, const char *fmt, ...);
+
+/* How many lines the last command wrote. A result worth reading should show
+ * itself rather than waiting to be found. */
+int cmd_last_output_lines(void);
 
 const cmd_t *cmd_table(int *count);
 
