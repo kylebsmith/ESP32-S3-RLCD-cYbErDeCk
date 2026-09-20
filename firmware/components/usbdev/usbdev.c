@@ -323,6 +323,7 @@ static void cdc_rx(int itf, cdcacm_event_t *event)
 static esp_timer_handle_t s_reboot_timer;
 static bool               s_reboot_to_loader;
 static int                s_prev_rts;
+static bool               s_reset_armed;
 
 static void reboot_now(void *arg)
 {
@@ -408,8 +409,26 @@ static void cdc_line_state(int itf, cdcacm_event_t *event)
      * stops arriving the failure is silent and looks like a dead board. */
     ESP_LOGW(TAG, "cdc line state: dtr=%d rts=%d (prev rts=%d)",
              (int)dtr, (int)rts, s_prev_rts);
-    if (!rts && s_prev_rts) {
-        s_reboot_to_loader = dtr;
+    /* REQUIRE THE WHOLE esptool PATTERN, NOT JUST A FALLING RTS.
+     *
+     * esptool's ClassicReset drives two distinct edges: first DTR low with
+     * RTS high, then DTR high with RTS low. Watching only for a falling RTS
+     * matched something far more common - CLOSING THE PORT. Any terminal
+     * disconnect drops both lines, so every time a monitor detached, the deck
+     * rebooted. That is how this session repeatedly found the deck in the ROM
+     * loader with a blank screen for no reason anyone had asked for, and it
+     * cost a long time to notice because the cause was the tool doing the
+     * looking.
+     *
+     * Demanding the armed state first - RTS high while DTR is low - makes a
+     * plain close a no-op, because a close drops both together and never
+     * passes through it. */
+    if (rts && !dtr) {
+        s_reset_armed = true;
+    }
+    if (!rts && s_prev_rts && s_reset_armed && dtr) {
+        s_reset_armed = false;
+        s_reboot_to_loader = true;
         ESP_LOGW(TAG, "esptool reset -> %s",
                  dtr ? "download mode" : "normal boot");
         if (s_reboot_timer == NULL) {
