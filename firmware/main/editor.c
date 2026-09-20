@@ -167,12 +167,17 @@ static void status_bar(void)
     char s[64];
     const char *net = kbd_connected() ? "KEYBOARD" : kbd_state_name();
 
-    snprintf(s, sizeof s, "%-8.8s %4u%c u%-2d %s",
-             net,
+    /* Cursor position earns its place: a text editor that cannot tell you
+     * where the cursor is makes every navigation bug invisible, and on a
+     * 30-column screen the cursor is easy to lose. */
+    snprintf(s, sizeof s, "%-3.3s%5u%c %2d:%-2d u%-2d %s",
+             kbd_connected() ? "KBD" : "...",
              (unsigned)doc_len(),
              doc_dirty() ? '*' : ' ',
+             s_cursor_line + 1, s_cursor_col + 1,
              doc_undo_depth(),
              doc_sd_present() ? "SD" : "  ");
+    (void)net;
 
     if (strcmp(s, s_status_shown) == 0) {
         return;                       /* nothing changed - do not touch flash */
@@ -372,6 +377,16 @@ static void handle_ctrl(char c)
     }
 }
 
+/* Motion is logged so navigation can be checked from the bench without
+ * anyone having to read the panel over someone's shoulder. */
+static void log_motion(const char *what)
+{
+    wrap(TEXT_COLS);
+    ESP_LOGI("editor", "%s -> line %d col %d (offset %u of %u)",
+             what, s_cursor_line + 1, s_cursor_col + 1,
+             (unsigned)doc_cursor(), (unsigned)doc_len());
+}
+
 void editor_handle(const kbd_event_t *ev)
 {
     if (ev->type == KBD_EV_CHAR && (ev->mods & (KBD_CTRL | KBD_ALT))) {
@@ -385,15 +400,17 @@ void editor_handle(const kbd_event_t *ev)
     case KBD_EV_ENTER:     doc_insert('\n');   break;
     case KBD_EV_TAB:       doc_insert(' '); doc_insert(' '); break;
     case KBD_EV_BACKSPACE: doc_backspace();   break;
-    case KBD_EV_LEFT:      doc_left();        break;
-    case KBD_EV_RIGHT:     doc_right();       break;
+    case KBD_EV_LEFT:      doc_left();  log_motion("left");  break;
+    case KBD_EV_RIGHT:     doc_right(); log_motion("right"); break;
     case KBD_EV_UP:
         wrap(TEXT_COLS);
         goto_line_col(s_cursor_line - 1, s_cursor_col);
+        log_motion("up");
         break;
     case KBD_EV_DOWN:
         wrap(TEXT_COLS);
         goto_line_col(s_cursor_line + 1, s_cursor_col);
+        log_motion("down");
         break;
     case KBD_EV_HOME: { int s, e; line_bounds(&s, &e); doc_move_to((size_t)s); break; }
     case KBD_EV_END:  { int s, e; line_bounds(&s, &e); doc_move_to((size_t)e); break; }

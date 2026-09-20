@@ -60,6 +60,21 @@ static const char *TAG = "kbd";
 #define KEEPALIVE_IDLE_MS  4000
 #define KEEPALIVE_MIN_GAP  2000
 
+/* How long a connected-but-silent link is tolerated before it is torn down
+ * and rebuilt.
+ *
+ * Observed on this keyboard: it works immediately after a fresh connection,
+ * then stops reporting and never resumes, while the link stays up and GATT
+ * still answers. Exit Suspend is accepted (rc 0) and changes nothing. The
+ * keyboard has effectively abandoned the link while our controller still
+ * believes in it - so it is advertising for a new host while we hold a
+ * corpse, and no amount of nudging down a dead link will help.
+ *
+ * Sixty seconds of silence means nobody is typing anyway, and a rebuild costs
+ * about five seconds, so this is close to free when it is not needed and is
+ * the only thing that works when it is. */
+#define LINK_DEAD_MS  60000
+
 static QueueHandle_t s_q;
 static uint16_t      s_conn = BLE_HS_CONN_HANDLE_NONE;
 static uint8_t       s_own_addr_type;
@@ -243,6 +258,16 @@ static void repeat_task(void *arg)
                 ESP_LOGI(TAG, "keyboard quiet %llds - exit-suspend nudge (rc %d)",
                          (long long)((nowb - s_last_report_ms) / 1000), rc);
             }
+        }
+
+        /* Rebuild a link that has gone silent. */
+        if (s_subscribed && s_conn != BLE_HS_CONN_HANDLE_NONE &&
+            s_last_report_ms != 0 &&
+            nowb - s_last_report_ms >= LINK_DEAD_MS) {
+            ESP_LOGW(TAG, "link silent %llds - tearing it down and reconnecting",
+                     (long long)((nowb - s_last_report_ms) / 1000));
+            s_last_report_ms = nowb;      /* do not re-fire while it closes */
+            ble_gap_terminate(s_conn, BLE_ERR_REM_USER_CONN_TERM);
         }
 
         if (nowb - last_beat >= 10000) {
@@ -464,6 +489,7 @@ static void subscribe_next(uint16_t conn)
                 ESP_LOGI(TAG, "keyboard ready - %d report(s) subscribed",
                          s_sub_done);
                 emit(KBD_EV_CONNECTED, 0, false);
+                s_last_report_ms = esp_timer_get_time() / 1000;
                 struct ble_gap_conn_desc d;
                 if (ble_gap_conn_find(conn, &d) == 0) {
                     peer_save(&d.peer_id_addr);
