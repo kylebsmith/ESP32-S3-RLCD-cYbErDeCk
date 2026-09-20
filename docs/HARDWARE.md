@@ -106,109 +106,86 @@ returns to 32 Hz on a keypress via a single command byte.
 
 ### Character-cell geometry `[DERIVED]`
 
-Candidate cells, against a 400 × 300 field with 4 × 2 byte blocks:
+**The quantisation rotates with the panel, and this was got wrong at first.**
+The byte is 4 × 2 pixels *in the panel's own portrait frame*, but the device
+runs **landscape** (settled by `docs/DATUMS.md` D-07: only 400 × 300 gives
+square 0.2120 mm pixels against the enclosure's active area). Rotated:
 
-| Cell | Grid | Fits exactly? | Byte-aligned? | Notes |
-|------|------|---------------|---------------|-------|
-| **8 × 12** | **50 × 25** | **yes, both axes** | **yes** (2 × 6 bytes) | recommended default |
-| 8 × 16 | 50 × 18 | 12 px wasted vertically | yes | classic VGA font metrics |
-| 12 × 16 | 33 × 18 | 4 px h, 12 px v wasted | yes | large/accessible mode |
-| 5 × 10 | 80 × 30 | yes, both axes | **no** (5 ∤ 4) | classic 80×30; cells straddle bytes |
+| Landscape axis | Maps to | Addressing unit | **Quantum** |
+|---|---|---|---|
+| width, 400 px | native Y | `RASET` row address | **2 px** |
+| height, 300 px | native X | `CASET` column address | **12 px** |
 
-`8 × 12 → 50 × 25` divides both axes exactly, wastes no pixels, and each cell
-is exactly 12 bytes. A per-cell dirty bitmap for the whole screen is
-50 × 25 = 1250 bits = **157 bytes**, which is free. An 80-column mode remains
-available at 5 × 10 at the cost of unaligned cell writes.
+So **12 px is the hardware's own line height** — one full-width text line of
+12 px is exactly one column address across all 200 row addresses. Character
+width wants to be even; height wants to be a multiple of 12.
 
-## Pin map `[CODE]` H6, corroborated by H7
+A window of *C* column addresses × *R* row addresses costs `C × R × 3` bytes:
 
-### Display (SPI3_HOST)
-| Signal | GPIO |
-|--------|------|
-| SCK | 11 |
-| MOSI | 12 |
-| CS | 40 |
-| DC | 5 |
-| RST | 41 |
-| TE | 6 |
+| Cell | Grid | h % 12 | w % 2 | Bytes/char | @ 20 MHz |
+|------|------|--------|-------|-----------|----------|
+| **6 × 12** | **66 × 25** | yes | yes | **9** | 3.6 µs |
+| 8 × 12 | 50 × 25 | yes | yes | 12 | 4.8 µs |
+| 12 × 12 | 33 × 25 | yes | yes | 18 | 7.2 µs |
+| 5 × 10 | 80 × 30 | **no** | **no** | 24 | 9.6 µs |
 
-### I²C bus (I2C_NUM_0) — codec, RTC, temp/humidity
-| Signal | GPIO |
-|--------|------|
-| SDA | 13 |
-| SCL | 14 |
+**`6 × 12` giving `66 × 25` is the recommendation.** It is aligned on both
+axes, it is the cheapest per character, and 66 columns is close to the
+classical measure for prose. `8 × 12` at `50 × 25` is the roomier alternative
+and equally well aligned.
 
-### Audio (I²S)
-| Signal | GPIO |
-|--------|------|
-| MCLK | 16 |
-| BCLK | 9 |
-| WS | 45 |
-| DIN (mics → ES7210) | 10 |
-| DOUT (→ ES8311 → speaker) | 8 |
-| PA enable | 46 |
+An 80-column mode is now clearly the wrong trade: `5 × 10` is misaligned on
+*both* axes, costs the most per character of any option here, and at 120 DPI a
+1.06 mm cell is legible but unpleasant. **Plan the UI for 66 × 25.**
 
-### Buttons
-| Button | GPIO | Source |
-|--------|------|--------|
-| BOOT | 0 | `[CODE]` H6 |
-| KEY (user) | 18 | `[CODE]` H5 |
-| PWR | — | hard-wired to PMIC; long-press off, click on `[VENDOR]` H1 |
+| Update | Bytes | @ 20 MHz |
+|--------|-------|----------|
+| One character (6 × 12) | 9 | 3.6 µs |
+| One full-width 12 px line | 600 | 240 µs |
+| Full frame | 15,000 | 6.0 ms |
 
-### Battery sense
-ADC1 channel 3, 12 dB attenuation, oneshot + calibration. `[CODE]` H5
+### Refresh: three different numbers, and only two govern how it feels `[OPEN]`
 
-## Peripherals
+This is the sharpest unresolved question in the prior art and it must not be
+collapsed into one figure:
 
-| Part | Function | Address / bus | Source |
-|------|----------|---------------|--------|
-| ES8311 | audio codec (playback) | I²C `0x18` | `[CODE]` H5 |
-| ES7210 | ADC, echo cancellation (dual mic) | I²C `0x40` | `[CODE]` H5 |
-| PCF85063 | RTC, with separate backup cell | I²C | `[VENDOR]` H1 |
-| SHTC3 | temperature / humidity | I²C | `[VENDOR]` H1 |
-| — | microSD, SDMMC 1-bit, FAT32 | dedicated | `[VENDOR]` H1 |
-| — | 18650 holder + charge/discharge management | — | `[VENDOR]` H1 |
-| — | 2 × 8 header, 2.54 mm pitch | — | `[VENDOR]` H1 |
+1. **SPI write throughput** — fast. 6.0 ms a frame at 20 MHz, 5.0 at 24 MHz,
+   and the datasheet's 30 ns `tSCYC` allows 33 MHz. Not the limit.
+2. **Liquid-crystal optical response** — an NES emulator written for this exact
+   panel reports it staying clean only to about **23 Hz**, with blacks washing
+   out above roughly 26 Hz. If that holds, it, not bandwidth, is the real
+   ceiling, and the earlier "32 Hz is comfortable" reading is optimistic.
+3. **Self-refresh rate** — HPM or LPM, independent of how fast content is
+   written.
 
-Audio runs at 24 kHz in/out in the vendor's own voice application. `[CODE]` H6
+**Writing while the panel is in LPM can delay the visible update by up to one
+refresh period — about a second at 1 Hz.** That is the lag Freewrite owners
+complain about, and it is a design rule rather than a defect: **kick to HPM on
+the first keydown and drop back after an idle timeout.** Prior art defaults to
+HPM and makes the automatic behaviour opt-in, which is the wrong default for a
+battery device.
 
-**USB**: the ESP32-S3 has one USB-OTG peripheral. It can be a USB **device**
-(so MIDI-over-USB to a host is available) or a host, but not both at once, and
-it is the same port used for flashing and logs.
+Unmeasured here. Bench it before believing any of it.
 
-## USB, power role and expansion
+### Driver constraints worth knowing before writing code
 
-| Item | Value | Source |
-|------|-------|--------|
-| USB-C CC1 / CC2 | **5.1 kΩ pulldown on each** → sink (device) role only | `[VENDOR]` H4 |
-| Charger | ETA6098 switching charger; SW / PMID / BATS with L1 = 2.2 µH, 3 A | `[VENDOR]` H4 |
-| USB-OTG ↔ USB-Serial/JTAG | share the **integrated transceiver by time-division multiplexing** when only the internal PHY is used | `[VENDOR]` H8 |
-| Both at once | possible **only with an external PHY** — "USB OTG using one of the transceivers while USB Serial/JTAG using the other" | `[VENDOR]` H8 |
-| USB Serial/JTAG class | **hardwired CDC-ACM + JTAG**, fixed function | `[VENDOR]` H8 |
+- **The framebuffer belongs in internal DMA SRAM, not PSRAM.** SPI DMA
+  requires internal SRAM; PSRAM would need cache-coherence work. 15 KB is
+  affordable. Scrollback and document buffers go in PSRAM.
+- **SPI reads are 5× slower than writes** — `tSCYC` 30 ns write against 150 ns
+  read, so ~6.7 MHz for any read path. A driver that reads controller RAM or
+  status at the write clock will fail intermittently.
+- **`ST7305` vs `ST7306`.** Waveshare says ST7305 three independent ways, but
+  Zephyr's in-tree board definition for this same board declares
+  `sitronix,st7306`. The command sets overlap enough that the ST7306 driver
+  works. Trust ST7305 for datasheet lookups; a driver labelled ST7306 may still
+  be the right code.
+- **No backlight, and no net to add one to.** The 23-pin LCD FPC carries only
+  GND, VCC3V3, SCL, SDA, CS, RS, TE and RESET — grepping the schematic for
+  backlight, `LEDA`, `LEDK` or frontlight returns nothing. Contrast improves in
+  direct sunlight, which is the compensating virtue, but any front light is a
+  board revision driven from a spare GPIO, not an FPC pin.
 
-### What this means for the design `[DERIVED]`
-
-- **USB MIDI out works.** MIDI to a host needs USB-OTG in *device* mode, which
-  is exactly what the port already is. No PHY conflict, no VBUS sourcing, no
-  extra parts. The creative-coding goal is unobstructed.
-- **USB Serial/JTAG can never carry MIDI** — it is fixed-function CDC-ACM. A
-  MIDI device must come from USB-OTG, which means giving up the console on the
-  internal PHY while MIDI is enumerated. That is a mode switch, not a blocker.
-- **USB host for a wired keyboard is the expensive path**, and it is the one
-  path this design does not need: it would contend for the same PHY *and*
-  require sourcing 5 V that the port's CC resistors say the board does not
-  offer. Since the keyboard is BLE HID, the conflict never arises.
-
-### 2 × 8 expansion header (P1, 2.54 mm) `[VENDOR]` H4
-
-Exposed nets: `VCC3V3`, `VBUS`, `GND` ×2, `GPIO0`, `GPIO1`, `GPIO2`, `GPIO3`,
-`GPIO17`, `GPIO18`, `U0TXD`, `U0RXD`, `ESP32_SDA`, `ESP32_SCL`, `USB'_N`,
-`USB'_P`.
-
-`GPIO0` is shared with BOOT and `GPIO18` with KEY, so the genuinely
-uncommitted lines are few. Both **I²C and UART0 are broken out**, which is the
-practical expansion route — any future peripheral should prefer one of those
-two buses over claiming raw GPIOs.
 
 ## Window addressing — the datasheet contradiction, resolved `[CODE]` H9
 
@@ -256,20 +233,19 @@ Windows are quantised — X snaps out to 12-pixel boundaries, Y to 2 lines.
 
 ### What this buys `[DERIVED]`
 
-A window of *N* column addresses × *M* row addresses costs `N × 3 × M` bytes.
-One 8 × 12 character cell spans at most 2 column addresses and exactly 6 row
-addresses:
+A window of *C* column addresses × *R* row addresses costs `C × R × 3` bytes.
+Worked through in the **landscape** frame the device actually uses — see
+*Character-cell geometry* above, where the axes and their quanta are set out:
 
-| Update | Bytes | Wire time @ 20 MHz |
-|--------|-------|--------------------|
-| Full frame | 15,000 | 6.0 ms |
-| One 8 × 12 character cell | **36** | **14 µs** |
+| Update | Bytes | Wire time @ 20 MHz | vs. full frame |
+|--------|-------|--------------------|----------------|
+| One 6 × 12 character | **9** | 3.6 µs | 1/1667 |
+| One full-width 12 px line | 600 | 240 µs | 1/25 |
+| Full frame | 15,000 | 6.0 ms | — |
 
-Roughly a **400× reduction** for the common case of typing a character. The
+Three orders of magnitude for the common case of typing a character. The
 earlier conclusion stands and strengthens: full-frame pushes were already fast
-enough for a comfortable editor, and windowed updates now make a keystroke
-essentially free, which is what matters for battery life rather than for
-latency.
+enough for a comfortable editor, so this buys **battery life, not latency**.
 
 ### Frame-rate control `[CODE]` H9
 
