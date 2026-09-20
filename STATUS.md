@@ -24,13 +24,13 @@ There is a short note already typed into the deck, waiting for you.
 ## Flash it
 
 ```bash
-. ~/esp/esp-idf/export.sh && cd firmware && idf.py -p /dev/cu.usbmodem2141101 flash monitor
+. ~/esp/esp-idf/export.sh && cd firmware && idf.py -p /dev/cu.usbmodem21301 flash monitor
 ```
 
 Watch the log without reflashing:
 
 ```bash
-. ~/esp/esp-idf/export.sh && cd firmware && idf.py -p /dev/cu.usbmodem2141101 monitor
+. ~/esp/esp-idf/export.sh && cd firmware && idf.py -p /dev/cu.usbmodem21301 monitor
 ```
 
 Button-free, as required. Every flash tonight worked first time and BOOT was
@@ -58,6 +58,21 @@ Every row has log evidence from the board on your desk.
 | Text grid with real margins | `grid 30x10 at (20,12)` — 20 px sides, 12 px top |
 | Keyboard pairs, bonds, encrypts and subscribes | `encryption change, status 0` … `subscribed to report 5 of 5` |
 | **Typing works, wraps, and redraws** | 408 characters typed in over the cable |
+| **Clock: 99.6 % of ticks within 100 µs** | `>jitter`, 3008 ticks, three lanes, 124 bpm, 60 s |
+| **Nothing at all between 0.25 ms and 5 ms** | same run: buckets `<.1:2996 <.25:11 <.5:0 <1:0 <2:0 <5:0 >5:1` |
+| **One excursion in 3008, caused by a flash write** | worst tick at 12 s; log shows `saved 59 bytes, seq 205, 16219 us` at 13 s |
+| **Transport: every event under 100 µs, 64 µs total spread** | `>jitter` xport, 1255 events |
+| **Playhead costs 0.94 % of one core** | idle 0 pushes/0 cells per 10 s; playing 84–102 pushes, 94,040 µs render over 498 cells |
+| **Redraw rate equals the step rate** | 8.4–10.2 pushes/s against a 16th-note rate of 8.27/s |
+| **Swing is exact** | 124 bpm: 50 % → 125/125 ms, 67 % → 83/167, 75 % → 62/188 |
+| **Accent / normal / ghost** | velocities 120 / 100 / 33 on the wire |
+| **Scale degrees resolve** | `>scale dmin` + `0...3...5...3...` → notes 38, 43, 46 (D2, G2, Bb2) |
+| **Polyrhythm: lanes keep their own phase** | 16-step kick vs 12-step hat coincide then separate; kick holds 484 ms |
+| **Re-running an unchanged line silences the lane** | kick every 484 ms → Ctrl+Enter → 3.87 s of silence → Ctrl+Enter → resumes |
+| **`>flash` reaches the ROM loader with no button** | `rst:0xc (RTC_SW_CPU_RST), boot:0x2 (DOWNLOAD(USB/UART0))` |
+| **The USB PHY restore works** | `>usbtest now`: port vanished, returned in 2 s, no power cycle |
+| **The escape hatch survives USB MIDI** | `>usbtest flash` → download mode on the SAME port; esptool `--before no_reset` reports `USB mode: USB-Serial/JTAG` |
+| **BLE MIDI reaches Ableton** | owner paired it from Audio MIDI Setup and played the deck |
 | **A document survives a chip reset** | `restored 408 bytes, seq 2` |
 | **A deliberately torn write is rejected; the previous snapshot loads** | `PASS 2/2 … torn-write recovery works` |
 | Autosave fires on newline and after a 1 s pause | `saved 180 bytes, seq 11, 3934 us` |
@@ -101,6 +116,19 @@ wiped itself and will not run again.
 ---
 
 ## Written but NOT verified
+
+Stated plainly, because the standing rule on this project is that if it was
+not verified on hardware it must say so in those words. Everything below is
+**unverified**.
+
+| What | Why it is not verified |
+|---|---|
+| Whether the playhead bar **reads** on the glass at 8.3 Hz | I have no camera. SPI bytes were measured; legibility was not. `HARDWARE.md` reports the liquid crystal clean only to ~23 Hz, so 8.3 is comfortably inside — but nobody has looked. |
+| Whether the inverted status bar reads as "this is output" | Same. If it does not, the louder alternative is a `+` in column 0 of every row of a transient buffer, which costs a column and cannot be missed. |
+| The BLE **connection interval** macOS actually grants | The request and the logging are in; no host was connected during the measurement runs. This is the number that decides how much the transport contributes. |
+| The BLE **packing ratio** | `blemidi_send` returns early with no host, so nothing was packed. Three lanes on one step should read 3.00× in `>jitter`. |
+| The 66-minute counter roll | The arithmetic property is asserted on the host for every lane length 2–32. Nobody has played an odd-length lane for 66 minutes. |
+| USB MIDI | Not built. The gate that blocked it has passed; the composite has not been written. |
 
 ### Everything optical
 I have no camera. The test card, the chunky typeface, ink/paper polarity and
@@ -352,19 +380,48 @@ the numbers keep flowing rather than stopping just when something goes wrong.
 
 ---
 
+## What is measured, and what the numbers mean
+
+The owner reported perceptible timing jitter. The deck now measures its own
+timing, and the result redirected the work:
+
+- **The sequencer's clock is not the problem.** 99.6 % of ticks land within
+  100 µs of the ideal grid, and there is *nothing* in the buckets between
+  0.25 ms and 5 ms. One tick in 3008 was badly late, and its recorded
+  timestamp lines up with a 16 ms journal flash write — a flash write disables
+  the instruction cache, and the timer callback is not in IRAM.
+- **The queue is not the problem either.** Every one of 1255 events waited
+  under 100 µs, total spread 64 µs.
+- **The transport was.** `blemidi_send` issued one BLE notification per
+  message, and a peripheral can only transmit during a connection event. A
+  step containing a kick, a hat and a bass note was three notifications, free
+  to land in three different connection events. Messages are now packed into
+  one packet per step.
+- **And the deck never asked for a connection interval**, which the BLE-MIDI
+  spec requires. It now requests 7.5 ms and logs what the central actually
+  grants.
+
+The remaining controllable term is the flash-cache stall. The fix is
+`ESP_TIMER_ISR` dispatch with the whole tick path in IRAM; it is not done,
+because it is easy to get wrong in a way that crashes only when the cache is
+off, and the research on exactly what may and may not be called from that
+context is still open.
+
 ## The one thing I would do next
 
-**Turn the Rii 518BT on and watch the log.**
+**USB MIDI, as a CDC + MIDI composite.**
+
+The gate that blocked it has passed: `>usbtest flash` proved the deck still
+reaches the ROM loader on the familiar port after the USB PHY has been handed
+to OTG, so the migration is reversible and cannot strand the owner. The
+endpoint budget allows CDC and MIDI together, so the console and the serial
+keyboard do not have to be given up to get it.
+
+USB full-speed polls at 1 ms frames against a BLE connection interval of
+7.5 ms at best. On the evidence above — a clock holding to 100 µs feeding a
+transport quantised to the connection interval — that is where the
+perceptible jitter goes.
 
 ```bash
-. ~/esp/esp-idf/export.sh && cd firmware && idf.py -p /dev/cu.usbmodem2141101 monitor
+. ~/esp/esp-idf/export.sh && cd firmware && idf.py -p /dev/cu.usbmodem21301 monitor
 ```
-
-Every advertiser is logged with name, address, appearance and UUID count, and
-a matching one is tagged `<-- KEYBOARD`. That single observation decides which
-morning you are having: either the HID path works and you have a writing
-device, or it does not and the log says exactly where it stopped — scan,
-connect, pair, discover, or subscribe.
-
-Everything downstream is already proven through the cable. The keyboard is the
-last unknown.
