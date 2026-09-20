@@ -122,5 +122,6 @@ esp_err_t doc_mirror_sd(void)
         ESP_LOGW(TAG, "rename failed");
         return ESP_FAIL;
     }
+    ESP_LOGI(TAG, "mirrored %u bytes to " MOUNT "/notes.txt", (unsigned)len);
     return ESP_OK;
 }
