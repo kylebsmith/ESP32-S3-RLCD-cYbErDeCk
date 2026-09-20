@@ -6,6 +6,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
 #include "freertos/task.h"
 
 static const char *TAG = "seq";
@@ -16,6 +17,35 @@ static bool       s_running;
 static int        s_pos;
 static esp_timer_handle_t s_clock;
 static seq_sink_t s_sink;
+
+/* The clock callback must not call the transport directly.
+ *
+ * esp_timer dispatches on its own task with a 3.5 KB stack, and NimBLE's
+ * notify path is not a 3.5 KB guest. Worse, that task is stalled by every
+ * flash write - so an autosave would delay the clock, which is exactly the
+ * class of coupling docs/OS.md's two-core split exists to forbid.
+ *
+ * So the clock only enqueues. A dedicated task with a real stack drains the
+ * queue and talks to the transport, and a full queue drops the oldest event
+ * rather than blocking the clock: a late note is worse than a lost one. */
+typedef struct { uint8_t status, d1, d2; } midi_ev_t;
+static QueueHandle_t s_midiq;
+static uint32_t      s_dropped;
+
+static void midi_task(void *arg)
+{
+    (void)arg;
+    midi_ev_t ev;
+    while (1) {
+        if (xQueueReceive(s_midiq, &ev, portMAX_DELAY) == pdTRUE) {
+            if (s_sink != NULL) {
+                s_sink(ev.status, ev.d1, ev.d2);
+            }
+        }
+    }
+}
+
+uint32_t seq_dropped(void) { return s_dropped; }
 
 /* Note-offs are scheduled rather than sent with the note, so a lane can never
  * leave a note hanging: there is no "on" a performer could forget to pair.
@@ -30,8 +60,18 @@ static pending_off_t s_offs[SEQ_MAX_LANES * 4];
 
 static void emit(uint8_t status, uint8_t d1, uint8_t d2)
 {
-    if (s_sink != NULL) {
-        s_sink(status, d1, d2);
+    if (s_midiq == NULL) {
+        if (s_sink != NULL) {
+            s_sink(status, d1, d2);
+        }
+        return;
+    }
+    const midi_ev_t ev = { status, d1, d2 };
+    if (xQueueSend(s_midiq, &ev, 0) != pdTRUE) {
+        midi_ev_t drop;
+        (void)xQueueReceive(s_midiq, &drop, 0);   /* make room */
+        (void)xQueueSend(s_midiq, &ev, 0);
+        s_dropped++;
     }
 }
 
@@ -98,6 +138,16 @@ esp_err_t seq_init(void)
 {
     memset(s_lanes, 0, sizeof s_lanes);
     memset(s_offs, 0, sizeof s_offs);
+
+    s_midiq = xQueueCreate(64, sizeof(midi_ev_t));
+    if (s_midiq == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
+    /* Priority above the editor, below the BLE host. 4 KB because NimBLE's
+     * notify path is the deepest thing this task calls. */
+    if (xTaskCreate(midi_task, "midi", 4096, NULL, 6, NULL) != pdPASS) {
+        return ESP_ERR_NO_MEM;
+    }
     const esp_timer_create_args_t args = {
         .callback = tick,
         .name = "seq",

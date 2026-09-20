@@ -85,6 +85,7 @@ static int           s_adv_logged;
 static int           s_adv_seen;
 static int           s_reports_logged;
 static int           s_dropped;
+static volatile uint8_t s_mods_now;
 static uint16_t      s_ctrl_point_handle;
 static volatile int64_t s_last_report_ms;
 static int64_t       s_last_keepalive_ms;
@@ -122,6 +123,7 @@ static void (*s_gatt_hook)(void);
 static void (*s_sync_hook)(void);
 
 bool kbd_connected(void)      { return s_connected; }
+uint8_t kbd_mods(void)        { return s_mods_now; }
 const char *kbd_state_name(void) { return s_state; }
 
 static void emit_m(kbd_ev_type_t t, char ch, uint8_t mods, bool repeat)
@@ -199,6 +201,11 @@ static void handle_report(const uint8_t *r, int len)
     }
     static uint8_t prev[6];
     const uint8_t mods = r[0];
+    /* Track modifiers on EVERY report, not only on a new keydown. The repeat
+     * path used whatever was latched when the key first went down, so
+     * releasing Shift or AltGr mid-repeat kept replaying the old set. */
+    s_held_mods = mods;
+    s_mods_now = mods;
     const uint8_t *keys = &r[2];
     int nkeys = len - 2;
     if (nkeys > 6) {

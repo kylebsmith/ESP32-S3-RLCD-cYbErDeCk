@@ -72,3 +72,8 @@ void seq_set_sink(seq_sink_t sink);
 
 /* Silence everything, immediately, from any context. */
 void seq_all_notes_off(void);
+
+/* Events dropped because the transport could not keep up. A late note is
+ * worse than a lost one, so the clock never blocks - but the count must be
+ * visible or the loss is silent. */
+uint32_t seq_dropped(void);

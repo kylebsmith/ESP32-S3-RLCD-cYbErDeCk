@@ -253,10 +253,19 @@ static void status_bar(void)
             s_msg[0] = '\0';
         }
         const char *nm = doc_buf_name(doc_buf_current());
-        snprintf(wide, sizeof wide, "%-12.12s%c %3d:%-3d %s%s",
+        const uint8_t m = kbd_mods();
+        char mod[5];
+        int mi = 0;
+        if (m & KBD_CTRL)     { mod[mi++] = '^'; }
+        if (m & KBD_MOD_LALT) { mod[mi++] = 'A'; }
+        if (m & KBD_MOD_RALT) { mod[mi++] = 'G'; }
+        if (m & KBD_SHIFT)    { mod[mi++] = 'S'; }
+        mod[mi] = '\0';
+        snprintf(wide, sizeof wide, "%-11.11s%c %3d:%-3d %s%s%s",
                  nm[0] ? nm : "scratch",
                  doc_dirty() ? '*' : ' ',
                  s_cursor_line + 1, s_cursor_col + 1,
+                 mod,
                  kbd_connected() ? "K" : "-",
                  doc_sd_present() ? "S" : "-");
     }
@@ -680,12 +689,12 @@ void editor_handle(const kbd_event_t *ev)
         break;
     }
 
-    if (ev->type == KBD_EV_ENTER && (ev->mods & (KBD_CTRL | KBD_ALT))) {
+    if (ev->type == KBD_EV_ENTER && (ev->mods & KBD_COMMAND_MODS)) {
         run_current_line();
         return;
     }
 
-    if (ev->type == KBD_EV_CHAR && (ev->mods & (KBD_CTRL | KBD_ALT))) {
+    if (ev->type == KBD_EV_CHAR && (ev->mods & KBD_COMMAND_MODS)) {
         handle_ctrl((char)(ev->ch >= 'A' && ev->ch <= 'Z'
                            ? ev->ch - 'A' + 'a' : ev->ch));
         return;

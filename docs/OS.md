@@ -48,7 +48,7 @@ look reasonable. All are established in HARDWARE.md.
 | No MMU `[FACT]` | No Linux, no processes, no memory isolation. Reliability comes from *ownership discipline*, not from hardware protection. |
 | BLE only, no Bluetooth Classic `[FACT]` | The keyboard is a BLE HID (HOGP) peripheral. Confirmed against the owner's unit, which advertises the HID service. |
 | One USB-OTG peripheral, sharing a PHY with USB-Serial/JTAG `[FACT]` | The port is *either* MIDI *or* the console. USB host is off the table. |
-| EP0 + 6 endpoints, ≤5 IN `[FACT]` | CDC + MIDI fits. Adding HID overflows. The descriptor is a fixed budget. |
+| EP0 + 6 endpoints, ≤5 IN `[OPEN]` | CDC + MIDI fits. Adding HID overflows. **This was tagged `[FACT]` and said to be "established in HARDWARE.md". It is not** — HARDWARE.md contains no endpoint budget and mentions USB once, about a current sink. By this repository's own discipline the number is untraceable until it is read out of the ESP32-S3 datasheet, and the USB MIDI decision must not rest on it before then. |
 | 1 bpp, strictly `[FACT]` | No antialiasing, ever. Hand-hinted bitmap faces only; any TTF rasteriser producing coverage values produces mush. |
 | Byte = 4 × 2 px; landscape quanta 2 px wide, 12 px tall `[FACT]` | **12 px is the hardware's line height.** The text grid is not a style choice. |
 | LPM write latency ≈ one refresh period `[FACT]` | Idle at 1 Hz is free, but the first keystroke must kick the panel to HPM or it feels like a Freewrite. |

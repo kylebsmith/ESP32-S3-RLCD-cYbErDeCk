@@ -46,6 +46,18 @@ typedef enum {
 #define KBD_SHIFT (KBD_MOD_LSHIFT | KBD_MOD_RSHIFT)
 #define KBD_ALT   (KBD_MOD_LALT   | KBD_MOD_RALT)
 
+/* Modifiers that mean "this is a command", as opposed to modifiers that mean
+ * "this is a different character".
+ *
+ * RIGHT ALT IS NOT A COMMAND MODIFIER. On most compact keyboards - including
+ * the Rii - the Fn key is delivered to the host as AltGr, and AltGr is how
+ * half the characters on a small layout are reached at all. Treating it as a
+ * command modifier meant that typing '>' arrived carrying RALT, was routed
+ * into the chord handler, matched no binding, and was DISCARDED IN SILENCE.
+ * The keyboard appeared to stop working the moment the owner typed the one
+ * character the command syntax requires. */
+#define KBD_COMMAND_MODS (KBD_CTRL | KBD_MOD_LALT)
+
 typedef struct {
     kbd_ev_type_t type;
     char          ch;
@@ -66,6 +78,10 @@ esp_err_t kbd_init(void);
 bool kbd_poll(kbd_event_t *ev, uint32_t timeout_ms);
 
 bool kbd_connected(void);
+
+/* Modifiers held right now, for a visible indicator. docs/OS.md: sticky or
+ * invisible modifier state is a bug generator. */
+uint8_t kbd_mods(void);
 
 /* The pairing-recovery gesture: drop every bond and rescan. */
 void kbd_forget_all(void);
