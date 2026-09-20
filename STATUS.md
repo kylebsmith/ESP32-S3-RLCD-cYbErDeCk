@@ -46,7 +46,8 @@ Every row has log evidence from the board on your desk.
 | **Full frame: 4.75 ms** @ 24 MHz | 20-run average, repeatable to ±6 µs across every build |
 | **One 6×12 character costs exactly 9 bytes** | measured on the wire |
 | **One 12×24 character costs exactly 36 bytes** | measured on the wire |
-| Text grid initialises at 33 × 12 | `font 12x24 x1 -> cell 12x24, grid 33x12` |
+| Text grid with real margins | `grid 30x10 at (20,12)` — 20 px sides, 12 px top |
+| Keyboard pairs, bonds, encrypts and subscribes | `encryption change, status 0` … `subscribed to report 5 of 5` |
 | **Typing works, wraps, and redraws** | 408 characters typed in over the cable |
 | **A document survives a chip reset** | `restored 408 bytes, seq 2` |
 | **A deliberately torn write is rejected; the previous snapshot loads** | `PASS 2/2 … torn-write recovery works` |
@@ -93,27 +94,47 @@ I have no camera. The test card, the chunky typeface, ink/paper polarity and
 contrast are **unseen by me**. Your look at the first build reported the image
 mirrored and 6×12 text too small; both are addressed, neither confirmed.
 
-### Orientation — the most likely thing still wrong
-"All mirrored, everything reading reversed and backwards" is a horizontal
-mirror on the logical-x → native-y axis, so the default is now `ORIENT_1`
-(`ny = 399 − x`). **That is a hypothesis.**
+### The BLE keyboard — connects and subscribes; typing still unproven
+**Resolved since the first draft.** The Rii pairs, bonds, encrypts and is
+subscribed. Verified from the log:
 
-You do not need me to fix it: **tap KEY (GPIO18) to cycle all four
-orientations**, saved to NVS instantly, so once it reads right it stays right.
-The top-left cell says `TOP LEFT` and the bottom-right says `BOTTOM RIGHT`;
-when those sit in the corners they name and read forwards, it is correct. The
-host-side check proves all four mappings are collision-free bijections, so
-whichever you land on is a valid mapping.
+```
+found a keyboard (unnamed), connecting
+connected, starting encryption
+encryption change, status 0
+HID service at 21..53
+characteristic discovery done: 5 report(s), protocol mode present
+subscribed to report 2 of 5 / 3 of 5 / 5 of 5
+```
 
-### The BLE keyboard — completely untested
-**No keyboard ever advertised.** Across several scans I logged 48 distinct
-advertisers; not one carried the HID service (0x1812) or a keyboard
-appearance. The names were neighbours' devices — `EMPRESS`, `S18 …LE`,
-`Dime3_LE`, `N06SY`. The Rii 518BT was almost certainly powered off.
+Two real bugs were behind the original "connects but types nothing":
 
-So the stack is proven to *scan and decode*, and everything past that is
-unexercised: pairing, bonding, HID discovery, boot-protocol negotiation,
-report decoding, key repeat, auto-reconnect, and the pairing-recovery gesture.
+1. **Nested GATT procedures.** NimBLE allows one procedure in flight per
+   connection, and descriptor discovery was being started from inside the
+   characteristic-discovery callback. It failed with `EBUSY`, the CCCD was
+   never written, and the link looked perfectly healthy.
+2. **A double-advance in the subscription walk.** Descriptor discovery reports
+   a CCCD *and then* reports completion; both paths advanced the index, so
+   every characteristic with a CCCD advanced twice and the walk ran off the
+   end — "subscribed to report 7 of 5" while real reports were skipped.
+
+Also worth recording: this keyboard **refuses the boot-protocol write** with
+ATT Write Not Permitted (status 259), so it stays in report protocol where the
+boot keyboard report never notifies. Collapsing to the boot report — the tidy
+thing to do — would have been silently wrong. The firmware subscribes to every
+notifiable report instead and decodes any report of three bytes or more.
+
+**Still unproven: that a key press becomes a character.** The keyboard sleeps
+and stops advertising when idle, and it was asleep for every attempt after the
+fix. The decode path has never seen a real keystroke.
+
+### Orientation — settled
+The owner cycled KEY until it read correctly in the enclosure and landed on
+**orientation 3**. That value is now honoured permanently: a stored
+orientation is evidence about the physical build, which the firmware does not
+have and must never overwrite, so the shipped default applies only when
+nothing has been chosen. The host-side check proves all four mappings are
+collision-free bijections.
 
 ### True power-cut survival
 Verified: full chip reset, and deliberate record corruption. **Not** verified:

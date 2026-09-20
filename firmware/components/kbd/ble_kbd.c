@@ -115,14 +115,24 @@ static void dispatch_usage(uint8_t usage, uint8_t mods, bool repeat)
  * owns rather than the report path. */
 static void handle_report(const uint8_t *r, int len)
 {
-    if (len < 8) {
+    /* The boot layout is {modifiers, reserved, six keycodes}. Report-protocol
+     * keyboards usually send the same shape, sometimes with a leading report
+     * ID and sometimes with fewer than six keycode slots, so the count is
+     * taken from the length rather than assumed. Anything under three bytes
+     * is not a keyboard report at all - a one-byte notification is a battery
+     * level or a consumer-control key - and is ignored. */
+    if (len < 3) {
         return;
     }
     static uint8_t prev[6];
     const uint8_t mods = r[0];
     const uint8_t *keys = &r[2];
+    int nkeys = len - 2;
+    if (nkeys > 6) {
+        nkeys = 6;
+    }
 
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < nkeys; i++) {
         const uint8_t u = keys[i];
         if (u == 0 || u == 0x01) {
             continue;                 /* empty or rollover-error */
@@ -142,13 +152,14 @@ static void handle_report(const uint8_t *r, int len)
 
     /* Is the key we were repeating still down? */
     bool still = false;
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < nkeys; i++) {
         if (keys[i] == s_held_usage && s_held_usage != 0) { still = true; break; }
     }
     if (!still) {
         s_held_usage = 0;
     }
-    memcpy(prev, keys, 6);
+    memset(prev, 0, sizeof prev);
+    memcpy(prev, keys, (size_t)nkeys);
 }
 
 static void repeat_task(void *arg)
@@ -187,9 +198,23 @@ struct chr_rec {
 static uint16_t       s_svc_start, s_svc_end;
 static struct chr_rec s_chrs[MAX_REPORT_CHRS];
 static int            s_chr_count;
+/* Every characteristic declaration in the service, report or not. A report's
+ * descriptor range ends just before the NEXT declaration of any kind; bound it
+ * with only the report characteristics and the range runs straight through the
+ * ones in between, so the same CCCD gets written several times and reports get
+ * double-subscribed. */
+static uint16_t       s_all_defs[16];
+static int            s_all_def_count;
 static uint16_t       s_protocol_mode_handle;
 static int            s_sub_index;        /* which report we are subscribing */
 static int            s_sub_done;
+/* Descriptor discovery reports a CCCD and THEN reports completion. If both
+ * paths advance the index, every characteristic that has a CCCD advances
+ * twice and the walk runs off the end of the list - which is how a keyboard
+ * ends up "subscribed to report 7 of 5" while some real reports are skipped.
+ * Exactly one path advances: the CCCD write when there is one, completion
+ * when there is not. */
+static bool           s_cccd_started;
 
 static void subscribe_next(uint16_t conn);
 
@@ -197,18 +222,22 @@ static void subscribe_next(uint16_t conn);
  * characteristic's declaration, or the end of the service for the last one. */
 static uint16_t dsc_end_for(int i)
 {
-    for (int j = 0; j < s_chr_count; j++) {
-        if (s_chrs[j].def_handle > s_chrs[i].val_handle) {
-            return (uint16_t)(s_chrs[j].def_handle - 1);
+    uint16_t best = s_svc_end;
+    for (int j = 0; j < s_all_def_count; j++) {
+        if (s_all_defs[j] > s_chrs[i].val_handle && s_all_defs[j] - 1 < best) {
+            best = (uint16_t)(s_all_defs[j] - 1);
         }
     }
-    return s_svc_end;
+    return best;
 }
 
 static int on_cccd_write(uint16_t conn, const struct ble_gatt_error *err,
                          struct ble_gatt_attr *attr, void *arg)
 {
     (void)attr; (void)arg;
+    if (s_sub_index >= s_chr_count) {
+        return 0;                      /* a late callback from a finished walk */
+    }
     if (err->status == 0) {
         s_sub_done++;
         ESP_LOGI(TAG, "subscribed to report %d of %d",
@@ -233,16 +262,17 @@ static int on_dsc(uint16_t conn, const struct ble_gatt_error *err,
         static const uint8_t on[2] = { 0x01, 0x00 };
         const int rc = ble_gattc_write_flat(conn, dsc->handle,
                                             on, sizeof on, on_cccd_write, NULL);
-        if (rc != 0) {
+        if (rc == 0) {
+            s_cccd_started = true;     /* on_cccd_write owns the next step */
+        } else {
             ESP_LOGW(TAG, "CCCD write could not start: %d", rc);
             s_sub_index++;
             subscribe_next(conn);
         }
-        return 0;                      /* on_cccd_write drives the next step */
+        return 0;
     }
 
-    if (err->status == BLE_HS_EDONE) {
-        /* No CCCD on this one - move along. */
+    if (err->status == BLE_HS_EDONE && !s_cccd_started) {
         ESP_LOGW(TAG, "report %d has no CCCD", s_sub_index + 1);
         s_sub_index++;
         subscribe_next(conn);
@@ -254,10 +284,13 @@ static void subscribe_next(uint16_t conn)
 {
     if (s_sub_index >= s_chr_count) {
         if (s_sub_done > 0) {
-            s_subscribed = true;
-            s_state = "connected";
-            ESP_LOGI(TAG, "keyboard ready - %d report(s) subscribed", s_sub_done);
-            emit(KBD_EV_CONNECTED, 0, false);
+            if (!s_subscribed) {
+                s_subscribed = true;
+                s_state = "connected";
+                ESP_LOGI(TAG, "keyboard ready - %d report(s) subscribed",
+                         s_sub_done);
+                emit(KBD_EV_CONNECTED, 0, false);
+            }
         } else {
             ESP_LOGE(TAG, "connected but NOTHING subscribed - the keyboard "
                           "exposed no notifiable report characteristic");
@@ -266,6 +299,7 @@ static void subscribe_next(uint16_t conn)
         return;
     }
     const int i = s_sub_index;
+    s_cccd_started = false;
     ESP_LOGI(TAG, "discovering descriptors of report %d (val %u, range %u..%u)",
              i + 1, s_chrs[i].val_handle,
              (unsigned)(s_chrs[i].val_handle + 1), dsc_end_for(i));
@@ -298,18 +332,12 @@ static int on_chr(uint16_t conn, const struct ble_gatt_error *err,
                       "protocol mode %s",
                  s_chr_count, s_protocol_mode_handle ? "present" : "absent");
 
-        /* Prefer the boot keyboard report if the keyboard has one: it is a
-         * fixed 8-byte layout and needs no report-descriptor parsing. */
-        int boot = -1;
-        for (int i = 0; i < s_chr_count; i++) {
-            if (s_chrs[i].uuid == UUID_BOOT_KBD_IN) { boot = i; break; }
-        }
-        if (boot >= 0) {
-            ESP_LOGI(TAG, "using the boot keyboard report");
-            s_chrs[0] = s_chrs[boot];
-            s_chr_count = 1;
-        }
-
+        /* Subscribe to ALL of them. Collapsing to the boot keyboard report
+         * would be neater, but it is only correct if the keyboard actually
+         * enters boot protocol - and this one answers the protocol-mode write
+         * with ATT Write Not Permitted, so it stays in report protocol where
+         * the boot report never notifies. Subscribing to everything costs a
+         * few CCCD writes and does not care which mode won. */
         s_sub_index = 0;
         s_sub_done  = 0;
 
@@ -329,6 +357,10 @@ static int on_chr(uint16_t conn, const struct ble_gatt_error *err,
 
     if (err->status != 0 || chr == NULL) {
         return 0;
+    }
+
+    if (s_all_def_count < (int)(sizeof s_all_defs / sizeof s_all_defs[0])) {
+        s_all_defs[s_all_def_count++] = chr->def_handle;
     }
 
     const uint16_t u = ble_uuid_u16(&chr->uuid.u);
@@ -362,6 +394,7 @@ static int on_svc(uint16_t conn, const struct ble_gatt_error *err,
             return 0;
         }
         s_chr_count = 0;
+        s_all_def_count = 0;
         s_protocol_mode_handle = 0;
         const int rc = ble_gattc_disc_all_chrs(conn, s_svc_start, s_svc_end,
                                                on_chr, NULL);

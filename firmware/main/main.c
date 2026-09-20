@@ -53,32 +53,31 @@ static void report_memory(const char *when)
              (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
 }
 
-/* Bumped whenever the shipped default changes. A stored orientation from an
- * older build is replaced rather than honoured, so a corrected default takes
- * effect on flash instead of waiting for someone to find the button. */
-#define ORIENT_DEFAULT  ST7305_ORIENT_3
-#define ORIENT_VERSION  2
-
 static void orient_save(uint8_t v);
+
+/* The shipped default, used only when nothing has been chosen yet. An
+ * orientation the owner set by hand is ALWAYS honoured - a stored value is
+ * evidence about the physical build, which is knowledge this firmware does
+ * not have and must not overwrite. */
+#define ORIENT_DEFAULT  ST7305_ORIENT_3
 
 static uint8_t orient_load(void)
 {
     nvs_handle_t h;
     uint8_t v = ORIENT_DEFAULT;
-    uint8_t ver = 0;
+    bool stored = false;
 
     if (nvs_open(NVS_NS, NVS_READONLY, &h) == ESP_OK) {
-        nvs_get_u8(h, "orient_ver", &ver);
-        if (ver == ORIENT_VERSION) {
-            nvs_get_u8(h, "orient", &v);
-        }
+        stored = nvs_get_u8(h, "orient", &v) == ESP_OK;
         nvs_close(h);
     }
     if (v > 3) {
         v = ORIENT_DEFAULT;
+        stored = false;
     }
-    if (ver != ORIENT_VERSION) {
-        ESP_LOGW(TAG, "orientation reset to the new default %d", v);
+    ESP_LOGI(TAG, "orientation %d (%s)", v,
+             stored ? "chosen on this device" : "shipped default");
+    if (!stored) {
         orient_save(v);
     }
     return v;
@@ -89,7 +88,6 @@ static void orient_save(uint8_t v)
     nvs_handle_t h;
     if (nvs_open(NVS_NS, NVS_READWRITE, &h) == ESP_OK) {
         nvs_set_u8(h, "orient", v);
-        nvs_set_u8(h, "orient_ver", ORIENT_VERSION);
         nvs_commit(h);
         nvs_close(h);
     }
@@ -136,7 +134,6 @@ void app_main(void)
     uint8_t orient = orient_load();
     st7305_set_orientation((st7305_orient_t)orient);
     ESP_ERROR_CHECK(tg_set_font(&tg_font_12x24, 1));     /* test card: flush grid */
-    ESP_LOGI(TAG, "orientation %d (from NVS)", orient);
 
     /* Show the card briefly so a boot is visibly a boot, then get out of the
      * way. If the text reads mirrored, KEY cycles the orientation. */
