@@ -67,6 +67,7 @@ typedef struct {
 } cmd_t;
 
 struct cmd_ctx {
+    const char  *name;       /* the command word that matched */
     const char  *arg;        /* rest of the line, unparsed, never NULL */
     cmd_caller_t caller;
     char         msg[96];    /* short human-readable result            */

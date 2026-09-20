@@ -21,6 +21,7 @@
 #include "nvs_flash.h"
 
 #include "cmd.h"
+#include "seq.h"
 #include "docstore.h"
 #include "editor.h"
 #include "kbd.h"
@@ -110,6 +111,16 @@ static void bench(void)
     }
     ESP_LOGI(TAG, "BENCH full frame: %lld us (%d B)",
              (esp_timer_get_time() - t0) / runs, ST7305_FB_SIZE);
+}
+
+static void midi_log_sink(uint8_t status, uint8_t d1, uint8_t d2)
+{
+    /* Note-on only, and rate-limited: a 16th-note grid at 120 bpm is eight
+     * events a second and the console is also the keyboard. */
+    static int n;
+    if ((status & 0xF0) == 0x90 && d2 > 0 && n++ < 64) {
+        ESP_LOGI("midi", "note %3u vel %3u ch %u", d1, d2, (status & 0x0F) + 1);
+    }
 }
 
 static int64_t now_ms(void) { return esp_timer_get_time() / 1000; }
@@ -242,6 +253,14 @@ void app_main(void)
     bench();
     vTaskDelay(pdMS_TO_TICKS(2500));
 
+    /* Until a transport exists, notes go to the log. The sequencer does not
+     * know the difference, which is the point of the sink being a function
+     * pointer: BLE MIDI, USB MIDI and a UART all plug in here without the
+     * musical core changing. */
+    seq_set_sink(midi_log_sink);
+    if (seq_init() != ESP_OK) {
+        ESP_LOGE(TAG, "sequencer init failed");
+    }
     cmd_init();
     if (doc_init() != ESP_OK) {
         ESP_LOGE(TAG, "docstore init FAILED");

@@ -155,6 +155,7 @@ cmd_status_t cmd_run_line(const char *line, cmd_caller_t caller,
                 if (msg_out != NULL) { snprintf(msg_out, msg_max, "%s", ctx.msg); }
                 return CMD_ERROR;
             }
+            ctx.name = s_table[i].name;
             const cmd_status_t st = s_table[i].fn(&ctx);
             if (msg_out != NULL) {
                 snprintf(msg_out, msg_max, "%s", ctx.msg);

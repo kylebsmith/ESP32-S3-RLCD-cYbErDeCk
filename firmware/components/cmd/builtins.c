@@ -8,10 +8,12 @@
 #include "cmd.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "docstore.h"
 #include "textgrid.h"
+#include "seq.h"
 
 static cmd_status_t c_help(cmd_ctx_t *ctx)
 {
@@ -181,7 +183,108 @@ static cmd_status_t c_density(cmd_ctx_t *ctx)
     return CMD_DONE;
 }
 
+/* ------------------------------------------------------------------ music
+ *
+ * A drum IS a command. "kick x...x...x...x..." is twenty-two keystrokes for a
+ * four-on-the-floor, and nothing has to be declared, named or wired up first.
+ * That is the whole design brief for a thumb keyboard: the shortest path from
+ * a musical idea to a sound, with no ceremony in between.
+ */
+static const struct { const char *name; uint8_t note; } s_drums[] = {
+    { "kick",  36 }, { "snare", 38 }, { "hat",   42 }, { "ohat",  46 },
+    { "clap",  39 }, { "tom",   45 }, { "rim",   37 }, { "crash", 49 },
+};
+
+static cmd_status_t c_drum(cmd_ctx_t *ctx)
+{
+    uint8_t note = 36;
+    for (size_t i = 0; i < sizeof s_drums / sizeof s_drums[0]; i++) {
+        if (strcmp(s_drums[i].name, ctx->name) == 0) {
+            note = s_drums[i].note;
+            break;
+        }
+    }
+    if (ctx->arg[0] == '\0') {
+        seq_mute(ctx->name, true);
+        snprintf(ctx->msg, sizeof ctx->msg, "%s silent", ctx->name);
+        return CMD_DONE;
+    }
+    seq_lane_note(ctx->name, note, 9);
+    if (seq_lane(ctx->name, ctx->arg) != ESP_OK) {
+        cmd_out(ctx, "no room for another lane");
+        return CMD_ERROR;
+    }
+    seq_mute(ctx->name, false);
+    snprintf(ctx->msg, sizeof ctx->msg, "%s %s", ctx->name, ctx->arg);
+    return CMD_DONE;
+}
+
+static cmd_status_t c_bpm(cmd_ctx_t *ctx)
+{
+    if (ctx->arg[0] != '\0') {
+        seq_bpm(atoi(ctx->arg));
+    }
+    snprintf(ctx->msg, sizeof ctx->msg, "%d bpm", seq_get_bpm());
+    return CMD_DONE;
+}
+
+static cmd_status_t c_play(cmd_ctx_t *ctx)
+{
+    seq_play();
+    snprintf(ctx->msg, sizeof ctx->msg, "playing at %d", seq_get_bpm());
+    return CMD_DONE;
+}
+
+static cmd_status_t c_stop(cmd_ctx_t *ctx)
+{
+    seq_stop();
+    snprintf(ctx->msg, sizeof ctx->msg, "stopped");
+    return CMD_DONE;
+}
+
+static cmd_status_t c_lanes(cmd_ctx_t *ctx)
+{
+    int n = 0;
+    const seq_lane_t *l = seq_lanes(&n);
+    for (int i = 0; i < SEQ_MAX_LANES; i++) {
+        if (!l[i].used) {
+            continue;
+        }
+        char bar[SEQ_MAX_STEPS + 1];
+        int k = 0;
+        for (; k < l[i].steps && k < SEQ_MAX_STEPS; k++) {
+            bar[k] = (l[i].mask & (1u << k)) ? 'x' : '.';
+        }
+        bar[k] = '\0';
+        cmd_out(ctx, "%c%-6s %s", l[i].muted ? '-' : ' ', l[i].name, bar);
+    }
+    snprintf(ctx->msg, sizeof ctx->msg, "%d lane%s %s", n, n == 1 ? "" : "s",
+             seq_running() ? "playing" : "stopped");
+    return CMD_DONE;
+}
+
+static cmd_status_t c_panic(cmd_ctx_t *ctx)
+{
+    seq_stop();
+    seq_all_notes_off();
+    snprintf(ctx->msg, sizeof ctx->msg, "all notes off");
+    return CMD_DONE;
+}
+
 static const cmd_t s_builtins[] = {
+    { "bpm",   c_bpm,   CMD_CAP_EDIT,  "tempo" },
+    { "play",  c_play,  CMD_CAP_EDIT,  "start the clock" },
+    { "stop",  c_stop,  CMD_CAP_EDIT,  "stop the clock" },
+    { "lanes", c_lanes, CMD_CAP_READ,  "what is playing" },
+    { "panic", c_panic, CMD_CAP_EDIT,  "silence everything" },
+    { "kick",  c_drum,  CMD_CAP_EDIT,  "x...x...x...x..." },
+    { "snare", c_drum,  CMD_CAP_EDIT,  "....x.......x..." },
+    { "hat",   c_drum,  CMD_CAP_EDIT,  "x.x.x.x.x.x.x.x." },
+    { "ohat",  c_drum,  CMD_CAP_EDIT,  "open hat" },
+    { "clap",  c_drum,  CMD_CAP_EDIT,  "clap" },
+    { "tom",   c_drum,  CMD_CAP_EDIT,  "tom" },
+    { "rim",   c_drum,  CMD_CAP_EDIT,  "rim" },
+    { "crash", c_drum,  CMD_CAP_EDIT,  "crash" },
     { "help",  c_help,  CMD_CAP_READ,                   "list the commands" },
     { "list",  c_list,  CMD_CAP_READ,                   "list open buffers" },
     { "new",   c_new,   CMD_CAP_EDIT,                   "a fresh scratch buffer" },
