@@ -397,7 +397,22 @@ batt_cowl_cap_r  = 3.0;    // [DESIGN] retained for the cavity's ridge()
 //  corner is what pulls the cowl's lower flank back off them: at 12.6 the
 //  footprint reaches x = 39.36, clearing the countersink rim by 0.89 mm.
 //  Asserted from the rendered plate, not from this arithmetic.
-batt_cowl_base_r  = 12.6;  // [DESIGN] outer plan-view corner radius
+//  AND THAT FIX WAS ITSELF BLOCKING. Opening the corner to 12.6 pulled the
+//  cowl's flank off the screws and, at the same time, pulled the OUTER surface
+//  in at 45 degrees while the cavity's near-square R2.2 corner stayed put. The
+//  wall between them collapsed from 2.07 mm on the flats to 0.0385 mm at the
+//  corner - an open slit into the battery cavity, about 0.6 mm of arc by
+//  3.8 mm tall, at all four corners. Every assert passed: all four were
+//  one-dimensional or measured the cavity against the HOLDER, and none of them
+//  measured the outer surface against the cavity. See docs/DATUMS.md C-28.
+//
+//  There is no value that fixes both. The holder's square corner is at
+//  (38.90, 11.05) and the screw axis at (42.75, 11.65) - 3.896 mm apart, less
+//  the Ø5.0 head radius leaves 1.396 mm for clearance AND wall, against the
+//  2.50 the design asks for. So the two constraints are decoupled instead: the
+//  corner goes back to 6.0 and the screws get their own relief bores.
+batt_cowl_base_r  = 6.0;   // [DESIGN] outer plan-view corner radius
+cowl_screw_relief_d = board_cs_head_d + 0.2;   // [DESIGN] Ø5.2 driver access
 //  CORRECTED RATIONALE. This used to say "the holder's corners are R2.0".
 //  They are not: in Waveshare's STEP the holder's plan form is exactly square
 //  at every height through the body - 0.0000 mm deviation from its bounding
@@ -1272,9 +1287,20 @@ cowl_foot_c = batt_cowl_base_r + batt_cowl_foot;
 //  1. the two LOWER M2.5 board screws, in the cowl's own frame
 cowl_screw_dy = -board_mount_pitch_y/2 - batt_off_y;              // = -11.65
 cowl_screw_dx = board_mount_pitch_x/2;                            // =  42.75
-assert(rse_x_at(cowl_foot_w, cowl_foot_h, cowl_foot_c, form_n, cowl_screw_dy)
-       <= cowl_screw_dx - board_cs_head_d/2 - 0.5,
-       "battery cowl lies over the lower board-screw countersinks: they cannot be driven");
+//  The cowl DOES still reach these two screws at a 6.0 corner - the old
+//  horizontal-extent assert here fails by design now - and that is fine,
+//  because each one gets a relief bore straight through the cowl instead. That
+//  decouples the two constraints the corner radius could not satisfy at once:
+//  the corner stays small enough to keep a wall on the cavity, and the screws
+//  get their access cut locally rather than by reshaping the whole cowl.
+//
+//  Both conditions are stated as clearances, not as x-extents, because an
+//  x-extent is what hid the breach in the first place. The real minimum wall is
+//  measured from the rendered plate by validate.py's COWL checks.
+assert(cowl_screw_relief_d >= board_cs_head_d + 0.2,
+       "cowl screw relief is not wide enough to pass the M2.5 countersunk head");
+assert(cowl_screw_dx - cowl_screw_relief_d/2 - cowl_cav_w/2 >= 0.4,
+       "cowl screw relief breaks into the battery cavity");
 
 //  2. the expansion-header window, whose lower edge is the cowl's ceiling
 cowl_win_lo = expansion_win_y - (expansion_win_h + 2*fit_slide)/2 - batt_off_y;

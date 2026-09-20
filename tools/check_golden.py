@@ -48,6 +48,19 @@ PARAM_TOL = 1e-6
 EXTENT_TOL = 1e-3      # mm
 VOLUME_TOL = 1e-2      # mm^3
 
+# Parameters that exist in the file but CANNOT move v1 geometry, because every
+# feature they drive is gated behind `variant >= 2`. They are excluded from the
+# freeze: including them would mean tuning the cover's thickness "breaks v1",
+# which is nonsense and would train everyone to ignore this check. The gate is
+# what makes the exclusion safe, and the MESH comparison below is what proves
+# the gate holds - if a v2 parameter ever did reach v1 geometry, the rendered
+# chassis would move and be caught there regardless of this list.
+V2_ONLY = ("cover_", "magnet_", "face_roll_", "front_face_")
+
+
+def v1_surface(d):
+    return {k: v for k, v in d.items() if not k.startswith(V2_ONLY)}
+
 
 def build_params(variant):
     """Parse parameters.scad as the given variant sees it."""
@@ -106,11 +119,11 @@ def main():
                if isinstance(v, list)}
 
     if args.update:
-        g = {"version": "v1.0",
+        g = {"version": "v1.1",
              "commit": subprocess.run(["git", "-C", ROOT, "rev-parse", "HEAD"],
                                       capture_output=True, text=True).stdout.strip(),
-             "scalars": dict(sorted(scalars.items())),
-             "vectors": dict(sorted(vectors.items())),
+             "scalars": dict(sorted(v1_surface(scalars).items())),
+             "vectors": dict(sorted(v1_surface(vectors).items())),
              "parts": measure_parts(variant, ["chassis", "backplate", "buttons"])}
         os.makedirs(os.path.dirname(args.golden), exist_ok=True)
         json.dump(g, open(args.golden, "w"), indent=1, sort_keys=True)

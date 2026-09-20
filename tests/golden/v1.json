@@ -1,5 +1,5 @@
 {
- "commit": "e6477268a2cfbe2b8b70dd56b35b5ef68fba26d6",
+ "commit": "9d4801d6a432254c4da80ddd289be93eb4bbfe79",
  "parts": {
   "backplate": {
    "bodies": 1,
@@ -8,7 +8,7 @@
     133.05,
     13.45
    ],
-   "volume": 46865.769,
+   "volume": 47324.201,
    "watertight": true
   },
   "buttons": {
@@ -43,7 +43,7 @@
   "batt_bay_h": 22.1,
   "batt_bay_h_step": 21.1,
   "batt_bay_w": 77.8,
-  "batt_cowl_base_r": 12.6,
+  "batt_cowl_base_r": 6.0,
   "batt_cowl_base_ri": 2.2,
   "batt_cowl_cap": 0.34,
   "batt_cowl_cap_r": 3.0,
@@ -67,6 +67,7 @@
   "board_cs_head_d": 5.0,
   "board_cs_head_h": 1.5,
   "board_cx": 0.0,
+  "board_cy": 31.175,
   "board_depth": 11.25,
   "board_h": 69.1,
   "board_h_measured": 69.1,
@@ -96,6 +97,8 @@
   "body_h": 138.85,
   "body_t": 16.85,
   "body_w": 116.25,
+  "boss_cx": 51.2375,
+  "boss_flank": 8.175,
   "btn_band_hi": 0.7,
   "btn_band_lo": -1.1015,
   "btn_cb_depth": 1.0,
@@ -124,11 +127,12 @@
   "corner_gusset": 6.0,
   "cowl_cav_h": 23.1,
   "cowl_cav_w": 78.8,
-  "cowl_foot_c": 13.2,
+  "cowl_foot_c": 6.6,
   "cowl_foot_h": 28.3,
   "cowl_foot_w": 84.0,
   "cowl_screw_dx": 42.75,
   "cowl_screw_dy": -11.65,
+  "cowl_screw_relief_d": 5.2,
   "cowl_win_lo": 14.6,
   "dish_blend": 5.0,
   "dish_depth": 0.9,
@@ -169,10 +173,12 @@
   "grille_pitch": 2.3125,
   "grille_slot_h": 1.2,
   "grille_slot_w": 14.0,
+  "inner_w": 109.85,
   "kbd_access_above_floor": 1.4,
   "kbd_access_from_edge": 8.5,
   "kbd_access_h": 8.0,
   "kbd_access_w": 34.0,
+  "kbd_aper_draft": 0.6,
   "kbd_aper_h": 55.8,
   "kbd_aper_w": 106.5,
   "kbd_bay_cy": -36.65,
@@ -212,8 +218,10 @@
   "mic_offset_x": 32.5,
   "mic_w_centre": -0.5,
   "nozzle": 0.4,
+  "plate_edge_margin": 0.8,
   "plate_edge_roll": 0.45,
   "plate_edge_soft": 0.6,
+  "plate_half_h": 65.925,
   "pocket_clear": 0.5,
   "pocket_r_limit": 2.207107,
   "port_mouth": 1.5,
@@ -241,6 +249,7 @@
   "usbc_open_h": 6.5,
   "usbc_open_w": 12.5,
   "usbc_w_centre": -1.17,
+  "variant": 2.0,
   "wall": 3.2,
   "window_corner_r": 1.294,
   "window_h": 70.8163,
@@ -252,6 +261,10 @@
   "z_front_outer": 16.85
  },
  "vectors": {
+  "boss_rows": [
+   -0.575,
+   63.125
+  ],
   "kbd_rib_dx": [
    -35.0,
    35.0
@@ -261,5 +274,5 @@
    22.5
   ]
  },
- "version": "v1.0"
+ "version": "v1.1"
 }

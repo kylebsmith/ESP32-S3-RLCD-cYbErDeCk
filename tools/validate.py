@@ -46,7 +46,7 @@ import params
 try:
     import numpy as np
     import trimesh
-    from shapely.geometry import Polygon
+    from shapely.geometry import Polygon, Point
     from shapely.ops import unary_union
 except ImportError as exc:  # pragma: no cover
     sys.exit(f"missing dependency: {exc}\ninstall with: pip install -r tools/requirements.txt")
@@ -841,6 +841,75 @@ def _corner_lip_with_play(chassis, p):
     return best, at
 
 
+def check_cowl(parts, p):
+    """The battery cowl's wall, measured as a DISTANCE and at every height.
+
+    This class exists because four assertions and an OBSTRUCTION check all
+    passed on a cowl whose wall had collapsed to 0.0385 mm at the corners - an
+    open slit into the battery cavity, 0.6 mm of arc by 3.8 mm tall, on all
+    four. Every one of those checks was one-dimensional (an x-extent) or
+    measured the cavity against the HOLDER. None of them measured the outer
+    surface against the cavity, which is the only pair that defines a wall.
+
+    The cause was a fix: opening the outer corner from 6.0 to 12.6 to pull the
+    cowl off two screw countersinks. A fuller outer corner draws the surface IN
+    at 45 degrees while a near-square R2.2 cavity corner stays put, so the wall
+    between them vanishes. The screws are cleared by relief bores now, and this
+    reads the wall off the mesh rather than off arithmetic.
+    """
+    print("\n-- COWL --")
+    ok = True
+    if not p.get("batt_cowl_enable", 1):
+        return ok
+    bp = parts["backplate"]
+    cx = p["batt_off_x"]
+    cy = p["board_cy"] + p["batt_off_y"]
+    worst, at = 1e9, 0.0
+    for z in np.arange(-0.2, float(bp.bounds[0][2]) + 0.3, -0.2):
+        sec = bp.section(plane_origin=[0, 0, float(z)], plane_normal=[0, 0, 1])
+        if sec is None:
+            continue
+        polys = [g for g in sec.to_2D(to_2D=np.eye(4))[0].polygons_full
+                 if g.distance(Point(cx, cy)) < 50]
+        if not polys:
+            continue
+        g = max(polys, key=lambda q: q.area)
+        if not g.interiors:
+            continue
+        cav = max((Polygon(r) for r in g.interiors), key=lambda q: q.area)
+        d = g.exterior.distance(cav.exterior)
+        if d < worst:
+            worst, at = d, float(z)
+    floor = 2 * p["nozzle"] if "nozzle" in p else 0.8
+    ok &= check("cowl wall never thins to less than two extrusions", "COWL",
+                worst >= floor,
+                f"narrowest wall between the cowl's outer surface and the "
+                f"battery cavity is {worst:.4f} mm at z = {at:.2f} "
+                f"({worst / 0.4:.1f} extrusions); the flats carry "
+                f"{p['batt_cowl_wall']:.1f}. It was 0.0385 mm - an open slit - "
+                f"at batt_cowl_base_r 12.6")
+
+    # And the screws that corner radius was raised to clear.
+    blocked = []
+    for sx in (-1, 1):
+        ax = p["board_cx"] + sx * p["board_mount_pitch_x"] / 2
+        ay = p["board_cy"] - p["board_mount_pitch_y"] / 2
+        for r, n in ((0.0, 1), (1.25, 8), (p["board_cs_head_d"] / 2, 16)):
+            pts = []
+            for k in range(n):
+                th = 2 * math.pi * k / n
+                pts += [[ax + r * math.cos(th), ay + r * math.sin(th), float(z)]
+                        for z in np.arange(-0.05, -p["batt_cowl_rise"] - 0.5, -0.2)]
+            if bp.contains(np.array(pts, float)).any():
+                blocked.append((round(ax, 1), round(r, 2)))
+    ok &= check("both lower board screws can still be driven", "COWL",
+                not blocked,
+                f"a Ø{p['board_cs_head_d']:.1f} driver column reaches both lower "
+                "M2.5 screws through the cowl's relief bores"
+                if not blocked else f"{len(blocked)} probe(s) blocked: {blocked[:4]}")
+    return ok
+
+
 def check_magnets(parts, p):
     """The magnetic cover: the discs, the stack they clamp across, and the
     platforms that carry the shear the magnets cannot.
@@ -1235,6 +1304,7 @@ def main():
         ok &= check_openings(parts, p)
         ok &= check_obstruction(parts, p)
         ok &= check_stacks(parts, mocks, p)
+        ok &= check_cowl(parts, p)
         if p.get("variant", 1) >= 2:
             ok &= check_magnets(parts, p)
         ok &= check_interface(parts, p)

@@ -549,6 +549,17 @@ module backplate() {
                 countersunk_hole(board_screw_clear, board_cs_head_d,
                                  board_cs_head_h, back_t);
 
+        // --- relief bores for the two lower board screws --------------------
+        //  The cowl's flank still passes over these two countersinks, so a
+        //  driver reaches them through the cowl rather than around it. Entirely
+        //  at z < 0, so nothing in the plate itself is touched.
+        if (batt_cowl_enable)
+            for (sx = [-1, 1])
+                translate([board_cx + sx * board_mount_pitch_x/2,
+                           board_cy - board_mount_pitch_y/2,
+                           -batt_cowl_rise - 1])
+                    cylinder(h = batt_cowl_rise + 1.01, d = cowl_screw_relief_d);
+
         // --- 18650 bay: through the plate, and hollowed inside the cowl -----
         translate([board_cx + batt_off_x, board_cy + batt_off_y, -0.01])
             rbox(batt_bay_w + 2*fit_slide, batt_bay_h + 2*fit_slide,

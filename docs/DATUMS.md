@@ -347,6 +347,55 @@ a wider recess behind it. This back plate is 3.2 mm thick and the header stands
 8.603 mm off the PCB back — **1.60 mm proud of the standoff plane** — so the
 body itself must pass through. The window here is sized from the body.
 
+### C-28 — The fix for C-25 opened a slit into the battery cavity — BLOCKING
+
+C-25 found the battery cowl lying on top of two M2.5 board-screw countersinks
+and fixed it two ways at once: by deriving the cowl's plan form (82.80 × 27.10)
+and by opening its outer plan corner from **6.0 to 12.6** to pull the flank off
+the screws.
+
+The second half of that fix was itself blocking. A fuller outer corner draws the
+surface **in** at 45°, while the cavity's near-square R2.2 corner stays where it
+is. The wall between them went from 2.07 mm on the flats to **0.0385 mm at the
+corner** — an open slit into the 18650 cavity, roughly 0.6 mm of arc by 3.8 mm
+tall, on all four corners. The part was watertight and printed as a single body,
+so nothing downstream objected.
+
+| | flats | corner |
+|---|---|---|
+| declared `batt_cowl_wall` | 2.00 | 2.00 |
+| at `batt_cowl_base_r` 12.6 | 2.07 | **0.0385** |
+| at `batt_cowl_base_r` 6.0 | 2.07 | **1.0246** |
+
+**Why nothing caught it.** Four assertions guard this cowl. Three are
+one-dimensional — `rse_x_at()` horizontal extents — and the fourth measures the
+cavity against the **holder**. Not one of them measures the outer surface
+against the cavity, which is the only pair of surfaces that defines a wall. The
+`OBSTRUCTION` class added in C-25 has the same blind spot: it asks what lies
+*over* a hole, never how thin something got beside one. This is the project's
+recurring failure in its purest form — *every defect found has been in geometry
+no check interrogated*, and the corner is where one-dimensional checks go blind.
+
+**Why no single corner radius fixes both.** The holder's square corner is at
+(38.90, 11.05) and the screw axis at (42.75, 11.65) — 3.896 mm apart. Less the
+Ø5.0 head radius, 1.396 mm remains for clearance *and* wall, against the
+0.50 + 2.00 = 2.50 the design asks for. Every value of `batt_cowl_base_r` trades
+about a millimetre of screw clearance for about a millimetre of corner wall and
+the sum never exceeds ~1.1 mm.
+
+**Resolved by decoupling them.** The corner goes back to 6.0, and the two lower
+screws get their own Ø5.2 relief bores straight through the cowl — local access
+instead of reshaping the whole shell to reach around. The bores live entirely at
+z < 0, so nothing in the plate is touched, and they leave a 1.02 mm web to the
+cavity.
+
+`validate.py` gained a `COWL` class that reads the wall off the rendered plate
+as a **distance** between the outer ring and the cavity ring, at every height —
+not as an extent — and re-probes a Ø5.0 driver column to both screws.
+
+**This defect shipped.** It was present in `v1.0` (`6a9ded1`) and in the STLs
+issued from it. `v1.1` is the first release without it.
+
 ### C-27 — The back plate's stiffening ribs were not there
 
 `backplate()` added three 3.0 mm ribs across the keyboard bay, with a comment

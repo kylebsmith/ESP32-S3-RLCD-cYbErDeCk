@@ -1,6 +1,6 @@
 {
-  "passed": 106,
-  "total": 106,
+  "passed": 108,
+  "total": 108,
   "results": [
     {
       "check": "chassis: watertight",
@@ -24,7 +24,7 @@
       "check": "backplate: watertight",
       "class": "MESH",
       "ok": true,
-      "detail": "17420 faces"
+      "detail": "17700 faces"
     },
     {
       "check": "backplate: single body",
@@ -36,7 +36,7 @@
       "check": "backplate: positive volume",
       "class": "MESH",
       "ok": true,
-      "detail": "46866 mm^3 -> 58.1 g in PLA"
+      "detail": "47324 mm^3 -> 58.7 g in PLA"
     },
     {
       "check": "buttons: watertight",
@@ -162,7 +162,7 @@
       "check": "backplate is not degenerate",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "109.25 x 133.05 x 13.45, 46866 mm^3"
+      "detail": "109.25 x 133.05 x 13.45, 47324 mm^3"
     },
     {
       "check": "buttons is not degenerate",
@@ -439,6 +439,18 @@
       "class": "STACK",
       "ok": true,
       "detail": "bare pocket 109.85 x 59.15 closed to 108.950 x 58.650; travel on the smallest body falls to +-0.375 / +-0.375 mm"
+    },
+    {
+      "check": "cowl wall never thins to less than two extrusions",
+      "class": "COWL",
+      "ok": true,
+      "detail": "narrowest wall between the cowl's outer surface and the battery cavity is 1.0246 mm at z = -0.20 (2.6 extrusions); the flats carry 2.0. It was 0.0385 mm - an open slit - at batt_cowl_base_r 12.6"
+    },
+    {
+      "check": "both lower board screws can still be driven",
+      "class": "COWL",
+      "ok": true,
+      "detail": "a \u00d85.0 driver column reaches both lower M2.5 screws through the cowl's relief bores"
     },
     {
       "check": "pinned face-roll coefficient still matches the shell",
