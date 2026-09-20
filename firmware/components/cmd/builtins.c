@@ -17,9 +17,11 @@
 #include "seq_pattern.h"
 
 #include "esp_system.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "soc/rtc_cntl_reg.h"
+#include "usbmux.h"
 
 static cmd_status_t c_help(cmd_ctx_t *ctx)
 {
@@ -391,6 +393,8 @@ static cmd_status_t c_sync(cmd_ctx_t *ctx)
  * So the deck is never stuck - but it does WAIT, and a deck waiting silently
  * in download mode looks exactly like a dead one. The panel says so before
  * it goes. */
+static cmd_status_t flash_now(cmd_ctx_t *ctx);
+
 static cmd_status_t c_flash(cmd_ctx_t *ctx)
 {
     /* CONFIRMATION, because the cost of a mistake here is the whole session.
@@ -408,6 +412,14 @@ static cmd_status_t c_flash(cmd_ctx_t *ctx)
         return CMD_ERROR;
     }
 
+    return flash_now(ctx);
+}
+
+/* The reboot-into-the-ROM-loader body, shared so that '>usbtest flash' takes
+ * exactly the same route rather than a lookalike. A test of a lookalike is
+ * a test of the lookalike. */
+static cmd_status_t flash_now(cmd_ctx_t *ctx)
+{
     /* Save EVERY dirty document, not just the current one.
      *
      * This used to save only the current buffer, and skip even that when the
@@ -435,6 +447,11 @@ static cmd_status_t c_flash(cmd_ctx_t *ctx)
     cmd_announce("DOWNLOAD MODE - flash now");
     /* Long enough for the panel to show it and the log to drain. */
     vTaskDelay(pdMS_TO_TICKS(600));
+    /* Hand the PHY back before rebooting, or the ROM loader comes up on a PHY
+     * that USB-Serial-JTAG does not own and the familiar port never appears.
+     * The ROM does not do this for us - see usbmux.h. Without this line the
+     * escape hatch stops being one the moment USB MIDI exists. */
+    usbmux_release_to_usj();
     REG_WRITE(RTC_CNTL_OPTION1_REG, RTC_CNTL_FORCE_DOWNLOAD_BOOT);
     esp_restart();
     return CMD_DONE;                 /* not reached */
@@ -501,6 +518,70 @@ static cmd_status_t c_dump(cmd_ctx_t *ctx)
         doc_buf_select(was);
     }
     snprintf(ctx->msg, sizeof ctx->msg, "%u bytes", (unsigned)len);
+    return CMD_DONE;
+}
+
+/* '>usbtest' - prove the PHY restore BEFORE anything depends on it.
+ *
+ * This is the gate on the whole USB MIDI migration, and it is deliberately
+ * the first thing built. It puts the PHY mux into exactly the state TinyUSB
+ * will leave it in - without TinyUSB - and then puts it back.
+ *
+ * ON THE FIRMWARE THIS REPLACES, THE TEST CANNOT PASS. There was no
+ * usbmux_release_to_usj(); the console would go and only a power cycle would
+ * bring it back. That is the check being "proven to fail on the old state".
+ *
+ *   >usbtest now    take the PHY, wait, give it back. The console dies for
+ *                   two seconds and returns. If it does not return, the
+ *                   restore does not work and no USB work should proceed.
+ *   >usbtest flash  take the PHY, then run the '>flash' path with the mux
+ *                   dirty. The deck must land in download mode on the SAME
+ *                   port it uses today. If it does not, STOP - the escape
+ *                   hatch does not survive USB MIDI and nothing else on the
+ *                   plan should be built.
+ *
+ * Worst case either way is a power cycle: the mux is in the RTC domain and a
+ * cold boot restores the hardware default. */
+static void usbtest_cb(void *arg)
+{
+    (void)arg;
+    usbmux_release_to_usj();
+}
+
+static cmd_status_t c_usbtest(cmd_ctx_t *ctx)
+{
+    const bool to_flash = (strcmp(ctx->arg, "flash") == 0);
+    if (!to_flash && strcmp(ctx->arg, "now") != 0) {
+        cmd_out(ctx, "usbtest now   - drop the console 2s");
+        cmd_out(ctx, "usbtest flash - reboot to ROM loader");
+        cmd_out(ctx, "both recover without a button.");
+        snprintf(ctx->msg, sizeof ctx->msg, "usbtest now | usbtest flash");
+        return CMD_ERROR;
+    }
+
+    cmd_announce(to_flash ? "USB TEST - flashing route"
+                          : "USB TEST - console back in 2s");
+    vTaskDelay(pdMS_TO_TICKS(400));
+
+    if (to_flash) {
+        usbmux_take_for_otg();
+        return flash_now(ctx);
+    }
+
+    /* A one-shot timer, not a delay in this task: if the restore is broken we
+     * want it attempted from a context that is still running even if this
+     * command's task were somehow stuck. */
+    const esp_timer_create_args_t args = {
+        .callback = usbtest_cb, .name = "usbtest",
+        .dispatch_method = ESP_TIMER_TASK,
+    };
+    esp_timer_handle_t t = NULL;
+    if (esp_timer_create(&args, &t) != ESP_OK) {
+        return CMD_ERROR;
+    }
+    usbmux_take_for_otg();
+    esp_timer_start_once(t, 2000000);
+    snprintf(ctx->msg, sizeof ctx->msg, "PHY taken - back in 2s");
     return CMD_DONE;
 }
 
@@ -621,6 +702,7 @@ static const cmd_t s_builtins[] = {
     { "sync",  c_sync,  CMD_CAP_EDIT,  "midi clock out on | off" },
     { "send",  c_send,  CMD_CAP_SYSTEM,"where events go; send mon on" },
     { "flash", c_flash, CMD_CAP_SYSTEM,"flash now - reboot to ROM loader" },
+    { "usbtest", c_usbtest, CMD_CAP_SYSTEM, "prove the USB PHY restore" },
     { "dump",  c_dump,  CMD_CAP_READ,  "print a document to the console" },
     { "play",  c_play,  CMD_CAP_EDIT,  "start the clock" },
     { "stop",  c_stop,  CMD_CAP_EDIT,  "stop the clock" },

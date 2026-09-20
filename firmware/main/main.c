@@ -27,6 +27,7 @@
 #include "docstore.h"
 #include "editor.h"
 #include "ui_text.h"
+#include "usbmux.h"
 #include "kbd.h"
 #include "selftest.h"
 #include "serialkbd.h"
@@ -258,6 +259,13 @@ void app_main(void)
      * Without this, a system reset that happened to preserve the domain would
      * send the deck back into download mode with no explanation. */
     REG_WRITE(RTC_CNTL_OPTION1_REG, 0);
+
+    /* And hand the USB PHY back to USB-Serial-JTAG, for the same reason and
+     * with one difference that matters: a panic reset does NOT run shutdown
+     * handlers - panic_restart() calls esp_restart_noos() directly - so this
+     * line, here, is the only restore that runs after a crash. See usbmux.h
+     * for why nothing else puts these bits back, including the ROM. */
+    usbmux_release_to_usj();
 
     ESP_LOGI(TAG, "cYbErDeCk OS  build %s", BUILD_ID);
     report_memory("boot");
