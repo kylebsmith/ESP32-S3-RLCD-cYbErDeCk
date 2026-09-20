@@ -323,8 +323,13 @@ def audit(p, r):
     cmp(g, "button aperture width", p["button_aper_w"], r.get("button_aper_w"))
     cmp(g, "button aperture height", p["button_aper_h"], r.get("button_aper_h"))
     cmp(g, "microphone span", 2 * p["mic_offset_x"], r.get("mic_span"))
-    cmp(g, "microphone aperture width", p["mic_aper_w"], r.get("mic_aper_w"))
-    cmp(g, "microphone aperture height", p["mic_aper_h"], r.get("mic_aper_h"))
+    cmp(g, "microphone aperture width", p["mic_aper_w"], r.get("mic_aper_w"),
+        reason="the reference is a 0.4-nozzle part; this one prints on 0.8, where "
+               "the roof of a 2.5 mm slot is a single bridged bead and needs support "
+               "inside a 3.2 mm tunnel. Longer and taller makes the stadium roof a "
+               "self-supporting arch and passes more sound")
+    cmp(g, "microphone aperture height", p["mic_aper_h"], r.get("mic_aper_h"),
+        reason="as above; 3.2 is 4 beads at 0.8, asserted by mic_aper_h >= 4*nozzle")
 
     g = "KEYBOARD"
     cmp(g, "pocket width", p["kbd_pocket_w"], r.get("kbd_pocket_w"),
