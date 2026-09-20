@@ -223,6 +223,7 @@ static void wrap(int cols)
 /* The status bar is chrome, not part of the document grid, so it is drawn at
  * its own pixel row and only when its text actually changes. */
 int64_t editor_now_ms(void);
+static void line_at(size_t from, char *out, size_t max);
 
 /* Messages must fit. tg_draw_text_px used to clip silently at the screen
  * edge, so "not a command - start the line with >" rendered as "not a command
@@ -285,12 +286,31 @@ void editor_draw(void)
 
     for (int r = 0; r < TEXT_ROWS; r++) {
         const int li = s_top_line + r;
+        const int start = (li < s_line_count) ? s_line_start[li] : 0;
+        const int end   = (li < s_line_count)
+                          ? ((li + 1 < s_line_count) ? s_line_start[li + 1]
+                                                     : (int)len)
+                          : 0;
+
+        /* Mark a recognised command. Only the display row that BEGINS a
+         * logical line can carry the sigil, and only the command word itself
+         * is marked - so the eye learns "inverse word = the machine knows
+         * this" without a second colour, which a one-bit panel does not
+         * have. An unrecognised command is left looking like prose, which is
+         * how it will behave. */
+        int mark_at = -1, mark_len = 0;
+        if (li < s_line_count &&
+            (start == 0 || doc_at((size_t)start - 1) == '\n')) {
+            char lbuf[96];
+            line_at((size_t)start, lbuf, sizeof lbuf);
+            if (cmd_recognise(lbuf, &mark_at, &mark_len) == NULL) {
+                mark_at = -1;
+            }
+        }
+
         for (int c = 0; c < TEXT_COLS; c++) {
             char ch = ' ';
             if (li < s_line_count) {
-                const int start = s_line_start[li];
-                const int end   = (li + 1 < s_line_count)
-                                  ? s_line_start[li + 1] : (int)len;
                 const int idx = start + c;
                 if (idx < end) {
                     const char d = doc_at((size_t)idx);
@@ -301,8 +321,10 @@ void editor_draw(void)
             if (is_cursor) {
                 s_cur_col = c; s_cur_row = r; s_cur_ch = ch;
             }
-            tg_put(c, r, ch,
-                   (is_cursor && s_cursor_on) ? TG_INVERSE : TG_NORMAL);
+            const bool marked = mark_at >= 0 &&
+                                c >= mark_at && c < mark_at + mark_len;
+            const bool inv = (is_cursor && s_cursor_on) != marked;
+            tg_put(c, r, ch, inv ? TG_INVERSE : TG_NORMAL);
         }
     }
 
@@ -526,6 +548,21 @@ static void log_motion(const char *what)
 #else
     (void)what;
 #endif
+}
+
+/* Copy the logical line that begins at `from`. */
+static void line_at(size_t from, char *out, size_t max)
+{
+    const size_t len = doc_len();
+    size_t n = 0;
+    for (size_t i = from; i < len && n + 1 < max; i++) {
+        const char ch = doc_at(i);
+        if (ch == '\n') {
+            break;
+        }
+        out[n++] = ch;
+    }
+    out[n] = '\0';
 }
 
 /* Copy the LOGICAL line the cursor is on - the run between newlines in the

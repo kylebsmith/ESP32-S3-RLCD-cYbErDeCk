@@ -85,6 +85,19 @@ void cmd_out(cmd_ctx_t *ctx, const char *fmt, ...);
  * itself rather than waiting to be found. */
 int cmd_last_output_lines(void);
 
+/* Is this line a command the table actually knows?
+ *
+ * The editor asks so it can mark a recognised command differently from
+ * ordinary text - which answers two questions at a glance without anything
+ * being run: is this line addressed to the machine, and does the machine know
+ * the word. An unrecognised command looks like prose, which is exactly what
+ * it will behave like.
+ *
+ * Returns the command, or NULL. On success *word_at and *word_len give the
+ * span of the command NAME within the line, so only the word that was
+ * recognised is marked. */
+const cmd_t *cmd_recognise(const char *line, int *word_at, int *word_len);
+
 const cmd_t *cmd_table(int *count);
 
 /* Register the built-in commands. Called once at start-up. */

@@ -70,6 +70,41 @@ void cmd_out(cmd_ctx_t *ctx, const char *fmt, ...)
     }
 }
 
+const cmd_t *cmd_recognise(const char *line, int *word_at, int *word_len)
+{
+    if (line == NULL) {
+        return NULL;
+    }
+    const char *p = line;
+    while (*p == ' ' || *p == '\t') {
+        p++;
+    }
+    if (*p != '>') {
+        return NULL;
+    }
+    p++;
+    while (*p == ' ' || *p == '\t') {
+        p++;
+    }
+    const char *start = p;
+    while (*p != '\0' && *p != ' ' && *p != '\t') {
+        p++;
+    }
+    const size_t n = (size_t)(p - start);
+    if (n == 0) {
+        return NULL;
+    }
+    for (int i = 0; i < s_count; i++) {
+        if (strlen(s_table[i].name) == n &&
+            strncmp(s_table[i].name, start, n) == 0) {
+            if (word_at != NULL)  { *word_at = (int)(start - line); }
+            if (word_len != NULL) { *word_len = (int)n; }
+            return &s_table[i];
+        }
+    }
+    return NULL;
+}
+
 cmd_status_t cmd_run_line(const char *line, cmd_caller_t caller,
                           char *msg_out, size_t msg_max)
 {
