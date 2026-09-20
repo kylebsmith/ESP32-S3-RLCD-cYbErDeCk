@@ -74,6 +74,27 @@ jobs:
       # were cited by name in the CAD for the whole life of the button and
       # keyboard-rib work and none of the three was ever written; nothing
       # noticed, because nothing was looking.
+      # The firmware's window arithmetic, checked on the host. It compiles the
+      # shipping header rather than a copy of it, and it asserts that it can
+      # tell the correct CASET mirroring apart from the naive version that
+      # every full-frame driver gets right by accident. No board needed.
+      - name: Check the ST7305 address arithmetic
+        run: |
+          cc -std=c99 -Wall -Wextra -Werror \
+             -I firmware/components/st7305/include \
+             -o /tmp/test_st7305_addr tools/test_st7305_addr.c
+          /tmp/test_st7305_addr
+
+      # The two bitmap faces are generated from reviewable art, never edited
+      # by hand. If the committed C and the art disagree, someone edited the
+      # wrong one.
+      - name: Check the fonts match their art
+        run: |
+          python3 tools/make_font.py > /tmp/font6x12.c
+          diff -u firmware/components/textgrid/font6x12.c /tmp/font6x12.c
+          python3 tools/make_font.py --12x24 > /tmp/font12x24.c
+          diff -u firmware/components/textgrid/font12x24.c /tmp/font12x24.c
+
       - name: Check the documentation is self-consistent
         run: python3 tools/check_docs.py
 

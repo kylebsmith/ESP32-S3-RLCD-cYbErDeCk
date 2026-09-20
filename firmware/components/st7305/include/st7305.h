@@ -32,22 +32,9 @@
 extern "C" {
 #endif
 
-/* Logical, landscape. */
-#define ST7305_WIDTH   400
-#define ST7305_HEIGHT  300
-
-/* Native, the controller's frame. */
-#define ST7305_NATIVE_W 300
-#define ST7305_NATIVE_H 400
-
-/* 25 column addresses x 3 bytes. */
-#define ST7305_ROW_BYTES  (((ST7305_NATIVE_W + 11) / 12) * 3)   /* 75  */
-#define ST7305_ROW_ADDRS  (ST7305_NATIVE_H / 2)                 /* 200 */
-#define ST7305_FB_SIZE    (ST7305_ROW_BYTES * ST7305_ROW_ADDRS) /* 15000 */
-
-#define ST7305_ADDR_START       0x12
-#define ST7305_ADDR_END         0x2A
-#define ST7305_ADDR_MIRROR_BASE (ST7305_ADDR_START + ST7305_ADDR_END) /* 0x3C */
+/* Geometry and the address arithmetic live in st7305_addr.h, which has no
+ * dependencies so the host-side check in tools/ can exercise the same code. */
+#include "st7305_addr.h"
 
 /* The landscape mapping has a two-way ambiguity per axis that no datasheet
  * settles: it depends on how the glass sits in the module. All four are

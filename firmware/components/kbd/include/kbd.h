@@ -46,5 +46,10 @@ bool kbd_connected(void);
 /* The pairing-recovery gesture: drop every bond and rescan. */
 void kbd_forget_all(void);
 
+/* Push an event from another source. The USB serial console uses this, which
+ * makes the deck usable over the cable when no keyboard is paired - and makes
+ * the whole editor path testable without a radio. */
+void kbd_inject(const kbd_event_t *ev);
+
 /* Printable name of what we are doing, for the status line. */
 const char *kbd_state_name(void);

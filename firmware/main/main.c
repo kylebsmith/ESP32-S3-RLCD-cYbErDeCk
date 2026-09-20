@@ -23,6 +23,7 @@
 #include "editor.h"
 #include "kbd.h"
 #include "selftest.h"
+#include "serialkbd.h"
 #include "st7305.h"
 #include "testcard.h"
 #include "textgrid.h"
@@ -95,6 +96,15 @@ void app_main(void)
         ESP_LOGE(TAG, "display init FAILED - stopping");
         return;
     }
+    uint8_t id[3] = {0};
+    if (st7305_read_id(id) == ESP_OK) {
+        ESP_LOGI(TAG, "panel RDDID -> %02X %02X %02X%s", id[0], id[1], id[2],
+                 (id[0] | id[1] | id[2]) == 0 ? "  (all zero - the bus may not"
+                 " read back on this board; nothing depends on it)" : "");
+    } else {
+        ESP_LOGW(TAG, "panel RDDID read failed - nothing depends on it");
+    }
+
     uint8_t orient = orient_load();
     st7305_set_orientation((st7305_orient_t)orient);
     ESP_ERROR_CHECK(tg_set_font(&tg_font_12x24, 1));     /* 12x24 -> 33x12 */
@@ -118,6 +128,7 @@ void app_main(void)
     if (kbd_init() != ESP_OK) {
         ESP_LOGE(TAG, "BLE keyboard init FAILED");
     }
+    serialkbd_init();                /* the cable is a keyboard too */
     report_memory("after BLE");
 
     const gpio_config_t key = {

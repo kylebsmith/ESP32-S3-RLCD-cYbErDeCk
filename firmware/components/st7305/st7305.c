@@ -304,27 +304,14 @@ uint8_t *st7305_framebuffer(void) { return s_fb; }
 void st7305_set_orientation(st7305_orient_t o) { s_orient = o; }
 st7305_orient_t st7305_orientation(void) { return s_orient; }
 
-/* Logical (x, y) -> native (nx, ny). */
+/* Thin wrappers so call sites stay readable; the arithmetic is in
+ * st7305_addr.h and is shared with the host-side check. */
 static inline void to_native(int x, int y, int *nx, int *ny)
 {
-    switch (s_orient) {
-    case ST7305_ORIENT_0: *nx = y;                     *ny = x;                    break;
-    case ST7305_ORIENT_1: *nx = y;                     *ny = ST7305_WIDTH - 1 - x; break;
-    case ST7305_ORIENT_2: *nx = ST7305_HEIGHT - 1 - y; *ny = ST7305_WIDTH - 1 - x; break;
-    default:              *nx = ST7305_HEIGHT - 1 - y; *ny = x;                    break;
-    }
+    st7305_to_native((int)s_orient, x, y, nx, ny);
 }
-
-static inline size_t fb_index_n(int nx, int ny)
-{
-    return (size_t)(ny >> 1) * ST7305_ROW_BYTES + (size_t)(nx >> 2);
-}
-
-static inline uint8_t fb_mask_n(int nx, int ny)
-{
-    /* The top (smaller native y) pixel is the higher bit. */
-    return (uint8_t)(1u << (7 - ((nx & 3) << 1) - (ny & 1)));
-}
+#define fb_index_n st7305_fb_index_n
+#define fb_mask_n  st7305_fb_mask_n
 
 void st7305_damage(int x, int y, int w, int h)
 {
@@ -403,14 +390,12 @@ void st7305_clear(bool on)
 static esp_err_t push_window(int nx0, int nx1, int ny0, int ny1, size_t *sent)
 {
     /* Quantise out: native x to 12 px, native y to 2 lines. */
-    const int addr_start = ST7305_ADDR_START + nx0 / 12;
-    const int addr_end   = ST7305_ADDR_START + nx1 / 12;
-    const int row_first  = ny0 / 2;
-    const int row_last   = ny1 / 2;
-
-    const int send_start = (addr_start - ST7305_ADDR_START) * 3;
-    const int send_count = (addr_end - addr_start + 1) * 3;
-    const int rows       = row_last - row_first + 1;
+    st7305_window_t w;
+    st7305_window(nx0, nx1, ny0, ny1, &w);
+    const int send_start = w.send_start;
+    const int send_count = w.send_count;
+    const int rows       = w.rows;
+    const int row_first  = w.raset[0];
 
     if (s_policy == ST7305_POWER_AUTO) {
         ST_TRY(set_mode(true));
@@ -418,13 +403,8 @@ static esp_err_t push_window(int nx0, int nx1, int ny0, int ny1, size_t *sent)
         esp_timer_start_once(s_idle_timer, (uint64_t)IDLE_LPM_MS * 1000);
     }
 
-    const uint8_t caset[] = {
-        (uint8_t)(ST7305_ADDR_MIRROR_BASE - addr_end),
-        (uint8_t)(ST7305_ADDR_MIRROR_BASE - addr_start),
-    };
-    const uint8_t raset[] = { (uint8_t)row_first, (uint8_t)row_last };
-    ST_TRY(st_cmd_data(0x2A, caset, sizeof caset));
-    ST_TRY(st_cmd_data(0x2B, raset, sizeof raset));
+    ST_TRY(st_cmd_data(0x2A, w.caset, sizeof w.caset));
+    ST_TRY(st_cmd_data(0x2B, w.raset, sizeof w.raset));
 
     const uint8_t *payload;
     if (send_count == ST7305_ROW_BYTES) {
@@ -432,7 +412,7 @@ static esp_err_t push_window(int nx0, int nx1, int ny0, int ny1, size_t *sent)
         payload = &s_fb[(size_t)row_first * ST7305_ROW_BYTES];
     } else {
         uint8_t *dst = s_stage;
-        for (int r = row_first; r <= row_last; r++) {
+        for (int r = row_first; r < row_first + rows; r++) {
             memcpy(dst, &s_fb[(size_t)r * ST7305_ROW_BYTES + send_start],
                    (size_t)send_count);
             dst += send_count;
@@ -485,26 +465,46 @@ esp_err_t st7305_flush_full(void)
 
 esp_err_t st7305_read_id(uint8_t out[3])
 {
-    const uint8_t cmd = 0x04;   /* RDDID */
+    /* The FPC carries ONE bidirectional data line (docs/HARDWARE.md: the
+     * 23-pin flex has GND, VCC3V3, SCL, SDA, CS, RS, TE, RESET and nothing
+     * else), so this is 3-wire SIO: MOSI is turned around for the read. That
+     * also means command and data cannot share one transaction - the driver
+     * rejects a half-duplex transfer with both phases - so it is a write
+     * followed by a read, with CS held low across both.
+     *
+     * The read clock is 6 MHz, not 24: tSCYC is 150 ns for a read against
+     * 30 ns for a write, and a read path driven at the write clock fails
+     * intermittently rather than cleanly.
+     */
+    const uint8_t cmd = 0x04;          /* RDDID */
     uint8_t rx[4] = {0};
 
     gpio_set_level(PIN_DC, 0);
     gpio_set_level(PIN_CS, 0);
 
-    spi_transaction_t t = {
-        .flags     = 0,
+    spi_transaction_t tx = {
         .length    = 8,
         .tx_buffer = &cmd,
-        .rxlength  = 32,
-        .rx_buffer = rx,
+        .rxlength  = 0,
+        .rx_buffer = NULL,
     };
-    const esp_err_t err = spi_device_polling_transmit(s_spi_read, &t);
+    esp_err_t err = spi_device_polling_transmit(s_spi_read, &tx);
+
+    if (err == ESP_OK) {
+        gpio_set_level(PIN_DC, 1);
+        spi_transaction_t rd = {
+            .length    = 0,
+            .tx_buffer = NULL,
+            .rxlength  = 32,           /* one dummy byte then three ID bytes */
+            .rx_buffer = rx,
+        };
+        err = spi_device_polling_transmit(s_spi_read, &rd);
+    }
 
     gpio_set_level(PIN_CS, 1);
     gpio_set_level(PIN_DC, 1);
 
     if (err == ESP_OK) {
-        /* One dummy clock precedes the three ID bytes. */
         out[0] = rx[1];
         out[1] = rx[2];
         out[2] = rx[3];

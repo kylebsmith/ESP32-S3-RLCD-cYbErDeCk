@@ -71,6 +71,13 @@ static void emit(kbd_ev_type_t t, char ch, bool repeat)
     }
 }
 
+void kbd_inject(const kbd_event_t *ev)
+{
+    if (s_q != NULL && ev != NULL) {
+        xQueueSend(s_q, ev, 0);
+    }
+}
+
 bool kbd_poll(kbd_event_t *ev, uint32_t timeout_ms)
 {
     if (s_q == NULL) {
