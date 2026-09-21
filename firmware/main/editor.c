@@ -24,6 +24,7 @@
 #include "editor.h"
 #include "battery.h"
 #include "cell_attr.h"
+#include "viz.h"
 #include "ui_text.h"
 #include "seq.h"
 #include "seq_pattern.h"
@@ -365,9 +366,25 @@ static int playhead_offset(int line_off, const char *lbuf, int at, int len)
     return (off < 0) ? -1 : line_off + a + off;
 }
 
+/* How many columns the text keeps when the visual preview is up.
+ *
+ * The visual gets the right-hand side and one blank column as a gutter. A
+ * vertical rule would cost a column and read as a border; a blank column reads
+ * as space, which is what actually separates two things on a page. */
+static int text_cols_now(void)
+{
+    if (!viz_split_on()) {
+        return TEXT_COLS;
+    }
+    int vw = VIZ_W;
+    if (vw > TEXT_COLS - 12) { vw = TEXT_COLS - 12; }   /* text keeps 12 */
+    if (vw < 8) { vw = 8; }
+    return TEXT_COLS - vw - 1;
+}
+
 void editor_draw(void)
 {
-    wrap(TEXT_COLS);
+    wrap(text_cols_now());
 
     /* Recover the top line from the anchored offset, then scroll to keep the
      * cursor on screen, then re-anchor. */
@@ -440,7 +457,8 @@ void editor_draw(void)
                      ? playhead_offset((int)s, lbuf, a, n) : -1;
         }
 
-        for (int c = 0; c < TEXT_COLS; c++) {
+        const int tc = text_cols_now();
+        for (int c = 0; c < tc; c++) {
             char ch = ' ';
             if (li < s_line_count) {
                 const int idx = start + c;
@@ -471,6 +489,20 @@ void editor_draw(void)
              * command word gets a bar on top instead of sharing it. */
             const bool inv = is_cursor && s_cursor_on;
             tg_put(c, r, ch, cell_attr(inv, playing, marked));
+        }
+
+        /* The visual, frame by frame, beside the code that makes it. The same
+         * document holds both, so a pattern line and the picture it produces
+         * are four inches apart on one screen - which is the entire reason to
+         * put it here rather than on a page of its own. */
+        if (viz_split_on()) {
+            const char *row = viz_row(r);
+            for (int c = tc; c < TEXT_COLS; c++) {
+                const int vx = c - tc - 1;
+                const char vch = (c == tc || vx < 0 || row[vx] == '\0')
+                                 ? ' ' : row[vx];
+                tg_put(c, r, vch, TG_NORMAL);
+            }
         }
     }
 
@@ -704,7 +736,7 @@ static void log_motion(const char *what)
      * WAS - which made a working goal column look broken in the trace while
      * the offsets proved it correct. Only compiled in for tracing, so the
      * extra wrap costs nothing in a normal build. */
-    wrap(TEXT_COLS);
+    wrap(text_cols_now());
     ESP_LOGI("editor", "%s -> line %d col %d (offset %u of %u)",
              what, s_cursor_line + 1, s_cursor_col + 1,
              (unsigned)doc_cursor(), (unsigned)doc_len());
@@ -858,7 +890,7 @@ void editor_handle(const kbd_event_t *ev)
 {
     /* One wrap per event. Everything below reads the table; nothing below
      * rebuilds it. */
-    wrap(TEXT_COLS);
+    wrap(text_cols_now());
 
     /* Any motion that is not vertical, and any edit, drops the goal column. */
     switch (ev->type) {

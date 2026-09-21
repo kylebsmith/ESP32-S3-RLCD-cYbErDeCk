@@ -26,6 +26,7 @@
 #include "battery.h"
 #include "net.h"
 #include "ssh.h"
+#include "viz.h"
 #include "usbdev.h"
 #include "usbmux.h"
 
@@ -184,15 +185,32 @@ esp_err_t editor_set_density(int dense);
  * right way round. */
 static cmd_status_t c_density(cmd_ctx_t *ctx)
 {
-    /* Strict, not defaulting. A command that silently does the opposite of
-     * what a typo asked for is worse than one that refuses. */
+    /* LOW, MID, HIGH - said as densities rather than as font names, because
+     * "chunky" and "dense" describe the ink and the owner is choosing how much
+     * text fits.
+     *
+     * THERE ARE ONLY TWO FACES, AND MID IS HONEST ABOUT IT. low is 12x24 and
+     * high is 6x12; a genuine middle needs a third face of about 9x18, drawn
+     * from art the way the other two were, which is real work and not a flag.
+     * So 'mid' refuses and says what it would take, rather than silently
+     * picking one of the two and letting the owner believe there are three.
+     *
+     * The old words still work, because they are in people's fingers and in
+     * boot documents already written. */
     int dense;
-    if (ctx->arg[0] == 'd' || ctx->arg[0] == '6') {
-        dense = 1;
-    } else if (ctx->arg[0] == 'c' || ctx->arg[0] == '1') {
-        dense = 0;
+    const char a = ctx->arg[0];
+    if (a == 'h' || a == 'd' || a == '6') {
+        dense = 1;                                  /* high / dense  - 6x12  */
+    } else if (a == 'l' || a == 'c' || a == '1') {
+        dense = 0;                                  /* low / chunky - 12x24 */
+    } else if (a == 'm') {
+        cmd_out(ctx, "no middle face yet - it needs");
+        cmd_out(ctx, "a 9x18 drawn like the others.");
+        cmd_out(ctx, "low = 30 cols, high = 60.");
+        snprintf(ctx->msg, sizeof ctx->msg, "mid needs a third font");
+        return CMD_ERROR;
     } else {
-        cmd_out(ctx, "density chunky | density dense");
+        cmd_out(ctx, "density low | high");
         return CMD_ERROR;
     }
     if (editor_set_density(dense) != ESP_OK) {
@@ -864,8 +882,94 @@ static cmd_status_t c_battery(cmd_ctx_t *ctx)
  * With no argument it sends the current document, so an ASCII drawing IS a
  * frame and editing it live IS visual coding - the same Ctrl+Enter, the same
  * buffer, no second environment. */
+/* '>viz <gen> <pattern>' - a visual lane, in the same grammar as a drum.
+ *
+ *   >viz noise x?x?x?x?
+ *   >viz bar   0..3..9..3..
+ *   >viz wave  9 /2
+ *
+ * Four generators and no more without an argument: what makes this expressive
+ * is eight lanes at different rates driving them, not any one of them being
+ * clever. '>viz <gen>' with no pattern removes that lane. */
+static cmd_status_t c_viz(cmd_ctx_t *ctx)
+{
+    if (ctx->arg[0] == '\0') {
+        cmd_out(ctx, "viz noise|bar|dot|wave <pat>");
+        cmd_out(ctx, "digits 0-9 are intensity.");
+        cmd_out(ctx, "split  toggles the preview");
+        cmd_out(ctx, "route  drives one from another");
+        snprintf(ctx->msg, sizeof ctx->msg, "viz noise x?x?x?x?");
+        return CMD_DONE;
+    }
+    char gen[16];
+    const char *pat = ctx->arg;
+    size_t i = 0;
+    while (*pat && *pat != ' ' && i < sizeof gen - 1) { gen[i++] = *pat++; }
+    gen[i] = '\0';
+    while (*pat == ' ') { pat++; }
+    if (viz_lane(gen, pat) != ESP_OK) {
+        cmd_out(ctx, "no generator '%s'", gen);
+        cmd_out(ctx, "noise bar dot wave");
+        return CMD_ERROR;
+    }
+    if (pat[0] != '\0') { viz_split(true); }
+    snprintf(ctx->msg, sizeof ctx->msg, "%s %.18s", gen, pat);
+    return CMD_DONE;
+}
+
+/* '>split' - the preview, on or off. Toggling the same command off again is
+ * the owner's ask and the right shape: one word, two states, no submenu. */
+static cmd_status_t c_split(cmd_ctx_t *ctx)
+{
+    viz_split(!viz_split_on());
+    snprintf(ctx->msg, sizeof ctx->msg, "split %s",
+             viz_split_on() ? "on" : "off");
+    return CMD_DONE;
+}
+
+/* '>route <gen> <lane>' - the sidechain, generalised.
+ *
+ * The visual lane says WHEN and the named music lane says HOW MUCH. It is one
+ * idea - a lane may read another lane's output - and it works between any two,
+ * which is why it is not called sidechaining: the same mechanism sends a kick
+ * to a bar height or a filter sweep to a wave amplitude. */
+static cmd_status_t c_route(cmd_ctx_t *ctx)
+{
+    if (ctx->arg[0] == '\0') {
+        cmd_out(ctx, "route <gen> <lane>");
+        cmd_out(ctx, "route noise bass");
+        cmd_out(ctx, "route noise      unroutes");
+        snprintf(ctx->msg, sizeof ctx->msg, "route noise bass");
+        return CMD_DONE;
+    }
+    char gen[16], src[16];
+    two_words(ctx->arg, gen, sizeof gen, src, sizeof src);
+    if (viz_route(gen, src) != ESP_OK) {
+        cmd_out(ctx, "no generator '%s'", gen);
+        return CMD_ERROR;
+    }
+    snprintf(ctx->msg, sizeof ctx->msg, src[0] ? "%s <- %s" : "%s unrouted",
+             gen, src);
+    return CMD_DONE;
+}
+
 static cmd_status_t c_frame(cmd_ctx_t *ctx)
 {
+    /* If visuals are running, THE FRAME IS THE FRAME. Sending the document
+     * instead would be sending the source when the owner asked for the
+     * picture. With no visual lanes it falls back to the document, which is
+     * how a hand-drawn ASCII frame gets out. */
+    if (ctx->arg[0] == '\0' && viz_active()) {
+        static char vt[VIZ_H * (VIZ_W + 2) + 4];
+        const int n = viz_text(vt, (int)sizeof vt);
+        const esp_err_t ve = net_osc_frame(vt);
+        if (ve == ESP_ERR_INVALID_STATE) {
+            cmd_out(ctx, "no osc target. try: osc <ip> <port>");
+            return CMD_ERROR;
+        }
+        snprintf(ctx->msg, sizeof ctx->msg, "sent a %d-byte frame", n);
+        return (ve == ESP_OK) ? CMD_DONE : CMD_ERROR;
+    }
     const int want = (ctx->arg[0] != '\0') ? doc_buf_find(ctx->arg)
                                            : doc_buf_current();
     if (want < 0) {
@@ -1240,7 +1344,10 @@ static const cmd_t s_builtins[] = {
     { "host",  c_host,  CMD_CAP_NET,   "host <ssid> <pass> - be the net" },
     { "osc",   c_osc,   CMD_CAP_NET,   "osc <ip> <port> - /deck/<lane>" },
     { "ssh",   c_ssh,   CMD_CAP_NET,   "ssh user@host pass <command>" },
-    { "frame", c_frame, CMD_CAP_NET,   "send this doc as ASCII over osc" },
+    { "frame", c_frame, CMD_CAP_NET,   "send the frame over osc" },
+    { "viz",   c_viz,   CMD_CAP_EDIT,  "viz noise x?x?x?x?" },
+    { "split", c_split, CMD_CAP_EDIT,  "toggle the visual preview" },
+    { "route", c_route, CMD_CAP_EDIT,  "route noise bass" },
     { "usb",   c_usb,   CMD_CAP_SYSTEM,"usb on | off - MIDI over the cable" },
     { "flash", c_flash, CMD_CAP_SYSTEM,"flash now - reboot to ROM loader" },
     { "dump",  c_dump,  CMD_CAP_READ,  "print a document to the console" },
@@ -1276,7 +1383,7 @@ static const cmd_t s_builtins[] = {
     { "close", c_close, CMD_CAP_EDIT,                   "forget this buffer" },
     { "guide", c_guide, CMD_CAP_EDIT,                   "mark as a guide" },
     { "prose", c_prose, CMD_CAP_EDIT,                   "mark as prose" },
-    { "density", c_density, CMD_CAP_EDIT,               "chunky | dense" },
+    { "density", c_density, CMD_CAP_EDIT,               "low | high" },
 };
 
 void cmd_register(const cmd_t *table, int count);

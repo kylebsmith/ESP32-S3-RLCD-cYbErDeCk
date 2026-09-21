@@ -283,6 +283,15 @@ typedef struct {
 void seq_stats(seq_stat_t *clock_out, seq_stat_t *xport_out);
 void seq_stats_reset(void);
 
+/* Called on every internal tick, and on every note a lane plays.
+ *
+ * The visuals hang off these rather than seq calling into viz directly,
+ * because the sequencer must not depend on a display: the same hooks would
+ * serve a coprocessor over pogo pins without seq learning about it. */
+typedef void (*seq_tick_hook_t)(uint32_t tick);
+typedef void (*seq_play_hook_t)(const char *lane, uint8_t value);
+void seq_set_hooks(seq_tick_hook_t on_tick, seq_play_hook_t on_play);
+
 /* Events dropped because the transport could not keep up. A late note is
  * worse than a lost one, so the clock never blocks - but the count must be
  * visible or the loss is silent. */

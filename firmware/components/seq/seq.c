@@ -12,6 +12,9 @@
 
 static const char *TAG = "seq";
 
+static seq_tick_hook_t s_on_tick;
+static seq_play_hook_t s_on_play;
+
 static seq_lane_t s_lanes[SEQ_MAX_LANES];
 static int        s_bpm = 120;
 static bool       s_running;
@@ -97,6 +100,12 @@ void seq_stats(seq_stat_t *c, seq_stat_t *x)
 {
     if (c != NULL) { *c = s_clock_stat; }
     if (x != NULL) { *x = s_xport_stat; }
+}
+
+void seq_set_hooks(seq_tick_hook_t t, seq_play_hook_t p)
+{
+    s_on_tick = t;
+    s_on_play = p;
 }
 
 void seq_stats_reset(void)
@@ -444,12 +453,18 @@ static void fire_lanes(uint32_t tick)
             }
             const uint8_t v = (uint8_t)((l->deg[s] * 127) / 9);
             emit((uint8_t)(0xB0 | (l->chan & 0x0F)), l->cc, v);
+            if (s_on_play != NULL) {
+                s_on_play(l->name, v);
+            }
             continue;
         }
         const uint8_t note = l->melodic
             ? degree_note(l->deg[s] == 0xFF ? 0 : l->deg[s], l->octave)
             : l->note;
         emit((uint8_t)(0x90 | (l->chan & 0x0F)), note, (uint8_t)vel);
+        if (s_on_play != NULL) {
+            s_on_play(l->name, (uint8_t)vel);
+        }
         schedule_off(l->chan, note, l->gate_ms);
     }
 }
@@ -504,6 +519,12 @@ static void tick(void *arg)
      * 66 minutes.
      */
     fire_lanes(s_tick);
+    /* The visuals advance on the same tick as the music, so the animation and
+     * the beat share a clock by construction rather than by being kept in
+     * step. Cheap: the hook returns immediately when nothing is drawing. */
+    if (s_on_tick != NULL) {
+        s_on_tick(s_tick);
+    }
     if ((s_tick % SEQ_TICKS_PER_STEP) == 0) {
         s_pos = s_tick / SEQ_TICKS_PER_STEP;
         /* The step itself is an event. It travels through the same queue as

@@ -30,6 +30,7 @@
 #include "ui_text.h"
 #include "net.h"
 #include "usbdev.h"
+#include "viz.h"
 #include "usbmux.h"
 #include "kbd.h"
 #include "selftest.h"
@@ -408,6 +409,7 @@ void app_main(void)
      * pointer: BLE MIDI, USB MIDI and a UART all plug in here without the
      * musical core changing. */
     cmd_set_announce(announce);
+    seq_set_hooks(viz_tick, viz_lane_played);
     seq_dest_add("ble", dest_ble, blemidi_flush, "BLE MIDI (off by default)");
     seq_dest_add("mon", dest_mon, NULL, "echo notes to console");
     /* OSC is registered always and enabled by '>osc <ip> <port>'. It is the

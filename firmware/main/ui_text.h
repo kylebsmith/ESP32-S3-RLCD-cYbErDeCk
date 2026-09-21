@@ -110,7 +110,13 @@
     ">host deck 12345678\n" \
     ">osc 192.168.4.2 9000\n" \
     ">ssh me@host pass ls\n" \
-    ">frame  send ascii as a frame\n" \
+    "\n" \
+    "VISUALS - same document\n" \
+    ">viz noise x?x?x?x?\n" \
+    ">viz bar 0..3..9..3..\n" \
+    ">route noise bass\n" \
+    ">split  preview on/off\n" \
+    ">frame  send it over osc\n" \
     ">list   your documents\n" \
     ">help   all the commands\n"
 

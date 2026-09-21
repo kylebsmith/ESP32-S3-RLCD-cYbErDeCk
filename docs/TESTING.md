@@ -121,7 +121,30 @@ On the deck:
 You should see `/deck/step` with the bar position and `/deck/<lane>` for every
 hit, by lane name.
 
-## 11. ASCII frames
+## 11. Visuals, in the same document
+
+```
+>kick X...x...X...x...
+>bass 0...5...3...7...
+>viz noise x?x?x?x?
+>viz bar 0..3..9..3..
+>route noise bass
+>play
+```
+
+The right side of the screen becomes a live ASCII frame, advancing on the same
+clock as the music. `>split` toggles the preview; the visual lanes keep running
+either way.
+
+`>route noise bass` makes the bass note's velocity drive the noise density —
+the visual line says *when*, the music lane says *how much*. Unroute with
+`>route noise`.
+
+Four generators: `noise`, `bar`, `dot`, `wave`. Digits 0–9 are intensity, and
+everything else about the pattern is the same grammar as a drum lane — `?`,
+brackets, `/2` and `*2` all work.
+
+## 12. ASCII frames
 
 Make a document with some ASCII art, then:
 
@@ -132,7 +155,7 @@ Make a document with some ASCII art, then:
 The listener prints it between `--- frame ---` markers. Editing the drawing and
 running `>frame` again is the whole of visual coding on this device.
 
-## 12. SSH
+## 13. SSH
 
 Turn on Remote Login (macOS: Settings → General → Sharing). Then with the deck
 on the same network:
@@ -147,7 +170,7 @@ The host key is **shown, not verified** — the fingerprint is printed so you ca
 see it change. The password is on the line, which is why `+ssh` is transient
 and never reaches the journal, the SD card or a backup.
 
-## 13. Battery
+## 14. Battery
 
 ```
 >battery
@@ -163,7 +186,7 @@ Then:
 Persistent, no reflash. A four-cell bar appears at the right of the status row.
 If the divider isn't 2:1, `>battery use 4 30` for 3:1.
 
-## 14. Settings survive
+## 15. Settings survive
 
 Ctrl-L to `boot`. It holds ordinary commands that run at startup:
 
@@ -173,10 +196,12 @@ Ctrl-L to `boot`. It holds ordinary commands that run at startup:
 >density dense
 ```
 
-Edit it, power cycle, and they take effect. `dense` gives 60 columns instead of
-30 — smaller text, fewer wrapped lines.
+Edit it, power cycle, and they take effect. `>density low` is 30 columns,
+`>density high` is 60. There is no middle yet — it needs a third font face
+drawn at about 9x18, and `>density mid` says so rather than quietly picking
+one of the two.
 
-## 15. It recovers
+## 16. It recovers
 
 If it crashes it now reboots in about two seconds and the screen says
 `crashed Nx - unplug to clear`. That counter clears on a real power cycle:
