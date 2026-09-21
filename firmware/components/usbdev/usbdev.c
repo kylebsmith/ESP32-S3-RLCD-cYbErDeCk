@@ -231,8 +231,8 @@ esp_err_t usbdev_want(bool on)
  * further behind. */
 void usbdev_midi_send(uint8_t status, uint8_t d1, uint8_t d2)
 {
-    if (!usbdev_mounted()) {
-        return;
+    if (!usbdev_mounted() || status == 0xF9) {
+        return;          /* 0xF9 is the deck's own step marker, not MIDI */
     }
     const uint8_t msg[3] = { status, d1, d2 };
     /* System real-time messages are a single byte. Sending three would inject

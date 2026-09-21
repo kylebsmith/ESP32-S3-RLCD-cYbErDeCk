@@ -110,6 +110,7 @@
     ">host deck 12345678\n" \
     ">osc 192.168.4.2 9000\n" \
     ">ssh me@host pass ls\n" \
+    ">frame  send ascii as a frame\n" \
     ">list   your documents\n" \
     ">help   all the commands\n"
 

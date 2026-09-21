@@ -853,6 +853,54 @@ static cmd_status_t c_battery(cmd_ctx_t *ctx)
  *
  * Runs on the editor task, blocking, with a 15-second library timeout. An SSH
  * server that never answers must not become a deck that never redraws. */
+/* '>frame' - send a document to the renderer as ASCII.
+ *
+ * THIS IS THE VISUAL PRIMITIVE, and it is deliberately not a graphics API. The
+ * deck's medium is a rectangle of characters; the most useful thing it can hand
+ * a projector is that rectangle. A receiver renders it however it likes - as
+ * text, as a bitmap, as geometry driven by the glyphs - and the deck stays the
+ * text and control brain, which is what the pogo-pin coprocessor plan assumes.
+ *
+ * With no argument it sends the current document, so an ASCII drawing IS a
+ * frame and editing it live IS visual coding - the same Ctrl+Enter, the same
+ * buffer, no second environment. */
+static cmd_status_t c_frame(cmd_ctx_t *ctx)
+{
+    const int want = (ctx->arg[0] != '\0') ? doc_buf_find(ctx->arg)
+                                           : doc_buf_current();
+    if (want < 0) {
+        cmd_out(ctx, "no document called '%s'", ctx->arg);
+        return CMD_ERROR;
+    }
+    const int was = doc_buf_current();
+    if (want != was && doc_buf_select(want) != ESP_OK) {
+        return CMD_ERROR;
+    }
+    static char text[1024];
+    size_t n = doc_len();
+    if (n > sizeof text - 1) {
+        n = sizeof text - 1;
+    }
+    doc_read(text, n);
+    text[n] = '\0';
+    if (want != was) {
+        doc_buf_select(was);
+    }
+
+    const esp_err_t e = net_osc_frame(text);
+    if (e == ESP_ERR_INVALID_STATE) {
+        cmd_out(ctx, "no osc target. try: osc <ip> <port>");
+        return CMD_ERROR;
+    }
+    if (e != ESP_OK) {
+        cmd_out(ctx, "frame too large or send failed");
+        return CMD_ERROR;
+    }
+    snprintf(ctx->msg, sizeof ctx->msg, "sent %u bytes as a frame",
+             (unsigned)n);
+    return CMD_DONE;
+}
+
 static cmd_status_t c_ssh(cmd_ctx_t *ctx)
 {
     if (ctx->arg[0] == '\0') {
@@ -1182,6 +1230,7 @@ static const cmd_t s_builtins[] = {
     { "host",  c_host,  CMD_CAP_NET,   "host <ssid> <pass> - be the net" },
     { "osc",   c_osc,   CMD_CAP_NET,   "osc <ip> <port> - /deck/<lane>" },
     { "ssh",   c_ssh,   CMD_CAP_NET,   "ssh user@host pass <command>" },
+    { "frame", c_frame, CMD_CAP_NET,   "send this doc as ASCII over osc" },
     { "usb",   c_usb,   CMD_CAP_SYSTEM,"usb on | off - MIDI over the cable" },
     { "flash", c_flash, CMD_CAP_SYSTEM,"flash now - reboot to ROM loader" },
     { "dump",  c_dump,  CMD_CAP_READ,  "print a document to the console" },

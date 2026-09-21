@@ -144,6 +144,34 @@ jobs:
              -o /tmp/test_cell_attr tools/test_cell_attr.c
           /tmp/test_cell_attr
 
+      # The OSC wire format. A missing pad byte or a little-endian integer
+      # produces a datagram a receiver silently discards, and the symptom is
+      # "the visuals do not work" with nothing in any log on either side. The
+      # second step proves the reference receiver in tools/ parses exactly what
+      # the firmware packs - the two halves of the same claim.
+      - name: Check the OSC packing
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror \
+             -I firmware/components/net/include \
+             -o /tmp/test_osc tools/test_osc.c
+          /tmp/test_osc
+          python3 - <<'EOF'
+          import struct
+          src = open('tools/osc_listen.py').read().split('def main()')[0]
+          exec(src)
+          def s(x):
+              b = x.encode() + b'\0'
+              return b + b'\0' * ((4 - len(b) % 4) % 4)
+          m  = s('/deck/step') + s(',i') + struct.pack('>i', 7)
+          m += s('/deck/kick') + s(',ii') + struct.pack('>ii', 36, 100)
+          m += s('/deck/frame') + s(',s') + s('hello')
+          got = list(parse(m))
+          want = [('/deck/step', [7]), ('/deck/kick', [36, 100]),
+                  ('/deck/frame', ['hello'])]
+          assert got == want, got
+          print('[PASS] receiver parses what the firmware packs')
+          EOF
+
       - name: Check the serial keymap
         run: |
           cc -std=c11 -Wall -Wextra -Werror \

@@ -308,8 +308,8 @@ void blemidi_flush(void)
 
 void blemidi_send(uint8_t status, uint8_t d1, uint8_t d2, uint32_t when_us)
 {
-    if (!blemidi_connected()) {
-        return;
+    if (!blemidi_connected() || status == 0xF9) {
+        return;          /* 0xF9 is the deck's own step marker, not MIDI */
     }
     /* BLE-MIDI framing: a header byte carrying the top six bits of a 13-bit
      * millisecond timestamp, then a timestamp byte before EVERY message, then

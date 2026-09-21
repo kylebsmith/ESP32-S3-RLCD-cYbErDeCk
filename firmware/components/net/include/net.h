@@ -49,5 +49,15 @@ void net_osc_send(const char *lane, uint8_t status, uint8_t d1, uint8_t d2,
                   uint32_t when_us);
 void net_osc_flush(void);
 
+/* The transport position, once per step. A receiver's whole timebase in one
+ * message - it needs no MIDI clock and no note to know where the bar is. */
+void net_osc_step(int step);
+
+/* A screenful of ASCII as '/deck/frame'. This is the visual primitive: the
+ * deck's medium IS a rectangle of characters, so the most useful thing it can
+ * hand a renderer is that rectangle, not a description of one. Its own
+ * datagram, because it is up to a few hundred bytes. */
+esp_err_t net_osc_frame(const char *text);
+
 /* Datagrams sent, and messages packed into them. */
 void net_osc_counts(uint32_t *msgs, uint32_t *packets);

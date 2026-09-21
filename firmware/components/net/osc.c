@@ -26,6 +26,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "lwip/sockets.h"
+#include "osc_pack.h"
 #include "lwip/inet.h"
 
 static const char *TAG = "osc";
@@ -34,16 +35,24 @@ static int                s_sock = -1;
 static struct sockaddr_in s_to;
 static uint32_t           s_msgs, s_packets;
 
-/* One datagram per drained step, built here and sent by net_osc_flush(). 512
- * bytes is comfortably inside the 1500-byte MTU and more than eight lanes can
- * produce in one step. */
-static uint8_t s_buf[512];
-static int     s_len;
+/* One datagram per drained step. 512 bytes is inside any MTU and more than
+ * eight lanes can produce in a step. */
+static uint8_t s_raw[512];
+static osc_t   s_pk;
+static bool    s_open;
 
 void net_osc_counts(uint32_t *m, uint32_t *p)
 {
     if (m != NULL) { *m = s_msgs; }
     if (p != NULL) { *p = s_packets; }
+}
+
+static void pk_open(void)
+{
+    if (!s_open) {
+        osc_init(&s_pk, s_raw, (int)sizeof s_raw);
+        s_open = true;
+    }
 }
 
 esp_err_t net_osc_target(const char *ip, int port)
@@ -67,42 +76,12 @@ esp_err_t net_osc_target(const char *ip, int port)
     if (s_sock < 0) {
         return ESP_FAIL;
     }
-    /* Non-blocking, because this is called from the MIDI task and a socket
-     * that can block is a clock that can stall. */
-    int fl = fcntl(s_sock, F_GETFL, 0);
+    /* Non-blocking: this is called from the MIDI task, and a socket that can
+     * block is a clock that can stall. */
+    const int fl = fcntl(s_sock, F_GETFL, 0);
     fcntl(s_sock, F_SETFL, fl | O_NONBLOCK);
     ESP_LOGW(TAG, "osc -> %s:%d", ip, port);
     return ESP_OK;
-}
-
-/* OSC strings are null-terminated and padded with nulls to a multiple of four.
- * Returns false when the buffer is full rather than truncating - a malformed
- * packet is worse than a dropped one, because a receiver may reject the whole
- * datagram and lose the messages that were fine. */
-static bool put_str(const char *s)
-{
-    const int n = (int)strlen(s) + 1;
-    const int pad = (4 - (n % 4)) % 4;
-    if (s_len + n + pad > (int)sizeof s_buf) {
-        return false;
-    }
-    memcpy(&s_buf[s_len], s, (size_t)n);
-    s_len += n;
-    memset(&s_buf[s_len], 0, (size_t)pad);
-    s_len += pad;
-    return true;
-}
-
-static bool put_i32(int32_t v)
-{
-    if (s_len + 4 > (int)sizeof s_buf) {
-        return false;
-    }
-    s_buf[s_len++] = (uint8_t)(v >> 24);
-    s_buf[s_len++] = (uint8_t)(v >> 16);
-    s_buf[s_len++] = (uint8_t)(v >> 8);
-    s_buf[s_len++] = (uint8_t)v;
-    return true;
 }
 
 void net_osc_send(const char *lane, uint8_t status, uint8_t d1, uint8_t d2,
@@ -112,39 +91,76 @@ void net_osc_send(const char *lane, uint8_t status, uint8_t d1, uint8_t d2,
     if (s_sock < 0) {
         return;
     }
-    /* Note-offs and the transport bytes are not sent. A visual patch wants to
-     * know that a thing HAPPENED; a note-off is a MIDI housekeeping detail and
-     * sending it would double the traffic to say nothing. */
-    const uint8_t type = status & 0xF0;
-    char addr[40];
-    if (type == 0x90 && d2 > 0) {
-        snprintf(addr, sizeof addr, "/deck/%s", (lane && *lane) ? lane : "x");
-    } else if (type == 0xB0) {
-        snprintf(addr, sizeof addr, "/deck/%s", (lane && *lane) ? lane : "cc");
-    } else {
+    pk_open();
+
+    /* Note-offs and transport bytes are not sent: a visual wants to know a
+     * thing HAPPENED, and a note-off would double the traffic to say nothing.
+     * The transport clock goes out as /deck/step instead, once per step, which
+     * is a receiver's whole timebase in one message. */
+    /* The step marker the sequencer emits for exactly this purpose. */
+    if (status == 0xF9) {
+        if (osc_msg_i(&s_pk, "/deck/step", (int32_t)d1)) {
+            s_msgs++;
+        }
         return;
     }
-
-    const int mark = s_len;
-    if (!put_str(addr) || !put_str(",ii") ||
-        !put_i32((int32_t)d1) || !put_i32((int32_t)d2)) {
-        s_len = mark;            /* leave the datagram valid */
+    const uint8_t type = status & 0xF0;
+    if (!((type == 0x90 && d2 > 0) || type == 0xB0)) {
         return;
+    }
+    char addr[40];
+    snprintf(addr, sizeof addr, "/deck/%s",
+             (lane && *lane) ? lane : (type == 0xB0 ? "cc" : "x"));
+    if (osc_msg_ii(&s_pk, addr, (int32_t)d1, (int32_t)d2)) {
+        s_msgs++;
+    }
+}
+
+void net_osc_step(int step)
+{
+    if (s_sock < 0) {
+        return;
+    }
+    pk_open();
+    if (osc_msg_i(&s_pk, "/deck/step", (int32_t)step)) {
+        s_msgs++;
+    }
+}
+
+esp_err_t net_osc_frame(const char *text)
+{
+    if (s_sock < 0 || text == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    /* A frame goes in its OWN datagram rather than riding with a step: it is
+     * up to a few hundred bytes of ASCII and would push the step packet past
+     * anything worth calling small. */
+    static uint8_t raw[1100];
+    osc_t o;
+    osc_init(&o, raw, (int)sizeof raw);
+    if (!osc_msg_s(&o, "/deck/frame", text)) {
+        return ESP_ERR_INVALID_SIZE;
+    }
+    if (sendto(s_sock, raw, (size_t)o.len, 0,
+               (struct sockaddr *)&s_to, sizeof s_to) <= 0) {
+        return ESP_FAIL;
     }
     s_msgs++;
+    s_packets++;
+    return ESP_OK;
 }
 
 void net_osc_flush(void)
 {
-    if (s_sock < 0 || s_len == 0) {
-        s_len = 0;
+    if (s_sock < 0 || !s_open || s_pk.len == 0) {
+        s_open = false;
         return;
     }
-    const int n = s_len;
-    s_len = 0;
-    /* One datagram per step. Fire and forget: a failed send is a dropped
-     * frame, and a dropped frame is better than a stalled clock. */
-    if (sendto(s_sock, s_buf, (size_t)n, 0,
+    const int n = s_pk.len;
+    s_open = false;
+    /* Fire and forget. A failed send is a dropped frame, and a dropped frame
+     * is better than a stalled clock. */
+    if (sendto(s_sock, s_raw, (size_t)n, 0,
                (struct sockaddr *)&s_to, sizeof s_to) > 0) {
         s_packets++;
     }

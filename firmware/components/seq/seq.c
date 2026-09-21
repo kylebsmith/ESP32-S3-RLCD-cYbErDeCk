@@ -506,6 +506,12 @@ static void tick(void *arg)
     fire_lanes(s_tick);
     if ((s_tick % SEQ_TICKS_PER_STEP) == 0) {
         s_pos = s_tick / SEQ_TICKS_PER_STEP;
+        /* The step itself is an event. It travels through the same queue as
+         * the notes, so a destination that cares about the bar gets it in the
+         * same datagram as the notes of that step - and one that does not
+         * care ignores it, exactly as the monitor ignores the lane name.
+         * Status 0xF9 is undefined in MIDI, so no transport will act on it. */
+        emit(0xF9, (uint8_t)(s_pos & 0x7F), 0);
     }
     s_tick++;
 }
