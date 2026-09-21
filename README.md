@@ -69,6 +69,55 @@ on — the panel sets that corner, not taste, and the bound is asserted in CI.
 
 12.55 mm shorter, 1.15 mm thinner, *and* thicker-walled.
 
+## The instrument
+
+The firmware turns the board into a handheld live-coding instrument. One line of
+text is one lane, and a lane is the only noun in the system — a kick, a
+bassline, a filter sweep and an ASCII frame are the same object, and what
+differs is only which destination interprets it.
+
+```
+>bpm 124
+>scale dmin
+>kick X...x...X...x...
+>hat  x?x?x.x. /2
+>bass 0...3...5...3...
+>cc cut 0..3..6..9..6.
+>play
+```
+
+`x` is a hit, `X` an accent, `,` a ghost, `?` a maybe, `?[15]` a fifteen per
+cent maybe, `.` a rest. Digits are scale degrees on a melodic lane and values on
+a controller lane. A trailing `/2` or `*2` sets that lane's own speed. An
+inverted bar sweeps the line in time with the sound, so you can see what is
+playing in the document you are editing.
+
+Output goes to named destinations rather than a compiled-in sink, which is why
+the same pattern can drive a synth and a projector without either knowing about
+the other:
+
+| | |
+|---|---|
+| `>usb on` | USB MIDI, measured at **0.03 ms** of jitter at the host |
+| `>send ble on` | BLE MIDI, off by default — the radio is the keyboard's |
+| `>osc <ip> <port>` | OSC as `/deck/<lane>`, for visuals and other machines |
+| `>frame` | the current document, as ASCII, to whatever is rendering |
+| `>host deck <pass>` | the deck becomes the Wi-Fi network |
+| `>ssh you@host <pass> <cmd>` | run something elsewhere, read the reply here |
+
+There is no command mode and no menu. Commands are lines of text beginning with
+`>`, in any document, run with Ctrl+Enter — so a document is a piece of music, a
+notebook and a control surface at once, and the settings file is simply a
+document that runs at startup.
+
+**[docs/TESTING.md](docs/TESTING.md)** is a step-by-step pass over all of it.
+
+Timing is measured rather than asserted. The sequencer's clock holds 99.6 % of
+ticks within 100 µs of the grid; end to end over USB the standard deviation is
+0.03 ms, against roughly 6 ms for an audible displacement of a percussive
+onset. What is *not* measured is stated as such, here and in
+[STATUS.md](STATUS.md).
+
 ## Print it
 
 The three printable parts are committed in

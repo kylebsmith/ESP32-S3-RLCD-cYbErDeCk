@@ -84,6 +84,57 @@ static esp_err_t wifi_once(void)
     return ESP_OK;
 }
 
+void net_remembered(char *out, size_t max)
+{
+    out[0] = '\0';
+    nvs_handle_t h;
+    if (nvs_open(NVS_NS, NVS_READONLY, &h) == ESP_OK) {
+        size_t n = max;
+        if (nvs_get_str(h, "ssid", out, &n) != ESP_OK) {
+            out[0] = '\0';
+        }
+        nvs_close(h);
+    }
+}
+
+void net_forget(void)
+{
+    nvs_handle_t h;
+    if (nvs_open(NVS_NS, NVS_READWRITE, &h) == ESP_OK) {
+        nvs_erase_key(h, "ssid");
+        nvs_erase_key(h, "pass");
+        nvs_commit(h);
+        nvs_close(h);
+    }
+    ESP_LOGW(TAG, "forgot the network");
+}
+
+esp_err_t net_rejoin(void)
+{
+    /* The credentials are remembered the moment they are TYPED, not once a
+     * join succeeds - so a wrong password, a network that is out of range, or
+     * simply walking away from the command still leaves the deck knowing what
+     * it was told. The owner reported typing an SSID and password, backing
+     * out, and finding it gone; that is why. */
+    char ssid[33] = "", pass[65] = "";
+    nvs_handle_t h;
+    if (nvs_open(NVS_NS, NVS_READONLY, &h) != ESP_OK) {
+        return ESP_ERR_NOT_FOUND;
+    }
+    size_t sn = sizeof ssid, pn = sizeof pass;
+    const bool have = (nvs_get_str(h, "ssid", ssid, &sn) == ESP_OK) &&
+                      ssid[0] != '\0';
+    if (nvs_get_str(h, "pass", pass, &pn) != ESP_OK) {
+        pass[0] = '\0';
+    }
+    nvs_close(h);
+    if (!have) {
+        return ESP_ERR_NOT_FOUND;
+    }
+    ESP_LOGW(TAG, "rejoining %s", ssid);
+    return net_join(ssid, pass);
+}
+
 static void remember(const char *ssid, const char *pass)
 {
     nvs_handle_t h;
@@ -115,10 +166,13 @@ esp_err_t net_join(const char *ssid, const char *pass)
                                                   : WIFI_AUTH_OPEN;
     snprintf(s_ssid, sizeof s_ssid, "%.32s", ssid);
     s_hosting = false;
+    /* Remembered FIRST. A join can fail for a dozen reasons that have nothing
+     * to do with the credentials being wrong, and losing them on every one of
+     * those is how the owner ended up retyping a password repeatedly. */
+    remember(ssid, pass);
     ESP_RETURN_ON_ERROR(esp_wifi_set_mode(WIFI_MODE_STA), TAG, "mode");
     ESP_RETURN_ON_ERROR(esp_wifi_set_config(WIFI_IF_STA, &wc), TAG, "cfg");
     ESP_RETURN_ON_ERROR(esp_wifi_start(), TAG, "start");
-    remember(ssid, pass);
     return esp_wifi_connect();
 }
 

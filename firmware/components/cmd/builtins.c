@@ -961,9 +961,19 @@ static cmd_status_t c_wifi(cmd_ctx_t *ctx)
     if (ctx->arg[0] == '\0') {
         net_status(st, sizeof st);
         cmd_out(ctx, "%s", st);
+        char kn[34];
+        net_remembered(kn, sizeof kn);
+        if (kn[0] != '\0') {
+            cmd_out(ctx, "remembered: %.17s", kn);
+        }
         cmd_out(ctx, "wifi <ssid> <password>");
-        cmd_out(ctx, "wifi off   give back the air");
+        cmd_out(ctx, "wifi off | wifi forget");
         snprintf(ctx->msg, sizeof ctx->msg, "%s", st);
+        return CMD_DONE;
+    }
+    if (strcmp(ctx->arg, "forget") == 0) {
+        net_forget();
+        snprintf(ctx->msg, sizeof ctx->msg, "network forgotten");
         return CMD_DONE;
     }
     if (strcmp(ctx->arg, "off") == 0) {

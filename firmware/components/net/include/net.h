@@ -34,6 +34,18 @@ esp_err_t net_join(const char *ssid, const char *pass);
  * requires 8 and silently falling back to open would be a lie. */
 esp_err_t net_host(const char *ssid, const char *pass);
 
+/* Re-join the remembered network, if there is one. Called at boot: a deck
+ * that has been told which network it lives on should not need telling again
+ * every time it is switched on. Returns ESP_ERR_NOT_FOUND when nothing is
+ * remembered, which is not an error. */
+esp_err_t net_rejoin(void);
+
+/* What is remembered, for '>wifi' to show. The password is never returned. */
+void net_remembered(char *ssid, size_t max);
+
+/* Forget it. */
+void net_forget(void);
+
 /* Stop the radio entirely and give the airtime back. */
 void net_stop(void);
 

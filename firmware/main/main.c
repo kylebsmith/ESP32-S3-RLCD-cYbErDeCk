@@ -493,6 +493,14 @@ void app_main(void)
     splash_show();                       /* the boot screen, and a real test
                                           * of the whole draw path */
 
+    /* Re-join the network the deck was last told about. It is remembered when
+     * typed rather than when a join succeeds, so this works even if the first
+     * attempt failed - and a deck that knows where it lives should not have to
+     * be told again on every power-on. */
+    if (net_rejoin() == ESP_OK) {
+        ESP_LOGI(TAG, "rejoining the remembered network");
+    }
+
     run_boot_document();                 /* settings, as a document */
 
     if (s_boot_loops > 0) {
