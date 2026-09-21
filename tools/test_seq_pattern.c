@@ -129,6 +129,33 @@ int main(void)
         }
     }
 
+    /* 9. A BRACKET IS A PARAMETER, NOT A STEP.
+     *
+     * '?[15]' is one step with a parameter. If the bracket counted as steps,
+     * the pattern would be four longer than it looks and the playhead would
+     * drift off the character that is sounding - the exact failure the
+     * step/offset bijection exists to prevent. */
+    eqi("bracket is not a step",  seq_pattern_steps("x?[15]x.", MAX_STEPS), 4);
+    eqi("step after a bracket",   seq_pattern_offset("x?[15]x.", 2, MAX_STEPS), 6);
+    eqi("the step it attaches to", seq_pattern_offset("x?[15]x.", 1, MAX_STEPS), 1);
+    eqi("parameter value",        seq_pattern_param("[15]"), 15);
+    eqi("parameter length",       seq_pattern_param_len("[15]"), 4);
+    eqi("unterminated is not one", seq_pattern_param_len("[15"), 0);
+    eqi("non-numeric is not one",  seq_pattern_param("[a]"), -1);
+    /* No step may land inside a bracket. */
+    {
+        const char *b = "x?[15]x.";
+        const int n = seq_pattern_steps(b, MAX_STEPS);
+        for (int i = 0; i < n; i++) {
+            const int off = seq_pattern_offset(b, i, MAX_STEPS);
+            if (off < 0 || b[off] == '[' || b[off] == ']' ||
+                (b[off] >= '0' && b[off] <= '9' && off > 0 && b[off-1] == '[')) {
+                printf("[FAIL] step %d landed inside a parameter\n", i);
+                fails++;
+            }
+        }
+    }
+
     printf(fails ? "[FAIL] %d check(s) failed\n" : "[PASS] pattern geometry\n",
            fails);
     return fails != 0;

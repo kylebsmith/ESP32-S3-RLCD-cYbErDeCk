@@ -161,6 +161,7 @@ static cmd_status_t c_prose(cmd_ctx_t *ctx)
     return CMD_DONE;
 }
 
+static cmd_status_t c_out(cmd_ctx_t *ctx) __attribute__((unused));
 static cmd_status_t c_out(cmd_ctx_t *ctx)
 {
     const int i = doc_buf_ensure("+out");
@@ -339,15 +340,40 @@ static const struct { const char *name; uint8_t cc; } s_ctrls[] = {
     { "rev",  91 },   /* reverb send                */
 };
 
+/* ONE command, not four. '>cut', '>res', '>mod' and '>rev' were four names for
+ * one idea, and one of them collided with the destinations command and was
+ * silently unreachable. '>cc cut 0..9..' says exactly what it is, takes a NAME
+ * or a NUMBER, and reaches every controller rather than the four somebody
+ * happened to think of. The LANE is still named for the control, so the
+ * playhead and '>lanes' read the same as any other line. */
 static cmd_status_t c_ctrl(cmd_ctx_t *ctx)
 {
-    uint8_t cc = 1;
-    for (size_t i = 0; i < sizeof s_ctrls / sizeof s_ctrls[0]; i++) {
-        if (strcmp(s_ctrls[i].name, ctx->name) == 0) {
-            cc = s_ctrls[i].cc;
-            break;
-        }
+    char what[16] = {0};
+    const char *pat = ctx->arg;
+    size_t w = 0;
+    while (*pat != '\0' && *pat != ' ' && w < sizeof what - 1) {
+        what[w++] = *pat++;
     }
+    while (*pat == ' ') { pat++; }
+    if (what[0] == '\0') {
+        for (size_t i = 0; i < sizeof s_ctrls / sizeof s_ctrls[0]; i++) {
+            cmd_out(ctx, "cc %-5s %u", s_ctrls[i].name, (unsigned)s_ctrls[i].cc);
+        }
+        cmd_out(ctx, "cc <name|0-127> <pattern>");
+        snprintf(ctx->msg, sizeof ctx->msg, "cc cut 0..4..8..4..");
+        return CMD_DONE;
+    }
+    int cc = -1;
+    for (size_t i = 0; i < sizeof s_ctrls / sizeof s_ctrls[0]; i++) {
+        if (strcmp(s_ctrls[i].name, what) == 0) { cc = s_ctrls[i].cc; break; }
+    }
+    if (cc < 0 && what[0] >= '0' && what[0] <= '9') { cc = atoi(what); }
+    if (cc < 0 || cc > 127) {
+        cmd_out(ctx, "no controller '%s'. try: cc", what);
+        return CMD_ERROR;
+    }
+    ctx->name = what;
+    ctx->arg  = pat;
     if (ctx->arg[0] == '\0') {
         seq_mute(ctx->name, true);
         snprintf(ctx->msg, sizeof ctx->msg, "%s still", ctx->name);
@@ -576,12 +602,14 @@ static cmd_status_t c_dump(cmd_ctx_t *ctx)
  *
  * Worst case either way is a power cycle: the mux is in the RTC domain and a
  * cold boot restores the hardware default. */
+static void usbtest_cb(void *arg) __attribute__((unused));
 static void usbtest_cb(void *arg)
 {
     (void)arg;
     usbmux_release_to_usj();
 }
 
+static cmd_status_t c_usbtest(cmd_ctx_t *ctx) __attribute__((unused));
 static cmd_status_t c_usbtest(cmd_ctx_t *ctx)
 {
     const bool to_flash = (strcmp(ctx->arg, "flash") == 0);
@@ -888,7 +916,6 @@ static const cmd_t s_builtins[] = {
     { "send",  c_send,  CMD_CAP_SYSTEM,"where events go; send mon on" },
     { "usb",   c_usb,   CMD_CAP_SYSTEM,"usb on | off - MIDI over the cable" },
     { "flash", c_flash, CMD_CAP_SYSTEM,"flash now - reboot to ROM loader" },
-    { "usbtest", c_usbtest, CMD_CAP_SYSTEM, "prove the USB PHY restore" },
     { "dump",  c_dump,  CMD_CAP_READ,  "print a document to the console" },
     { "play",  c_play,  CMD_CAP_EDIT,  "start the clock" },
     { "stop",  c_stop,  CMD_CAP_EDIT,  "stop the clock" },
@@ -920,7 +947,6 @@ static const cmd_t s_builtins[] = {
     { "close", c_close, CMD_CAP_EDIT,                   "forget this buffer" },
     { "guide", c_guide, CMD_CAP_EDIT,                   "mark as a guide" },
     { "prose", c_prose, CMD_CAP_EDIT,                   "mark as prose" },
-    { "out",   c_out,   CMD_CAP_READ,                   "read command output" },
     { "density", c_density, CMD_CAP_EDIT,               "chunky | dense" },
 };
 

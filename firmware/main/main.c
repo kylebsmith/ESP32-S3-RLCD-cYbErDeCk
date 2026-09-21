@@ -14,6 +14,7 @@
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "soc/rtc_cntl_reg.h"
+#include "esp_system.h"
 #include "esp_task_wdt.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -312,6 +313,21 @@ void app_main(void)
      * is running - which means here, at the first opportunity the app gets.
      * Without this, a system reset that happened to preserve the domain would
      * send the deck back into download mode with no explanation. */
+    /* WHY DID WE JUST BOOT? Logged first, because after a silent panic reboot
+     * this is the only surviving evidence that anything went wrong - and a
+     * deck that reboots itself and says nothing is indistinguishable from one
+     * the owner power-cycled. */
+    {
+        const esp_reset_reason_t r = esp_reset_reason();
+        static const char *why[] = {
+            "unknown", "power on", "external pin", "software", "panic",
+            "interrupt watchdog", "task watchdog", "other watchdog",
+            "deep sleep", "brownout", "sdio", "usb", "jtag",
+        };
+        ESP_LOGW(TAG, "boot: %s",
+                 ((unsigned)r < sizeof why / sizeof why[0]) ? why[r] : "?");
+    }
+
     REG_WRITE(RTC_CNTL_OPTION1_REG, 0);
 
     /* And hand the USB PHY back to USB-Serial-JTAG, for the same reason and

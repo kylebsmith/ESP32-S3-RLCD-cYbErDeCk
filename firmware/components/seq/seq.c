@@ -355,8 +355,15 @@ static void fire_step(int step)
         /* '?' - maybe. Half, because half is the only ratio that needs no
          * number after it, and a number after it would be the start of the
          * syntax this instrument is trying not to have. */
-        if ((l->chance & (1u << s)) && (rng_next() & 1u)) {
-            continue;
+        if (l->chance & (1u << s)) {
+            /* '?' alone is half; '?[15]' is fifteen per cent. Half is the
+             * default because it is the only ratio that needs no number, and
+             * the bracket is there for when the player wants a different one
+             * rather than a different character. */
+            const uint32_t pct = l->prob[s] ? l->prob[s] : 50u;
+            if ((rng_next() % 100u) >= pct) {
+                continue;
+            }
         }
         /* Accent and ghost are a ratio of the lane's own velocity, not fixed
          * numbers, so setting a lane quiet keeps its accents in proportion
@@ -557,9 +564,22 @@ esp_err_t seq_lane(const char *name, const char *steps)
     }
     uint32_t mask = 0, accent = 0, ghost = 0, chance = 0;
     uint8_t  deg[SEQ_MAX_STEPS];
+    uint8_t  prob[SEQ_MAX_STEPS];
     memset(deg, 0xFF, sizeof deg);
+    memset(prob, 0, sizeof prob);
     int n = 0;
     for (const char *p = steps; *p != '\0' && n < SEQ_MAX_STEPS; p++) {
+        /* A bracket is a parameter on the step just placed, not a step. */
+        const int plen = seq_pattern_param_len(p);
+        if (plen > 0) {
+            const int v = seq_pattern_param(p);
+            if (v >= 0 && v <= 100 && n > 0) {
+                prob[n - 1] = (uint8_t)(v == 0 ? 1 : v);
+                chance |= (1u << (n - 1));   /* a per-cent implies maybe */
+            }
+            p += plen - 1;
+            continue;
+        }
         if (seq_pattern_is_spacing(*p)) {
             continue;    /* spacing for the eye - seq_pattern.h owns this rule */
         }
@@ -583,6 +603,7 @@ esp_err_t seq_lane(const char *name, const char *steps)
     l->accent = accent;
     l->ghost  = ghost;
     l->chance = chance;
+    memcpy(l->prob, prob, sizeof l->prob);
     memcpy(l->deg, deg, sizeof l->deg);
     l->steps  = (uint8_t)n;
     /* The text this lane was compiled from, so a later press can tell "run

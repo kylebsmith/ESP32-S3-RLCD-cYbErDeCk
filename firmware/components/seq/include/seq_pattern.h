@@ -26,6 +26,45 @@ static inline int seq_pattern_is_spacing(char c)
     return c == ' ';
 }
 
+/* A BRACKET IS A PARAMETER ON THE STEP BEFORE IT, NOT A STEP.
+ *
+ * '?[15]' is a fifteen-per-cent chance on that one step. The bracket attaches
+ * to the character to its left and occupies no step of its own, which is what
+ * keeps step index and character offset a bijection - and that bijection is
+ * what lets the playhead sit on the character that is sounding. Nested
+ * brackets would destroy it, which is why there are none: a bracket may only
+ * ever follow a step and contain a number.
+ *
+ * Returns the character length of the bracket group at `p`, or 0. */
+static inline int seq_pattern_param_len(const char *p)
+{
+    if (p == NULL || *p != '[') {
+        return 0;
+    }
+    int n = 1;
+    while (p[n] != '\0' && p[n] != ']' && n < 6) {
+        n++;
+    }
+    return (p[n] == ']') ? n + 1 : 0;   /* unterminated: not a parameter */
+}
+
+/* The number inside the bracket at `p`, or -1. */
+static inline int seq_pattern_param(const char *p)
+{
+    if (seq_pattern_param_len(p) == 0) {
+        return -1;
+    }
+    int v = 0, any = 0;
+    for (const char *q = p + 1; *q != ']'; q++) {
+        if (*q < '0' || *q > '9') {
+            return -1;
+        }
+        v = v * 10 + (*q - '0');
+        any = 1;
+    }
+    return any ? v : -1;
+}
+
 /* How many steps a pattern compiles to. Must match seq_lane()'s count. */
 static inline int seq_pattern_steps(const char *pat, int max_steps)
 {
@@ -34,6 +73,8 @@ static inline int seq_pattern_steps(const char *pat, int max_steps)
         return 0;
     }
     for (const char *p = pat; *p != '\0' && n < max_steps; p++) {
+        const int plen = seq_pattern_param_len(p);
+        if (plen > 0) { p += plen - 1; continue; }   /* a parameter, not a step */
         if (!seq_pattern_is_spacing(*p)) {
             n++;
         }
@@ -50,6 +91,8 @@ static inline int seq_pattern_offset(const char *pat, int want, int max_steps)
     }
     int n = 0;
     for (const char *p = pat; *p != '\0'; p++) {
+        const int plen = seq_pattern_param_len(p);
+        if (plen > 0) { p += plen - 1; continue; }
         if (seq_pattern_is_spacing(*p)) {
             continue;
         }

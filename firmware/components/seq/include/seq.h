@@ -60,7 +60,8 @@ typedef struct {
     uint32_t mask;          /* one bit per step; the realtime core reads this */
     uint32_t accent;        /* 'X' - louder                                   */
     uint32_t ghost;         /* ',' - quieter                                  */
-    uint32_t chance;        /* '?' - plays about half the time                */
+    uint32_t chance;        /* '?' - maybe                                    */
+    uint8_t  prob[SEQ_MAX_STEPS];  /* per-step chance %, 0 = use the default  */
     uint8_t  deg[SEQ_MAX_STEPS];  /* scale degree per step, 0xFF = fixed note */
     uint8_t  steps;         /* how many of them are in play                   */
     uint8_t  note;          /* MIDI note number, for a fixed-pitch lane       */
@@ -88,6 +89,16 @@ esp_err_t seq_init(void);
  *   X   accent - louder. One shift key, and it stands up off the line.
  *   ,   ghost  - quieter. Small on the page, small in the mix.
  *   ?   maybe  - plays about half the time. A question mark is what it is.
+ *
+ * And ONE optional parameter, in brackets, attached to the step before it:
+ *
+ *   ?[15]  this step plays fifteen per cent of the time
+ *
+ * A bracket is not a step. It occupies no column in the step count, so the
+ * playhead still lands on the character that is sounding. There are no nested
+ * brackets and there never will be: a bracket may follow a step and contain a
+ * number, and that is the whole of it.
+ *
  *   0-9 on a MELODIC lane, the scale degree. 0 is the root.
  *
  * A digit on a drum lane is just a hit; a lane knows which kind it is. This

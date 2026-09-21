@@ -88,3 +88,16 @@ CONFIG_FATFS_MAX_LFN=64
 CONFIG_TINYUSB_CDC_ENABLED=y
 CONFIG_TINYUSB_CDC_COUNT=1
 CONFIG_TINYUSB_MIDI_COUNT=1
+
+# A PANIC MUST REBOOT, NOT TRY TO EXPLAIN ITSELF FIRST.
+#
+# The default prints a backtrace and then reboots. In USB MIDI mode the console
+# has been moved to a CDC interface that nothing may be draining, and in serial
+# mode the USB-Serial-JTAG peripheral no longer owns the PHY - so the print can
+# block forever and the reboot never happens. That is the difference between a
+# device that recovers in two seconds and one that has to be power-cycled by
+# hand, which is what kept happening.
+#
+# The reset reason is logged at the next boot instead, which is the part that
+# was actually useful.
+CONFIG_ESP_SYSTEM_PANIC_SILENT_REBOOT=y

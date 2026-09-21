@@ -81,14 +81,14 @@
     ">kick X...x...X...x...\n" \
     ">hat x,x?x,x?x,x?x,x?\n" \
     ">bass 0...3...5...3...\n" \
-    ">cut 0..3..6..9..6..3.\n" \
+    ">cc cut 0..3..6..9..6.\n" \
     ">play\n" \
     "\n" \
     "x hit  X loud  , quiet\n" \
-    "? maybe (half the time)\n" \
+    "? maybe   ?[15] 15% odds\n" \
     ". rest  0-9 is a degree\n" \
-    "0 is the root. On cut and\n" \
-    "mod, 0-9 are values.\n" \
+    "0 is the root. On a cc\n" \
+    "lane, 0-9 are values.\n" \
     "Edit any line, run it\n" \
     "again - it changes live.\n" \
     "Run it unchanged to\n" \
