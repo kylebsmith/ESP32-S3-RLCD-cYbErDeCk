@@ -7,8 +7,8 @@
 
 esp_err_t editor_init(void);
 
-/* 0 = 12x24 chunky, 1 = 6x12 dense. Both faces are already in the binary. */
-/* 0 low (12x24, 30 cols), 1 mid (9x24, 40), 2 high (6x12, 60). */
+/* 0 low (12x24, 30 cols), 2 high (6x12, 60). Both faces are in the binary;
+ * the panel's addressing quanta afford no middle size - see editor.c. */
 esp_err_t editor_set_density(int level);
 void editor_draw(void);
 

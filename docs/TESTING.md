@@ -126,23 +126,48 @@ hit, by lane name.
 ```
 >kick X...x...X...x...
 >bass 0...5...3...7...
->viz noise x?x?x?x?
->viz bar 0..3..9..3..
->route noise bass
+>viz echo 9
+>viz noise 2
+>viz move d
+>route disc kick
 >play
 ```
 
-The right side of the screen becomes a live ASCII frame, advancing on the same
-clock as the music. `>split` toggles the preview; the visual lanes keep running
-either way.
+The lower half of the screen becomes a live frame inside a stroked border,
+advancing on the same clock as the music. `>split on` and `>split off` are
+explicit; a bare `>split` toggles. `>split 8` gives the picture eight rows.
 
-`>route noise bass` makes the bass note's velocity drive the noise density —
-the visual line says *when*, the music lane says *how much*. Unroute with
-`>route noise`.
+**Three sources and five operators.** A source puts ink down; an operator bends
+whatever the sources drew. That is the whole design — complexity comes from
+combining them, not from having more of them.
 
-Four generators: `noise`, `bar`, `dot`, `wave`. Digits 0–9 are intensity, and
-everything else about the pattern is the same grammar as a drum lane — `?`,
-brackets, `/2` and `*2` all work.
+| draws | |
+|---|---|
+| `noise` | a random field |
+| `disc` | a filled circle from the centre |
+| `ramp` | a gradient along an axis |
+
+| bends | |
+|---|---|
+| `echo` | keeps the last frame, one ink step dimmer — **trails** |
+| `move` | shifts the frame, wrapping |
+| `warp` | displaces lines along an axis — waves, glitch |
+| `tile` | repeats the frame across, 1–4 copies |
+| `fold` | mirrors it, 1–3 folds — kaleidoscope |
+
+**A digit is always how much: 0 none, 9 full.** In every primitive. A `u`, `d`,
+`l` or `r` is which way, either in front of the pattern (`>viz ramp u 4.6.9.6.`)
+or as a step of it (`>viz move d....d...`). Speed is the pattern, so `/2` and
+`*2` halve and double a visual lane exactly as they do a drum.
+
+Old shapes are combinations now. Rain is `noise` + `move d` + `echo`. A bar is
+`ramp`. A wave is `ramp` + `warp`. Start with `>viz echo 9` and then add a
+source — that one line is the difference between a blinking shape and an
+animation.
+
+`>route disc kick` makes the kick's velocity drive the circle's radius — the
+visual line says *when*, the music lane says *how much*. Unroute with
+`>route disc`.
 
 ## 12. ASCII frames
 
@@ -196,10 +221,13 @@ Ctrl-L to `boot`. It holds ordinary commands that run at startup:
 >density dense
 ```
 
-Edit it, power cycle, and they take effect. `>density low` is 30 columns, `>density mid` is 45,
-`>density high` is 60 — all three at a legible height except `high`.
+Edit it, power cycle, and they take effect. There are two densities and the
+panel decides that, not taste: `>density low` is 30 columns of the chunky
+12x24 face, `>density high` is 60 columns of 6x12. Cell height has to be a
+multiple of 12 and cell width has to be even, so no legible middle size exists
+— an 8x24 face was built, read thin, and was thrown away.
 
-`mid` is the one to use with the split: 45 columns leaves 29 for code with the
+`high` is the one to use with the split: 60 columns leaves 39 for code with the
 view taking a third, so pattern lines stop wrapping. `>split 12` or
 `>split 20` sets the view width directly.
 

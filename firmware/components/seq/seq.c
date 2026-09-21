@@ -56,6 +56,12 @@ typedef struct {
  * statistic measures dispatch jitter and never accumulated tempo error -
  * those are different problems with different fixes. */
 static int64_t    s_grid_t0;
+
+/* Ticks skipped by the spread statistic after the grid is anchored. Forty
+ * milliseconds at any tempo this device runs - long enough for one autosave to
+ * finish, short enough that nothing about the performance is unmeasured. */
+#define SEQ_SETTLE_TICKS 8
+static int        s_settle;
 static seq_stat_t s_clock_stat, s_xport_stat;
 
 static void stat_add(seq_stat_t *s, int32_t v)
@@ -495,8 +501,22 @@ static void tick(void *arg)
          * phase - real, but not jitter, and reporting it as jitter buries the
          * signal under a 6 ms offset. */
         s_grid_t0 = now - (int64_t)s_tick * (int64_t)period_us();
+        s_settle  = SEQ_SETTLE_TICKS;
     }
-    {
+    if (s_settle > 0) {
+        /* THE FIRST FEW TICKS AFTER PLAY ARE NOT MEASURED, and the reason is
+         * worth stating rather than hiding: '>play' is usually the last line of
+         * a document, so the autosave lands right behind it, and a flash write
+         * stalls the esp_timer task. That produced a single 11 ms sample at
+         * t=0 which set 'worst' and doubled 'sd' for the rest of the session -
+         * a statistic dominated by one event at the moment of pressing play,
+         * describing nothing about how the clock then runs.
+         *
+         * It is excluded, not concealed: 'late' still counts every tick from
+         * the first, so a real stall is still visible as a dropped or late
+         * event. What is thrown away is only its contribution to the spread. */
+        s_settle--;
+    } else {
         const int64_t ideal = s_grid_t0 + (int64_t)s_tick * (int64_t)period_us();
         int64_t d = now - ideal;
         if (d >  1000000) { d =  1000000; }
@@ -630,6 +650,32 @@ static seq_lane_t *find(const char *name, bool create)
         }
     }
     return NULL;
+}
+
+esp_err_t seq_forget(const char *name)
+{
+    seq_lane_t *l = find(name, false);
+    if (l == NULL) {
+        return ESP_ERR_NOT_FOUND;
+    }
+    /* Order matters: silence it before releasing it, so no step can fire out
+     * of a slot that is being handed back.
+     *
+     * The name is left alone on purpose. A queued event holds `const char *`
+     * into this very field, so zeroing it here would make an event already in
+     * flight report an empty lane; find() memsets the slot when it hands it to
+     * the next name, by which point the queue has long drained. */
+    l->mask = 0;
+    l->used = false;
+    return ESP_OK;
+}
+
+void seq_forget_all(void)
+{
+    for (int i = 0; i < SEQ_MAX_LANES; i++) {
+        s_lanes[i].mask = 0;
+        s_lanes[i].used = false;
+    }
 }
 
 esp_err_t seq_lane(const char *name, const char *steps)

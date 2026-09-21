@@ -60,12 +60,97 @@ static cmd_status_t c_list(cmd_ctx_t *ctx)
     return CMD_DONE;
 }
 
+/* '>run [name]' - RUN EVERY COMMAND LINE IN A DOCUMENT.
+ *
+ * Until this existed, the only document that ever ran as a whole was 'boot',
+ * at startup. So a piece could be written, named and saved, and then the only
+ * way to hear it again was to stand on each line in turn and press Ctrl+Enter
+ * twenty times - which is menu diving with extra steps, and it is the one
+ * gesture live coding cannot be missing: load the piece, play the piece.
+ *
+ * With no argument it runs the document you are looking at, which is what
+ * 'run' means when you are already standing in it. With a name it opens that
+ * one first, because '>open kilroy1' then '>run' is two commands for one
+ * thought.
+ *
+ * IT CANNOT RUN ITSELF. A page holding '>run' would otherwise re-enter here
+ * for every line of itself, forever - the same shape as the '>dump' that fed
+ * its own output back in and spun 131,073 times. One flag, checked first. */
+static cmd_status_t c_run(cmd_ctx_t *ctx)
+{
+    static bool running;
+    if (running) {
+        cmd_out(ctx, "run cannot run itself");
+        return CMD_ERROR;
+    }
+
+    const int was = doc_buf_current();
+    if (ctx->arg[0] != '\0') {
+        const int idx = doc_buf_find(ctx->arg);
+        if (idx < 0 || doc_buf_select(idx) != ESP_OK) {
+            cmd_out(ctx, "no document '%.20s'", ctx->arg);
+            return CMD_ERROR;
+        }
+    }
+
+    /* The line buffer is bounded and the document length is read ONCE, before
+     * the loop: a command that lengthens the document it is being read from
+     * must not extend the walk. */
+    running = true;
+    const size_t n = doc_len();
+    char line[128];
+    size_t k = 0;
+    int ran = 0, failed = 0;
+    for (size_t i = 0; i <= n; i++) {
+        const char ch = (i < n) ? doc_at(i) : '\n';
+        if (ch == '\n' || k == sizeof line - 1) {
+            line[k] = '\0';
+            if (k > 0) {
+                switch (cmd_run_line(line, CMD_BY_GUIDE, NULL, 0)) {
+                case CMD_DONE:  ran++;    break;
+                case CMD_ERROR: failed++; break;
+                default: break;
+                }
+            }
+            k = 0;
+            continue;
+        }
+        line[k++] = ch;
+    }
+    running = false;
+
+    /* ALWAYS COME BACK TO WHERE THE OWNER WAS STANDING, named or not.
+     *
+     * Running a page is not navigation. This did leave you on the named page,
+     * on the reasoning that naming it was half a request to see it - and the
+     * consequence was immediate: the next thing typed went INTO the piece,
+     * because the page you were working on had silently been swapped out from
+     * under the cursor. That is the teleport trap wearing a different hat.
+     * '>open kilroy' is how you go there; '>run kilroy' is how you hear it. */
+    doc_buf_select(was);
+    if (failed > 0) {
+        snprintf(ctx->msg, sizeof ctx->msg, "%d ran, %d refused", ran, failed);
+        return CMD_ERROR;
+    }
+    snprintf(ctx->msg, sizeof ctx->msg, "%d line%s ran", ran, ran == 1 ? "" : "s");
+    return CMD_DONE;
+}
+
 static cmd_status_t c_new(cmd_ctx_t *ctx)
 {
     if (doc_buf_new() != ESP_OK) {
         cmd_out(ctx, "no free buffer");
         return CMD_ERROR;
     }
+    /* A NEW DOCUMENT IS A BLANK SLATE, in the sequencer as well as on screen.
+     *
+     * It used not to be, and the result was the worst kind of wrong: an empty
+     * page that went on playing the last page's lanes, with eight slots full
+     * of names the text did not mention, so '>lanes' described a piece nobody
+     * could see and the ninth lane was refused. What plays is what the
+     * document says. */
+    seq_forget_all();
+    viz_forget_all();
     snprintf(ctx->msg, sizeof ctx->msg, "new scratch buffer %d", doc_buf_current());
     return CMD_DONE;
 }
@@ -185,28 +270,28 @@ esp_err_t editor_set_density(int dense);
  * right way round. */
 static cmd_status_t c_density(cmd_ctx_t *ctx)
 {
-    /* LOW, MID, HIGH - said as densities rather than as font names, because
-     * "chunky" and "dense" describe the ink and the owner is choosing how much
-     * text fits.
+    /* TWO DENSITIES, AND THE PANEL DECIDES THAT, NOT TASTE.
      *
-     * THERE ARE ONLY TWO FACES, AND MID IS HONEST ABOUT IT. low is 12x24 and
-     * high is 6x12; a genuine middle needs a third face of about 9x18, drawn
-     * from art the way the other two were, which is real work and not a flag.
-     * So 'mid' refuses and says what it would take, rather than silently
-     * picking one of the two and letting the owner believe there are three.
+     * A middle size was built and thrown away. Cell height must be a multiple
+     * of 12 (the CASET quantum) and width must be even (RASET), so the only
+     * cells at a legible height are 24 tall - and fitting more columns means
+     * narrowing the body, which at 24 tall means a face that reads thin and
+     * barely monospaced. Every body column of the chunky art carries ink, so
+     * there is no lossless crop either: narrowing collapses a 2 px stem
+     * somewhere, and 2 px stems are why the chunky face is readable on a
+     * reflective panel with no backlight at all.
      *
-     * The old words still work, because they are in people's fingers and in
-     * boot documents already written. */
+     * So: low is 12x24 at 30 columns, high is 6x12 at 60. For visual work use
+     * high - a third-width split leaves 39 columns of code, which fits any
+     * pattern line without wrapping. */
     int level;
     const char a = ctx->arg[0];
     if (a == 'h' || a == 'd' || a == '6') {
         level = 2;                            /* high / dense  - 6x12,  60 */
-    } else if (a == 'm' || a == '9') {
-        level = 1;                            /* mid           - 9x24,  40 */
     } else if (a == 'l' || a == 'c' || a == '1') {
         level = 0;                            /* low / chunky - 12x24,  30 */
     } else {
-        cmd_out(ctx, "density low | mid | high");
+        cmd_out(ctx, "density low | high");
         return CMD_ERROR;
     }
     if (editor_set_density(level) != ESP_OK) {
@@ -216,7 +301,7 @@ static cmd_status_t c_density(cmd_ctx_t *ctx)
     /* Derived, not hardcoded: the string said 60x20 while the layout computed
      * 60x24. A status message that disagrees with the machine is a small lie
      * that costs someone an afternoon later. */
-    static const char *names[3] = { "low", "mid", "high" };
+    static const char *names[3] = { "low", "-", "high" };
     snprintf(ctx->msg, sizeof ctx->msg, "%s %dx%d", names[level],
              tg_cols(), tg_rows());
     return CMD_DONE;
@@ -279,14 +364,27 @@ static cmd_status_t c_drum(cmd_ctx_t *ctx)
             break;
         }
     }
-    if (ctx->arg[0] == '\0' || rerun_silences(ctx)) {
+    /* A BARE LANE NAME MEANS THE LANE IS GONE, not muted.
+     *
+     * Muting already has a word - '>mute kick' - and it leaves the slot
+     * allocated, which is how a session filled all eight lanes with names the
+     * document no longer mentioned and then refused a ninth. Re-running the
+     * same line still silences, because that is a performance gesture on a
+     * lane that is still part of the piece. */
+    if (ctx->arg[0] == '\0') {
+        const bool had = seq_forget(ctx->name) == ESP_OK;
+        snprintf(ctx->msg, sizeof ctx->msg, had ? "%s gone" : "no %s", ctx->name);
+        return CMD_DONE;
+    }
+    if (rerun_silences(ctx)) {
         seq_mute(ctx->name, true);
         snprintf(ctx->msg, sizeof ctx->msg, "%s silent", ctx->name);
         return CMD_DONE;
     }
     seq_lane_note(ctx->name, note, 9);
     if (seq_lane(ctx->name, ctx->arg) != ESP_OK) {
-        cmd_out(ctx, "no room for another lane");
+        cmd_out(ctx, "8 lanes is all there is.");
+        cmd_out(ctx, "free one: type its name alone");
         return CMD_ERROR;
     }
     seq_mute(ctx->name, false);
@@ -321,7 +419,12 @@ static cmd_status_t c_voice(cmd_ctx_t *ctx)
     if (oct == NULL) {
         return CMD_ERROR;
     }
-    if (ctx->arg[0] == '\0' || rerun_silences(ctx)) {
+    if (ctx->arg[0] == '\0') {            /* bare name forgets - see c_drum */
+        const bool had = seq_forget(ctx->name) == ESP_OK;
+        snprintf(ctx->msg, sizeof ctx->msg, had ? "%s gone" : "no %s", ctx->name);
+        return CMD_DONE;
+    }
+    if (rerun_silences(ctx)) {
         seq_mute(ctx->name, true);
         snprintf(ctx->msg, sizeof ctx->msg, "%s silent", ctx->name);
         return CMD_DONE;
@@ -329,7 +432,8 @@ static cmd_status_t c_voice(cmd_ctx_t *ctx)
     seq_lane_melodic(ctx->name, s_voices[v].oct, s_voices[v].chan,
                      s_voices[v].gate);
     if (seq_lane(ctx->name, ctx->arg) != ESP_OK) {
-        cmd_out(ctx, "no room for another lane");
+        cmd_out(ctx, "8 lanes is all there is.");
+        cmd_out(ctx, "free one: type its name alone");
         return CMD_ERROR;
     }
     seq_mute(ctx->name, false);
@@ -364,15 +468,37 @@ static const struct { const char *name; uint8_t cc; } s_ctrls[] = {
  * or a NUMBER, and reaches every controller rather than the four somebody
  * happened to think of. The LANE is still named for the control, so the
  * playhead and '>lanes' read the same as any other line. */
+/* THE CONTROL LANES, AND A BUG THAT ATE THE LANE BUDGET.
+ *
+ * This runs under five names. '>cut', '>res', '>mod' and '>rev' each ARE a
+ * controller, so the whole argument is the pattern. '>cc' is the escape hatch
+ * for the other 124, so there the first word names the controller and the rest
+ * is the pattern.
+ *
+ * It used to parse the first word as a controller name in every case, so
+ * '>cut 0..3..6..9..6..3' resolved the CONTROLLER from "0..3..6..9..6..3" -
+ * which begins with a digit, so atoi made it CC 0 - and then compiled an EMPTY
+ * pattern into a lane named after the pattern. The filter never swept, the
+ * listing showed a lane with no name anybody typed, and every attempt spent
+ * one of the eight lane slots on garbage. Then the ninth real lane was refused
+ * and the message blamed the ceiling.
+ *
+ * '>cc' was also never registered, so the help printed here offered a command
+ * that did not exist. Both halves of that are fixed: the four names take a
+ * pattern, and 'cc' is real. */
 static cmd_status_t c_ctrl(cmd_ctx_t *ctx)
 {
     char what[16] = {0};
     const char *pat = ctx->arg;
-    size_t w = 0;
-    while (*pat != '\0' && *pat != ' ' && w < sizeof what - 1) {
-        what[w++] = *pat++;
+    if (strcmp(ctx->name, "cc") == 0) {
+        size_t w = 0;
+        while (*pat != '\0' && *pat != ' ' && w < sizeof what - 1) {
+            what[w++] = *pat++;
+        }
+        while (*pat == ' ') { pat++; }
+    } else {
+        snprintf(what, sizeof what, "%s", ctx->name);
     }
-    while (*pat == ' ') { pat++; }
     if (what[0] == '\0') {
         for (size_t i = 0; i < sizeof s_ctrls / sizeof s_ctrls[0]; i++) {
             cmd_out(ctx, "cc %-5s %u", s_ctrls[i].name, (unsigned)s_ctrls[i].cc);
@@ -390,16 +516,29 @@ static cmd_status_t c_ctrl(cmd_ctx_t *ctx)
         cmd_out(ctx, "no controller '%s'. try: cc", what);
         return CMD_ERROR;
     }
+    /* Name the lane after the CONTROLLER. '>cc 74' and '>cut' are the same
+     * thing, so they have to be the same lane - otherwise one piece holds two
+     * lanes fighting over one CC and the budget pays for both. */
+    for (size_t i = 0; i < sizeof s_ctrls / sizeof s_ctrls[0]; i++) {
+        if (s_ctrls[i].cc == (uint8_t)cc) {
+            snprintf(what, sizeof what, "%s", s_ctrls[i].name);
+            break;
+        }
+    }
+    if (what[0] >= '0' && what[0] <= '9') {
+        snprintf(what, sizeof what, "cc%d", cc);
+    }
     ctx->name = what;
     ctx->arg  = pat;
-    if (ctx->arg[0] == '\0') {
-        seq_mute(ctx->name, true);
-        snprintf(ctx->msg, sizeof ctx->msg, "%s still", ctx->name);
+    if (ctx->arg[0] == '\0') {            /* bare name forgets - see c_drum */
+        const bool had = seq_forget(ctx->name) == ESP_OK;
+        snprintf(ctx->msg, sizeof ctx->msg, had ? "%s gone" : "no %s", ctx->name);
         return CMD_DONE;
     }
     seq_lane_ctrl(ctx->name, cc, 0);
     if (seq_lane(ctx->name, ctx->arg) != ESP_OK) {
-        cmd_out(ctx, "no room for another lane");
+        cmd_out(ctx, "8 lanes is all there is.");
+        cmd_out(ctx, "free one: type its name alone");
         return CMD_ERROR;
     }
     seq_mute(ctx->name, false);
@@ -727,6 +866,7 @@ static cmd_status_t c_jitter(cmd_ctx_t *ctx)
                 (unsigned)(msgs / pkts), (unsigned)((msgs * 100 / pkts) % 100));
     }
     cmd_out(ctx, "clock = tick vs the ideal grid");
+    cmd_out(ctx, "first 8 ticks after play skipped");
     cmd_out(ctx, "xport = queue wait before sending");
     const uint32_t lost = seq_dropped();
     if (lost > 0) {
@@ -879,22 +1019,32 @@ static cmd_status_t c_battery(cmd_ctx_t *ctx)
  * With no argument it sends the current document, so an ASCII drawing IS a
  * frame and editing it live IS visual coding - the same Ctrl+Enter, the same
  * buffer, no second environment. */
-/* '>viz <gen> <pattern>' - a visual lane, in the same grammar as a drum.
+/* '>viz <name> <pattern>' - a visual lane, in the same grammar as a drum.
  *
- *   >viz noise x?x?x?x?
- *   >viz bar   0..3..9..3..
- *   >viz wave  9 /2
+ *   >viz noise x?x?x?x?          a field, half the time
+ *   >viz disc  0..3..6..9..6..3  a circle breathing
+ *   >viz ramp  u 4.6.9.6.        a gradient sweeping upward
+ *   >viz echo  9                 keep the last frame: everything gets a tail
+ *   >viz move  d....d...         and the tail falls
  *
- * Four generators and no more without an argument: what makes this expressive
- * is eight lanes at different rates driving them, not any one of them being
- * clever. '>viz <gen>' with no pattern removes that lane. */
+ * THREE SOURCES AND FIVE OPERATORS - see viz.h for why that shape rather than
+ * eight shapes. A digit is always HOW MUCH, 0 none to 9 full, in every one of
+ * them; a u, d, l or r is which way. Speed is the pattern, not a number, so
+ * '/2' halves a lane exactly as it does for a drum.
+ *
+ * '>viz <name>' with no pattern removes that lane. */
 static cmd_status_t c_viz(cmd_ctx_t *ctx)
 {
     if (ctx->arg[0] == '\0') {
-        cmd_out(ctx, "viz noise|bar|dot|wave <pat>");
-        cmd_out(ctx, "digits 0-9 are intensity.");
-        cmd_out(ctx, "split  toggles the preview");
-        cmd_out(ctx, "route  drives one from another");
+        cmd_out(ctx, "viz <name> <pattern>");
+        cmd_out(ctx, "draws: noise disc ramp");
+        cmd_out(ctx, "bends: echo move warp");
+        cmd_out(ctx, "       tile fold");
+        cmd_out(ctx, "0-9 is how much, 9 full.");
+        cmd_out(ctx, "u d l r is which way.");
+        cmd_out(ctx, "try: viz echo 9");
+        cmd_out(ctx, "then viz noise 2");
+        cmd_out(ctx, "then viz move d");
         snprintf(ctx->msg, sizeof ctx->msg, "viz noise x?x?x?x?");
         return CMD_DONE;
     }
@@ -905,8 +1055,9 @@ static cmd_status_t c_viz(cmd_ctx_t *ctx)
     gen[i] = '\0';
     while (*pat == ' ') { pat++; }
     if (viz_lane(gen, pat) != ESP_OK) {
-        cmd_out(ctx, "no generator '%s'", gen);
-        cmd_out(ctx, "noise bar dot wave");
+        cmd_out(ctx, "no primitive '%s'", gen);
+        cmd_out(ctx, "noise disc ramp");
+        cmd_out(ctx, "echo move warp tile fold");
         return CMD_ERROR;
     }
     if (pat[0] != '\0') { viz_split(true); }
@@ -918,12 +1069,29 @@ static cmd_status_t c_viz(cmd_ctx_t *ctx)
  * the owner's ask and the right shape: one word, two states, no submenu. */
 static cmd_status_t c_split(cmd_ctx_t *ctx)
 {
-    /* '>split' toggles; '>split 20' sets how many columns the visual gets and
-     * turns it on. The default is a third, because the code is what is being
-     * edited and the preview is a monitor - a half-and-half split at 30
-     * columns wrapped every pattern line and made the document unnavigable. */
-    if (ctx->arg[0] != '\0') {
-        viz_split_width(atoi(ctx->arg));
+    /* '>split 20' sets how many columns the visual gets and turns it on. The
+     * default is a third, because the code is what is being edited and the
+     * preview is a monitor - a half-and-half split at 30 columns wrapped every
+     * pattern line and made the document unnavigable.
+     *
+     * ON AND OFF ARE SPELLED OUT BECAUSE A DOCUMENT LINE HAS TO BE IDEMPOTENT.
+     * A bare '>split' toggles, which is right for a hand at the keyboard and
+     * wrong in a document: '>viz ring ...' turns the preview on by itself, so
+     * a '>split' further down the page turned it back OFF, and re-running the
+     * page flipped it again. Running a document twice has to leave the device
+     * in the same state both times, or the text is not a description of the
+     * piece. So a page says 'split on' and a performer says 'split'. */
+    if (strcmp(ctx->arg, "on") == 0) {
+        viz_split(true);
+    } else if (strcmp(ctx->arg, "off") == 0) {
+        viz_split(false);
+    } else if (ctx->arg[0] != '\0') {
+        const int n = atoi(ctx->arg);
+        if (n <= 0) {
+            cmd_out(ctx, "split on | off | <rows>");
+            return CMD_ERROR;
+        }
+        viz_split_rows(n);
         viz_split(true);
     } else {
         viz_split(!viz_split_on());
@@ -933,9 +1101,11 @@ static cmd_status_t c_split(cmd_ctx_t *ctx)
         snprintf(ctx->msg, sizeof ctx->msg, "split off");
         return CMD_DONE;
     }
-    const int vw = viz_split_cols(tg_cols());
-    snprintf(ctx->msg, sizeof ctx->msg, "split %d code / %d view",
-             tg_cols() - vw - 1, vw);
+    /* Say the SHAPE, not just a number. The direction is decided by arithmetic
+     * on the grid - see viz_pane() - so the one thing the owner cannot work out
+     * for themselves is which way it went and how big the picture ended up. */
+    snprintf(ctx->msg, sizeof ctx->msg, "view %dx%d below", viz_cols(),
+             viz_rows());
     return CMD_DONE;
 }
 
@@ -948,10 +1118,11 @@ static cmd_status_t c_split(cmd_ctx_t *ctx)
 static cmd_status_t c_route(cmd_ctx_t *ctx)
 {
     if (ctx->arg[0] == '\0') {
-        cmd_out(ctx, "route <gen> <lane>");
-        cmd_out(ctx, "route noise bass");
-        cmd_out(ctx, "route noise      unroutes");
-        snprintf(ctx->msg, sizeof ctx->msg, "route noise bass");
+        cmd_out(ctx, "route <primitive> <lane>");
+        cmd_out(ctx, "route disc kick");
+        cmd_out(ctx, "route echo cut");
+        cmd_out(ctx, "route disc       unroutes");
+        snprintf(ctx->msg, sizeof ctx->msg, "route disc kick");
         return CMD_DONE;
     }
     char gen[16], src[16];
@@ -1357,9 +1528,9 @@ static const cmd_t s_builtins[] = {
     { "osc",   c_osc,   CMD_CAP_NET,   "osc <ip> <port> - /deck/<lane>" },
     { "ssh",   c_ssh,   CMD_CAP_NET,   "ssh user@host pass <command>" },
     { "frame", c_frame, CMD_CAP_NET,   "send the frame over osc" },
-    { "viz",   c_viz,   CMD_CAP_EDIT,  "viz noise x?x?x?x?" },
-    { "split", c_split, CMD_CAP_EDIT,  "toggle the visual preview" },
-    { "route", c_route, CMD_CAP_EDIT,  "route noise bass" },
+    { "viz",   c_viz,   CMD_CAP_EDIT,  "viz echo 9 | viz noise 2" },
+    { "split", c_split, CMD_CAP_EDIT,  "split on | off | <rows>" },
+    { "route", c_route, CMD_CAP_EDIT,  "route disc kick" },
     { "usb",   c_usb,   CMD_CAP_SYSTEM,"usb on | off - MIDI over the cable" },
     { "flash", c_flash, CMD_CAP_SYSTEM,"flash now - reboot to ROM loader" },
     { "dump",  c_dump,  CMD_CAP_READ,  "print a document to the console" },
@@ -1382,6 +1553,7 @@ static const cmd_t s_builtins[] = {
     { "lead",  c_voice, CMD_CAP_EDIT,  "degrees 0-9, 0 is the root" },
     { "pad",   c_voice, CMD_CAP_EDIT,  "long notes" },
     { "arp",   c_voice, CMD_CAP_EDIT,  "short notes, high" },
+    { "cc",    c_ctrl,  CMD_CAP_EDIT,  "cc <name|0-127> <pattern>" },
     { "cut",   c_ctrl,  CMD_CAP_EDIT,  "filter: 0..4..8..4.." },
     { "res",   c_ctrl,  CMD_CAP_EDIT,  "resonance, 0-9" },
     { "mod",   c_ctrl,  CMD_CAP_EDIT,  "mod wheel, 0-9" },
@@ -1391,11 +1563,12 @@ static const cmd_t s_builtins[] = {
     { "new",   c_new,   CMD_CAP_EDIT,                   "a fresh scratch buffer" },
     { "name",  c_name,  CMD_CAP_EDIT | CMD_CAP_STORE,   "file this buffer under a name" },
     { "open",  c_open,  CMD_CAP_READ,                   "switch to a named document" },
+    { "run",   c_run,   CMD_CAP_EDIT,                   "run a document without leaving this one" },
     { "save",  c_save,  CMD_CAP_STORE,                  "write this buffer now" },
     { "close", c_close, CMD_CAP_EDIT,                   "forget this buffer" },
     { "guide", c_guide, CMD_CAP_EDIT,                   "mark as a guide" },
     { "prose", c_prose, CMD_CAP_EDIT,                   "mark as prose" },
-    { "density", c_density, CMD_CAP_EDIT,               "low | mid | high" },
+    { "density", c_density, CMD_CAP_EDIT,               "low | high (use high to split)" },
 };
 
 void cmd_register(const cmd_t *table, int count);

@@ -183,6 +183,19 @@ jobs:
              -o /tmp/test_keymap_agree tools/test_keymap_agree.c
           /tmp/test_keymap_agree
 
+      # The visual primitives, compiled from the shipping source. Catches a
+      # name in the help text with no primitive behind it, a table row that
+      # slipped out of order, mirror running before the generators it folds,
+      # and rain losing its memory between frames - all of which look like a
+      # bad pattern rather than a bug when they happen on the panel.
+      - name: Check the visual primitives
+        run: |
+          gcc -std=c11 -Wall -Wextra -Wno-unused-parameter -O1 \
+             -I firmware/components/viz/include \
+             -I firmware/components/seq/include -I tools/hostshim \
+             -o /tmp/test_viz tools/test_viz.c firmware/components/viz/viz.c
+          /tmp/test_viz
+
       # The two bitmap faces are generated from reviewable art, never edited
       # by hand. If the committed C and the art disagree, someone edited the
       # wrong one.
@@ -192,8 +205,6 @@ jobs:
           diff -u firmware/components/textgrid/font6x12.c /tmp/font6x12.c
           python3 tools/make_font.py --12x24 > /tmp/font12x24.c
           diff -u firmware/components/textgrid/font12x24.c /tmp/font12x24.c
-          python3 tools/make_font.py --8x24 > /tmp/font8x24.c
-          diff -u firmware/components/textgrid/font8x24.c /tmp/font8x24.c
           python3 tools/check_fonts.py
 
       - name: Check the documentation is self-consistent

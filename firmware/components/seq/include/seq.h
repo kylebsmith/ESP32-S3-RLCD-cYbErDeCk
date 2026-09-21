@@ -163,6 +163,22 @@ const seq_lane_t *seq_lane_find(const char *name, int len);
 esp_err_t seq_lane_note(const char *name, int note, int chan);
 esp_err_t seq_mute(const char *name, bool mute);
 
+/* FORGET A LANE, WHICH IS NOT THE SAME AS MUTING ONE.
+ *
+ * Eight lanes is the budget, and until this existed there was no way to give a
+ * slot back: muting leaves the lane allocated, so a session that had tried ten
+ * names was full and said "no room" about a lane the document did not even
+ * mention. Mute is a performance gesture and belongs on a lane that is still
+ * part of the piece; forget is an editing one and means the lane is gone.
+ *
+ * A note already sounding still gets its note-off - the gate is scheduled
+ * independently of the lane - so forgetting cannot leave a note stuck on. */
+esp_err_t seq_forget(const char *name);
+
+/* Every lane, for a blank slate. What plays should be what the document says,
+ * and a new document says nothing yet. */
+void seq_forget_all(void);
+
 void seq_bpm(int bpm);
 int  seq_get_bpm(void);
 void seq_play(void);

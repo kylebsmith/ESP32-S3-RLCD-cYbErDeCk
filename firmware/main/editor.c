@@ -139,28 +139,30 @@ void editor_invalidate(void)
     s_status_shown[0] = '\0';
 }
 
-/* THREE DENSITIES, AND WHY THE MIDDLE IS NARROWER RATHER THAN SHORTER.
+/* TWO DENSITIES, AND THE PANEL DECIDES THAT, NOT TASTE.
  *
- * Cell height must be a multiple of 12: that is the CASET addressing quantum in
- * landscape, established in docs/HARDWARE.md and enforced by tg_set_layout.
- * So the obvious middle - a 9x18 face - is not buildable on this panel at all.
- * The middle size is therefore a narrower cell at the same height: 9x24, which
- * keeps the stroke weight a reflective panel with no backlight needs while
- * fitting a third more code across the screen.
+ * Cell height must be a multiple of 12 - the CASET addressing quantum in
+ * landscape, established in docs/HARDWARE.md and enforced by tg_set_layout -
+ * and cell width must be even, the RASET quantum. So the obvious middle sizes
+ * are unbuildable here: 9x18 fails on height, 9x24 fails on width ("cell
+ * width 9 / origin x 20 must be even"). An 8x24 face was built and thrown
+ * away: a 6 px body in a 24 px cell reads 1:4 against the chunky face's 1:2.4,
+ * which is thin and barely monospaced, and every body column of the chunky art
+ * carries ink so there is no lossless crop - narrowing collapses a 2 px stem,
+ * and 2 px stems are why this face is legible on a reflective panel with no
+ * backlight.
  *
  *   0  low   12x24   30 columns, 11 rows
- *   1  mid    8x24   45 columns, 11 rows
- *
- * WIDTH must be even as well - the RASET quantum - so 9x24 is unbuildable too;
- * the device rejects it with "cell width 9 / origin x 20 must be even".
  *   2  high   6x12   60 columns, 24 rows
+ *
+ * Level 1 is not a size. It is left in the numbering so boot documents that
+ * name it keep working, and it resolves to high.
  */
 esp_err_t editor_set_density(int level)
 {
-    const tg_font_t *face = (level >= 2) ? &tg_font_6x12
-                          : (level == 1) ? &tg_font_8x24 : &tg_font_12x24;
-    const int cw = (level >= 2) ? 6 : (level == 1) ? 8 : 12;
-    const int ch = (level >= 2) ? 12 : 24;
+    const tg_font_t *face = (level >= 1) ? &tg_font_6x12 : &tg_font_12x24;
+    const int cw = (level >= 1) ? 6 : 12;
+    const int ch = (level >= 1) ? 12 : 24;
 
     const int cols = (ST7305_WIDTH - 2 * MARGIN_X) / cw;
     /* One row of the grid is the status line; the rest is text. */
@@ -383,17 +385,66 @@ static int playhead_offset(int line_off, const char *lbuf, int at, int len)
     return (off < 0) ? -1 : line_off + a + off;
 }
 
-/* How many columns the text keeps when the visual preview is up.
+/* WHAT THE TEXT KEEPS WHEN THE PREVIEW IS UP.
  *
- * The visual gets the right-hand side and one blank column as a gutter. A
- * vertical rule would cost a column and read as a border; a blank column reads
- * as space, which is what actually separates two things on a page. */
+ * viz_pane() decides the rectangle and the direction; these two only subtract
+ * it. Keeping the decision in one place matters because the wrap width, the
+ * scroll clamp and the draw loop all have to agree - if they disagree by one
+ * cell the cursor sits inside the picture and there is no way to tell.
+ *
+ * THE PREVIEW HAS A BORDER, and it earns the cell it costs twice over. It marks
+ * where the picture ends, which the owner asked for; and, because the border is
+ * drawn every frame across the pane's full height, the cells below a short
+ * frame are written rather than left holding whatever the last layout put
+ * there - which is what showed up as static junk in the bottom right. */
+static viz_pane_t pane_now(void)
+{
+    return viz_pane(TEXT_COLS, TEXT_ROWS);
+}
+
+/* The split always stacks, so the text keeps every column and gives up rows.
+ * Full-width code is the point: a pattern line never wraps at any density. */
 static int text_cols_now(void)
 {
-    if (!viz_split_on()) {
-        return TEXT_COLS;
+    return TEXT_COLS;
+}
+
+static int text_rows_now(void)
+{
+    const viz_pane_t p = pane_now();
+    return (p.h > 0) ? p.y : TEXT_ROWS;
+}
+
+/* Draw the preview: a stroke all the way round, the frame inside it, and every
+ * cell of the rectangle written. Called after the text, so the pane owns its
+ * area outright and nothing from the code side can bleed into it. */
+static void draw_pane(const viz_pane_t *p)
+{
+    if (p->w <= 0 || p->h <= 0) {
+        return;
     }
-    return TEXT_COLS - viz_split_cols(TEXT_COLS) - 1;
+    const int iw = p->w - 2, ih = p->h - 2;   /* inside the stroke */
+    /* Tell the generators how big the picture is. Doing it here, from the
+     * geometry that is about to be drawn, is the only way the frame cannot be
+     * the wrong shape for its pane. */
+    viz_size(iw, ih);
+
+    for (int r = 0; r < p->h; r++) {
+        const char *row = (r >= 1 && r <= ih) ? viz_row(r - 1) : NULL;
+        const bool edge_row = (r == 0 || r == p->h - 1);
+        for (int cc = 0; cc < p->w; cc++) {
+            char ch;
+            if (edge_row) {
+                ch = (cc == 0 || cc == p->w - 1) ? '+' : '-';
+            } else if (cc == 0 || cc == p->w - 1) {
+                ch = '|';
+            } else {
+                const int vx = cc - 1;
+                ch = (row != NULL && vx < iw && row[vx] != '\0') ? row[vx] : ' ';
+            }
+            tg_put(p->x + cc, p->y + r, ch, TG_NORMAL);
+        }
+    }
 }
 
 void editor_draw(void)
@@ -413,8 +464,9 @@ void editor_draw(void)
     if (s_cursor_line < top) {
         top = s_cursor_line;
     }
-    if (s_cursor_line >= top + TEXT_ROWS) {
-        top = s_cursor_line - TEXT_ROWS + 1;
+    const int trows = text_rows_now();
+    if (s_cursor_line >= top + trows) {
+        top = s_cursor_line - trows + 1;
     }
     if (top < 0) {
         top = 0;
@@ -431,7 +483,7 @@ void editor_draw(void)
      * a wrapped lane keeps its playhead. Every logical-line start resets it. */
     int ph_off = -1;
 
-    for (int r = 0; r < TEXT_ROWS; r++) {
+    for (int r = 0; r < trows; r++) {
         const int li = s_top_line + r;
         const int start = (li < s_line_count) ? s_line_start[li] : 0;
         const int end   = (li < s_line_count)
@@ -505,19 +557,27 @@ void editor_draw(void)
             tg_put(c, r, ch, cell_attr(inv, playing, marked));
         }
 
-        /* The visual, frame by frame, beside the code that makes it. The same
-         * document holds both, so a pattern line and the picture it produces
-         * are four inches apart on one screen - which is the entire reason to
-         * put it here rather than on a page of its own. */
-        if (viz_split_on()) {
-            const char *row = viz_row(r);
-            for (int c = tc; c < TEXT_COLS; c++) {
-                const int vx = c - tc - 1;
-                const char vch = (c == tc || vx < 0 || row[vx] == '\0')
-                                 ? ' ' : row[vx];
-                tg_put(c, r, vch, TG_NORMAL);
+        /* Any column the text does not reach is blanked, so a narrower text
+         * area cannot leave the previous layout's glyphs standing. */
+        for (int c = tc; c < TEXT_COLS; c++) {
+            tg_put(c, r, ' ', TG_NORMAL);
+        }
+    }
+
+    /* The visual, frame by frame, beside the code that makes it - or under it
+     * on a narrow grid. The same document holds both, so a pattern line and the
+     * picture it produces are inches apart on one screen, which is the entire
+     * reason to put it here rather than on a page of its own. */
+    {
+        const viz_pane_t p = pane_now();
+        /* Rows the text gave up are blanked before the pane is drawn, so a
+         * shrunken text area leaves nothing behind it either. */
+        for (int r = trows; r < TEXT_ROWS; r++) {
+            for (int c = 0; c < TEXT_COLS; c++) {
+                tg_put(c, r, ' ', TG_NORMAL);
             }
         }
+        draw_pane(&p);
     }
 
     /* Cells first, then sub-cell chrome on top of them. Note that this

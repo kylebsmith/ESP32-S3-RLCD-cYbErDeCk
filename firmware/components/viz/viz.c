@@ -6,16 +6,54 @@
 #include "seq.h"
 #include "seq_pattern.h"
 
-#define NGEN 4
+#define NGEN 8
 #define NAME_MAX 8
 
-/* The generators, in a flat table like every other name in this system. */
-static const char *s_names[NGEN] = { "noise", "bar", "dot", "wave" };
+/* THREE SOURCES AND FIVE OPERATORS, in a flat table like every other name in
+ * this system.
+ *
+ * WHY THIS SHAPE. The first attempt was eight SOURCES - noise, bar, dot, wave,
+ * ring, rain, box - which is a bag of shapes, and a bag of shapes is what a
+ * system looks like when nobody decided what the operations are. Adding a
+ * ninth shape adds one picture. What a node graph actually gives you is few
+ * sources and a set of operators every source can be fed through, so the
+ * vocabulary multiplies instead of accumulating: feedback, transform,
+ * replicate, mirror, displace. Three sources through five operators is a far
+ * larger space than eight sources, out of the same eight names.
+ *
+ * Every shape that was lost is reachable as a combination. Rain is noise that
+ * moves down and echoes. A bar is a ramp. A wave is a ramp that warps. A box
+ * is a disc that warps. That is the trade being made on purpose.
+ *
+ * TABLE ORDER IS DRAW ORDER, and the order is a pipeline:
+ *
+ *   history   echo   lays the last frame back down, one ink step dimmer
+ *   motion    move   shifts what is there, so the history streaks and the
+ *             warp   sources land fresh - which is what makes a trail
+ *   sources   noise  disc  ramp
+ *   repeat    tile   fold
+ *
+ * So '>viz echo 9' plus '>viz move d' plus '>viz noise 2' is falling rain with
+ * a dissolving tail, and none of those three lines knows about the others. */
+static const char *s_names[NGEN] = {
+    "echo", "move", "warp",          /* history, then motion  */
+    "noise", "disc", "ramp",         /* the sources           */
+    "tile", "fold",                  /* repetition            */
+};
 
 typedef struct {
     bool    used;
     uint32_t mask, chance;
-    uint8_t  val[SEQ_MAX_STEPS];   /* 0-9 intensity, 255 = no digit */
+    uint8_t  val[SEQ_MAX_STEPS];   /* 0-9 amount, 255 = no digit given  */
+    /* The step's own character. A digit says HOW MUCH; a letter says WHICH
+     * WAY, and the two primitives that point somewhere - move and warp - read
+     * it as u, d, l or r. Storing the character rather than translating it at
+     * compile time means one grammar: any non-rest character is a hit, and
+     * what it MEANS is the primitive's business. */
+    char     chr[SEQ_MAX_STEPS];
+    /* The lane's direction, from a 'u', 'd', 'l' or 'r' written before the
+     * pattern. A step's own letter overrides it for that step. */
+    char     dir;
     uint8_t  prob[SEQ_MAX_STEPS];
     uint8_t  steps;
     uint16_t tps;                  /* this lane's ticks per step */
@@ -25,8 +63,33 @@ typedef struct {
 
 static vlane_t s_l[NGEN];
 static char    s_fb[VIZ_H][VIZ_W + 1];
+/* The frame before this one, for echo. Feedback is the single technique that
+ * turns a still picture into an animation, so it gets the memory it needs. */
+static char    s_prev[VIZ_H][VIZ_W + 1];
 static bool    s_split;
 static uint32_t s_rng = 0x1234567u;
+
+static void clear_frame(void);
+
+/* The live frame size. Defaults to something drawable so a frame exists before
+ * any layout has been set - viz_tick() can be called from the clock the moment
+ * a lane compiles, which is before the editor has drawn anything. */
+static int s_w = 28, s_h = 10;
+
+int viz_cols(void) { return s_w; }
+int viz_rows(void) { return s_h; }
+
+void viz_size(int w, int h)
+{
+    if (w < 4)     { w = 4; }
+    if (h < 2)     { h = 2; }
+    if (w > VIZ_W) { w = VIZ_W; }
+    if (h > VIZ_H) { h = VIZ_H; }
+    if (w == s_w && h == s_h) { return; }
+    s_w = w;
+    s_h = h;
+    clear_frame();          /* the old frame is the wrong shape - do not show it */
+}
 
 static inline uint32_t rng(void)
 {
@@ -48,31 +111,47 @@ bool viz_active(void)
     return false;
 }
 
-static int s_split_w;                /* 0 means "a third of whatever we have" */
+static int s_split_h;                /* 0 means "about half the rows" */
 
 void viz_split(bool on) { s_split = on; }
 bool viz_split_on(void) { return s_split; }
 
-void viz_split_width(int cols)
+void viz_split_rows(int rows)
 {
-    s_split_w = (cols > 0) ? cols : 0;
+    s_split_h = (rows > 0) ? rows : 0;
 }
 
-int viz_split_cols(int total)
+/* CODE_ROWS_MIN is the whole argument for who loses when the two do not fit.
+ * Four visible lines is enough to hold a lane and its neighbours in view while
+ * editing; below that the editor stops being usable, and an unusable editor
+ * with a beautiful picture next to it is not a live-coding instrument. */
+#define CODE_ROWS_MIN 4
+
+viz_pane_t viz_pane(int cols, int rows)
 {
-    /* A third, rounded down, and never so much that the code side cannot hold
-     * a pattern line without wrapping. Sixteen columns is '>kick ' plus
-     * sixteen steps, which is the shortest line worth looking at. */
-    int w = (s_split_w > 0) ? s_split_w : total / 3;
-    const int keep = 18;
-    if (w > total - keep) { w = total - keep; }
-    if (w > VIZ_W)        { w = VIZ_W; }
-    if (w < 4)            { w = 4; }
-    return w;
+    viz_pane_t p = { .x = 0, .y = 0, .w = 0, .h = 0 };
+    if (!s_split || cols < 8 || rows < CODE_ROWS_MIN + 3) {
+        return p;
+    }
+
+    /* Half the rows, rounded UP: a picture three cells tall reads as nothing,
+     * and the code side is still legible at five lines. Plus two for the
+     * border, which is part of the pane and has to be paid for out of it. */
+    int h = (s_split_h > 0) ? s_split_h + 2 : (rows + 1) / 2;
+    if (rows - h < CODE_ROWS_MIN) { h = rows - CODE_ROWS_MIN; }
+    if (h > VIZ_H + 2)            { h = VIZ_H + 2; }
+    if (h < 3)                    { return p; }
+
+    p.w = cols;
+    p.h = h;
+    p.x = 0;
+    p.y = rows - h;
+    return p;
 }
+
 const char *viz_row(int y)
 {
-    return (y >= 0 && y < VIZ_H) ? s_fb[y] : "";
+    return (y >= 0 && y < s_h) ? s_fb[y] : "";
 }
 
 esp_err_t viz_lane(const char *gen, const char *pattern)
@@ -86,6 +165,34 @@ esp_err_t viz_lane(const char *gen, const char *pattern)
         return ESP_OK;
     }
 
+    /* A DIRECTION IN FRONT OF THE PATTERN, BECAUSE A STEP CANNOT SAY BOTH.
+     *
+     * One character per step means a step holds an amount or a direction, and
+     * the primitives that point somewhere need both at once - '>viz ramp 4'
+     * has no way to say which way, and '>viz ramp u' has no way to say how
+     * far. So a lone u, d, l or r before the pattern sets the lane's direction
+     * and is not a step:
+     *
+     *     >viz ramp u 4.6.9.6.      up, at those amounts
+     *     >viz move d....d...       down, twice a bar, full
+     *
+     * Both idioms work and neither needs explaining twice: a letter in front is
+     * the lane's direction, a letter in a step is that step's direction, and
+     * the default is down because falling is what ASCII does first. */
+    char dir = 'd';
+    if ((pattern[0] == 'u' || pattern[0] == 'd' ||
+         pattern[0] == 'l' || pattern[0] == 'r') &&
+        (pattern[1] == ' ' || pattern[1] == '\t')) {
+        dir = pattern[0];
+        pattern++;
+        while (*pattern == ' ' || *pattern == '\t') { pattern++; }
+        if (*pattern == '\0') {
+            /* 'ramp u' on its own: the direction, at full amount, every step.
+             * Refusing here would make the shortest useful line an error. */
+            pattern = "9";
+        }
+    }
+
     /* THE SAME WALK AS A MUSIC LANE. seq_pattern.h owns which characters are
      * steps, where a bracket attaches, and what a trailing rate means - so a
      * visual line and a drum line cannot drift apart about their own grammar,
@@ -94,8 +201,10 @@ esp_err_t viz_lane(const char *gen, const char *pattern)
     const int plen = seq_pattern_rate(pattern, &rnum, &rden);
     uint32_t mask = 0, chance = 0;
     uint8_t val[SEQ_MAX_STEPS], prob[SEQ_MAX_STEPS];
+    char    chr[SEQ_MAX_STEPS];
     memset(val, 255, sizeof val);
     memset(prob, 255, sizeof prob);
+    memset(chr, 0, sizeof chr);
     int n = 0;
     const char *stop = pattern + plen;
     for (const char *p = pattern; p < stop && *p && n < SEQ_MAX_STEPS; p++) {
@@ -112,6 +221,7 @@ esp_err_t viz_lane(const char *gen, const char *pattern)
         if (seq_pattern_is_spacing(*p)) { continue; }
         if (*p != '.' && *p != '-' && *p != '_') {
             mask |= (1u << n);
+            chr[n] = *p;
             if (*p == '?') { chance |= (1u << n); }
             if (*p >= '0' && *p <= '9') { val[n] = (uint8_t)(*p - '0'); }
         }
@@ -122,11 +232,23 @@ esp_err_t viz_lane(const char *gen, const char *pattern)
     l->mask = mask; l->chance = chance; l->steps = (uint8_t)n;
     memcpy(l->val, val, sizeof l->val);
     memcpy(l->prob, prob, sizeof l->prob);
+    memcpy(l->chr, chr, sizeof l->chr);
     long t = (long)SEQ_TICKS_PER_STEP * rden / (rnum > 0 ? rnum : 1);
     if (t < 1) { t = 1; }
     l->tps = (uint16_t)(t > 32767 ? 32767 : t);
+    l->dir = dir;
     l->used = true;
     return ESP_OK;
+}
+
+void viz_forget_all(void)
+{
+    for (int i = 0; i < NGEN; i++) {
+        s_l[i].used = false;
+        s_l[i].src[0] = '\0';
+        s_l[i].routed_val = 0;
+    }
+    clear_frame();
 }
 
 esp_err_t viz_route(const char *gen, const char *src)
@@ -152,58 +274,275 @@ void viz_lane_played(const char *lane, uint8_t value)
 
 static void clear_frame(void)
 {
-    for (int y = 0; y < VIZ_H; y++) {
-        memset(s_fb[y], ' ', VIZ_W);
-        s_fb[y][VIZ_W] = '\0';
+    for (int y = 0; y < s_h; y++) {
+        memset(s_fb[y], ' ', (size_t)s_w);
+        s_fb[y][s_w] = '\0';
     }
 }
 
-/* The four primitives. Each is a handful of lines on purpose: what makes this
- * expressive is eight lanes at different rates driving them, not any one of
- * them being clever. */
-static void draw_noise(int amt)
+/* ONE INK RAMP, USED BY EVERYTHING.
+ *
+ * Six levels from nothing to solid. Every primitive that has an amount to show
+ * picks a level off this ramp, and echo fades a cell by stepping DOWN it - so
+ * a trail dissolves through the same greys a gradient is drawn with, and the
+ * whole frame reads as one picture rather than as several primitives arguing.
+ * On a one-bit reflective panel these are the only tones there are. */
+static const char INK[] = " .:*#@";
+#define INK_TOP 5                                /* index of the solid glyph */
+
+static int ink_level(char c)
 {
-    const int cells = VIZ_W * VIZ_H * amt / 9;
-    static const char ink[] = ".:*#@";
+    for (int i = 0; i <= INK_TOP; i++) {
+        if (INK[i] == c) { return i; }
+    }
+    return c == ' ' ? 0 : INK_TOP;               /* anything else reads solid */
+}
+
+/* An amount 0-9 as a level on the ramp. */
+static char ink_for(int amt)
+{
+    return INK[amt <= 0 ? 0 : (amt * INK_TOP + 8) / 9];
+}
+
+/* THE AMOUNT IS ALWAYS THE SAME IDEA: 0 is none and 9 is full.
+ *
+ * This is the one rule that makes the digits readable, and it was missing. The
+ * old set had a digit mean density in one primitive, height in another, a
+ * position in a third and a radius in a fourth, so '0..3..6..9' meant four
+ * unrelated things depending on which line it was on and there was nothing to
+ * learn. Now every primitive answers the same question - HOW MUCH of you? -
+ * and what that scales is the primitive's one-line description:
+ *
+ *   echo   how much of the last frame survives   0 none .. 9 a long tail
+ *   move   how far it shifts, in cells           direction from u d l r
+ *   warp   how far rows are displaced            axis from u d l r
+ *   noise  how much of the field is inked
+ *   disc   the radius                            0 a dot .. 9 fills
+ *   ramp   how far the gradient has swept        direction from u d l r
+ *   tile   how many copies                       1 .. 4
+ *   fold   how many mirrors                      1 .. 3
+ *
+ * SPEED IS THE PATTERN, NOT A NUMBER. '>viz move dddddddd' shifts every step,
+ * '>viz move d.......' once a bar, '>viz move d /2' at half rate. Rate is
+ * already in the grammar for the drums, so movement borrows it rather than
+ * inventing a parameter - which is why none of these needs a direction word or
+ * a second bracket field. */
+
+/* A direction letter as a delta. Defaults to down, because that is the one
+ * every ASCII animation needs first. */
+static void delta_of(char c, int *dx, int *dy)
+{
+    switch (c) {
+    case 'u': *dx =  0; *dy = -1; break;
+    case 'l': *dx = -1; *dy =  0; break;
+    case 'r': *dx =  1; *dy =  0; break;
+    default:  *dx =  0; *dy =  1; break;         /* d, and anything unnamed */
+    }
+}
+
+/* ---- history ---------------------------------------------------------- */
+
+/* echo: FEEDBACK. Lay the previous frame back down, every cell one or more
+ * steps dimmer on the ink ramp.
+ *
+ * This is the technique the whole set was missing. On its own it does nothing
+ * visible; under any source it is the difference between a blinking shape and
+ * an animation, and it costs one line of pattern. A high amount fades slowly
+ * and leaves a long tail; a low one is gone in two frames. */
+static void draw_echo(int amt, char dir, uint32_t step)
+{
+    const int fall = 1 + (9 - amt) / 2;          /* 1 step at 9, 5 at 0 */
+    for (int y = 0; y < s_h; y++) {
+        for (int x = 0; x < s_w; x++) {
+            const int lv = ink_level(s_prev[y][x]) - fall;
+            if (lv > 0) { s_fb[y][x] = INK[lv]; }
+        }
+    }
+}
+
+/* ---- motion ----------------------------------------------------------- */
+
+/* move: TRANSFORM. Shift the whole frame, wrapping at the edges.
+ *
+ * Placed before the sources so that what moves is the HISTORY: the trail
+ * streaks away and this frame's source lands fresh at its own position. That
+ * ordering is the entire reason echo + move reads as a comet and not as a
+ * juddering picture. */
+static void draw_move(int amt, char dir, uint32_t step)
+{
+    int dx, dy;
+    delta_of(dir, &dx, &dy);
+    const int n = (amt == 9 || amt < 0) ? 1 : (amt + 2) / 3;   /* 1..3 cells */
+    dx *= n; dy *= n;
+    if (dx == 0 && dy == 0) { return; }
+
+    char tmp[VIZ_H][VIZ_W + 1];
+    for (int y = 0; y < s_h; y++) {
+        memcpy(tmp[y], s_fb[y], (size_t)s_w + 1);
+    }
+    for (int y = 0; y < s_h; y++) {
+        for (int x = 0; x < s_w; x++) {
+            const int sy = ((y - dy) % s_h + s_h) % s_h;
+            const int sx = ((x - dx) % s_w + s_w) % s_w;
+            s_fb[y][x] = tmp[sy][sx];
+        }
+    }
+}
+
+/* warp: DISPLACE. Slide each line of the frame along the axis by an amount
+ * that runs up and down across the frame, so straight things bend.
+ *
+ * A ramp through warp is a wave; a disc through warp is a lens; noise through
+ * warp is water. One primitive, and its output depends entirely on what was
+ * drawn before it - which is what an operator is for. The phase advances with
+ * the step, so it moves on its own. */
+static void draw_warp(int amt, char dir, uint32_t step)
+{
+    int dx, dy;
+    delta_of(dir, &dx, &dy);
+    const int span = (amt < 0 ? 9 : amt);
+    if (span == 0) { return; }
+
+    char tmp[VIZ_H][VIZ_W + 1];
+    for (int y = 0; y < s_h; y++) {
+        memcpy(tmp[y], s_fb[y], (size_t)s_w + 1);
+        memset(s_fb[y], ' ', (size_t)s_w);
+    }
+    for (int y = 0; y < s_h; y++) {
+        for (int x = 0; x < s_w; x++) {
+            /* A triangle along the axis being displaced, folded to 0..8..0 so
+             * there is no floating point and nothing to look up. */
+            const int along = (dy != 0) ? x : y;
+            const int t   = (along + (int)step) % 16;
+            const int tri = (t < 8) ? t : (16 - t);
+            const int sh  = ((tri - 4) * span) / 9;
+            const int sy = (dy != 0) ? ((y - sh) % s_h + s_h) % s_h : y;
+            const int sx = (dy != 0) ? x : ((x - sh) % s_w + s_w) % s_w;
+            s_fb[y][x] = tmp[sy][sx];
+        }
+    }
+}
+
+/* ---- sources ---------------------------------------------------------- */
+
+/* noise: a stochastic field. The amount is how much of it is inked. */
+static void draw_noise(int amt, char dir, uint32_t step)
+{
+    const int cells = s_w * s_h * amt / 9;
     for (int i = 0; i < cells; i++) {
         const uint32_t r = rng();
-        s_fb[r % VIZ_H][(r >> 8) % VIZ_W] = ink[(r >> 16) % 5];
+        s_fb[r % (uint32_t)s_h][(r >> 8) % (uint32_t)s_w] =
+            INK[1 + (r >> 16) % INK_TOP];
     }
 }
 
-static void draw_bar(int amt, uint32_t step)
+/* disc: a filled circle from the centre, radius from the amount. Route this
+ * from a kick and the frame breathes on the beat, which is the clearest thing
+ * routing does. Through warp it is a box; through fold, a flower. */
+static void draw_disc(int amt, char dir, uint32_t step)
 {
-    const int x = (int)(step % VIZ_W);
-    const int h = amt * VIZ_H / 9;
-    for (int y = VIZ_H - h; y < VIZ_H; y++) {
-        if (y >= 0) { s_fb[y][x] = '#'; }
+    const int cx = s_w / 2, cy = s_h / 2;
+    const int r  = amt * (s_w / 2) / 9;
+    const char c = ink_for(amt);
+    if (r < 1) { s_fb[cy][cx] = c; return; }
+    for (int y = 0; y < s_h; y++) {
+        /* A CELL IS TWICE AS TALL AS IT IS WIDE on both faces - 12x24 and
+         * 6x12 - so a circle that is round in CELLS is a squashed ellipse on
+         * the glass. Counting vertical distance double makes it round to the
+         * eye, which is the only measure that matters here. */
+        const int dy = 2 * (y - cy);
+        for (int x = 0; x < s_w; x++) {
+            const int dx = x - cx;
+            if (dx * dx + dy * dy <= r * r) { s_fb[y][x] = c; }
+        }
     }
 }
 
-static void draw_dot(int amt, uint32_t step)
+/* ramp: a gradient across the frame along the given axis, swept to the amount.
+ *
+ * This is the one that replaces bar, dot and wave, and it replaces all three
+ * because all three were the same idea - a mark whose extent is the value -
+ * drawn three ways. A ramp at amount 3 is a short bar; through warp it is a
+ * wave; through tile it is a row of bars. */
+static void draw_ramp(int amt, char dir, uint32_t step)
 {
-    const int x = (int)(step % VIZ_W);
-    const int y = (VIZ_H - 1) - (amt * (VIZ_H - 1) / 9);
-    static const char ink[] = ".oO@";
-    s_fb[y < 0 ? 0 : y][x] = ink[amt > 6 ? 3 : (amt > 3 ? 2 : (amt > 1 ? 1 : 0))];
-}
-
-/* A sine without floating point or a table: a triangle folded twice is close
- * enough at twelve rows, and it costs nothing on the clock. */
-static void draw_wave(int amt, uint32_t step)
-{
-    const int mid = VIZ_H / 2;
-    for (int x = 0; x < VIZ_W; x++) {
-        const int t = (x + (int)step) % 16;
-        const int tri = (t < 8) ? t : (16 - t);          /* 0..8..0 */
-        const int y = mid + ((tri - 4) * amt * mid) / (4 * 9);
-        if (y >= 0 && y < VIZ_H) { s_fb[y][x] = '-'; }
+    int dx, dy;
+    delta_of(dir, &dx, &dy);
+    const int len = (dy != 0) ? s_h : s_w;
+    int reach = amt * len / 9;
+    /* ANY AMOUNT ABOVE ZERO HAS TO SHOW. In a short frame - eight rows, which
+     * is what a stacked split gives at chunky - amt*len/9 floors to zero for
+     * every amount below two, so '>viz ramp 1' drew nothing at all and looked
+     * like a dead lane. Zero means none; one means the least there is. */
+    if (amt > 0 && reach < 1) { reach = 1; }
+    for (int i = 0; i < reach; i++) {
+        /* Brightest at the leading edge, so the direction is visible in the
+         * ink and not only in the motion. */
+        const int lv = INK_TOP - (i * INK_TOP) / (len > 1 ? len - 1 : 1);
+        const int at = (dx < 0 || dy < 0) ? (len - 1 - i) : i;
+        if (dy != 0) {
+            for (int x = 0; x < s_w; x++) { s_fb[at][x] = INK[lv < 1 ? 1 : lv]; }
+        } else {
+            for (int y = 0; y < s_h; y++) { s_fb[y][at] = INK[lv < 1 ? 1 : lv]; }
+        }
     }
 }
+
+/* ---- repetition ------------------------------------------------------- */
+
+/* tile: REPLICATE. Take the leftmost slice of the frame and repeat it across.
+ * Instant density from a small source, which is what a replicator is for. */
+static void draw_tile(int amt, char dir, uint32_t step)
+{
+    const int n = 1 + (amt < 0 ? 9 : amt) / 3;   /* 1..4 copies */
+    if (n < 2) { return; }
+    const int seg = s_w / n;
+    if (seg < 1) { return; }
+    for (int y = 0; y < s_h; y++) {
+        for (int x = seg; x < s_w; x++) {
+            s_fb[y][x] = s_fb[y][x % seg];
+        }
+    }
+}
+
+/* fold: MIRROR, one to three times. Left onto right, then top onto bottom,
+ * then the left half again - a kaleidoscope out of one line of pattern.
+ * It draws nothing of its own, which is the point. */
+static void draw_fold(int amt, char dir, uint32_t step)
+{
+    const int folds = 1 + (amt < 0 ? 9 : amt) / 4;   /* 1..3 */
+    for (int f = 0; f < folds; f++) {
+        if (f % 2 == 0) {
+            for (int y = 0; y < s_h; y++) {
+                for (int x = 0; x < s_w / 2; x++) {
+                    s_fb[y][s_w - 1 - x] = s_fb[y][x];
+                }
+            }
+        } else {
+            for (int y = 0; y < s_h / 2; y++) {
+                memcpy(s_fb[s_h - 1 - y], s_fb[y], (size_t)s_w);
+            }
+        }
+    }
+}
+
+/* One row per primitive, in the same order as s_names - so the name the owner
+ * types and the code that runs cannot drift apart. */
+typedef void (*draw_fn)(int amt, char dir, uint32_t step);
+static const draw_fn s_draw[NGEN] = {
+    draw_echo, draw_move, draw_warp,
+    draw_noise, draw_disc, draw_ramp,
+    draw_tile, draw_fold,
+};
 
 void viz_tick(uint32_t tick)
 {
     if (!viz_active()) { return; }
+    /* Keep this frame before it is wiped: echo needs the one before it, and a
+     * copy taken here is the only place it is guaranteed to be complete. */
+    for (int y = 0; y < s_h; y++) {
+        memcpy(s_prev[y], s_fb[y], (size_t)s_w + 1);
+    }
     clear_frame();
 
     for (int i = 0; i < NGEN; i++) {
@@ -225,19 +564,19 @@ void viz_tick(uint32_t tick)
         if (amt < 0) { amt = 0; }
         if (amt > 9) { amt = 9; }
 
-        switch (i) {
-        case 0: draw_noise(amt);        break;
-        case 1: draw_bar(amt, step);    break;
-        case 2: draw_dot(amt, step);    break;
-        default: draw_wave(amt, step);  break;
-        }
+        /* A letter in the step wins over the lane's direction; a digit or an
+         * 'x' leaves the lane's direction alone. */
+        const char ch = l->chr[s];
+        const char dir = (ch == 'u' || ch == 'd' || ch == 'l' || ch == 'r')
+                         ? ch : l->dir;
+        s_draw[i](amt, dir, step);
     }
 }
 
 int viz_text(char *out, int max)
 {
     int n = 0;
-    for (int y = 0; y < VIZ_H && n < max - 1; y++) {
+    for (int y = 0; y < s_h && n < max - 1; y++) {
         const int w = snprintf(out + n, (size_t)(max - n), "%s\n", s_fb[y]);
         if (w <= 0) { break; }
         n += w;

@@ -39,16 +39,6 @@ static inline int tg_font_bit(const tg_font_t *f, const uint8_t *row, int gx)
 }
 
 extern const tg_font_t tg_font_6x12;     /* compact: 66 x 25 */
-extern const tg_font_t tg_font_8x24;     /* middle:  45 x 12 - the chunky art
-                                          * squeezed to 9 columns, so it keeps
-                                          * the weight the panel needs while
-                                          * fitting half again as much code.
-                                          * HEIGHT must be a multiple of 12 and
-                                          * WIDTH must be even - the CASET and
-                                          * RASET quanta - so a middle size is
-                                          * a narrower cell, never a shorter
-                                          * one, and 9x18 and 9x24 are both
-                                          * unbuildable on this panel. */
 extern const tg_font_t tg_font_12x24;    /* chunky:  33 x 12 - the default,
                                           * because a reflective panel with no
                                           * backlight needs the weight */
