@@ -101,3 +101,37 @@ CONFIG_TINYUSB_MIDI_COUNT=1
 # The reset reason is logged at the next boot instead, which is the part that
 # was actually useful.
 CONFIG_ESP_SYSTEM_PANIC_SILENT_REBOOT=y
+
+# THE TWO-CORE SPLIT, ACTUALLY APPLIED.
+#
+# docs/OS.md argues that the clock and the display must not share a core, and
+# then the firmware ran with ESP_TIMER_TASK_AFFINITY_CPU0 and
+# ESP_MAIN_TASK_AFFINITY_CPU0 - the clock and the renderer on the same core of
+# a dual-core chip, with the second core carrying only the MIDI transport task.
+# The symptom was small and persistent: two ticks in six thousand past a
+# millisecond, always while the visual preview was redrawing a pane where every
+# cell changes. Making the renderer cheaper moved that number but could not
+# remove it, because the contention was structural.
+#
+# So: CPU1 is the realtime half - the esp_timer task that IS the clock, at
+# priority 22, alongside the MIDI transport task at 6, which seq.c already
+# pinned there. CPU0 carries everything that can afford to wait: the editor,
+# the panel, the keyboard, WiFi and BLE.
+#
+# This is the hinge the instrument rests on. A late tick is audible in a way a
+# late frame is not, so when the two compete the frame loses - and now they do
+# not compete at all.
+# Only the chosen option is named: this is a kconfig CHOICE, and writing the
+# other arm as =n resets the whole choice to its default, which is CPU0 - the
+# exact thing being changed.
+#
+# CPU1 is gated behind SHOW_EXPERIMENTAL and IDF calls it experimental, so the
+# caveat is worth stating rather than burying: what it changes is which core
+# runs the timer TASK. The timer ISR stays on CPU0 and hands work across, which
+# is an ordinary cross-core queue. What IDF is warning about is code that
+# assumes a callback runs on CPU0 - this firmware has one esp_timer callback,
+# the sequencer tick, and it touches only its own lane table and a queue the
+# transport task on CPU1 already drains. Measured before and after on the deck,
+# with the visuals running.
+CONFIG_ESP_TIMER_SHOW_EXPERIMENTAL=y
+CONFIG_ESP_TIMER_TASK_AFFINITY_CPU1=y

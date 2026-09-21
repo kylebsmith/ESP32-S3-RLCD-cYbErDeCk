@@ -105,9 +105,28 @@ esp_err_t viz_route(const char *gen, const char *src);
 /* Told by the sequencer: this lane just played this value. Feeds routing. */
 void viz_lane_played(const char *lane, uint8_t value);
 
-/* Advance one frame. Called on the sequencer's step, so the animation and the
- * music share a clock by construction rather than by being synchronised. */
+/* Told by the sequencer that a step happened. CALLED FROM THE CLOCK CALLBACK,
+ * so it does nothing but write down which step it was.
+ *
+ * THE FRAME IS NOT DRAWN HERE. Generating one is a pass over the whole picture
+ * for every lane that fires, and esp_timer dispatches on a shared task - so
+ * doing it here put that work between one tick and the next, and cost a late
+ * tick whenever several lanes landed on the same step. docs/OS.md forbids
+ * exactly this, and it is the same mistake already fixed in four other places
+ * in this firmware: the callback records, the main loop acts.
+ *
+ * The animation still runs on the music's clock. What moved is only WHERE the
+ * pixels are computed, not when the frame is due. */
 void viz_tick(uint32_t step);
+
+/* Draw the frame the last viz_tick asked for. Called from the main loop;
+ * returns true if a new one was generated.
+ *
+ * Steps that arrive while the loop is busy COALESCE, and that is correct rather
+ * than merely tolerable: the preview is a monitor, the newest frame is the only
+ * one worth showing, and a backlog of stale frames would make the picture lag
+ * the music - which is the one thing it must not do. */
+bool viz_service(void);
 
 /* One row of the frame, NUL-terminated at the live width. Rows at or past
  * viz_rows() are empty, so a caller cannot read stale ink out of the buffer. */

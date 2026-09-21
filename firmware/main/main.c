@@ -644,6 +644,23 @@ void app_main(void)
             need_draw = true;
         }
 
+        /* THE PICTURE IS COMPUTED HERE, NOT IN THE CLOCK CALLBACK.
+         *
+         * viz_tick only writes down which step happened; this is where the
+         * frame is actually drawn. Generating one is a pass over the whole
+         * picture for every visual lane that fired, and doing that inside an
+         * esp_timer callback - which dispatches on a task shared with every
+         * other timer - delayed the next tick. That is the coupling
+         * docs/OS.md's two-core split exists to forbid, and this is the
+         * fourth place in this firmware it has had to be undone.
+         *
+         * A frame that arrives while this loop is busy replaces the one
+         * waiting rather than queueing behind it, so the picture can drop a
+         * frame but can never lag the music. */
+        if (viz_service()) {
+            need_draw = true;
+        }
+
         if (need_draw) {
             editor_draw();
             const uint32_t before = editor_cells_drawn();

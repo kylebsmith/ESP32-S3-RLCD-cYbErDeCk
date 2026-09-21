@@ -69,7 +69,42 @@ static char    s_prev[VIZ_H][VIZ_W + 1];
 static bool    s_split;
 static uint32_t s_rng = 0x1234567u;
 
+/* OUR OWN GLYPHS, NOT PUNCTUATION.
+ *
+ * The picture used to be drawn with ' ', '.', ':', '*', '#' and '@' - six
+ * shapes a typeface designer chose for setting prose, pressed into service as
+ * a tonal ramp. They are uneven as tones, they carry the letters' sidebearings
+ * so a field of them is striped with white gutters, and none of them was drawn
+ * for this. The tiles at 128..155 were: see tools/font_tiles.py.
+ *
+ *   128..136   nine tones, an ordered dither from nothing to solid
+ *   137..140   sparkles: a speck, a four-point star, an eight-point, a burst
+ *   141..145   half blocks four ways, and a centred square
+ *   146..148   a diamond, a filled disc, a hollow ring
+ *   149..151   diagonals and their crossing
+ *   152..155   quadrant arcs, which tile 2x2 into one circle twice the size
+ *
+ * NINE TONES IS THE POINT. Six uneven steps could not fade; nine even ones can,
+ * so echo dissolves a trail through real greys instead of jumping ':' to '.' to
+ * gone. And the field is seamless, because a tone fills its cell edge to edge
+ * where a letter must not touch its neighbour. */
+#define TONE_0   128                 /* an empty cell, as a tone       */
+#define TONE_TOP 8                   /* 136 is solid                   */
+#define SOLID    (char)(TONE_0 + TONE_TOP)
+
+#define SPARK_FIRST 137              /* speck, star4, star8, burst     */
+#define SPARK_N     4
+#define ARC_FIRST   152              /* top-left, top-right, br, bl    */
+
+static inline int tone_of(char ch)
+{
+    const unsigned u = (unsigned char)ch;
+    if (u >= TONE_0 && u <= TONE_0 + TONE_TOP) { return (int)(u - TONE_0); }
+    return (u == ' ' || u == 0) ? 0 : TONE_TOP;   /* anything else is solid */
+}
+
 static void clear_frame(void);
+static void viz_frame(uint32_t tick);
 
 /* The live frame size. Defaults to something drawable so a frame exists before
  * any layout has been set - viz_tick() can be called from the clock the moment
@@ -275,33 +310,9 @@ void viz_lane_played(const char *lane, uint8_t value)
 static void clear_frame(void)
 {
     for (int y = 0; y < s_h; y++) {
-        memset(s_fb[y], ' ', (size_t)s_w);
+        memset(s_fb[y], TONE_0, (size_t)s_w);
         s_fb[y][s_w] = '\0';
     }
-}
-
-/* ONE INK RAMP, USED BY EVERYTHING.
- *
- * Six levels from nothing to solid. Every primitive that has an amount to show
- * picks a level off this ramp, and echo fades a cell by stepping DOWN it - so
- * a trail dissolves through the same greys a gradient is drawn with, and the
- * whole frame reads as one picture rather than as several primitives arguing.
- * On a one-bit reflective panel these are the only tones there are. */
-static const char INK[] = " .:*#@";
-#define INK_TOP 5                                /* index of the solid glyph */
-
-static int ink_level(char c)
-{
-    for (int i = 0; i <= INK_TOP; i++) {
-        if (INK[i] == c) { return i; }
-    }
-    return c == ' ' ? 0 : INK_TOP;               /* anything else reads solid */
-}
-
-/* An amount 0-9 as a level on the ramp. */
-static char ink_for(int amt)
-{
-    return INK[amt <= 0 ? 0 : (amt * INK_TOP + 8) / 9];
 }
 
 /* THE AMOUNT IS ALWAYS THE SAME IDEA: 0 is none and 9 is full.
@@ -351,11 +362,18 @@ static void delta_of(char c, int *dx, int *dy)
  * and leaves a long tail; a low one is gone in two frames. */
 static void draw_echo(int amt, char dir, uint32_t step)
 {
-    const int fall = 1 + (9 - amt) / 2;          /* 1 step at 9, 5 at 0 */
+    /* One tone step at nine, four at zero. Nine tones means a trail can
+     * actually FADE - eight visible stages between solid and gone - which is
+     * the whole reason the ramp is nine and not six.
+     *
+     * It still has to reach nothing. At no fall at all the frame would fill
+     * with everything ever drawn and never clear again, which is feedback with
+     * the gain at unity, and a trail that does not end is not a trail. */
+    const int fall = 1 + (9 - amt) / 3;          /* 1 step at 9, 4 at 0 */
     for (int y = 0; y < s_h; y++) {
         for (int x = 0; x < s_w; x++) {
-            const int lv = ink_level(s_prev[y][x]) - fall;
-            if (lv > 0) { s_fb[y][x] = INK[lv]; }
+            const int lv = tone_of(s_prev[y][x]) - fall;
+            if (lv > 0) { s_fb[y][x] = (char)(TONE_0 + lv); }
         }
     }
 }
@@ -406,7 +424,7 @@ static void draw_warp(int amt, char dir, uint32_t step)
     char tmp[VIZ_H][VIZ_W + 1];
     for (int y = 0; y < s_h; y++) {
         memcpy(tmp[y], s_fb[y], (size_t)s_w + 1);
-        memset(s_fb[y], ' ', (size_t)s_w);
+        memset(s_fb[y], TONE_0, (size_t)s_w);
     }
     for (int y = 0; y < s_h; y++) {
         for (int x = 0; x < s_w; x++) {
@@ -428,11 +446,20 @@ static void draw_warp(int amt, char dir, uint32_t step)
 /* noise: a stochastic field. The amount is how much of it is inked. */
 static void draw_noise(int amt, char dir, uint32_t step)
 {
+    /* SPARKLES, NOT SPECKLE. Scattering tones gives grey mush; scattering the
+     * four sparkle glyphs gives a field with things IN it, which is what makes
+     * a noise lane worth looking at rather than merely worth measuring. The
+     * brighter sparkles are rarer, so the field has a few bright points in a
+     * lot of small ones instead of being uniformly loud. */
     const int cells = s_w * s_h * amt / 9;
     for (int i = 0; i < cells; i++) {
         const uint32_t r = rng();
-        s_fb[r % (uint32_t)s_h][(r >> 8) % (uint32_t)s_w] =
-            INK[1 + (r >> 16) % INK_TOP];
+        const uint32_t pick = (r >> 16) % 8u;
+        const char ch = (pick < 4u) ? (char)SPARK_FIRST            /* speck  */
+                      : (pick < 6u) ? (char)(SPARK_FIRST + 1)      /* star4  */
+                      : (pick < 7u) ? (char)(SPARK_FIRST + 2)      /* star8  */
+                                    : (char)(SPARK_FIRST + 3);     /* burst  */
+        s_fb[r % (uint32_t)s_h][(r >> 8) % (uint32_t)s_w] = ch;
     }
 }
 
@@ -442,9 +469,24 @@ static void draw_noise(int amt, char dir, uint32_t step)
 static void draw_disc(int amt, char dir, uint32_t step)
 {
     const int cx = s_w / 2, cy = s_h / 2;
-    const int r  = amt * (s_w / 2) / 9;
-    const char c = ink_for(amt);
-    if (r < 1) { s_fb[cy][cx] = c; return; }
+    /* THE SHORT AXIS BOUNDS THE RADIUS, or it is not a circle.
+     *
+     * This scaled off the width alone, and the pane is a wide letterbox - 58 by
+     * 10 at the compact face - so 'disc 9' asked for a radius of 29 in a frame
+     * 10 tall and drew a filled RECTANGLE with four rounded corners. A circle
+     * has to fit in both directions. Vertical distance counts double because a
+     * cell is twice as tall as it is wide, so the height's reach is s_h, not
+     * s_h/2. */
+    const int lim = (s_w / 2 < s_h) ? (s_w / 2) : s_h;
+    const int r  = amt * lim / 9;
+    /* A SMALL DISC IS ONE GLYPH. At radius nothing there is a drawn circle to
+     * use - 147 - which reads as a circle where a single '@' read as a blob.
+     * This is what the tiles are for: the shape at the size it is wanted. */
+    /* A SMALL DISC IS ONE DRAWN GLYPH. At a radius of a cell or less there is
+     * nothing to rasterise, and 147 is a circle somebody drew - which reads as
+     * a circle where a single solid block read as a blob. This is what having
+     * our own shapes buys: the shape at the size it is wanted. */
+    if (r <= 1) { s_fb[cy][cx] = (char)147; return; }
     for (int y = 0; y < s_h; y++) {
         /* A CELL IS TWICE AS TALL AS IT IS WIDE on both faces - 12x24 and
          * 6x12 - so a circle that is round in CELLS is a squashed ellipse on
@@ -453,7 +495,19 @@ static void draw_disc(int amt, char dir, uint32_t step)
         const int dy = 2 * (y - cy);
         for (int x = 0; x < s_w; x++) {
             const int dx = x - cx;
-            if (dx * dx + dy * dy <= r * r) { s_fb[y][x] = c; }
+            const int d2 = dx * dx + dy * dy;
+            if (d2 > r * r) { continue; }
+            /* SOLID INSIDE, A LIGHTER TONE ON THE EDGE.
+             *
+             * The arc glyphs were tried here and are wrong for this: an arc's
+             * curvature is one cell, so it only matches a circle about two
+             * cells across. On a bigger one every boundary cell got a tight
+             * curve the circle does not have, and the result was a double
+             * contour rather than an edge. A step down the tone ramp softens
+             * the staircase without claiming a curve that is not there - which
+             * is what an edge tone is for on a panel with one ink. */
+            if (d2 <= (r - 1) * (r - 1)) { s_fb[y][x] = SOLID; continue; }
+            s_fb[y][x] = (char)(TONE_0 + TONE_TOP - 2);
         }
     }
 }
@@ -476,14 +530,17 @@ static void draw_ramp(int amt, char dir, uint32_t step)
      * like a dead lane. Zero means none; one means the least there is. */
     if (amt > 0 && reach < 1) { reach = 1; }
     for (int i = 0; i < reach; i++) {
-        /* Brightest at the leading edge, so the direction is visible in the
-         * ink and not only in the motion. */
-        const int lv = INK_TOP - (i * INK_TOP) / (len > 1 ? len - 1 : 1);
+        /* Solid at the leading edge, thinning to the faintest tone at the tail.
+         * Nine tones make this a gradient; six punctuation marks made it a
+         * staircase, and the direction was only visible in the motion. */
+        int lv = TONE_TOP - (i * TONE_TOP) / (reach > 1 ? reach - 1 : 1);
+        if (lv < 1) { lv = 1; }
+        const char ch = (char)(TONE_0 + lv);
         const int at = (dx < 0 || dy < 0) ? (len - 1 - i) : i;
         if (dy != 0) {
-            for (int x = 0; x < s_w; x++) { s_fb[at][x] = INK[lv < 1 ? 1 : lv]; }
+            for (int x = 0; x < s_w; x++) { s_fb[at][x] = ch; }
         } else {
-            for (int y = 0; y < s_h; y++) { s_fb[y][at] = INK[lv < 1 ? 1 : lv]; }
+            for (int y = 0; y < s_h; y++) { s_fb[y][at] = ch; }
         }
     }
 }
@@ -535,7 +592,54 @@ static const draw_fn s_draw[NGEN] = {
     draw_tile, draw_fold,
 };
 
+/* What the clock leaves for the main loop: a step number and a flag. Written in
+ * the callback, read and cleared in viz_service. */
+static volatile uint32_t s_pending_tick;
+static volatile bool     s_pending;
+
+/* IS ANY LANE DUE ON THIS TICK? Cheap enough for the callback - eight modulos
+ * and no memory traffic - and it is what makes the frame rate right.
+ *
+ * The clock runs at 96 PPQN, so this is called about 200 times a second at
+ * 124 bpm, while a sixteenth-note lane fires eight times a second. Flagging
+ * every tick meant the frame was regenerated two hundred times a second and
+ * the pane redrawn with it: eight seconds of rendering in every ten, eighty
+ * per cent of a core, for twenty-four identical pictures in a row.
+ *
+ * It was also WRONG, not merely wasteful. The frame is cleared before the
+ * lanes are drawn, so on a tick where nothing fires the old code cleared the
+ * picture and drew nothing back - the frame was blank between steps, and it
+ * only ever looked right because the editor happened to sample it on step
+ * boundaries. One frame per step, which is what the device is for, is also
+ * the only version that is correct. */
+static bool any_lane_due(uint32_t tick)
+{
+    for (int i = 0; i < NGEN; i++) {
+        const vlane_t *l = &s_l[i];
+        if (!l->used || l->steps == 0) { continue; }
+        const uint32_t tps = l->tps ? l->tps : SEQ_TICKS_PER_STEP;
+        if ((tick % tps) == 0) { return true; }
+    }
+    return false;
+}
+
 void viz_tick(uint32_t tick)
+{
+    if (!any_lane_due(tick)) { return; }
+    s_pending_tick = tick;
+    s_pending = true;
+}
+
+bool viz_service(void)
+{
+    if (!s_pending) { return false; }
+    s_pending = false;
+    if (!viz_active()) { return false; }
+    viz_frame(s_pending_tick);
+    return true;
+}
+
+static void viz_frame(uint32_t tick)
 {
     if (!viz_active()) { return; }
     /* Keep this frame before it is wiped: echo needs the one before it, and a
@@ -575,9 +679,39 @@ void viz_tick(uint32_t tick)
 
 int viz_text(char *out, int max)
 {
+    /* THE WIRE GETS ASCII, THE GLASS GETS THE TILES.
+     *
+     * The frame is drawn with our own glyphs at 128..155, which mean nothing to
+     * anything that is not this device - a receiver on a Pi, an OSC monitor,
+     * the host check. So '>frame' translates: each tone back to a step of
+     * " .:*#@", each sparkle to '*', an arc to '#'. That is a downsample and is
+     * stated as one; the panel is not affected.
+     *
+     * When there is a receiver that wants the real thing - the RP2040 with the
+     * HDMI output - the format to send it is the glyph bytes, and this is the
+     * function to add that to. It is not guessed at now, because a wire format
+     * invented before its reader is a wire format nobody implements. */
     int n = 0;
     for (int y = 0; y < s_h && n < max - 1; y++) {
-        const int w = snprintf(out + n, (size_t)(max - n), "%s\n", s_fb[y]);
+        char line[VIZ_W + 2];
+        int k = 0;
+        for (; k < s_w && k < VIZ_W; k++) {
+            const unsigned u = (unsigned char)s_fb[y][k];
+            if (u >= TONE_0 && u <= TONE_0 + TONE_TOP) {
+                static const char RAMP[] = " ..::*#@@";      /* nine to six */
+                line[k] = RAMP[u - TONE_0];
+            } else if (u >= SPARK_FIRST && u < SPARK_FIRST + SPARK_N) {
+                line[k] = '*';
+            } else if (u >= ARC_FIRST && u < ARC_FIRST + 4) {
+                line[k] = '#';
+            } else if (u >= 128) {
+                line[k] = '#';
+            } else {
+                line[k] = s_fb[y][k];
+            }
+        }
+        line[k] = '\0';
+        const int w = snprintf(out + n, (size_t)(max - n), "%s\n", line);
         if (w <= 0) { break; }
         n += w;
     }

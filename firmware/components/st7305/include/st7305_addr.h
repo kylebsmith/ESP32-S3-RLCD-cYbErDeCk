@@ -56,6 +56,28 @@ static inline uint8_t st7305_fb_mask_n(int nx, int ny)
     return (uint8_t)(1u << (7 - ((nx & 3) << 1) - (ny & 1)));
 }
 
+/* ONE LOGICAL ROW IS ONE NATIVE COLUMN, IN EVERY ORIENTATION.
+ *
+ * Look at st7305_to_native: nx is y or H-1-y in all four cases, and x only ever
+ * appears in ny. So walking a glyph row - fixed logical y, increasing logical x
+ * - holds nx CONSTANT and moves ny by exactly +1 or -1.
+ *
+ * That is what makes a row blittable. Everything the per-pixel path recomputed
+ * for all twelve pixels of a row - the orientation switch, the bounds test, the
+ * byte index's nx term, the mask's nx term - depends only on nx and can be
+ * hoisted out. This returns the two things that vary, so the caller can hoist
+ * the rest; it is here rather than in st7305.c because the host check for the
+ * blit has to compute the same thing from the same source.
+ */
+static inline void st7305_row_start(int orient, int x, int y, int w,
+                                    int *nx, int *ny0, int *ny_step)
+{
+    int nx1, ny1;
+    st7305_to_native(orient, x, y, nx, ny0);
+    st7305_to_native(orient, x + 1, y, &nx1, &ny1);
+    *ny_step = (w > 1) ? (ny1 - *ny0) : 1;
+}
+
 /* Resolve a native-frame rectangle to what actually goes on the wire. */
 typedef struct {
     uint8_t caset[2];

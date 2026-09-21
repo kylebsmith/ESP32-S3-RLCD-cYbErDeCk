@@ -31,6 +31,42 @@ static int fails;
     else         { printf("  [ ok ] " __VA_ARGS__); printf("\n"); }        \
 } while (0)
 
+/* THE PUBLISHED FRAME, NOT THE INTERNAL ONE.
+ *
+ * viz draws with our own glyphs at 128..155, where an EMPTY cell is the empty
+ * TONE rather than a space - so a test looking for ' ' would find ink in every
+ * cell and pass nothing. viz_text() is the frame as the rest of the world
+ * receives it, translated back to plain ASCII, and checking that instead means
+ * this file also covers the translation rather than trusting it. */
+static char g_rows[VIZ_H][VIZ_W + 2];
+static int  g_nrows;
+
+/* ONE STEP, THE WAY THE FIRMWARE TAKES ONE. viz_tick is called from the clock
+ * and only writes down that a step happened; viz_service draws the frame from
+ * the main loop. A test that called only the first would measure nothing, so
+ * it calls both, in that order, exactly as main.c does. */
+static void snap(void)
+{
+    static char buf[VIZ_H * (VIZ_W + 2) + 4];
+    const int n = viz_text(buf, (int)sizeof buf);
+    g_nrows = 0;
+    int k = 0;
+    for (int i = 0; i < n && g_nrows < VIZ_H; i++) {
+        if (buf[i] == '\n') {
+            g_rows[g_nrows][k] = '\0';
+            g_nrows++;
+            k = 0;
+        } else if (k < VIZ_W) {
+            g_rows[g_nrows][k++] = buf[i];
+        }
+    }
+}
+
+static const char *row_at(int y)
+{
+    return (y >= 0 && y < g_nrows) ? g_rows[y] : "";
+}
+
 /* Ink anywhere in the frame.
  *
  * ONLY OVER THE LIVE RECTANGLE. VIZ_W and VIZ_H are the buffer's maximum, not
@@ -40,9 +76,9 @@ static int frame_ink(void)
 {
     int n = 0;
     for (int y = 0; y < viz_rows(); y++) {
-        const char *row = viz_row(y);
-        for (int x = 0; x < viz_cols() && row[x] != '\0'; x++) {
-            n += row[x] != ' ';
+        const char *r = row_at(y);
+        for (int x = 0; x < viz_cols() && r[x] != '\0'; x++) {
+            n += r[x] != ' ';
         }
     }
     return n;
@@ -59,6 +95,7 @@ static void clear_all_lanes(void)
     for (unsigned i = 0; i < sizeof all / sizeof *all; i++) {
         viz_lane(all[i], "");
     }
+    snap();
 }
 
 int main(void)
@@ -66,6 +103,7 @@ int main(void)
     /* A stated size, not the default: every count below is a fraction of the
      * rectangle, so the rectangle has to be part of the test. */
     viz_size(32, 12);
+    snap();
 
     /* 1. THE NAMES IN THE HELP TEXT. These are the exact strings c_viz prints
      *    when '>viz' is typed with no argument. */
@@ -87,6 +125,8 @@ int main(void)
         clear_all_lanes();
         viz_lane(sources[i], "9");
         viz_tick(0);
+        viz_service();
+        snap();
         const int ink = frame_ink();
         CHECK(ink > 0, "%s put %d cells down", sources[i], ink);
     }
@@ -96,18 +136,22 @@ int main(void)
     clear_all_lanes();
     viz_lane("disc", "9");
     viz_tick(0);
-    CHECK(viz_row(viz_rows() / 2)[viz_cols() / 2] != ' ', "disc is filled");
+    viz_service();
+    snap();
+    CHECK(row_at(viz_rows() / 2)[viz_cols() / 2] != ' ', "disc is filled");
 
     /* A ramp runs along its axis: 'd' inks whole ROWS from the top, so the top
      * row is full and the bottom is empty at a partial amount. */
     clear_all_lanes();
     viz_lane("ramp", "d 4");          /* explicit: downward, part way */
     viz_tick(0);
+    viz_service();
+    snap();
     {
         int top = 0, bot = 0;
         for (int x = 0; x < viz_cols(); x++) {
-            top += viz_row(0)[x] != ' ';
-            bot += viz_row(viz_rows() - 1)[x] != ' ';
+            top += row_at(0)[x] != ' ';
+            bot += row_at(viz_rows() - 1)[x] != ' ';
         }
         CHECK(top > 0 && bot == 0, "ramp 4 fills from the top (%d/%d)", top, bot);
     }
@@ -120,7 +164,11 @@ int main(void)
         clear_all_lanes();
         viz_lane(ops[i], "9");
         viz_tick(0);
-        viz_tick(24);                 /* twice, so echo has a past to work on */
+        viz_service();
+        snap();
+        viz_tick(24);
+        viz_service();
+        snap();                 /* twice, so echo has a past to work on */
         CHECK(frame_ink() == 0, "%s alone draws nothing", ops[i]);
     }
 
@@ -130,29 +178,35 @@ int main(void)
     clear_all_lanes();
     viz_lane("noise", "5");
     viz_tick(0);
+    viz_service();
+    snap();
     int asym = 0;
     for (int y = 0; y < viz_rows(); y++) {
         for (int x = 0; x < viz_cols() / 2; x++) {
-            asym += viz_row(y)[x] != viz_row(y)[viz_cols() - 1 - x];
+            asym += row_at(y)[x] != row_at(y)[viz_cols() - 1 - x];
         }
     }
     CHECK(asym > 0, "noise alone is not symmetric (%d cells differ)", asym);
 
     viz_lane("fold", "1");
     viz_tick(0);
+    viz_service();
+    snap();
     int sym = 1;
     for (int y = 0; y < viz_rows(); y++) {
         for (int x = 0; x < viz_cols() / 2; x++) {
-            if (viz_row(y)[x] != viz_row(y)[viz_cols() - 1 - x]) { sym = 0; }
+            if (row_at(y)[x] != row_at(y)[viz_cols() - 1 - x]) { sym = 0; }
         }
     }
     CHECK(sym, "noise + fold is symmetric left to right");
 
     viz_lane("fold", "9");
     viz_tick(0);
+    viz_service();
+    snap();
     int quad = 1;
     for (int y = 0; y < viz_rows() / 2; y++) {
-        if (memcmp(viz_row(y), viz_row(viz_rows() - 1 - y),
+        if (memcmp(row_at(y), row_at(viz_rows() - 1 - y),
                    (size_t)viz_cols()) != 0) { quad = 0; }
     }
     CHECK(quad, "fold 9 folds top to bottom too");
@@ -165,22 +219,37 @@ int main(void)
     viz_lane("disc", "9");
     viz_lane("echo", "9999");         /* every step */
     viz_tick(0);
+    viz_service();
+    snap();
     const int lit = frame_ink();
     CHECK(lit > 0, "the disc drew %d cells", lit);
     viz_lane("disc", "");             /* source removed: only echo remains */
-    viz_tick(24);                     /* step 1: no disc, echo only */
+    viz_tick(24);
+    viz_service();
+    snap();                     /* step 1: no disc, echo only */
     const int after1 = frame_ink();
     CHECK(after1 > 0, "one step later %d cells survive", after1);
     CHECK(after1 <= lit, "and no more than were there (%d <= %d)", after1, lit);
-    int prev = after1;
-    for (int k = 2; k < 8; k++) {
+    /* IT HAS TO TERMINATE, AND AT THE LONGEST TAIL OF ALL.
+     *
+     * Nine tones means eight visible stages between solid and gone, so the
+     * fade takes eight frames at amount nine - which is the point of nine
+     * tones, and is why the old bound of six frames was wrong rather than the
+     * fade being wrong. What actually matters is that it ENDS: a decay that
+     * kept a hundred per cent would fill the frame with everything ever drawn
+     * and never clear again, which is feedback with the gain at unity, and a
+     * trail that does not end is not a trail. */
+    int prev = after1, grew = 0, k;
+    for (k = 2; k < 200 && prev > 0; k++) {
         viz_tick((uint32_t)k * 24u);
+        viz_service();
+        snap();
         const int now = frame_ink();
-        if (now > prev) { prev = -1; break; }
+        if (now > prev) { grew = 1; break; }
         prev = now;
     }
-    CHECK(prev >= 0, "it only ever fades, never grows");
-    CHECK(prev == 0, "and reaches nothing (%d left)", prev);
+    CHECK(!grew, "it only ever fades, never grows");
+    CHECK(prev == 0, "and empties after %d frames (%d left)", k, prev);
 
     /* 5. MOTION RUNS BEFORE THE SOURCES, which is the whole reason echo plus
      *    move reads as a trail: the history is shifted and the new source
@@ -196,21 +265,27 @@ int main(void)
     viz_lane("echo", "9999");
     viz_lane("move", "uuuu");         /* history travels upward */
     viz_tick(0);
+    viz_service();
+    snap();
     int first_row = -1;
     for (int y = 0; y < viz_rows(); y++) {
         for (int x = 0; x < viz_cols(); x++) {
-            if (viz_row(y)[x] != ' ') { first_row = y; break; }
+            if (row_at(y)[x] != ' ') { first_row = y; break; }
         }
         if (first_row >= 0) { break; }
     }
     CHECK(first_row >= 0, "step 0 inked row %d", first_row);
     viz_tick(24);
+    viz_service();
+    snap();
     viz_tick(48);
+    viz_service();
+    snap();
     viz_lane("ramp", "");             /* no new ink: only the trail moves */
     int highest = 99;
     for (int y = 0; y < viz_rows(); y++) {
         for (int x = 0; x < viz_cols(); x++) {
-            if (viz_row(y)[x] != ' ' && y < highest) { highest = y; }
+            if (row_at(y)[x] != ' ' && y < highest) { highest = y; }
         }
     }
     CHECK(highest < first_row,
@@ -223,9 +298,13 @@ int main(void)
     clear_all_lanes();
     viz_lane("ramp", "r 1");          /* a thin column at the left */
     viz_tick(0);
+    viz_service();
+    snap();
     const int one = frame_ink();
     viz_lane("tile", "9");            /* four copies */
     viz_tick(0);
+    viz_service();
+    snap();
     CHECK(frame_ink() > one, "tile turned %d cells into %d", one, frame_ink());
 
     /* 6. THE PANE. Two failures the owner actually saw, both invisible to a
@@ -275,22 +354,27 @@ int main(void)
     viz_size(40, 20);
     viz_lane("noise", "9");
     viz_tick(0);
-    CHECK(viz_row(19)[0] != '\0', "at 40x20 row 19 exists");
+    viz_service();
+    snap();
+    CHECK(row_at(19)[0] != '\0', "at 40x20 row 19 exists");
     viz_size(20, 6);
+    snap();                 /* the frame just changed shape: re-read it */
     CHECK(viz_cols() == 20 && viz_rows() == 6, "resized to %dx%d",
           viz_cols(), viz_rows());
     int leaked = 0;
     for (int y = 6; y < VIZ_H; y++) {
-        if (viz_row(y)[0] != '\0') { leaked++; }
+        if (row_at(y)[0] != '\0') { leaked++; }
     }
     CHECK(leaked == 0, "rows 6..%d read empty (%d leaked)", VIZ_H - 1, leaked);
 
     /* And the generators respect the new rectangle: full-intensity noise must
      * not put a single cell outside it. */
     viz_tick(0);
+    viz_service();
+    snap();
     int outside = 0, inside = 0;
     for (int y = 0; y < VIZ_H; y++) {
-        const char *row = viz_row(y);
+        const char *row = row_at(y);
         for (int i = 0; row[i] != '\0'; i++) {
             if (row[i] != ' ') { (i >= 20 || y >= 6) ? outside++ : inside++; }
         }

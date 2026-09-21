@@ -455,6 +455,39 @@ void st7305_pixel_raw(int x, int y, bool on)
     if (on) { *p |= m; } else { *p = (uint8_t)(*p & ~m); }
 }
 
+void st7305_row_bits_raw(int x, int y, int w, uint32_t bits)
+{
+    if ((unsigned)y >= ST7305_HEIGHT || w <= 0) {
+        return;
+    }
+    /* Clip in LOGICAL space, once, rather than testing every pixel. */
+    if (x < 0) {
+        bits <<= (unsigned)(-x);
+        w += x;
+        x = 0;
+    }
+    if (x + w > ST7305_WIDTH) {
+        w = ST7305_WIDTH - x;
+    }
+    if (w <= 0) {
+        return;
+    }
+
+    int nx, ny, step;
+    st7305_row_start((int)s_orient, x, y, w, &nx, &ny, &step);
+
+    /* nx is constant along the row, so both of its contributions hoist out. */
+    const size_t col   = (size_t)(nx >> 2);
+    const int    shift = 7 - ((nx & 3) << 1);
+
+    for (int i = 0; i < w; i++, ny += step) {
+        uint8_t *const p = &s_fb[(size_t)(ny >> 1) * ST7305_ROW_BYTES + col];
+        const uint8_t m = (uint8_t)(1u << (shift - (ny & 1)));
+        if ((bits >> (31 - i)) & 1u) { *p |= m; }
+        else                         { *p = (uint8_t)(*p & ~m); }
+    }
+}
+
 void st7305_fill_raw(int x, int y, int w, int h, bool on)
 {
     for (int yy = y; yy < y + h; yy++) {

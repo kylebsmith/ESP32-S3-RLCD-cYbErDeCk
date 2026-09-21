@@ -85,6 +85,12 @@ void st7305_fill(int x, int y, int w, int h, bool on);
 void st7305_pixel_raw(int x, int y, bool on);
 void st7305_fill_raw(int x, int y, int w, int h, bool on);
 
+/* Set `w` consecutive pixels of one logical row from a bitmask, MSB = leftmost,
+ * without damaging. This is the hot path: a glyph is h of these instead of
+ * w*h separate pixel writes, which removes the orientation switch, the bounds
+ * test and most of the index arithmetic from the inner loop. w <= 32. */
+void st7305_row_bits_raw(int x, int y, int w, uint32_t bits);
+
 void st7305_clear(bool on);
 
 /* Mark a logical rectangle damaged without drawing (for callers that write

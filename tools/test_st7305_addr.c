@@ -38,6 +38,100 @@ static void naive_caset(int nx0, int nx1, uint8_t out[2])
     out[1] = (uint8_t)(ST7305_ADDR_START + nx1 / 12);
 }
 
+/* ---------------------------------------------------------------------------
+ * THE ROW BLIT MUST BE THE PER-PIXEL PATH, EXACTLY.
+ *
+ * st7305_row_bits_raw exists only to be faster: it hoists the orientation
+ * switch, the bounds test and most of the index arithmetic out of the inner
+ * loop by relying on nx being constant along a logical row. That is a claim
+ * about st7305_to_native, and if it is wrong the screen fills with plausible
+ * garbage that still looks like text - the worst possible failure, because it
+ * is legible enough to seem like a font bug.
+ *
+ * So this does not sample. For every orientation, every row, a sweep of
+ * starting columns including both edges and past them, and a set of bit
+ * patterns chosen to catch a mirrored or off-by-one walk, it computes the
+ * framebuffer two ways and demands they be identical byte for byte.
+ * ------------------------------------------------------------------------ */
+/* ST7305_FB_SIZE, not a size derived from the LOGICAL height. The framebuffer
+ * is indexed in NATIVE coordinates, where a logical row runs down the native
+ * long axis - so a buffer sized for 300 rows is overrun by every row past the
+ * middle of the panel, and both paths then scribble past the end and compare
+ * equal garbage. Sizing this wrong is the same confusion the driver itself has
+ * to get right, which is why it is worth naming here. */
+static unsigned char FB_A[ST7305_FB_SIZE];
+static unsigned char FB_B[ST7305_FB_SIZE];
+
+static void px(unsigned char *fb, int orient, int x, int y, int on)
+{
+    if ((unsigned)x >= ST7305_WIDTH || (unsigned)y >= ST7305_HEIGHT) {
+        return;
+    }
+    int nx, ny;
+    st7305_to_native(orient, x, y, &nx, &ny);
+    const unsigned char m = st7305_fb_mask_n(nx, ny);
+    unsigned char *p = &fb[st7305_fb_index_n(nx, ny)];
+    if (on) { *p |= m; } else { *p = (unsigned char)(*p & ~m); }
+}
+
+/* The blit, reimplemented against the same header the driver uses - so this
+ * tests the ARITHMETIC the driver relies on rather than re-running it. */
+static void blit(unsigned char *fb, int orient, int x, int y, int w,
+                 unsigned int bits)
+{
+    if ((unsigned)y >= ST7305_HEIGHT || w <= 0) { return; }
+    if (x < 0) { bits <<= (unsigned)(-x); w += x; x = 0; }
+    if (x + w > ST7305_WIDTH) { w = ST7305_WIDTH - x; }
+    if (w <= 0) { return; }
+    int nx, ny, step;
+    st7305_row_start(orient, x, y, w, &nx, &ny, &step);
+    const size_t col = (size_t)(nx >> 2);
+    const int shift  = 7 - ((nx & 3) << 1);
+    for (int i = 0; i < w; i++, ny += step) {
+        unsigned char *p = &fb[(size_t)(ny >> 1) * ST7305_ROW_BYTES + col];
+        const unsigned char m = (unsigned char)(1u << (shift - (ny & 1)));
+        if ((bits >> (31 - i)) & 1u) { *p |= m; }
+        else                         { *p = (unsigned char)(*p & ~m); }
+    }
+}
+
+static int check_row_blit(void)
+{
+    static const unsigned int PAT[] = {
+        0x00000000u, 0xFFF00000u, 0xAAA00000u, 0x55500000u,
+        0x80000000u, 0x00100000u, 0xC0300000u, 0x12300000u,
+    };
+    int bad = 0, cases = 0;
+    for (int orient = 0; orient < 4; orient++) {
+        for (int y = 0; y < ST7305_HEIGHT; y++) {
+            for (int x = -3; x <= ST7305_WIDTH - 9; x += 7) {
+                for (unsigned p = 0; p < sizeof PAT / sizeof *PAT; p++) {
+                    const int w = 12;
+                    memset(FB_A, 0x5A, sizeof FB_A);
+                    memset(FB_B, 0x5A, sizeof FB_B);
+                    for (int i = 0; i < w; i++) {
+                        px(FB_A, orient, x + i, y,
+                           (int)((PAT[p] >> (31 - i)) & 1u));
+                    }
+                    blit(FB_B, orient, x, y, w, PAT[p]);
+                    cases++;
+                    if (memcmp(FB_A, FB_B, sizeof FB_A) != 0) {
+                        if (bad < 4) {
+                            printf("  [FAIL] orient %d row %d x %d pattern %08X\n",
+                                   orient, y, x, PAT[p]);
+                        }
+                        bad++;
+                    }
+                }
+            }
+        }
+    }
+    printf("  %s row blit == per-pixel, %d cases\n",
+           bad == 0 ? "[ ok ]" : "[FAIL]", cases);
+    return bad;
+}
+
+
 int main(void)
 {
     st7305_window_t w;
@@ -143,6 +237,9 @@ int main(void)
         }
     }
     check("pixel collisions across all 4 orientations", collisions, 0);
+
+    printf("\n-- the row blit is the per-pixel path --\n");
+    failures += check_row_blit();
 
     printf("\n%s  (%d failure%s)\n",
            failures == 0 ? "ALL CHECKS PASS" : "CHECKS FAILED",

@@ -203,25 +203,42 @@ static void draw_cell(int col, int row)
     const int y0 = s_oy + row * s_ch;
     const int stride = s_font->stride;
 
+    /* ONE BLIT PER GLYPH ROW, NOT ONE CALL PER PIXEL.
+     *
+     * The old loop called st7305_pixel_raw for every pixel, and each call ran
+     * the orientation switch, a bounds test and the full index and mask
+     * arithmetic - 288 times for a 12x24 cell. But nx is constant along a
+     * logical row in every orientation (see st7305_row_start), so all of that
+     * hoists out and a row becomes one tight loop over its twelve bits.
+     *
+     * This is the path everything pays: typing, the playhead, the splash and
+     * the visual preview all arrive here. The visuals made it matter - a
+     * picture where most cells change every frame redraws the whole pane,
+     * where a page of text redraws one cell - but the saving is not theirs
+     * alone. */
+    const int w = s_font->w;
     for (int gy = 0; gy < s_font->h; gy++) {
         const uint8_t *rowbits = &g[(size_t)gy * stride];
         /* The bar is applied AFTER the inverse, so it flips back out of a
          * solid block. That is what makes cursor-on-playhead readable as
          * both rather than as a slightly different block. */
         const bool bar = (under && gy >= ubar) || (over && gy < obar);
-        for (int gx = 0; gx < s_font->w; gx++) {
+
+        uint32_t bits = 0;
+        for (int gx = 0; gx < w; gx++) {
             bool on = tg_font_bit(s_font, rowbits, gx) != 0;
-            if (inv) {
-                on = !on;
-            }
-            if (bar) {
-                on = !on;
-            }
-            if (s_scale == 1) {
-                st7305_pixel_raw(x0 + gx, y0 + gy, on);
-            } else {
+            if (inv) { on = !on; }
+            if (bar) { on = !on; }
+            if (on)  { bits |= 1u << (31 - gx); }
+        }
+
+        if (s_scale == 1) {
+            st7305_row_bits_raw(x0, y0 + gy, w, bits);
+        } else {
+            for (int gx = 0; gx < w; gx++) {
                 st7305_fill_raw(x0 + gx * s_scale, y0 + gy * s_scale,
-                                s_scale, s_scale, on);
+                                s_scale, s_scale,
+                                ((bits >> (31 - gx)) & 1u) != 0);
             }
         }
     }

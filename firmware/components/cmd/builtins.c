@@ -824,10 +824,20 @@ static void jitter_line(cmd_ctx_t *ctx, const char *what, const seq_stat_t *s)
     /* Everything relative to the tightest sample seen. That removes the
      * constant phase offset and leaves only the spread, which is the part a
      * listener can actually hear. */
-    cmd_out(ctx, "%-5s n%-6u sd%4d late%u", what, (unsigned)s->n,
+    cmd_out(ctx, "%-5s n%-6u sd%4dus late%u", what, (unsigned)s->n,
             (int)(var > 0 ? sqrt(var) : 0), (unsigned)s->late);
-    cmd_out(ctx, "      spread %d us  worst @%us",
-            (int)(s->max - s->min), (unsigned)(s->worst_ms / 1000));
+    /* TWO NUMBERS, TWO LINES, AND NEITHER CAN BE READ AS THE OTHER.
+     *
+     * This was "spread %d us  worst @%us" on one line, which put a duration in
+     * microseconds next to a MOMENT in seconds with nothing between them but
+     * two spaces - and it was read, reasonably, as a hundred-and-ten-second
+     * latency. A worst case of two minutes would be a catastrophe; the actual
+     * worst case was eleven milliseconds, at the instant play was pressed.
+     * A number nobody can parse is worse than no number, because it is
+     * indistinguishable from a disaster. */
+    cmd_out(ctx, "      spread %d us", (int)(s->max - s->min));
+    cmd_out(ctx, "      widest one at t+%us",
+            (unsigned)(s->worst_ms / 1000));
     /* The shape, not just the extremes. A single bad tick in two thousand is
      * a different instrument from fifty a second, and min/max cannot tell
      * them apart. */
@@ -866,8 +876,10 @@ static cmd_status_t c_jitter(cmd_ctx_t *ctx)
                 (unsigned)(msgs / pkts), (unsigned)((msgs * 100 / pkts) % 100));
     }
     cmd_out(ctx, "clock = tick vs the ideal grid");
-    cmd_out(ctx, "first 8 ticks after play skipped");
     cmd_out(ctx, "xport = queue wait before sending");
+    cmd_out(ctx, "sd/spread are MICROseconds.");
+    cmd_out(ctx, "t+ is when, not how long.");
+    cmd_out(ctx, "first 8 ticks after play skipped");
     const uint32_t lost = seq_dropped();
     if (lost > 0) {
         cmd_out(ctx, "%u events dropped", (unsigned)lost);
