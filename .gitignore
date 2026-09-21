@@ -39,3 +39,7 @@ firmware/sdkconfig.old
 # and IS committed, so a build six months from now is the build that was
 # tested; the sources themselves do not belong in this repository.
 firmware/managed_components/
+
+# libssh2 is vendored by tag under firmware/components/ssh/vendor. Its .git
+# directory is not ours to carry.
+firmware/components/ssh/vendor/.git/

@@ -109,6 +109,7 @@
     ">wifi <ssid> <pass>\n" \
     ">host deck 12345678\n" \
     ">osc 192.168.4.2 9000\n" \
+    ">ssh me@host pass ls\n" \
     ">list   your documents\n" \
     ">help   all the commands\n"
 

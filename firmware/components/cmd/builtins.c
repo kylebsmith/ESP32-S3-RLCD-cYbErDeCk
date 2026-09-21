@@ -25,6 +25,7 @@
 #include "soc/rtc_cntl_reg.h"
 #include "battery.h"
 #include "net.h"
+#include "ssh.h"
 #include "usbdev.h"
 #include "usbmux.h"
 
@@ -818,6 +819,72 @@ static cmd_status_t c_battery(cmd_ctx_t *ctx)
     return CMD_DONE;
 }
 
+/* '>ssh user@host pass command...' - run something on another machine and get
+ * the answer back as a document.
+ *
+ * The password is on the line, which is a real trade-off stated plainly: it is
+ * typed on a thumb keyboard by someone holding the device, it goes into a
+ * document, and '+ssh' is TRANSIENT so that document is never journalled and
+ * never reaches the SD mirror or the owner's DGX. The alternative - a key in
+ * NVS - is better and is the next step; this is the version that works today
+ * without a key-management design nobody has agreed yet.
+ *
+ * Runs on the editor task, blocking, with a 15-second library timeout. An SSH
+ * server that never answers must not become a deck that never redraws. */
+static cmd_status_t c_ssh(cmd_ctx_t *ctx)
+{
+    if (ctx->arg[0] == '\0') {
+        cmd_out(ctx, "ssh user@host pass <command>");
+        cmd_out(ctx, "the reply lands in +ssh.");
+        cmd_out(ctx, "needs wifi. host key is shown,");
+        cmd_out(ctx, "not verified - see the buffer.");
+        snprintf(ctx->msg, sizeof ctx->msg, "ssh user@host pass ls");
+        return CMD_DONE;
+    }
+    if (!net_up()) {
+        cmd_out(ctx, "no network. try: wifi <ssid> <pass>");
+        snprintf(ctx->msg, sizeof ctx->msg, "ssh needs wifi");
+        return CMD_ERROR;
+    }
+
+    /* user@host, then the password, then everything else is the command. */
+    char who[64] = {0}, pass[64] = {0};
+    const char *p = ctx->arg;
+    size_t i = 0;
+    while (*p == ' ') { p++; }
+    while (*p && *p != ' ' && i < sizeof who - 1)  { who[i++] = *p++; }
+    who[i] = '\0';
+    while (*p == ' ') { p++; }
+    i = 0;
+    while (*p && *p != ' ' && i < sizeof pass - 1) { pass[i++] = *p++; }
+    pass[i] = '\0';
+    while (*p == ' ') { p++; }
+    if (*p == '\0') {
+        cmd_out(ctx, "ssh user@host pass <command>");
+        return CMD_ERROR;
+    }
+
+    char *at = strchr(who, '@');
+    if (at == NULL) {
+        cmd_out(ctx, "needs user@host");
+        return CMD_ERROR;
+    }
+    *at = '\0';
+    const char *user = who;
+    char *host = at + 1;
+    int port = 22;
+    char *colon = strchr(host, ':');
+    if (colon != NULL) { *colon = '\0'; port = atoi(colon + 1); }
+
+    const esp_err_t e = ssh_run(user, host, port, pass, p);
+    char st[40];
+    ssh_status(st, sizeof st);
+    snprintf(ctx->msg, sizeof ctx->msg, "%s", st);
+    /* The reply is already in '+ssh'; returning DONE with more than one output
+     * line is what moves the view there. */
+    return (e == ESP_OK) ? CMD_DONE : CMD_ERROR;
+}
+
 static cmd_status_t c_wifi(cmd_ctx_t *ctx)
 {
     char st[40];
@@ -1092,6 +1159,7 @@ static const cmd_t s_builtins[] = {
     { "battery", c_battery, CMD_CAP_READ, "find the sense pin" },
     { "host",  c_host,  CMD_CAP_NET,   "host <ssid> <pass> - be the net" },
     { "osc",   c_osc,   CMD_CAP_NET,   "osc <ip> <port> - /deck/<lane>" },
+    { "ssh",   c_ssh,   CMD_CAP_NET,   "ssh user@host pass <command>" },
     { "usb",   c_usb,   CMD_CAP_SYSTEM,"usb on | off - MIDI over the cable" },
     { "flash", c_flash, CMD_CAP_SYSTEM,"flash now - reboot to ROM loader" },
     { "dump",  c_dump,  CMD_CAP_READ,  "print a document to the console" },
