@@ -33,6 +33,12 @@
 #define UI_GUIDE_HINT    "guide: Ctrl+Enter runs a line"
 #define UI_NO_GUIDE      "no guide buffer"
 
+/* Shown when a command's output moves the view. The owner hit this exactly:
+ * ran a command, was moved somewhere else, and "had no idea how to get back" -
+ * so they ran another command, which piled onto the same page. A rescue key
+ * nobody is told about is not a design. */
+#define UI_OUT_BACK      "output - Ctrl-O goes back"
+
 /* THE GUIDE IS THE TUTORIAL AND THE INSTRUMENT AT THE SAME TIME.
  *
  * The complaint about live coding environments is not that they are hard, it
@@ -43,25 +49,48 @@
  *
  * Thirty columns, because that is the grid - and the check below proves it
  * rather than trusting whoever edits this next. */
+/* THE SETTINGS ARE A DOCUMENT, AND IT IS NOT A NEW CONCEPT.
+ *
+ * A document named 'boot' is RUN at startup, one line at a time, exactly as
+ * if the owner had pressed Ctrl+Enter on each. So the settings file is a
+ * guide that happens to run by itself - no config format, no parser, no
+ * second syntax, and nothing to learn that was not already true of every
+ * other line on this device. Edit it like anything else; it takes effect next
+ * boot.
+ *
+ * It runs with GUIDE authority, not the owner's, so it cannot reach the
+ * commands that change pairing, power or the USB mode. A settings file that
+ * could put the deck into a state the owner then cannot type their way out of
+ * would be the same trap this project has already fallen into twice. */
+#define BOOT_TEXT \
+    "Runs at startup. Edit freely.\n" \
+    ">bpm 124\n" \
+    ">scale dmin\n" \
+    ">swing 50\n" \
+    ">density chunky\n"
+
 #define GUIDE_TEXT \
-    "Lines starting with > are\n" \
-    "commands. Ctrl+Enter runs\n" \
-    "the one under the cursor.\n" \
+    "Ctrl+Enter runs a line.\n" \
     "Enter always makes a line.\n" \
+    "Ctrl-L / Ctrl-J switch docs.\n" \
+    "Ctrl-O returns from output.\n" \
     "\n" \
     "RUN THESE, TOP TO BOTTOM\n" \
     ">bpm 124\n" \
     ">scale dmin\n" \
     ">kick X...x...X...x...\n" \
-    ">hat x,x,x,x,x,x,x,x,\n" \
+    ">hat x,x?x,x?x,x?x,x?\n" \
     ">bass 0...3...5...3...\n" \
+    ">cut 0..3..6..9..6..3.\n" \
     ">play\n" \
     "\n" \
     "x hit  X loud  , quiet\n" \
+    "? maybe (half the time)\n" \
     ". rest  0-9 is a degree\n" \
-    "0 is the root. Edit any\n" \
-    "line and run it again -\n" \
-    "it changes as it plays.\n" \
+    "0 is the root. On cut and\n" \
+    "mod, 0-9 are values.\n" \
+    "Edit any line, run it\n" \
+    "again - it changes live.\n" \
     "Run it unchanged to\n" \
     "silence that lane.\n" \
     "\n" \
@@ -71,8 +100,9 @@
     "\n" \
     ">lanes  what is playing\n" \
     ">send   where it goes\n" \
-    ">help   all the commands\n" \
-    ">list   your documents\n"
+    ">usb on one cable to a DAW\n" \
+    ">list   your documents\n" \
+    ">help   all the commands\n"
 
 #ifndef UI_TEXT_NO_ASSERTS
 _Static_assert(sizeof(UI_NOT_A_COMMAND) - 1 <= UI_NARROW_COLS, "status message is cut");

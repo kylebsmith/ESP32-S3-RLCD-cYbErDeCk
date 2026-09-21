@@ -319,6 +319,50 @@ static cmd_status_t c_voice(cmd_ctx_t *ctx)
     return CMD_DONE;
 }
 
+/* MODULATION IS A LANE, NOT A NEW CONCEPT.
+ *
+ * An LFO here is a pattern whose digits are values and whose destination is a
+ * controller instead of a note. '>cut 0..4..8..4..' is a filter sweep, and it
+ * is the same grammar, the same rests, the same probability marks and the same
+ * playhead as a drum line. One idea covering drums, melody and modulation is
+ * the difference between an instrument that feels designed and a pile of
+ * features.
+ *
+ * Named, not numbered. '>cut' beats '>cc 74' for the same reason a synth's
+ * front panel says CUTOFF: the number is an implementation detail of MIDI and
+ * nobody is composing with it. These are the General MIDI / de-facto
+ * assignments every DAW and synth already maps. */
+static const struct { const char *name; uint8_t cc; } s_ctrls[] = {
+    { "cut",  74 },   /* brightness / filter cutoff */
+    { "res",  71 },   /* resonance / timbre         */
+    { "mod",   1 },   /* modulation wheel           */
+    { "send", 91 },   /* reverb send                */
+};
+
+static cmd_status_t c_ctrl(cmd_ctx_t *ctx)
+{
+    uint8_t cc = 1;
+    for (size_t i = 0; i < sizeof s_ctrls / sizeof s_ctrls[0]; i++) {
+        if (strcmp(s_ctrls[i].name, ctx->name) == 0) {
+            cc = s_ctrls[i].cc;
+            break;
+        }
+    }
+    if (ctx->arg[0] == '\0') {
+        seq_mute(ctx->name, true);
+        snprintf(ctx->msg, sizeof ctx->msg, "%s still", ctx->name);
+        return CMD_DONE;
+    }
+    seq_lane_ctrl(ctx->name, cc, 0);
+    if (seq_lane(ctx->name, ctx->arg) != ESP_OK) {
+        cmd_out(ctx, "no room for another lane");
+        return CMD_ERROR;
+    }
+    seq_mute(ctx->name, false);
+    snprintf(ctx->msg, sizeof ctx->msg, "%s cc%u", ctx->name, (unsigned)cc);
+    return CMD_DONE;
+}
+
 static cmd_status_t c_scale(cmd_ctx_t *ctx)
 {
     if (ctx->arg[0] != '\0' && seq_scale(ctx->arg) != ESP_OK) {
@@ -797,6 +841,7 @@ static cmd_status_t c_lanes(cmd_ctx_t *ctx)
             if (!(l[i].mask & b))            { bar[k] = '.'; }
             else if (l[i].accent & b)        { bar[k] = 'X'; }
             else if (l[i].ghost & b)         { bar[k] = ','; }
+            else if (l[i].chance & b)        { bar[k] = '?'; }
             else if (l[i].melodic && l[i].deg[k] != 0xFF) {
                 bar[k] = (char)('0' + l[i].deg[k]);
             } else                           { bar[k] = 'x'; }
@@ -859,6 +904,10 @@ static const cmd_t s_builtins[] = {
     { "lead",  c_voice, CMD_CAP_EDIT,  "degrees 0-9, 0 is the root" },
     { "pad",   c_voice, CMD_CAP_EDIT,  "long notes" },
     { "arp",   c_voice, CMD_CAP_EDIT,  "short notes, high" },
+    { "cut",   c_ctrl,  CMD_CAP_EDIT,  "filter: 0..4..8..4.." },
+    { "res",   c_ctrl,  CMD_CAP_EDIT,  "resonance, 0-9" },
+    { "mod",   c_ctrl,  CMD_CAP_EDIT,  "mod wheel, 0-9" },
+    { "send",  c_ctrl,  CMD_CAP_EDIT,  "reverb send, 0-9" },
     { "help",  c_help,  CMD_CAP_READ,                   "list the commands" },
     { "list",  c_list,  CMD_CAP_READ,                   "list open buffers" },
     { "new",   c_new,   CMD_CAP_EDIT,                   "a fresh scratch buffer" },
@@ -869,7 +918,7 @@ static const cmd_t s_builtins[] = {
     { "guide", c_guide, CMD_CAP_EDIT,                   "mark as a guide" },
     { "prose", c_prose, CMD_CAP_EDIT,                   "mark as prose" },
     { "out",   c_out,   CMD_CAP_READ,                   "read command output" },
-    { "density", c_density, CMD_CAP_SYSTEM,             "chunky | dense" },
+    { "density", c_density, CMD_CAP_EDIT,               "chunky | dense" },
 };
 
 void cmd_register(const cmd_t *table, int count);

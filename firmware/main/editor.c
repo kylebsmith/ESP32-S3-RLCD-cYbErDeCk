@@ -40,6 +40,7 @@
 
 int64_t editor_now_ms(void);
 static void line_at(size_t from, char *out, size_t max);
+static void cycle_buffer(int dir);
 
 #define MARGIN_X     20
 #define MARGIN_TOP   12
@@ -90,6 +91,9 @@ static char s_cur_ch  = ' ';
  * know, or it erases the bar every time it repaints that one cell. */
 static bool s_cur_under = false;
 static bool s_cur_over  = false;
+/* When set and in the future, the status bar shows the way out of the output
+ * buffer after the command's own message has had its moment. */
+static int64_t s_msg2_until = 0;
 
 static char s_status_shown[64];
 /* The result of the last command, shown in place of the status line for a
@@ -257,6 +261,8 @@ static void status_bar(void)
 
     if (s_msg[0] != '\0' && editor_now_ms() < s_msg_until) {
         snprintf(wide, sizeof wide, "%s", s_msg);
+    } else if (editor_now_ms() < s_msg2_until && doc_current_is_transient()) {
+        snprintf(wide, sizeof wide, "%s", UI_OUT_BACK);
     } else {
         if (s_msg[0] != '\0') {
             s_msg[0] = '\0';
@@ -623,6 +629,19 @@ static void handle_ctrl(char c)
         }
         return;
     }
+    /* DOCUMENT SWITCHING WITHOUT A MODE.
+     *
+     * The owner could not see what documents existed without '>list', which
+     * moved them somewhere else and left them stranded. Two keys walk the
+     * open documents in place: no list to enter, no mode to leave, and the
+     * status bar already names where you are. This is cmd-tab, not a file
+     * browser - the browser is what "no menu diving" rules out.
+     *
+     * '+' buffers are skipped. Machine output is not somewhere you navigate
+     * TO; it is somewhere a command puts you, and Ctrl-O brings you back. */
+    case 'l': cycle_buffer(+1); break;
+    case 'j': cycle_buffer(-1); break;
+
     case 'z': doc_undo(); break;
     case 'y': doc_redo(); break;
     case 'a': { int s, e; line_bounds(&s, &e); doc_move_to((size_t)s); break; }
@@ -733,6 +752,33 @@ static void current_line(char *out, size_t max)
 /* The Run verb from docs/SUBSTRATE.md. In a guide buffer this will be plain
  * Enter; until buffer kinds exist, Ctrl+Enter runs the line under the cursor
  * from anywhere, which is the same gesture without the mode. */
+/* Walk to the next or previous real document, skipping machine buffers and
+ * empty slots. Wraps. */
+static void cycle_buffer(int dir)
+{
+    const int n = DOC_MAX_BUFFERS;
+    const int here = doc_buf_current();
+    for (int step = 1; step <= n; step++) {
+        const int i = ((here + dir * step) % n + n) % n;
+        const char *nm = doc_buf_name(i);
+        if (nm == NULL || nm[0] == '+') {
+            continue;
+        }
+        if (doc_buf_select(i) == ESP_OK) {
+            s_top_offset = 0;
+            s_goal_col = -1;
+            doc_move_to(0);
+            snprintf(s_msg, sizeof s_msg, "%s", nm[0] ? nm : "scratch");
+            s_msg_until = editor_now_ms() + 1500;
+            editor_invalidate();
+            tg_invalidate();
+            return;
+        }
+    }
+    snprintf(s_msg, sizeof s_msg, "only one document");
+    s_msg_until = editor_now_ms() + 1500;
+}
+
 static void run_current_line(void)
 {
     char line[128];
@@ -770,8 +816,19 @@ static void run_current_line(void)
             doc_move_to(out_was);
             s_top_offset = (int)out_was;
             s_goal_col = -1;
+            /* SAY HOW TO GET BACK, AND SAY IT LAST.
+             *
+             * The command's own result is shown first, then the way out, so
+             * the owner reads the answer and then learns the exit. The owner
+             * ran a command, was moved here, and "had no idea how to get
+             * back" - so they ran another command, which piled onto the same
+             * page. Ctrl-O was always the answer and nothing ever said so.
+             *
+             * Longer than a normal message because it is teaching, not
+             * reporting, and it only appears when the view actually moved. */
             snprintf(s_msg, sizeof s_msg, "%s", msg[0] ? msg : "output");
-            s_msg_until = editor_now_ms() + 2500;
+            s_msg_until = editor_now_ms() + 2200;
+            s_msg2_until = editor_now_ms() + 5200;
             editor_invalidate();
             tg_invalidate();
             return;

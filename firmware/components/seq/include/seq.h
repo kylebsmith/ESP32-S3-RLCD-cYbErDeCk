@@ -48,6 +48,7 @@ typedef struct {
     uint32_t mask;          /* one bit per step; the realtime core reads this */
     uint32_t accent;        /* 'X' - louder                                   */
     uint32_t ghost;         /* ',' - quieter                                  */
+    uint32_t chance;        /* '?' - plays about half the time                */
     uint8_t  deg[SEQ_MAX_STEPS];  /* scale degree per step, 0xFF = fixed note */
     uint8_t  steps;         /* how many of them are in play                   */
     uint8_t  note;          /* MIDI note number, for a fixed-pitch lane       */
@@ -59,6 +60,8 @@ typedef struct {
     bool     used;
     bool     muted;
     bool     melodic;
+    bool     ctrl;          /* a controller lane: digits are VALUES, not notes */
+    uint8_t  cc;
 } seq_lane_t;
 
 esp_err_t seq_init(void);
@@ -72,6 +75,7 @@ esp_err_t seq_init(void);
  *
  *   X   accent - louder. One shift key, and it stands up off the line.
  *   ,   ghost  - quieter. Small on the page, small in the mix.
+ *   ?   maybe  - plays about half the time. A question mark is what it is.
  *   0-9 on a MELODIC lane, the scale degree. 0 is the root.
  *
  * A digit on a drum lane is just a hit; a lane knows which kind it is. This
@@ -97,6 +101,12 @@ const char *seq_scale_name(void);
  * convention where middle C is C4 = 60. */
 esp_err_t seq_lane_melodic(const char *name, int octave, int chan,
                            int gate_ms);
+
+/* Make a lane a CONTROLLER lane. Its pattern digits become CC values rather
+ * than scale degrees: 0 is 0 and 9 is 127, so '0..4..8..4..' is a sweep up and
+ * back. Same grammar as every other lane - same rests, same '?' probability,
+ * same playhead - which is the point. */
+esp_err_t seq_lane_ctrl(const char *name, int cc, int chan);
 
 /* Shuffle, as a percentage: 50 is straight, 67 is triplet swing, 75 is as
  * far as this goes before it stops being a groove. Every ODD sixteenth is

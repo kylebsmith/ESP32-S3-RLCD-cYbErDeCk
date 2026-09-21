@@ -166,6 +166,49 @@ static int64_t now_ms(void) { return esp_timer_get_time() / 1000; }
  * write one - a device whose commands are undiscoverable has, in practice,
  * no commands. The owner can edit it like any other document, which is the
  * whole point: adding a menu item costs typing a line. */
+/* Create the boot document if it is missing, then run it. */
+static void run_boot_document(void)
+{
+    const int was = doc_buf_current();
+    int idx = doc_buf_find("boot");
+    if (idx < 0) {
+        if (doc_buf_new() != ESP_OK) {
+            return;
+        }
+        doc_set_text(BOOT_TEXT);
+        doc_buf_set_kind(DOC_KIND_GUIDE);
+        if (doc_buf_rename("boot") != ESP_OK) {
+            doc_buf_select(was);
+            return;
+        }
+        doc_save();
+        idx = doc_buf_current();
+        ESP_LOGI(TAG, "wrote a starter boot document");
+    }
+    if (doc_buf_select(idx) != ESP_OK) {
+        doc_buf_select(was);
+        return;
+    }
+    char line[128];
+    size_t k = 0;
+    const size_t n = doc_len();
+    int ran = 0;
+    for (size_t i = 0; i <= n; i++) {
+        const char ch = (i < n) ? doc_at(i) : '\n';
+        if (ch == '\n' || k == sizeof line - 1) {
+            line[k] = '\0';
+            if (k > 0 && cmd_run_line(line, CMD_BY_GUIDE, NULL, 0) == CMD_DONE) {
+                ran++;
+            }
+            k = 0;
+            continue;
+        }
+        line[k++] = ch;
+    }
+    doc_buf_select(was);
+    ESP_LOGI(TAG, "boot document: %d line(s) ran", ran);
+}
+
 static void ensure_guide_buffer(void)
 {
     for (int i = 0; i < DOC_MAX_BUFFERS; i++) {
@@ -393,6 +436,8 @@ void app_main(void)
     }
     report_memory("after BLE");
 
+
+    run_boot_document();                 /* settings, as a document */
 
     ESP_ERROR_CHECK(editor_init());      /* margins; 30 x 10 inside them */
     tg_invalidate();

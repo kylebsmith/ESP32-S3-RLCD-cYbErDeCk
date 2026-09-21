@@ -320,6 +320,27 @@ static int swing_ticks(void)
     return d;
 }
 
+/* A PRNG, not esp_random().
+ *
+ * This is called from the clock. esp_random() reads a hardware register that
+ * is documented as requiring the RF subsystem to be active for full entropy,
+ * and it is not somewhere to take a dependency from the realtime path. A step
+ * that plays half the time does not need cryptographic randomness; it needs to
+ * be cheap, bounded, and never blocking. xorshift32, seeded once.
+ *
+ * It is also a FEATURE that this is deterministic from the seed: a pattern
+ * that sounds right is reproducible within a session, which is the difference
+ * between a performance decision and a coin toss. */
+static uint32_t s_rng = 0x9E3779B9u;
+
+static inline uint32_t rng_next(void)
+{
+    s_rng ^= s_rng << 13;
+    s_rng ^= s_rng >> 17;
+    s_rng ^= s_rng << 5;
+    return s_rng;
+}
+
 static void fire_step(int step)
 {
     for (int i = 0; i < SEQ_MAX_LANES; i++) {
@@ -329,6 +350,12 @@ static void fire_step(int step)
         }
         const int s = step % l->steps;
         if (!(l->mask & (1u << s))) {
+            continue;
+        }
+        /* '?' - maybe. Half, because half is the only ratio that needs no
+         * number after it, and a number after it would be the start of the
+         * syntax this instrument is trying not to have. */
+        if ((l->chance & (1u << s)) && (rng_next() & 1u)) {
             continue;
         }
         /* Accent and ghost are a ratio of the lane's own velocity, not fixed
@@ -345,6 +372,16 @@ static void fire_step(int step)
          * bottom of the range, which on most synths is inaudible and on a few
          * is a thump nobody asked for, and the player would reasonably
          * conclude the lane was broken. */
+        if (l->ctrl) {
+            /* Digits are values: 0 is 0 and 9 is 127. A step with no digit
+             * holds the last value rather than jumping to zero, because a
+             * controller that snaps to silence on every unmarked step is a
+             * stutter, not a sweep. */
+            const uint8_t d = (l->deg[s] == 0xFF) ? 0 : l->deg[s];
+            const uint8_t v = (uint8_t)((d * 127) / 9);
+            emit((uint8_t)(0xB0 | (l->chan & 0x0F)), l->cc, v);
+            continue;
+        }
         const uint8_t note = l->melodic
             ? degree_note(l->deg[s] == 0xFF ? 0 : l->deg[s], l->octave)
             : l->note;
@@ -509,7 +546,7 @@ esp_err_t seq_lane(const char *name, const char *steps)
     if (l == NULL) {
         return ESP_ERR_NO_MEM;
     }
-    uint32_t mask = 0, accent = 0, ghost = 0;
+    uint32_t mask = 0, accent = 0, ghost = 0, chance = 0;
     uint8_t  deg[SEQ_MAX_STEPS];
     memset(deg, 0xFF, sizeof deg);
     int n = 0;
@@ -523,6 +560,7 @@ esp_err_t seq_lane(const char *name, const char *steps)
             mask |= (1u << n);
             if (*p == 'X') { accent |= (1u << n); }
             if (*p == ',') { ghost  |= (1u << n); }
+            if (*p == '?') { chance |= (1u << n); }
             if (*p >= '0' && *p <= '9') { deg[n] = (uint8_t)(*p - '0'); }
         }
         n++;
@@ -535,12 +573,26 @@ esp_err_t seq_lane(const char *name, const char *steps)
     l->mask   = mask;
     l->accent = accent;
     l->ghost  = ghost;
+    l->chance = chance;
     memcpy(l->deg, deg, sizeof l->deg);
     l->steps  = (uint8_t)n;
     /* The text this lane was compiled from, so a later press can tell "run
      * this again unchanged" from "I edited it". After the empty-pattern early
      * return above, so a removed lane carries no source. */
     l->src    = seq_pattern_hash(steps);
+    return ESP_OK;
+}
+
+esp_err_t seq_lane_ctrl(const char *name, int cc, int chan)
+{
+    seq_lane_t *l = find(name, true);
+    if (l == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
+    l->ctrl    = true;
+    l->melodic = false;
+    if (cc >= 0 && cc < 128)   { l->cc = (uint8_t)cc; }
+    if (chan >= 0 && chan < 16) { l->chan = (uint8_t)chan; }
     return ESP_OK;
 }
 
