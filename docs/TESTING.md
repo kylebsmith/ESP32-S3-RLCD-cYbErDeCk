@@ -146,12 +146,17 @@ combining them, not from having more of them.
 | `noise` | a random field |
 | `disc` | a filled circle from the centre |
 | `ramp` | a gradient along an axis |
+| `grid` | a lattice, from a frame to a dense mesh |
 
 | bends | |
 |---|---|
 | `echo` | keeps the last frame, one ink step dimmer — **trails** |
 | `move` | shifts the frame, wrapping |
 | `warp` | displaces lines along an axis — waves, glitch |
+| `shake` | tears lines sideways at random — glitch, where `warp` bends |
+| `grow` | dilates: every mark blooms into its neighbours |
+| `thin` | erodes: edges eat inward. `grow` + `thin` is an outline |
+| `flip` | inverts the whole frame — the cheapest strobe there is |
 | `tile` | repeats the frame across, 1–4 copies |
 | `fold` | mirrors it, 1–3 folds — kaleidoscope |
 
@@ -174,9 +179,15 @@ Old shapes are combinations now. Rain is `noise` + `move d` + `echo`. A bar is
 source — that one line is the difference between a blinking shape and an
 animation.
 
-`>route disc kick` makes the kick's velocity drive the circle's radius — the
-visual line says *when*, the music lane says *how much*. Unroute with
-`>route disc`.
+**Run a visual line again to mute it**, exactly as a drum lane works. Running it
+a third time brings it back. An empty pattern (`>viz disc`) removes the lane
+outright and takes its routing with it.
+
+`>route disc kick` makes the disc **fire on every kick**, at the size of that
+hit's velocity. Routing is *when* as well as *how much*: a routed lane ignores
+its own pattern and follows its source. Put `>viz echo 8` above it and the pulse
+gets a tail. Visual lanes can drive each other too — `>route grow disc` makes the
+bloom follow the circle. Unroute with `>route disc`.
 
 ## 12. ASCII frames
 

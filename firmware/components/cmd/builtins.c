@@ -1049,9 +1049,10 @@ static cmd_status_t c_viz(cmd_ctx_t *ctx)
 {
     if (ctx->arg[0] == '\0') {
         cmd_out(ctx, "viz <name> <pattern>");
-        cmd_out(ctx, "draws: noise disc ramp");
-        cmd_out(ctx, "bends: echo move warp");
-        cmd_out(ctx, "       tile fold");
+        cmd_out(ctx, "draws: noise disc ramp grid");
+        cmd_out(ctx, "bends: echo move warp shake");
+        cmd_out(ctx, "       grow thin flip tile fold");
+        cmd_out(ctx, "run a line again to mute it");
         cmd_out(ctx, "0-9 is how much, 9 full.");
         cmd_out(ctx, "u d l r is which way.");
         cmd_out(ctx, "try: viz echo 9");
@@ -1068,8 +1069,9 @@ static cmd_status_t c_viz(cmd_ctx_t *ctx)
     while (*pat == ' ') { pat++; }
     if (viz_lane(gen, pat) != ESP_OK) {
         cmd_out(ctx, "no primitive '%s'", gen);
-        cmd_out(ctx, "noise disc ramp");
-        cmd_out(ctx, "echo move warp tile fold");
+        cmd_out(ctx, "noise disc ramp grid");
+        cmd_out(ctx, "echo move warp shake");
+        cmd_out(ctx, "grow thin flip tile fold");
         return CMD_ERROR;
     }
     if (pat[0] != '\0') { viz_split(true); }
@@ -1132,7 +1134,7 @@ static cmd_status_t c_route(cmd_ctx_t *ctx)
     if (ctx->arg[0] == '\0') {
         cmd_out(ctx, "route <primitive> <lane>");
         cmd_out(ctx, "route disc kick");
-        cmd_out(ctx, "route echo cut");
+        cmd_out(ctx, "route grow disc   viz drives viz");
         cmd_out(ctx, "route disc       unroutes");
         snprintf(ctx->msg, sizeof ctx->msg, "route disc kick");
         return CMD_DONE;

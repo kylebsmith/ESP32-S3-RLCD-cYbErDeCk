@@ -90,8 +90,9 @@ static int frame_ink(void)
 static void clear_all_lanes(void)
 {
     viz_forget_all();
-    static const char *all[] = { "echo", "move", "warp",
-                                 "noise", "disc", "ramp", "tile", "fold" };
+    static const char *all[] = { "echo", "move", "warp", "shake",
+                                 "noise", "disc", "ramp", "grid",
+                                 "grow", "thin", "flip", "tile", "fold" };
     for (unsigned i = 0; i < sizeof all / sizeof *all; i++) {
         viz_lane(all[i], "");
     }
@@ -107,8 +108,9 @@ int main(void)
 
     /* 1. THE NAMES IN THE HELP TEXT. These are the exact strings c_viz prints
      *    when '>viz' is typed with no argument. */
-    static const char *named[] = { "echo", "move", "warp",
-                                   "noise", "disc", "ramp", "tile", "fold" };
+    static const char *named[] = { "echo", "move", "warp", "shake",
+                                   "noise", "disc", "ramp", "grid",
+                                   "grow", "thin", "flip", "tile", "fold" };
     printf("-- every name the help offers resolves --\n");
     for (unsigned i = 0; i < sizeof named / sizeof *named; i++) {
         CHECK(viz_lane(named[i], "9") == ESP_OK, "viz %s", named[i]);
@@ -120,7 +122,7 @@ int main(void)
      *    and then puts nothing in the frame is the failure a lookup test
      *    cannot see. */
     printf("\n-- each source draws --\n");
-    static const char *sources[] = { "noise", "disc", "ramp" };
+    static const char *sources[] = { "noise", "disc", "ramp", "grid" };
     for (unsigned i = 0; i < sizeof sources / sizeof *sources; i++) {
         clear_all_lanes();
         viz_lane(sources[i], "9");
@@ -159,7 +161,10 @@ int main(void)
     /* 3. THE OPERATORS CHANGE WHAT IS THERE AND DRAW NOTHING THEMSELVES. An
      *    operator that inks an empty frame is not an operator. */
     printf("\n-- operators alone leave the frame empty --\n");
-    static const char *ops[] = { "echo", "move", "warp", "tile", "fold" };
+    /* flip is deliberately absent: inverting an empty frame FILLS it, which is
+     * correct and is the one operator that draws on nothing. */
+    static const char *ops[] = { "echo", "move", "warp", "shake",
+                                 "grow", "thin", "tile", "fold" };
     for (unsigned i = 0; i < sizeof ops / sizeof *ops; i++) {
         clear_all_lanes();
         viz_lane(ops[i], "9");
@@ -312,6 +317,69 @@ int main(void)
      *    columns for the code and wrapped every pattern line, and a frame
      *    shorter than its pane left the cells underneath holding whatever the
      *    last layout drew - which read as static junk in the bottom right. */
+    /* RUN THE SAME LINE AGAIN TO MUTE IT, as a drum lane does. */
+    printf("\n-- a re-run mutes, and again un-mutes --\n");
+    clear_all_lanes();
+    viz_lane("noise", "9");
+    viz_tick(0); viz_service(); snap();
+    CHECK(frame_ink() > 0, "it draws");
+    viz_lane("noise", "9");                 /* same line again */
+    viz_tick(24); viz_service(); snap();
+    CHECK(frame_ink() == 0, "the same line again silences it");
+    viz_lane("noise", "9");
+    viz_tick(48); viz_service(); snap();
+    CHECK(frame_ink() > 0, "and once more brings it back");
+
+    /* REMOVING A LANE TAKES ITS ROUTE WITH IT. Keeping 'src' meant turning a
+     * primitive off and on again resurrected its old routing. */
+    printf("\n-- a removed lane forgets its routing --\n");
+    clear_all_lanes();
+    viz_lane("disc", "9");
+    viz_route("disc", "kick");
+    viz_lane_played("kick", 0);             /* kick says: nothing */
+    viz_tick(0); viz_service(); snap();
+    const int routed_off = frame_ink();
+    viz_lane("disc", "");                   /* gone */
+    viz_lane("disc", "9");                  /* and back */
+    viz_tick(24); viz_service(); snap();
+    CHECK(frame_ink() > routed_off,
+          "unrouted after removal: %d cells, was %d", frame_ink(), routed_off);
+
+    /* ROUTING IS WHEN, NOT ONLY HOW MUCH. This is the one the owner reported:
+     * '>route disc kick' and no disc on the kick. It used to set an amount and
+     * leave the visual lane firing on its own pattern, and a drum's velocity
+     * barely varies - so the disc sat at full size forever and nothing about
+     * the kick's TIMING ever reached the picture. */
+    printf("\n-- a routed lane fires when its source fires --\n");
+    clear_all_lanes();
+    viz_lane("disc", "9");
+    viz_route("disc", "kick");
+
+    viz_tick(0); viz_service(); snap();
+    CHECK(frame_ink() == 0, "silent until the kick plays");
+
+    viz_lane_played("kick", 100);
+    viz_tick(24); viz_service(); snap();
+    const int hit = frame_ink();
+    CHECK(hit > 0, "the kick draws it (%d cells)", hit);
+
+    viz_tick(48); viz_service(); snap();
+    CHECK(frame_ink() == 0, "and it is gone on the next step");
+
+    /* The source's velocity is still the size. */
+    viz_lane_played("kick", 30);
+    viz_tick(72); viz_service(); snap();
+    const int soft = frame_ink();
+    viz_lane_played("kick", 127);
+    viz_tick(96); viz_service(); snap();
+    CHECK(frame_ink() > soft, "a hard hit is bigger than a soft one (%d > %d)",
+          frame_ink(), soft);
+
+    /* Unrouting hands the lane back to its own pattern. */
+    viz_route("disc", "");
+    viz_tick(120); viz_service(); snap();
+    CHECK(frame_ink() > 0, "unrouted, its own pattern drives it again");
+
     printf("\n-- the preview pane --\n");
     viz_split(true);
 

@@ -6,7 +6,7 @@
 #include "seq.h"
 #include "seq_pattern.h"
 
-#define NGEN 8
+#define NGEN 13
 #define NAME_MAX 8
 
 /* THREE SOURCES AND FIVE OPERATORS, in a flat table like every other name in
@@ -36,9 +36,10 @@
  * So '>viz echo 9' plus '>viz move d' plus '>viz noise 2' is falling rain with
  * a dissolving tail, and none of those three lines knows about the others. */
 static const char *s_names[NGEN] = {
-    "echo", "move", "warp",          /* history, then motion  */
-    "noise", "disc", "ramp",         /* the sources           */
-    "tile", "fold",                  /* repetition            */
+    "echo", "move", "warp", "shake", /* history, then motion  */
+    "noise", "disc", "ramp", "grid", /* the sources           */
+    "grow", "thin", "flip",          /* shaping                */
+    "tile", "fold",                  /* repetition             */
 };
 
 typedef struct {
@@ -59,6 +60,14 @@ typedef struct {
     uint16_t tps;                  /* this lane's ticks per step */
     char     src[NAME_MAX + 4];    /* routed from this lane, or empty */
     uint8_t  routed_val;           /* what that lane last played, 0-9 */
+    bool     muted;                /* run the same line again to silence  */
+    /* Set by the source lane in the clock callback, cleared by the frame on
+     * the main loop. Last trigger wins, which is right: a frame shows the most
+     * recent hit and there is nothing useful to do with an older one. */
+    volatile bool    trig;
+    volatile uint8_t trig_val;
+    uint32_t hash;                 /* of the pattern, for that comparison */
+    uint8_t  last_amt;             /* what this lane last drew, for routing */
 } vlane_t;
 
 static vlane_t s_l[NGEN];
@@ -196,9 +205,32 @@ esp_err_t viz_lane(const char *gen, const char *pattern)
     vlane_t *l = &s_l[gi];
 
     if (pattern == NULL || pattern[0] == '\0') {
-        l->used = false;                 /* an empty pattern removes it */
+        /* GONE MEANS GONE, INCLUDING ITS ROUTE. Clearing the lane but keeping
+         * 'src' meant turning a primitive off and on again brought its old
+         * routing back with it, so removing a lane appeared not to change the
+         * routing at all - which is what the owner saw. */
+        l->used = false;
+        l->src[0] = '\0';
+        l->routed_val = 0;
+        l->muted = false;
+        l->trig = false;
         return ESP_OK;
     }
+
+    /* RUN THE SAME LINE AGAIN TO SILENCE IT, the way a drum lane does.
+     *
+     * This is the live-coding gesture the music half already had and the
+     * visual half did not: Ctrl+Enter on a line that is already running and
+     * unchanged turns it off, and again turns it back on. A visual lane is a
+     * lane, so it answers the same gesture - having to retype the line as
+     * empty to stop it was the one place the two halves disagreed. */
+    const uint32_t h = seq_pattern_hash(pattern);
+    if (l->used && l->hash == h) {
+        l->muted = !l->muted;
+        return ESP_OK;
+    }
+    l->muted = false;
+    l->hash = h;
 
     /* A DIRECTION IN FRONT OF THE PATTERN, BECAUSE A STEP CANNOT SAY BOTH.
      *
@@ -282,6 +314,7 @@ void viz_forget_all(void)
         s_l[i].used = false;
         s_l[i].src[0] = '\0';
         s_l[i].routed_val = 0;
+        s_l[i].trig = false;
     }
     clear_frame();
 }
@@ -299,6 +332,20 @@ void viz_lane_played(const char *lane, uint8_t value)
     if (lane == NULL || lane[0] == '\0') { return; }
     for (int i = 0; i < NGEN; i++) {
         if (s_l[i].src[0] != '\0' && strcmp(s_l[i].src, lane) == 0) {
+            /* ROUTING IS WHEN AS WELL AS HOW MUCH.
+             *
+             * It used to be how much ALONE: the source set an amount and the
+             * visual lane still fired on its own pattern. A drum's velocity is
+             * very nearly constant, so '>route disc kick' left the disc sitting
+             * at full size forever and never pulsing - the owner's report was
+             * that there was no disc on the kick, and they were right, because
+             * nothing about the kick's TIMING reached the picture.
+             *
+             * A routed lane now fires when its source fires. That is what the
+             * word means, it is what makes a kick visible, and with '>viz echo'
+             * on top it is a pulse with a tail. */
+            s_l[i].trig = true;
+            s_l[i].trig_val = (uint8_t)((value * 9 + 63) / 127);
             /* MIDI velocity and CC are both 0-127; the visuals think in 0-9,
              * which is the same resolution the pattern digits have. Mapping
              * here rather than at every use keeps one scale in the system. */
@@ -583,13 +630,101 @@ static void draw_fold(int amt, char dir, uint32_t step)
     }
 }
 
+/* shake: DISPLACE AT RANDOM, a row at a time. Where warp bends along a smooth
+ * curve, this tears - the difference between water and a bad signal, and the
+ * two read as completely different material over the same source. */
+static void draw_shake(int amt, char dir, uint32_t step)
+{
+    if (amt <= 0) { return; }
+    char tmp[VIZ_H][VIZ_W + 1];
+    for (int y = 0; y < s_h; y++) { memcpy(tmp[y], s_fb[y], (size_t)s_w + 1); }
+    for (int y = 0; y < s_h; y++) {
+        const int sh = (int)(rng() % (uint32_t)(2 * amt + 1)) - amt;
+        for (int x = 0; x < s_w; x++) {
+            s_fb[y][x] = tmp[y][((x - sh) % s_w + s_w) % s_w];
+        }
+    }
+}
+
+/* grid: a lattice. The amount is how often a line falls, so it goes from a
+ * frame around the edge to a dense mesh - and through warp or fold it stops
+ * looking like a grid at all, which is the point of having one. */
+static void draw_grid(int amt, char dir, uint32_t step)
+{
+    const int every = 10 - (amt < 1 ? 1 : amt);      /* 9 apart .. 1 apart */
+    const char ch = (char)(TONE_0 + TONE_TOP);
+    for (int y = 0; y < s_h; y++) {
+        for (int x = 0; x < s_w; x++) {
+            if ((x % every) == 0 || (y % every) == 0) { s_fb[y][x] = ch; }
+        }
+    }
+}
+
+/* grow: DILATE. Every inked cell spreads to its neighbours, one tone down, so
+ * a single speck becomes a bloom and a thin line becomes a stroke. With echo
+ * this is how a trail thickens as it fades instead of just dimming. */
+static void draw_grow(int amt, char dir, uint32_t step)
+{
+    if (amt <= 0) { return; }
+    char tmp[VIZ_H][VIZ_W + 1];
+    for (int y = 0; y < s_h; y++) { memcpy(tmp[y], s_fb[y], (size_t)s_w + 1); }
+    for (int y = 0; y < s_h; y++) {
+        for (int x = 0; x < s_w; x++) {
+            if (tone_of(tmp[y][x]) > 0) { continue; }
+            int best = 0;
+            if (x > 0)       { const int t = tone_of(tmp[y][x - 1]); if (t > best) best = t; }
+            if (x < s_w - 1) { const int t = tone_of(tmp[y][x + 1]); if (t > best) best = t; }
+            if (y > 0)       { const int t = tone_of(tmp[y - 1][x]); if (t > best) best = t; }
+            if (y < s_h - 1) { const int t = tone_of(tmp[y + 1][x]); if (t > best) best = t; }
+            const int lv = best - (10 - amt) / 3 - 1;
+            if (lv > 0) { s_fb[y][x] = (char)(TONE_0 + lv); }
+        }
+    }
+}
+
+/* thin: ERODE, the other half of grow. An inked cell with an empty neighbour
+ * goes. Run both and you get an outline; run thin alone under echo and a solid
+ * shape eats itself from the edges inward. */
+static void draw_thin(int amt, char dir, uint32_t step)
+{
+    if (amt <= 0) { return; }
+    char tmp[VIZ_H][VIZ_W + 1];
+    for (int y = 0; y < s_h; y++) { memcpy(tmp[y], s_fb[y], (size_t)s_w + 1); }
+    for (int y = 0; y < s_h; y++) {
+        for (int x = 0; x < s_w; x++) {
+            if (tone_of(tmp[y][x]) == 0) { continue; }
+            const bool edge =
+                (x == 0 || tone_of(tmp[y][x - 1]) == 0) ||
+                (x == s_w - 1 || tone_of(tmp[y][x + 1]) == 0) ||
+                (y == 0 || tone_of(tmp[y - 1][x]) == 0) ||
+                (y == s_h - 1 || tone_of(tmp[y + 1][x]) == 0);
+            if (edge) { s_fb[y][x] = (char)TONE_0; }
+        }
+    }
+}
+
+/* flip: INVERT. Ink becomes empty and empty becomes ink, at a tone set by the
+ * amount. One line, and the whole frame reads as a negative - which under a
+ * pattern is the cheapest strobe there is. */
+static void draw_flip(int amt, char dir, uint32_t step)
+{
+    const int lv = (amt <= 0) ? TONE_TOP : (amt * TONE_TOP + 8) / 9;
+    for (int y = 0; y < s_h; y++) {
+        for (int x = 0; x < s_w; x++) {
+            const int t = tone_of(s_fb[y][x]);
+            s_fb[y][x] = (t > 0) ? (char)TONE_0 : (char)(TONE_0 + lv);
+        }
+    }
+}
+
 /* One row per primitive, in the same order as s_names - so the name the owner
  * types and the code that runs cannot drift apart. */
 typedef void (*draw_fn)(int amt, char dir, uint32_t step);
 static const draw_fn s_draw[NGEN] = {
-    draw_echo, draw_move, draw_warp,
-    draw_noise, draw_disc, draw_ramp,
-    draw_tile, draw_fold,
+    draw_echo,  draw_move, draw_warp, draw_shake,
+    draw_noise, draw_disc, draw_ramp, draw_grid,
+    draw_grow,  draw_thin, draw_flip,
+    draw_tile,  draw_fold,
 };
 
 /* What the clock leaves for the main loop: a step number and a flag. Written in
@@ -616,7 +751,12 @@ static bool any_lane_due(uint32_t tick)
 {
     for (int i = 0; i < NGEN; i++) {
         const vlane_t *l = &s_l[i];
+        /* A MUTED LANE STILL ASKS FOR FRAMES. It draws nothing, but the frame
+         * has to be regenerated or the last picture simply stays on the glass -
+         * so muting a lane froze the screen instead of clearing it, and looked
+         * for all the world like the mute had not worked. */
         if (!l->used || l->steps == 0) { continue; }
+        if (l->trig) { return true; }          /* its source just fired */
         const uint32_t tps = l->tps ? l->tps : SEQ_TICKS_PER_STEP;
         if ((tick % tps) == 0) { return true; }
     }
@@ -651,20 +791,33 @@ static void viz_frame(uint32_t tick)
 
     for (int i = 0; i < NGEN; i++) {
         vlane_t *l = &s_l[i];
-        if (!l->used || l->steps == 0) { continue; }
+        if (!l->used || l->muted || l->steps == 0) { continue; }
+
         const uint32_t tps = l->tps ? l->tps : SEQ_TICKS_PER_STEP;
-        if ((tick % tps) != 0) { continue; }
         const uint32_t step = tick / tps;
-        const int s = (int)(step % l->steps);
-        if (!(l->mask & (1u << s))) { continue; }
-        if (l->chance & (1u << s)) {
-            const uint32_t pct = (l->prob[s] == 255u) ? 50u : l->prob[s];
-            if ((rng() % 100u) >= pct) { continue; }
+        int amt, s;
+
+        if (l->src[0] != '\0') {
+            /* ROUTED: the source decides both when and how much. The lane's own
+             * pattern is not consulted, because a routed lane that also had to
+             * agree with its own steps fired only where the two happened to
+             * coincide - which is most of the way to never. Its first step
+             * still supplies the direction letter, so '>viz ramp u 9' keeps
+             * pointing up after '>route ramp bass'. */
+            if (!l->trig) { continue; }
+            l->trig = false;
+            amt = (int)l->trig_val;
+            s = 0;
+        } else {
+            if ((tick % tps) != 0) { continue; }
+            s = (int)(step % l->steps);
+            if (!(l->mask & (1u << s))) { continue; }
+            if (l->chance & (1u << s)) {
+                const uint32_t pct = (l->prob[s] == 255u) ? 50u : l->prob[s];
+                if ((rng() % 100u) >= pct) { continue; }
+            }
+            amt = (l->val[s] == 255) ? 9 : l->val[s];
         }
-        /* Routed intensity wins over the digit. That is the point of routing:
-         * the line says WHEN and another lane says HOW MUCH. */
-        int amt = (l->src[0] != '\0') ? l->routed_val
-                                     : ((l->val[s] == 255) ? 9 : l->val[s]);
         if (amt < 0) { amt = 0; }
         if (amt > 9) { amt = 9; }
 
@@ -674,6 +827,18 @@ static void viz_frame(uint32_t tick)
         const char dir = (ch == 'u' || ch == 'd' || ch == 'l' || ch == 'r')
                          ? ch : l->dir;
         s_draw[i](amt, dir, step);
+
+        /* A VISUAL LANE IS A SOURCE FOR ROUTING TOO.
+         *
+         * Routing could only ever read a MUSIC lane, so the visual half was a
+         * leaf: eight things a kick could drive and nothing that could drive
+         * each other. Publishing what each primitive just drew closes the
+         * loop - 'route grow disc' makes the bloom follow the circle, 'route
+         * flip noise' strobes on the field's density - and it is the same one
+         * idea, a lane may read another lane's output, with no new command and
+         * no new syntax. */
+        l->last_amt = (uint8_t)amt;
+        viz_lane_played(s_names[i], (uint8_t)(amt * 127 / 9));
     }
 }
 
