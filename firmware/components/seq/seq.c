@@ -271,8 +271,25 @@ static void emit(uint8_t status, uint8_t d1, uint8_t d2)
     }
     const midi_ev_t ev = { status, d1, d2, (uint32_t)esp_timer_get_time() };
     if (xQueueSend(s_midiq, &ev, 0) != pdTRUE) {
+        /* Make room by dropping the OLDEST NON-CLOCK event.
+         *
+         * The old code dropped whatever was at the head, which could be a
+         * 0xF8. A lost timing clock makes a DAW's tempo follower hunt - the
+         * owner reported Ableton going "wonky" with sync on - and a late note
+         * is a far smaller crime than a tempo that wobbles. Clock is the one
+         * message whose VALUE is its regularity. */
         midi_ev_t drop;
-        (void)xQueueReceive(s_midiq, &drop, 0);   /* make room */
+        int rescued = 0;
+        midi_ev_t keep[4];
+        while (xQueueReceive(s_midiq, &drop, 0) == pdTRUE) {
+            if (drop.status < 0xF8 || rescued >= (int)(sizeof keep / sizeof keep[0])) {
+                break;                      /* this one is expendable */
+            }
+            keep[rescued++] = drop;         /* a clock: put it back after */
+        }
+        for (int i = 0; i < rescued; i++) {
+            (void)xQueueSend(s_midiq, &keep[i], 0);
+        }
         (void)xQueueSend(s_midiq, &ev, 0);
         s_dropped++;
     }
@@ -341,14 +358,37 @@ static inline uint32_t rng_next(void)
     return s_rng;
 }
 
-static void fire_step(int step)
+/* Does this lane fire on this tick, and if so on which of ITS steps?
+ *
+ * Each lane divides the global tick counter by its own ticks-per-step, so a
+ * lane at '/2' advances half as often and one at '*2' twice as often. Swing
+ * still delays odd steps, measured in that lane's own ticks - so a half-time
+ * lane swings at half-time, which is what a musician means by it. */
+static int lane_step_now(const seq_lane_t *l, uint32_t tick, int *out_step)
+{
+    const uint32_t tps = l->tps ? l->tps : SEQ_TICKS_PER_STEP;
+    const uint32_t step = tick / tps;
+    const uint32_t phase = tick % tps;
+    const uint32_t want = (step & 1u)
+        ? (uint32_t)((int)swing_ticks() * (int)tps / SEQ_TICKS_PER_STEP) : 0u;
+    if (phase != want) {
+        return 0;
+    }
+    *out_step = (int)(step % (uint32_t)l->steps);
+    return 1;
+}
+
+static void fire_lanes(uint32_t tick)
 {
     for (int i = 0; i < SEQ_MAX_LANES; i++) {
         const seq_lane_t *l = &s_lanes[i];
         if (!l->used || l->muted || l->steps == 0) {
             continue;
         }
-        const int s = step % l->steps;
+        int s = 0;
+        if (!lane_step_now(l, tick, &s)) {
+            continue;
+        }
         if (!(l->mask & (1u << s))) {
             continue;
         }
@@ -445,20 +485,20 @@ static void tick(void *arg)
         emit(0xF8, 0, 0);            /* timing clock, no data bytes */
     }
 
-    const int step  = (int)(s_tick / SEQ_TICKS_PER_STEP);
-    const int phase = (int)(s_tick % SEQ_TICKS_PER_STEP);
-    const int want  = (step & 1) ? swing_ticks() : 0;
-    if (phase == want) {
-        /* NO MASK. It used to be `step & 0x7FFF`, and 32768 is a power of
-         * two: 8-, 16- and 32-step lanes wrapped cleanly, but a 5-, 6- or
-         * 12-step lane took a PHASE JUMP of (32768 % steps) every time the
-         * counter rolled - once every 66 minutes at 124 bpm. A pattern
-         * silently moving off the beat, once an hour, in the middle of a set.
-         *
-         * The counter is 32 bits and advances at the step rate, so it now
-         * rolls after about eight years of continuous playing. */
-        s_pos = step;
-        fire_step(s_pos);
+    /* Every lane is asked whether THIS tick is one of its steps, so a lane at
+     * '/2' or '*2' is not a special case anywhere - it simply divides the same
+     * counter differently. That is what makes half-time, double-time and
+     * polyrhythm one mechanism rather than three features.
+     *
+     * s_pos stays the sixteenth-note position, because that is what the
+     * playhead and '>lanes' mean by "where we are". It is UNMASKED: it used to
+     * be `& 0x7FFF`, and 32768 is a power of two, so 8- and 16-step lanes
+     * wrapped cleanly while a 5-, 6- or 12-step lane took a phase jump every
+     * 66 minutes.
+     */
+    fire_lanes(s_tick);
+    if ((s_tick % SEQ_TICKS_PER_STEP) == 0) {
+        s_pos = s_tick / SEQ_TICKS_PER_STEP;
     }
     s_tick++;
 }
@@ -564,13 +604,16 @@ esp_err_t seq_lane(const char *name, const char *steps)
     if (l == NULL) {
         return ESP_ERR_NO_MEM;
     }
+    int rnum = 1, rden = 1;
+    const int plen = seq_pattern_rate(steps, &rnum, &rden);
     uint32_t mask = 0, accent = 0, ghost = 0, chance = 0;
     uint8_t  deg[SEQ_MAX_STEPS];
     uint8_t  prob[SEQ_MAX_STEPS];
     memset(deg, 0xFF, sizeof deg);
     memset(prob, 255, sizeof prob);   /* 255 = no bracket on this step */
     int n = 0;
-    for (const char *p = steps; *p != '\0' && n < SEQ_MAX_STEPS; p++) {
+    const char *stop = steps + plen;
+    for (const char *p = steps; p < stop && *p != '\0' && n < SEQ_MAX_STEPS; p++) {
         /* A bracket is a parameter on the step just placed, not a step. */
         const int plen = seq_pattern_param_len(p);
         if (plen > 0) {
@@ -612,6 +655,14 @@ esp_err_t seq_lane(const char *name, const char *steps)
     memcpy(l->prob, prob, sizeof l->prob);
     memcpy(l->deg, deg, sizeof l->deg);
     l->steps  = (uint8_t)n;
+    {
+        /* Ticks per step for this lane. Clamped so a nonsense rate cannot
+         * make a lane fire every tick or never at all. */
+        long t = (long)SEQ_TICKS_PER_STEP * rden / (rnum > 0 ? rnum : 1);
+        if (t < 1)     { t = 1; }
+        if (t > 32767) { t = 32767; }
+        l->tps = (uint16_t)t;
+    }
     /* The text this lane was compiled from, so a later press can tell "run
      * this again unchanged" from "I edited it". After the empty-pattern early
      * return above, so a removed lane carries no source. */

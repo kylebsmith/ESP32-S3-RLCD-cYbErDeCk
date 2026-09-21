@@ -156,6 +156,31 @@ int main(void)
         }
     }
 
+    /* 10. THE RATE TOKEN IS NOT PART OF THE PICTURE.
+     *
+     * '/2' must not compile as two extra hits, and the playhead must not walk
+     * into it. If the command layer stripped the rate but this walk did not,
+     * the two would disagree about which characters are steps - the exact
+     * class of bug this header exists to make impossible. */
+    {
+        int num = 0, den = 0;
+        eqi("rate: pattern length", seq_pattern_rate("x.x.x.x. /2", &num, &den), 8);
+        eqi("rate: denominator",    den, 2);
+        eqi("rate: numerator",      num, 1);
+        eqi("rate: steps exclude it", seq_pattern_steps("x.x.x.x. /2", MAX_STEPS), 8);
+        eqi("rate: last step",      seq_pattern_offset("x.x.x.x. /2", 7, MAX_STEPS), 7);
+        eqi("rate: none past it",   seq_pattern_offset("x.x.x.x. /2", 8, MAX_STEPS), -1);
+
+        seq_pattern_rate("x.x. *4", &num, &den);
+        eqi("multiply numerator", num, 4);
+        eqi("multiply denominator", den, 1);
+
+        /* Not a rate: no leading operator, bad number, or out of range. */
+        eqi("plain token is picture", seq_pattern_steps("x.x. zz", MAX_STEPS), 6);
+        eqi("bad number is picture",  seq_pattern_steps("x.x. /z", MAX_STEPS), 6);
+        eqi("no space is picture",    seq_pattern_steps("x.x./2", MAX_STEPS), 6);
+    }
+
     printf(fails ? "[FAIL] %d check(s) failed\n" : "[PASS] pattern geometry\n",
            fails);
     return fails != 0;

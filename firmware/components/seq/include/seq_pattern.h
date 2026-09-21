@@ -20,6 +20,7 @@
 #define SEQ_PATTERN_H
 
 #include <stdint.h>
+#include <string.h>
 
 static inline int seq_pattern_is_spacing(char c)
 {
@@ -65,6 +66,53 @@ static inline int seq_pattern_param(const char *p)
     return any ? v : -1;
 }
 
+/* THE RATE TOKEN. The last whitespace-separated token, if it begins with '/'
+ * or '*', sets this lane's speed and is not part of the picture:
+ *
+ *     >bass 0...3...5...3... /2      half speed, two bars
+ *     >hat  x.x.x.x. *2             double speed
+ *
+ * It lives HERE, not in the command layer, for the same reason everything
+ * else does: seq_lane() walks the string to build bits and the editor walks it
+ * to place the playhead, and if only one of them knew about the rate they
+ * would disagree about which characters are steps. '/2' would otherwise
+ * compile as two extra hits.
+ *
+ * Returns the numerator and denominator of the rate, and the length of the
+ * pattern before it. den > 1 is slower; num > 1 is faster. */
+static inline int seq_pattern_rate(const char *pat, int *num, int *den)
+{
+    if (num != NULL) { *num = 1; }
+    if (den != NULL) { *den = 1; }
+    if (pat == NULL) { return 0; }
+
+    const int len = (int)strlen(pat);
+    int end = len;
+    while (end > 0 && pat[end - 1] == ' ') { end--; }
+    int start = end;
+    while (start > 0 && pat[start - 1] != ' ') { start--; }
+    if (start == 0 || end - start < 2) {
+        return len;                       /* no token, or the whole string */
+    }
+    const char op = pat[start];
+    if (op != '/' && op != '*') {
+        return len;
+    }
+    int v = 0;
+    for (int i = start + 1; i < end; i++) {
+        if (pat[i] < '0' || pat[i] > '9') { return len; }
+        v = v * 10 + (pat[i] - '0');
+    }
+    if (v < 1 || v > 32) {
+        return len;                       /* nonsense: treat it as picture */
+    }
+    if (op == '/' && den != NULL) { *den = v; }
+    if (op == '*' && num != NULL) { *num = v; }
+    int plen = start;
+    while (plen > 0 && pat[plen - 1] == ' ') { plen--; }
+    return plen;
+}
+
 /* How many steps a pattern compiles to. Must match seq_lane()'s count. */
 static inline int seq_pattern_steps(const char *pat, int max_steps)
 {
@@ -72,7 +120,8 @@ static inline int seq_pattern_steps(const char *pat, int max_steps)
     if (pat == NULL) {
         return 0;
     }
-    for (const char *p = pat; *p != '\0' && n < max_steps; p++) {
+    const char *stop = pat + seq_pattern_rate(pat, NULL, NULL);
+    for (const char *p = pat; p < stop && *p != '\0' && n < max_steps; p++) {
         const int plen = seq_pattern_param_len(p);
         if (plen > 0) { p += plen - 1; continue; }   /* a parameter, not a step */
         if (!seq_pattern_is_spacing(*p)) {
@@ -90,7 +139,8 @@ static inline int seq_pattern_offset(const char *pat, int want, int max_steps)
         return -1;
     }
     int n = 0;
-    for (const char *p = pat; *p != '\0'; p++) {
+    const char *stop = pat + seq_pattern_rate(pat, NULL, NULL);
+    for (const char *p = pat; p < stop && *p != '\0'; p++) {
         const int plen = seq_pattern_param_len(p);
         if (plen > 0) { p += plen - 1; continue; }
         if (seq_pattern_is_spacing(*p)) {

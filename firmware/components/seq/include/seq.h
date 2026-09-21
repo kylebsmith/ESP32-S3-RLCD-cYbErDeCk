@@ -64,6 +64,13 @@ typedef struct {
     uint8_t  prob[SEQ_MAX_STEPS];  /* per-step chance %, 0 = use the default  */
     uint8_t  deg[SEQ_MAX_STEPS];  /* scale degree per step, 0xFF = fixed note */
     uint8_t  steps;         /* how many of them are in play                   */
+    /* THIS LANE'S OWN TIME BASE, in internal ticks per step.
+     *
+     * Default SEQ_TICKS_PER_STEP. '/2' doubles it, '*2' halves it. Every lane
+     * keeping its own clock is what makes polyrhythm, half-time and ratchets
+     * the same mechanism rather than three features - and it is why the rate
+     * lives on the lane and not on the transport. */
+    uint16_t tps;
     uint8_t  note;          /* MIDI note number, for a fixed-pitch lane       */
     uint8_t  chan;          /* 0-15                                           */
     uint8_t  vel;
