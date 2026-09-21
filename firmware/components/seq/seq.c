@@ -377,8 +377,16 @@ static void fire_step(int step)
              * holds the last value rather than jumping to zero, because a
              * controller that snaps to silence on every unmarked step is a
              * stutter, not a sweep. */
-            const uint8_t d = (l->deg[s] == 0xFF) ? 0 : l->deg[s];
-            const uint8_t v = (uint8_t)((d * 127) / 9);
+            /* A step with no digit HOLDS, it does not emit zero. The code
+             * here sent 0 while the comment beside it claimed otherwise - a
+             * controller that snaps to silence between steps is a stutter,
+             * and the comment was describing the intention rather than the
+             * behaviour. Nothing is sent at all on a hold, which is also one
+             * fewer message on the wire. */
+            if (l->deg[s] == 0xFF) {
+                continue;
+            }
+            const uint8_t v = (uint8_t)((l->deg[s] * 127) / 9);
             emit((uint8_t)(0xB0 | (l->chan & 0x0F)), l->cc, v);
             continue;
         }
@@ -424,7 +432,7 @@ static void tick(void *arg)
         if (d < -1000000) { d = -1000000; }
         stat_add(&s_clock_stat, (int32_t)d);
     }
-    if (s_sync) {
+    if (s_sync && (s_tick % SEQ_CLOCK_EVERY) == 0) {
         emit(0xF8, 0, 0);            /* timing clock, no data bytes */
     }
 
@@ -448,7 +456,8 @@ static void tick(void *arg)
 
 static uint64_t period_us(void)
 {
-    /* One MIDI clock pulse. 60,000,000 / bpm / 24. */
+    /* One internal tick. 60,000,000 / bpm / 96. At 124 bpm that is 5,040 us,
+     * and a sixteenth is 24 of them - 120,967 us. */
     return (uint64_t)(60000000.0 / (double)s_bpm / (double)SEQ_PPQN);
 }
 

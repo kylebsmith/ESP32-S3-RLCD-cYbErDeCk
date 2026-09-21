@@ -40,8 +40,20 @@
  * speaks means tempo sync to a DAW is a message on an existing tick rather
  * than a second timer to keep in phase with the first, and it buys swing for
  * free: a sixth of a step is the unit a shuffle is expressed in anyway. */
-#define SEQ_PPQN           24
-#define SEQ_TICKS_PER_STEP 6
+/* 96 PPQN internally, MIDI clock still emitted at 24.
+ *
+ * At 24 PPQN a sixteenth was six ticks, so swing - which delays the offbeat by
+ * a whole number of ticks - had exactly FOUR distinct settings between 50 and
+ * 75. Measured by running swing_ticks(): 50 and 58 produce byte-identical
+ * output, as do 60 through 66. A control with 26 positions and 4 effects is a
+ * control that lies to the player.
+ *
+ * Four times the resolution gives 13 distinct settings across the same range,
+ * which is finer than the ear resolves at 124 bpm. MIDI clock is emitted every
+ * fourth tick, so the wire protocol is unchanged at its required 24 PPQN. */
+#define SEQ_PPQN           96
+#define SEQ_TICKS_PER_STEP 24
+#define SEQ_CLOCK_EVERY    4      /* 96 / 24 = MIDI clock divisor */
 
 typedef struct {
     char     name[SEQ_NAME_MAX];

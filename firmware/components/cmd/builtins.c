@@ -336,7 +336,7 @@ static const struct { const char *name; uint8_t cc; } s_ctrls[] = {
     { "cut",  74 },   /* brightness / filter cutoff */
     { "res",  71 },   /* resonance / timbre         */
     { "mod",   1 },   /* modulation wheel           */
-    { "send", 91 },   /* reverb send                */
+    { "rev",  91 },   /* reverb send                */
 };
 
 static cmd_status_t c_ctrl(cmd_ctx_t *ctx)
@@ -842,15 +842,18 @@ static cmd_status_t c_lanes(cmd_ctx_t *ctx)
             else if (l[i].accent & b)        { bar[k] = 'X'; }
             else if (l[i].ghost & b)         { bar[k] = ','; }
             else if (l[i].chance & b)        { bar[k] = '?'; }
-            else if (l[i].melodic && l[i].deg[k] != 0xFF) {
+            else if ((l[i].melodic || l[i].ctrl) && l[i].deg[k] != 0xFF) {
                 bar[k] = (char)('0' + l[i].deg[k]);
             } else                           { bar[k] = 'x'; }
         }
         bar[k] = '\0';
         cmd_out(ctx, "%c%-5s %s", l[i].muted ? '-' : ' ', l[i].name, bar);
     }
-    cmd_out(ctx, "%d bpm  swing %d  key %s  clock %s", seq_get_bpm(),
-            seq_get_swing(), seq_scale_name(), seq_get_sync() ? "out" : "off");
+    /* THIRTY COLUMNS. This was "%d bpm  swing %d  key %s  clock %s", which
+     * renders as 38 characters and wraps - on the one screen the player looks
+     * at to check their state mid-performance. */
+    cmd_out(ctx, "%d %s sw%d%s", seq_get_bpm(), seq_scale_name(),
+            seq_get_swing(), seq_get_sync() ? " clk" : "");
     char dests[64] = {0};
     for (int i = 0; i < seq_dest_count(); i++) {
         if (seq_dest_on(i)) {
@@ -907,7 +910,7 @@ static const cmd_t s_builtins[] = {
     { "cut",   c_ctrl,  CMD_CAP_EDIT,  "filter: 0..4..8..4.." },
     { "res",   c_ctrl,  CMD_CAP_EDIT,  "resonance, 0-9" },
     { "mod",   c_ctrl,  CMD_CAP_EDIT,  "mod wheel, 0-9" },
-    { "send",  c_ctrl,  CMD_CAP_EDIT,  "reverb send, 0-9" },
+    { "rev",   c_ctrl,  CMD_CAP_EDIT,  "reverb send, 0-9" },
     { "help",  c_help,  CMD_CAP_READ,                   "list the commands" },
     { "list",  c_list,  CMD_CAP_READ,                   "list open buffers" },
     { "new",   c_new,   CMD_CAP_EDIT,                   "a fresh scratch buffer" },

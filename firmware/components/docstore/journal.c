@@ -100,7 +100,18 @@ typedef struct {
     size_t sectors;
     bool   in_use;
 } live_t;
-static live_t s_live[DOC_MAX_BUFFERS];
+/* Sized to the ARCHIVE, not to the working set.
+ *
+ * This was DOC_MAX_BUFFERS (8) while journal_scan tracked JOURNAL_MAX_NAMES
+ * (24), so a ninth document's sectors could not be claimed - they were left
+ * marked free and find_free_run handed them to the next save. Raising the
+ * scan array without raising this one moved the bug rather than fixing it,
+ * which is exactly the mistake that made DOC_MAX_BUFFERS mean two things in
+ * the first place. Reproduced with a ten-name harness: "sector 8 ninth ***
+ * MARKED FREE ***", then that sector reused by the next save. */
+#define JOURNAL_MAX_NAMES 24
+
+static live_t s_live[JOURNAL_MAX_NAMES];
 
 static inline bool sec_used(size_t s)
 {
@@ -119,7 +130,7 @@ static inline void sec_mark(size_t s, bool used)
 static void live_claim(const char *name, size_t off, size_t sectors)
 {
     live_t *slot = NULL;
-    for (int i = 0; i < DOC_MAX_BUFFERS; i++) {
+    for (int i = 0; i < JOURNAL_MAX_NAMES; i++) {
         if (s_live[i].in_use &&
             strncmp(s_live[i].name, name, DOC_NAME_MAX) == 0) {
             slot = &s_live[i];
@@ -127,11 +138,16 @@ static void live_claim(const char *name, size_t off, size_t sectors)
         }
     }
     if (slot == NULL) {
-        for (int i = 0; i < DOC_MAX_BUFFERS; i++) {
+        for (int i = 0; i < JOURNAL_MAX_NAMES; i++) {
             if (!s_live[i].in_use) { slot = &s_live[i]; break; }
         }
     }
     if (slot == NULL) {
+        /* No room to TRACK this document's sectors, which means nothing is
+         * holding them and the next save can overwrite it. Say so loudly
+         * rather than returning quietly: this is the exact silence that made
+         * a ninth document disappear without a word. */
+        ESP_LOGE(TAG, "live table full - '%s' is unprotected", name);
         return;
     }
     /* Release the previous version's sectors, now that the new one is down. */
@@ -268,8 +284,6 @@ esp_err_t journal_load_into(size_t rec_off, char *out, size_t max, size_t *len)
  *
  * The archive can be larger than the working set; the only cost here is stack
  * for the scan array, 40 bytes per entry. */
-#define JOURNAL_MAX_NAMES 24
-
 /* Walk the whole partition and register the newest valid record per name. */
 static void journal_scan(char *scratch, size_t scratch_len)
 {
