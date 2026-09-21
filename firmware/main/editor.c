@@ -22,6 +22,7 @@
  * dumped.
  */
 #include "editor.h"
+#include "battery.h"
 #include "cell_attr.h"
 #include "ui_text.h"
 #include "seq.h"
@@ -276,13 +277,26 @@ static void status_bar(void)
         if (m & KBD_MOD_RALT) { mod[mi++] = 'G'; }
         if (m & KBD_SHIFT)    { mod[mi++] = 'S'; }
         mod[mi] = '\0';
-        snprintf(wide, sizeof wide, "%-11.11s%c %3d:%-3d %s%s%s",
+        /* Battery at the right-hand end, as a four-cell bar and nothing else.
+         * It is only drawn when the hardware can actually say - see
+         * battery.h. A fabricated percentage on an instrument someone is
+         * performing with is worse than a blank. */
+        char bat[8] = "";
+        const int bp = battery_percent();
+        if (bp >= 0) {
+            const int filled = (bp * 4 + 50) / 100;
+            snprintf(bat, sizeof bat, " %c%c%c%c",
+                     filled > 0 ? '#' : '.', filled > 1 ? '#' : '.',
+                     filled > 2 ? '#' : '.', filled > 3 ? '#' : '.');
+        }
+        snprintf(wide, sizeof wide, "%-11.11s%c %3d:%-3d %s%s%s%s",
                  nm[0] ? nm : "scratch",
                  doc_dirty() ? '*' : ' ',
                  s_cursor_line + 1, s_cursor_col + 1,
                  mod,
                  kbd_connected() ? "K" : "-",
-                 doc_sd_present() ? "S" : "-");
+                 doc_sd_present() ? "S" : "-",
+                 bat);
     }
     snprintf(s, sizeof s, "%-*.*s", TEXT_COLS, TEXT_COLS, wide);
 

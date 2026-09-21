@@ -202,8 +202,8 @@ const seq_lane_t *seq_lanes(int *count);
  * happened to converge. Passing the tick time means a transport that honours
  * timestamps sees a grid as tight as the clock's own - measured here at
  * under 100 us for 99.6 % of ticks. */
-typedef void (*seq_sink_t)(uint8_t status, uint8_t d1, uint8_t d2,
-                           uint32_t when_us);
+typedef void (*seq_sink_t)(const char *lane, uint8_t status, uint8_t d1,
+                           uint8_t d2, uint32_t when_us);
 
 #define SEQ_MAX_DESTS 4
 

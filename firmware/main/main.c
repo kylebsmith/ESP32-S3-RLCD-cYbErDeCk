@@ -28,11 +28,14 @@
 #include "docstore.h"
 #include "editor.h"
 #include "ui_text.h"
+#include "net.h"
 #include "usbdev.h"
 #include "usbmux.h"
 #include "kbd.h"
 #include "selftest.h"
+#include "battery.h"
 #include "serialkbd.h"
+#include "splash.h"
 #include "st7305.h"
 #include "testcard.h"
 #include "textgrid.h"
@@ -137,13 +140,17 @@ static void announce(const char *line)
     st7305_flush(NULL);
 }
 
-static void dest_ble(uint8_t status, uint8_t d1, uint8_t d2, uint32_t when_us)
+static void dest_ble(const char *lane, uint8_t status, uint8_t d1, uint8_t d2,
+                     uint32_t when_us)
 {
+    (void)lane;
     blemidi_send(status, d1, d2, when_us);
 }
 
-static void dest_usb(uint8_t status, uint8_t d1, uint8_t d2, uint32_t when_us)
+static void dest_usb(const char *lane, uint8_t status, uint8_t d1, uint8_t d2,
+                     uint32_t when_us)
 {
+    (void)lane;
     /* USB MIDI carries no timestamp: the host renders on arrival, and a
      * full-speed frame is 1 ms wide. That is the whole reason USB is the
      * answer to jitter rather than a second way to have the same problem. */
@@ -151,9 +158,11 @@ static void dest_usb(uint8_t status, uint8_t d1, uint8_t d2, uint32_t when_us)
     usbdev_midi_send(status, d1, d2);
 }
 
-static void dest_mon(uint8_t status, uint8_t d1, uint8_t d2, uint32_t when_us)
+static void dest_mon(const char *lane, uint8_t status, uint8_t d1, uint8_t d2,
+                     uint32_t when_us)
 {
     (void)when_us;
+    (void)lane;
     /* Note-ons only. Clock is 48 messages a second and would bury the thing
      * the player is actually looking for. */
     if ((status & 0xF0) == 0x90 && d2 > 0) {
@@ -401,6 +410,10 @@ void app_main(void)
     cmd_set_announce(announce);
     seq_dest_add("ble", dest_ble, blemidi_flush, "BLE MIDI (off by default)");
     seq_dest_add("mon", dest_mon, NULL, "echo notes to console");
+    /* OSC is registered always and enabled by '>osc <ip> <port>'. It is the
+     * visual half of the same lane grammar: one pattern, and whether it is a
+     * drum or a frame trigger is the destination's business. */
+    seq_dest_add("osc", net_osc_send, net_osc_flush, "OSC /deck/<lane>");
     /* BLE MIDI is OFF by default. It is quantised to the connection interval
      * and shares one radio with the keyboard link, so typing contends with
      * the notes - which is exactly when the owner heard the timing go loose.
@@ -476,6 +489,9 @@ void app_main(void)
     }
     report_memory("after BLE");
 
+
+    splash_show();                       /* the boot screen, and a real test
+                                          * of the whole draw path */
 
     run_boot_document();                 /* settings, as a document */
 

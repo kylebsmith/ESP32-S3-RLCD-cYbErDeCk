@@ -44,8 +44,9 @@ static int    s_ndests;
  * queue and talks to the transport, and a full queue drops the oldest event
  * rather than blocking the clock: a late note is worse than a lost one. */
 typedef struct {
-    uint8_t  status, d1, d2;
-    uint32_t queued_us;      /* for the transport-latency statistic */
+    uint8_t     status, d1, d2;
+    uint32_t    queued_us;   /* for the transport-latency statistic */
+    const char *lane;        /* into s_lanes[].name - static, never freed */
 } midi_ev_t;
 
 /* The ideal grid. Re-anchored on play and on any tempo change, so the
@@ -138,7 +139,8 @@ static void midi_task(void *arg)
                          (int32_t)((uint32_t)esp_timer_get_time() - ev.queued_us));
                 for (int i = 0; i < s_ndests; i++) {
                     if (s_dests[i].on && s_dests[i].fn != NULL) {
-                        s_dests[i].fn(ev.status, ev.d1, ev.d2, ev.queued_us);
+                        s_dests[i].fn(ev.lane ? ev.lane : "", ev.status,
+                                      ev.d1, ev.d2, ev.queued_us);
                     }
                 }
                 burst++;
@@ -264,12 +266,15 @@ typedef struct {
 } pending_off_t;
 static pending_off_t s_offs[SEQ_MAX_LANES * 4];
 
+static const char *s_emitting;   /* the lane fire_lanes is currently serving */
+
 static void emit(uint8_t status, uint8_t d1, uint8_t d2)
 {
     if (s_midiq == NULL) {
         return;                      /* before seq_init; nowhere to put it */
     }
-    const midi_ev_t ev = { status, d1, d2, (uint32_t)esp_timer_get_time() };
+    const midi_ev_t ev = { status, d1, d2, (uint32_t)esp_timer_get_time(),
+                           s_emitting };
     if (xQueueSend(s_midiq, &ev, 0) != pdTRUE) {
         /* Make room by dropping the OLDEST NON-CLOCK event.
          *
@@ -380,6 +385,7 @@ static int lane_step_now(const seq_lane_t *l, uint32_t tick, int *out_step)
 
 static void fire_lanes(uint32_t tick)
 {
+    s_emitting = NULL;
     for (int i = 0; i < SEQ_MAX_LANES; i++) {
         const seq_lane_t *l = &s_lanes[i];
         if (!l->used || l->muted || l->steps == 0) {
@@ -389,6 +395,7 @@ static void fire_lanes(uint32_t tick)
         if (!lane_step_now(l, tick, &s)) {
             continue;
         }
+        s_emitting = l->name;
         if (!(l->mask & (1u << s))) {
             continue;
         }

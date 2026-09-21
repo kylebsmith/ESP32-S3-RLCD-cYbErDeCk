@@ -23,6 +23,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "soc/rtc_cntl_reg.h"
+#include "battery.h"
+#include "net.h"
 #include "usbdev.h"
 #include "usbmux.h"
 
@@ -774,6 +776,117 @@ static cmd_status_t c_usb(cmd_ctx_t *ctx)
     return CMD_DONE;                 /* not reached */
 }
 
+/* '>wifi', '>host' and '>osc' - the network, as three commands that each say
+ * exactly what they do.
+ *
+ * All three are CMD_CAP_NET, so a guide file may use them but the boot
+ * document - which runs with guide authority - can bring the deck onto a
+ * network at startup for an installation. What a guide may NOT do is change
+ * pairing or power, which is where the line sits. */
+static void two_words(const char *arg, char *a, size_t an, char *b, size_t bn)
+{
+    size_t i = 0;
+    a[0] = b[0] = '\0';
+    while (*arg == ' ') { arg++; }
+    while (*arg != '\0' && *arg != ' ' && i < an - 1) { a[i++] = *arg++; }
+    a[i] = '\0';
+    while (*arg == ' ') { arg++; }
+    i = 0;
+    while (*arg != '\0' && i < bn - 1) { b[i++] = *arg++; }
+    b[i] = '\0';
+}
+
+/* '>battery' - find the sense pin, because nothing documents it.
+ *
+ * Prints every free ADC1 channel. Unplug USB and run it again: the channel
+ * that MOVES with the cell is the battery, and once it is known the reading
+ * can be wired up and this command deleted. Until then battery_percent()
+ * returns -1 and the status bar shows nothing rather than a number somebody
+ * made up. */
+static cmd_status_t c_battery(cmd_ctx_t *ctx)
+{
+    char s[120];
+    battery_scan(s, sizeof s);
+    /* Chunked to the grid, because a 120-character line on a 30-column screen
+     * is the same mistake twice. */
+    for (size_t i = 0; i < strlen(s); i += 28) {
+        cmd_out(ctx, "%.28s", s + i);
+    }
+    cmd_out(ctx, "unplug USB and run again -");
+    cmd_out(ctx, "the one that moves is it.");
+    snprintf(ctx->msg, sizeof ctx->msg, "scanned ADC1");
+    return CMD_DONE;
+}
+
+static cmd_status_t c_wifi(cmd_ctx_t *ctx)
+{
+    char st[40];
+    if (ctx->arg[0] == '\0') {
+        net_status(st, sizeof st);
+        cmd_out(ctx, "%s", st);
+        cmd_out(ctx, "wifi <ssid> <password>");
+        cmd_out(ctx, "wifi off   give back the air");
+        snprintf(ctx->msg, sizeof ctx->msg, "%s", st);
+        return CMD_DONE;
+    }
+    if (strcmp(ctx->arg, "off") == 0) {
+        net_stop();
+        snprintf(ctx->msg, sizeof ctx->msg, "wifi off");
+        return CMD_DONE;
+    }
+    char ssid[33], pass[65];
+    two_words(ctx->arg, ssid, sizeof ssid, pass, sizeof pass);
+    if (net_join(ssid, pass) != ESP_OK) {
+        cmd_out(ctx, "could not start the radio");
+        return CMD_ERROR;
+    }
+    snprintf(ctx->msg, sizeof ctx->msg, "joining %.20s", ssid);
+    return CMD_DONE;
+}
+
+static cmd_status_t c_host(cmd_ctx_t *ctx)
+{
+    if (ctx->arg[0] == '\0') {
+        cmd_out(ctx, "host <ssid> <password>");
+        cmd_out(ctx, "the deck becomes the network.");
+        cmd_out(ctx, "password needs 8+ chars or");
+        cmd_out(ctx, "it hosts open, and says so.");
+        snprintf(ctx->msg, sizeof ctx->msg, "host <ssid> <password>");
+        return CMD_DONE;
+    }
+    char ssid[33], pass[65];
+    two_words(ctx->arg, ssid, sizeof ssid, pass, sizeof pass);
+    if (net_host(ssid, pass) != ESP_OK) {
+        cmd_out(ctx, "could not start the radio");
+        return CMD_ERROR;
+    }
+    snprintf(ctx->msg, sizeof ctx->msg, "hosting %.14s 192.168.4.1", ssid);
+    return CMD_DONE;
+}
+
+static cmd_status_t c_osc(cmd_ctx_t *ctx)
+{
+    if (ctx->arg[0] == '\0') {
+        uint32_t m = 0, p = 0;
+        net_osc_counts(&m, &p);
+        cmd_out(ctx, "osc <ip> <port>");
+        cmd_out(ctx, "sends /deck/<lane> i i");
+        cmd_out(ctx, "%u msgs in %u packets", (unsigned)m, (unsigned)p);
+        snprintf(ctx->msg, sizeof ctx->msg, "osc 192.168.4.2 9000");
+        return CMD_DONE;
+    }
+    char ip[24], port[8];
+    two_words(ctx->arg, ip, sizeof ip, port, sizeof port);
+    const int pn = (port[0] != '\0') ? atoi(port) : 9000;
+    if (net_osc_target(ip, pn) != ESP_OK) {
+        cmd_out(ctx, "'%s' is not an address", ip);
+        return CMD_ERROR;
+    }
+    seq_dest_enable("osc", pn > 0);
+    snprintf(ctx->msg, sizeof ctx->msg, "osc -> %.15s:%d", ip, pn);
+    return CMD_DONE;
+}
+
 static cmd_status_t c_send(cmd_ctx_t *ctx)
 {
     if (ctx->arg[0] == '\0') {
@@ -975,6 +1088,10 @@ static const cmd_t s_builtins[] = {
     { "swing", c_swing, CMD_CAP_EDIT,  "50 straight, 67 triplet" },
     { "sync",  c_sync,  CMD_CAP_EDIT,  "midi clock out on | off" },
     { "send",  c_send,  CMD_CAP_SYSTEM,"where events go; send mon on" },
+    { "wifi",  c_wifi,  CMD_CAP_NET,   "wifi <ssid> <pass> | off" },
+    { "battery", c_battery, CMD_CAP_READ, "find the sense pin" },
+    { "host",  c_host,  CMD_CAP_NET,   "host <ssid> <pass> - be the net" },
+    { "osc",   c_osc,   CMD_CAP_NET,   "osc <ip> <port> - /deck/<lane>" },
     { "usb",   c_usb,   CMD_CAP_SYSTEM,"usb on | off - MIDI over the cable" },
     { "flash", c_flash, CMD_CAP_SYSTEM,"flash now - reboot to ROM loader" },
     { "dump",  c_dump,  CMD_CAP_READ,  "print a document to the console" },

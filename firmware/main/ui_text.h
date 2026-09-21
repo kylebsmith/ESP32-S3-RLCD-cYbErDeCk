@@ -106,6 +106,9 @@
     ">lanes  what is playing\n" \
     ">send   where it goes\n" \
     ">usb on one cable to a DAW\n" \
+    ">wifi <ssid> <pass>\n" \
+    ">host deck 12345678\n" \
+    ">osc 192.168.4.2 9000\n" \
     ">list   your documents\n" \
     ">help   all the commands\n"
 
