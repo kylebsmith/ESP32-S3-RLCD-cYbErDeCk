@@ -806,6 +806,27 @@ static void two_words(const char *arg, char *a, size_t an, char *b, size_t bn)
  * made up. */
 static cmd_status_t c_battery(cmd_ctx_t *ctx)
 {
+    /* '>battery use 4' once the owner knows which channel moved, optionally
+     * with the divider ratio x10 - 'use 4 20' is a 2:1 network. Persisted, so
+     * it is a one-time act, and 'use 0' forgets it. */
+    if (strncmp(ctx->arg, "use", 3) == 0) {
+        int g = 0, d = 20;
+        sscanf(ctx->arg + 3, "%d %d", &g, &d);
+        battery_use(g, d);
+        const int mv = battery_mv();
+        if (mv > 0) {
+            cmd_out(ctx, "GPIO%d: %dmV = %d%%", g, mv, battery_percent());
+        } else {
+            cmd_out(ctx, "GPIO%d reads nothing", g);
+        }
+        snprintf(ctx->msg, sizeof ctx->msg, "battery on GPIO%d", g);
+        return CMD_DONE;
+    }
+
+    const int mv = battery_mv();
+    if (mv > 0) {
+        cmd_out(ctx, "cell %dmV = %d%%", mv, battery_percent());
+    }
     char s[120];
     battery_scan(s, sizeof s);
     /* Chunked to the grid, because a 120-character line on a 30-column screen
@@ -813,8 +834,9 @@ static cmd_status_t c_battery(cmd_ctx_t *ctx)
     for (size_t i = 0; i < strlen(s); i += 28) {
         cmd_out(ctx, "%.28s", s + i);
     }
-    cmd_out(ctx, "unplug USB and run again -");
-    cmd_out(ctx, "the one that moves is it.");
+    cmd_out(ctx, "unplug USB, run again: the one");
+    cmd_out(ctx, "that moves is it. then:");
+    cmd_out(ctx, "  battery use <gpio>");
     snprintf(ctx->msg, sizeof ctx->msg, "scanned ADC1");
     return CMD_DONE;
 }

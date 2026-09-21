@@ -1,6 +1,8 @@
 #pragma once
 
 #include <stddef.h>
+
+#include "esp_err.h"
 /*
  * Battery, honestly.
  *
@@ -17,4 +19,13 @@
  * and unplug USB, and the channel that moves with the cell is the one.
  */
 int  battery_percent(void);      /* 0..100, or -1 when unknown */
-void battery_scan(char *out, size_t max);  /* one line per free ADC channel */
+int  battery_mv(void);           /* cell millivolts, or -1 */
+void battery_scan(char *out, size_t max);
+
+/* Tell the deck which channel the cell is on, and what the divider is.
+ * Persisted, so it is set once. `gpio` 0 forgets it again.
+ *
+ * This exists so the owner can finish the job without a reflash: run
+ * '>battery', unplug USB, run it again, and whichever channel moved is the
+ * one. That is a measurement they can make and I cannot. */
+esp_err_t battery_use(int gpio, int divider_x10);
