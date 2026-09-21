@@ -8,7 +8,8 @@
 esp_err_t editor_init(void);
 
 /* 0 = 12x24 chunky, 1 = 6x12 dense. Both faces are already in the binary. */
-esp_err_t editor_set_density(int dense);
+/* 0 low (12x24, 30 cols), 1 mid (9x24, 40), 2 high (6x12, 60). */
+esp_err_t editor_set_density(int level);
 void editor_draw(void);
 
 /* Forget cached chrome so the next draw repaints all of it. */

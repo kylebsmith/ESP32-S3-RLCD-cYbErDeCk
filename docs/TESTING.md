@@ -196,10 +196,12 @@ Ctrl-L to `boot`. It holds ordinary commands that run at startup:
 >density dense
 ```
 
-Edit it, power cycle, and they take effect. `>density low` is 30 columns,
-`>density high` is 60. There is no middle yet — it needs a third font face
-drawn at about 9x18, and `>density mid` says so rather than quietly picking
-one of the two.
+Edit it, power cycle, and they take effect. `>density low` is 30 columns, `>density mid` is 45,
+`>density high` is 60 — all three at a legible height except `high`.
+
+`mid` is the one to use with the split: 45 columns leaves 29 for code with the
+view taking a third, so pattern lines stop wrapping. `>split 12` or
+`>split 20` sets the view width directly.
 
 ## 16. It recovers
 

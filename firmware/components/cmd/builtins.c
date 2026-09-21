@@ -197,30 +197,27 @@ static cmd_status_t c_density(cmd_ctx_t *ctx)
      *
      * The old words still work, because they are in people's fingers and in
      * boot documents already written. */
-    int dense;
+    int level;
     const char a = ctx->arg[0];
     if (a == 'h' || a == 'd' || a == '6') {
-        dense = 1;                                  /* high / dense  - 6x12  */
+        level = 2;                            /* high / dense  - 6x12,  60 */
+    } else if (a == 'm' || a == '9') {
+        level = 1;                            /* mid           - 9x24,  40 */
     } else if (a == 'l' || a == 'c' || a == '1') {
-        dense = 0;                                  /* low / chunky - 12x24 */
-    } else if (a == 'm') {
-        cmd_out(ctx, "no middle face yet - it needs");
-        cmd_out(ctx, "a 9x18 drawn like the others.");
-        cmd_out(ctx, "low = 30 cols, high = 60.");
-        snprintf(ctx->msg, sizeof ctx->msg, "mid needs a third font");
-        return CMD_ERROR;
+        level = 0;                            /* low / chunky - 12x24,  30 */
     } else {
-        cmd_out(ctx, "density low | high");
+        cmd_out(ctx, "density low | mid | high");
         return CMD_ERROR;
     }
-    if (editor_set_density(dense) != ESP_OK) {
+    if (editor_set_density(level) != ESP_OK) {
         cmd_out(ctx, "density: layout refused");
         return CMD_ERROR;
     }
     /* Derived, not hardcoded: the string said 60x20 while the layout computed
      * 60x24. A status message that disagrees with the machine is a small lie
      * that costs someone an afternoon later. */
-    snprintf(ctx->msg, sizeof ctx->msg, "%s %dx%d", dense ? "dense" : "chunky",
+    static const char *names[3] = { "low", "mid", "high" };
+    snprintf(ctx->msg, sizeof ctx->msg, "%s %dx%d", names[level],
              tg_cols(), tg_rows());
     return CMD_DONE;
 }
@@ -921,9 +918,24 @@ static cmd_status_t c_viz(cmd_ctx_t *ctx)
  * the owner's ask and the right shape: one word, two states, no submenu. */
 static cmd_status_t c_split(cmd_ctx_t *ctx)
 {
-    viz_split(!viz_split_on());
-    snprintf(ctx->msg, sizeof ctx->msg, "split %s",
-             viz_split_on() ? "on" : "off");
+    /* '>split' toggles; '>split 20' sets how many columns the visual gets and
+     * turns it on. The default is a third, because the code is what is being
+     * edited and the preview is a monitor - a half-and-half split at 30
+     * columns wrapped every pattern line and made the document unnavigable. */
+    if (ctx->arg[0] != '\0') {
+        viz_split_width(atoi(ctx->arg));
+        viz_split(true);
+    } else {
+        viz_split(!viz_split_on());
+    }
+    tg_invalidate();
+    if (!viz_split_on()) {
+        snprintf(ctx->msg, sizeof ctx->msg, "split off");
+        return CMD_DONE;
+    }
+    const int vw = viz_split_cols(tg_cols());
+    snprintf(ctx->msg, sizeof ctx->msg, "split %d code / %d view",
+             tg_cols() - vw - 1, vw);
     return CMD_DONE;
 }
 
@@ -1383,7 +1395,7 @@ static const cmd_t s_builtins[] = {
     { "close", c_close, CMD_CAP_EDIT,                   "forget this buffer" },
     { "guide", c_guide, CMD_CAP_EDIT,                   "mark as a guide" },
     { "prose", c_prose, CMD_CAP_EDIT,                   "mark as prose" },
-    { "density", c_density, CMD_CAP_EDIT,               "low | high" },
+    { "density", c_density, CMD_CAP_EDIT,               "low | mid | high" },
 };
 
 void cmd_register(const cmd_t *table, int count);

@@ -60,6 +60,15 @@ bool viz_active(void);
 /* The whole frame as one newline-separated string, for '>frame'. */
 int viz_text(char *out, int max);
 
-/* Split-screen preview: how many columns the visual gets, or 0 for off. */
+/* Split-screen preview.
+ *
+ * WIDTH IS SETTABLE AND SMALL BY DEFAULT. At 30 columns a half-and-half split
+ * left twelve for the code, which wrapped every pattern line into two and made
+ * the document unnavigable - the owner's words were that it was insane to move
+ * around in. Code is the thing being edited; the preview is a monitor. So the
+ * visual takes a third, and the owner can take more when they want to look at
+ * it rather than work on it. */
 void viz_split(bool on);
+void viz_split_width(int cols);      /* 0 = the default third */
+int  viz_split_cols(int total);      /* columns the visual should get */
 bool viz_split_on(void);

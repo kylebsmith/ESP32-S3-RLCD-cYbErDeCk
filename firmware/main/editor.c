@@ -139,11 +139,28 @@ void editor_invalidate(void)
     s_status_shown[0] = '\0';
 }
 
-esp_err_t editor_set_density(int dense)
+/* THREE DENSITIES, AND WHY THE MIDDLE IS NARROWER RATHER THAN SHORTER.
+ *
+ * Cell height must be a multiple of 12: that is the CASET addressing quantum in
+ * landscape, established in docs/HARDWARE.md and enforced by tg_set_layout.
+ * So the obvious middle - a 9x18 face - is not buildable on this panel at all.
+ * The middle size is therefore a narrower cell at the same height: 9x24, which
+ * keeps the stroke weight a reflective panel with no backlight needs while
+ * fitting a third more code across the screen.
+ *
+ *   0  low   12x24   30 columns, 11 rows
+ *   1  mid    8x24   45 columns, 11 rows
+ *
+ * WIDTH must be even as well - the RASET quantum - so 9x24 is unbuildable too;
+ * the device rejects it with "cell width 9 / origin x 20 must be even".
+ *   2  high   6x12   60 columns, 24 rows
+ */
+esp_err_t editor_set_density(int level)
 {
-    const tg_font_t *face = dense ? &tg_font_6x12 : &tg_font_12x24;
-    const int cw = dense ? 6 : 12;
-    const int ch = dense ? 12 : 24;
+    const tg_font_t *face = (level >= 2) ? &tg_font_6x12
+                          : (level == 1) ? &tg_font_8x24 : &tg_font_12x24;
+    const int cw = (level >= 2) ? 6 : (level == 1) ? 8 : 12;
+    const int ch = (level >= 2) ? 12 : 24;
 
     const int cols = (ST7305_WIDTH - 2 * MARGIN_X) / cw;
     /* One row of the grid is the status line; the rest is text. */
@@ -376,10 +393,7 @@ static int text_cols_now(void)
     if (!viz_split_on()) {
         return TEXT_COLS;
     }
-    int vw = VIZ_W;
-    if (vw > TEXT_COLS - 12) { vw = TEXT_COLS - 12; }   /* text keeps 12 */
-    if (vw < 8) { vw = 8; }
-    return TEXT_COLS - vw - 1;
+    return TEXT_COLS - viz_split_cols(TEXT_COLS) - 1;
 }
 
 void editor_draw(void)

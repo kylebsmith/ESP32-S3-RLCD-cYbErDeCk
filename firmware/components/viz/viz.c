@@ -48,8 +48,28 @@ bool viz_active(void)
     return false;
 }
 
+static int s_split_w;                /* 0 means "a third of whatever we have" */
+
 void viz_split(bool on) { s_split = on; }
 bool viz_split_on(void) { return s_split; }
+
+void viz_split_width(int cols)
+{
+    s_split_w = (cols > 0) ? cols : 0;
+}
+
+int viz_split_cols(int total)
+{
+    /* A third, rounded down, and never so much that the code side cannot hold
+     * a pattern line without wrapping. Sixteen columns is '>kick ' plus
+     * sixteen steps, which is the shortest line worth looking at. */
+    int w = (s_split_w > 0) ? s_split_w : total / 3;
+    const int keep = 18;
+    if (w > total - keep) { w = total - keep; }
+    if (w > VIZ_W)        { w = VIZ_W; }
+    if (w < 4)            { w = 4; }
+    return w;
+}
 const char *viz_row(int y)
 {
     return (y >= 0 && y < VIZ_H) ? s_fb[y] : "";
