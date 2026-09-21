@@ -98,6 +98,9 @@
     ">scale fmin\n" \
     ">stop\n" \
     "\n" \
+    ">mute hat   >solo kick\n" \
+    ">mute       all back on\n" \
+    ">sync on    MIDI clock out\n" \
     ">lanes  what is playing\n" \
     ">send   where it goes\n" \
     ">usb on one cable to a DAW\n" \

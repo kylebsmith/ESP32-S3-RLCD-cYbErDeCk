@@ -895,6 +895,52 @@ static cmd_status_t c_lanes(cmd_ctx_t *ctx)
     return CMD_DONE;
 }
 
+/* '>mute hat bass' and '>solo kick' - the two moves a performer makes
+ * constantly and which, until now, cost retyping a whole pattern line to
+ * silence it. Several names at once, because muting one thing at a time is
+ * not how anyone plays.
+ *
+ * '>mute' with no argument unmutes EVERYTHING - the way back from any state,
+ * and the same shape as '>panic' for notes. '>solo' with no argument does the
+ * same, so the two keys are safe to hit blind. */
+static bool lane_named(const char *arg, const char *name)
+{
+    const size_t n = strlen(name);
+    for (const char *p = arg; *p != '\0'; ) {
+        while (*p == ' ') { p++; }
+        const char *s = p;
+        while (*p != '\0' && *p != ' ') { p++; }
+        if ((size_t)(p - s) == n && strncmp(s, name, n) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static cmd_status_t c_mute(cmd_ctx_t *ctx)
+{
+    const bool solo  = (strcmp(ctx->name, "solo") == 0);
+    const bool clear = (ctx->arg[0] == '\0');
+    int n = 0, touched = 0;
+    const seq_lane_t *l = seq_lanes(&n);
+    for (int i = 0; i < SEQ_MAX_LANES; i++) {
+        if (!l[i].used) {
+            continue;
+        }
+        const bool named = !clear && lane_named(ctx->arg, l[i].name);
+        /* solo: everything not named goes quiet. mute: everything named does.
+         * With no argument both mean "everything back on". */
+        const bool want_mute = clear ? false : (solo ? !named : named);
+        if (want_mute != l[i].muted) {
+            seq_mute(l[i].name, want_mute);
+            touched++;
+        }
+    }
+    snprintf(ctx->msg, sizeof ctx->msg, "%s: %d lane%s changed",
+             clear ? "all on" : ctx->name, touched, touched == 1 ? "" : "s");
+    return CMD_DONE;
+}
+
 static cmd_status_t c_panic(cmd_ctx_t *ctx)
 {
     seq_stop();
@@ -917,6 +963,8 @@ static const cmd_t s_builtins[] = {
     { "lanes", c_lanes, CMD_CAP_READ,  "what is playing" },
     { "jitter",c_jitter,CMD_CAP_READ,  "timing, measured in us" },
     { "panic", c_panic, CMD_CAP_EDIT,  "silence everything" },
+    { "mute",  c_mute,  CMD_CAP_EDIT,  "mute hat bass | mute = all on" },
+    { "solo",  c_mute,  CMD_CAP_EDIT,  "solo kick | solo = all on" },
     { "kick",  c_drum,  CMD_CAP_EDIT,  "x...x...x...x..." },
     { "snare", c_drum,  CMD_CAP_EDIT,  "....x.......x..." },
     { "hat",   c_drum,  CMD_CAP_EDIT,  "x.x.x.x.x.x.x.x." },

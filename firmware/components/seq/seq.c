@@ -360,7 +360,9 @@ static void fire_step(int step)
              * default because it is the only ratio that needs no number, and
              * the bracket is there for when the player wants a different one
              * rather than a different character. */
-            const uint32_t pct = l->prob[s] ? l->prob[s] : 50u;
+            /* 255 means the step carried no bracket, so use the default of
+             * a half. Everything else is taken literally, including zero. */
+            const uint32_t pct = (l->prob[s] == 255u) ? 50u : l->prob[s];
             if ((rng_next() % 100u) >= pct) {
                 continue;
             }
@@ -566,7 +568,7 @@ esp_err_t seq_lane(const char *name, const char *steps)
     uint8_t  deg[SEQ_MAX_STEPS];
     uint8_t  prob[SEQ_MAX_STEPS];
     memset(deg, 0xFF, sizeof deg);
-    memset(prob, 0, sizeof prob);
+    memset(prob, 255, sizeof prob);   /* 255 = no bracket on this step */
     int n = 0;
     for (const char *p = steps; *p != '\0' && n < SEQ_MAX_STEPS; p++) {
         /* A bracket is a parameter on the step just placed, not a step. */
@@ -574,7 +576,11 @@ esp_err_t seq_lane(const char *name, const char *steps)
         if (plen > 0) {
             const int v = seq_pattern_param(p);
             if (v >= 0 && v <= 100 && n > 0) {
-                prob[n - 1] = (uint8_t)(v == 0 ? 1 : v);
+                /* 0 means NEVER. It used to be clamped to 1%, which made
+                 * '?[0]' a step that fires once every few minutes - the one
+                 * value whose meaning is obvious was the one value that lied.
+                 * 255 is the sentinel for "no parameter"; 0 is a real zero. */
+                prob[n - 1] = (uint8_t)v;
                 chance |= (1u << (n - 1));   /* a per-cent implies maybe */
             }
             p += plen - 1;
