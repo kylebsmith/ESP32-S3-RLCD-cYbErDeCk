@@ -59,10 +59,28 @@ static const char *TAG = "usbdev";
 static void cdc_line_state(int itf, cdcacm_event_t *event);
 static void usb_event(tinyusb_event_t *ev, void *arg);
 static void usb_confirm(void);
+static void rtc_init_once(void);
 
-#define NVS_NS       "deck"
-#define KEY_WANT     "usb_want"
-#define KEY_ARMED    "usb_armed"
+/* USB MIDI MODE IS NOT PERSISTED, AND THAT IS THE FIX.
+ *
+ * It used to live in NVS. Then an NVS write started failing - the namespace is
+ * shared with the keyboard's bond storage - and the deck could not be got out
+ * of USB MIDI mode at all: '>usb off' ran, could not persist usb_want=0, and
+ * correctly refused to reboot because rebooting would have returned straight
+ * to the mode it was asked to leave. The escape depended on the one thing that
+ * was broken.
+ *
+ * So the intent lives in RTC_NOINIT instead. It survives esp_restart(), which
+ * is all '>usb on' needs, and it is CLEARED BY POWER LOSS - so unplugging the
+ * deck and holding PWR always, unconditionally, returns it to the serial
+ * console. No flash write, no NVS, nothing that can fail, and the recovery is
+ * a physical act that cannot be argued with.
+ *
+ * The cost is stated plainly: USB MIDI does not survive a power cycle, so it
+ * is one command per session. That is a fair price for an escape that cannot
+ * break, and anyone who wants it automatic can put '>usb on' in the boot
+ * document - which is itself an editable document, so that persistence is
+ * escapable too. */
 #define MAX_TRIES    3
 /* How long to wait for a host to mount us before concluding it will not. Long
  * enough for a laptop to enumerate a composite device unhurried, short enough
@@ -127,9 +145,10 @@ static const char *s_strings[] = {
 
 /* ------------------------------------------------------------------- state */
 
-#define TRY_MAGIC 0x55534201u
+#define TRY_MAGIC 0x55534202u
 static RTC_NOINIT_ATTR uint32_t s_try_magic;
 static RTC_NOINIT_ATTR uint32_t s_tries;
+static RTC_NOINIT_ATTR uint32_t s_want;
 
 /* What a timer callback decided, for usbdev_poll() to carry out in task
  * context. Never acted on from the callback itself - see usbdev.h. */
@@ -147,7 +166,7 @@ static esp_timer_handle_t s_trial;
 static uint32_t s_msgs, s_packets;
 static uint32_t s_dropped;
 
-unsigned usbdev_tries(void) { return (unsigned)s_tries; }
+unsigned usbdev_tries(void) { rtc_init_once(); return (unsigned)s_tries; }
 bool     usbdev_mounted(void) { return s_active && tud_midi_mounted(); }
 
 void usbdev_status(char *out, size_t max)
@@ -181,61 +200,25 @@ void usbdev_packing(uint32_t *m, uint32_t *p)
  * the default, and for usb_want the default is OFF, which is the safe
  * direction. Every outcome is logged, because a silent failure here costs the
  * owner their console. */
-static esp_err_t nvs_put_u8(const char *key, uint8_t v)
-{
-    nvs_handle_t h;
-    esp_err_t err = nvs_open(NVS_NS, NVS_READWRITE, &h);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "nvs_open failed: %s", esp_err_to_name(err));
-        return err;
-    }
-    err = nvs_set_u8(h, key, v);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "nvs_set %s failed: %s - erasing and retrying",
-                 key, esp_err_to_name(err));
-        nvs_erase_key(h, key);
-        err = nvs_set_u8(h, key, v);
-    }
-    if (err == ESP_OK) {
-        err = nvs_commit(h);
-    }
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "could not persist %s=%u: %s", key, (unsigned)v,
-                 esp_err_to_name(err));
-    }
-    nvs_close(h);
-    return err;
-}
-
-static uint8_t nvs_get_u8_or(const char *key, uint8_t dflt)
-{
-    nvs_handle_t h;
-    uint8_t v = dflt;
-    if (nvs_open(NVS_NS, NVS_READONLY, &h) == ESP_OK) {
-        if (nvs_get_u8(h, key, &v) != ESP_OK) {
-            v = dflt;
-        }
-        nvs_close(h);
-    }
-    return v;
-}
-
-bool usbdev_wanted(void) { return nvs_get_u8_or(KEY_WANT, 0) != 0; }
-
-esp_err_t usbdev_want(bool on)
+static void rtc_init_once(void)
 {
     if (s_try_magic != TRY_MAGIC) {
         s_try_magic = TRY_MAGIC;
         s_tries = 0;
+        s_want  = 0;            /* power-on default: the serial console */
     }
+}
+
+bool usbdev_wanted(void) { rtc_init_once(); return s_want != 0; }
+
+esp_err_t usbdev_want(bool on)
+{
+    rtc_init_once();
     if (on && s_tries >= MAX_TRIES) {
         return ESP_ERR_INVALID_STATE;
     }
-    esp_err_t err = nvs_put_u8(KEY_WANT, on ? 1 : 0);
-    if (err == ESP_OK) {
-        err = nvs_put_u8(KEY_ARMED, on ? 1 : 0);
-    }
-    return err;
+    s_want = on ? 1u : 0u;
+    return ESP_OK;              /* a store to RTC RAM cannot fail */
 }
 
 /* --------------------------------------------------------------- MIDI out
@@ -377,7 +360,6 @@ void usbdev_poll(void)
                 esp_timer_stop(s_trial);
             }
             s_tries = 0;
-            nvs_put_u8(KEY_ARMED, 0);
             ESP_LOGW(TAG, "USB MIDI live");
         }
         break;
@@ -385,8 +367,7 @@ void usbdev_poll(void)
     case ACT_REVERT:
         ESP_LOGE(TAG, "%s - reverting to the console",
                  s_action_why ? s_action_why : "usb");
-        nvs_put_u8(KEY_WANT, 0);
-        nvs_put_u8(KEY_ARMED, 0);
+        s_want = 0;
         usbmux_release_to_usj();
         esp_restart();
         break;
@@ -515,10 +496,7 @@ static void usb_confirm(void)
 
 bool usbdev_boot(void)
 {
-    if (s_try_magic != TRY_MAGIC) {
-        s_try_magic = TRY_MAGIC;
-        s_tries = 0;
-    }
+    rtc_init_once();
     if (!usbdev_wanted()) {
         return false;                       /* OFF: the shipped path */
     }
@@ -529,8 +507,7 @@ bool usbdev_boot(void)
          * timer ever gets to run - and the only layer that survives
          * panic_restart(), which does not run shutdown handlers. */
         ESP_LOGE(TAG, "USB failed %u times; giving up", (unsigned)s_tries);
-        nvs_put_u8(KEY_WANT, 0);
-        nvs_put_u8(KEY_ARMED, 0);
+        s_want = 0;
         return false;
     }
 
@@ -552,8 +529,7 @@ bool usbdev_boot(void)
     };
     if (tinyusb_driver_install(&cfg) != ESP_OK) {
         ESP_LOGE(TAG, "tinyusb_driver_install failed");
-        nvs_put_u8(KEY_WANT, 0);
-        nvs_put_u8(KEY_ARMED, 0);
+        s_want = 0;
         usbmux_release_to_usj();
         return false;                       /* fall back, no reboot needed */
     }

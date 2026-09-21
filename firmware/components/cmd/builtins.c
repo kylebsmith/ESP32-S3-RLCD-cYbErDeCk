@@ -737,8 +737,11 @@ static cmd_status_t c_usb(cmd_ctx_t *ctx)
     if (!on && !off) {
         cmd_out(ctx, "usb is %s%s", usbdev_wanted() ? "on" : "off",
                 usbdev_mounted() ? ", host attached" : "");
-        cmd_out(ctx, "usb on   one cable: MIDI + console");
-        cmd_out(ctx, "usb off  back to serial only");
+        cmd_out(ctx, "usb on   MIDI + console, 1 cable");
+        cmd_out(ctx, "usb off  back to serial");
+        cmd_out(ctx, "a power cycle always returns");
+        cmd_out(ctx, "to serial. put >usb on in boot");
+        cmd_out(ctx, "to have it every time.");
         if (usbdev_tries() > 0) {
             cmd_out(ctx, "%u failed attempt(s) this power cycle",
                     usbdev_tries());
@@ -754,16 +757,8 @@ static cmd_status_t c_usb(cmd_ctx_t *ctx)
         snprintf(ctx->msg, sizeof ctx->msg, "usb: too many failures");
         return CMD_ERROR;
     }
-    if (off && usbdev_want(false) != ESP_OK) {
-        /* DO NOT REBOOT IF THE CHANGE DID NOT PERSIST. Rebooting here would
-         * come back into the mode the owner just asked to leave, which is
-         * exactly what happened: '>usb off' appeared to work, the deck
-         * restarted, and it was still a USB MIDI device with no console. */
-        cmd_out(ctx, "could not save the setting.");
-        cmd_out(ctx, "not rebooting - you would come");
-        cmd_out(ctx, "back into USB mode. see the log.");
-        snprintf(ctx->msg, sizeof ctx->msg, "usb off FAILED to save");
-        return CMD_ERROR;
+    if (off) {
+        usbdev_want(false);
     }
 
     doc_save_all_dirty();
