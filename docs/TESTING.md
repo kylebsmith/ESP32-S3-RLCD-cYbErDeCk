@@ -186,8 +186,16 @@ outright and takes its routing with it.
 `>route disc kick` makes the disc **fire on every kick**, at the size of that
 hit's velocity. Routing is *when* as well as *how much*: a routed lane ignores
 its own pattern and follows its source. Put `>viz echo 8` above it and the pulse
-gets a tail. Visual lanes can drive each other too — `>route grow disc` makes the
-bloom follow the circle. Unroute with `>route disc`.
+gets a tail. Anything that plays can be a source: a drum, a melodic lane, or a **control
+lane** — `>route warp cut` makes the filter sweep bend the picture, which is the
+sidechain idea at full stretch. Visual lanes can drive each other too, so
+`>route grow disc` makes the bloom follow the circle. A lane cannot follow
+itself (it would re-trigger for ever), and routing to a name that is not a lane
+yet says so rather than going quietly silent. Unroute with `>route disc`.
+
+`>lanes` now lists the visual half as well — which primitives are live, what
+each follows, and a leading `-` for muted. If a route looks dead, that listing
+is where to look first.
 
 ## 12. ASCII frames
 

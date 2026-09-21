@@ -172,6 +172,7 @@ static void dest_mon(const char *lane, uint8_t status, uint8_t d1, uint8_t d2,
 }
 
 static uint32_t s_boot_loops;
+static bool     s_crashed_last_boot;
 
 static int64_t now_ms(void) { return esp_timer_get_time() / 1000; }
 
@@ -343,6 +344,7 @@ void app_main(void)
         } else if (rr == ESP_RST_PANIC || rr == ESP_RST_TASK_WDT ||
                    rr == ESP_RST_INT_WDT || rr == ESP_RST_WDT) {
             loop_n++;
+            s_crashed_last_boot = true;
         }
         s_boot_loops = loop_n;
     }
@@ -477,6 +479,31 @@ void app_main(void)
             ESP_LOGW(TAG, "KEY held at boot - USB MIDI forced off");
             editor_message("KEY held - USB MIDI off");
         }
+    }
+
+    /* A CRASH ALWAYS HANDS THE CONSOLE BACK.
+     *
+     * USB MIDI mode moves the console onto the composite device's CDC and the
+     * intent is held in RTC memory, which survives a reboot on purpose - so
+     * that a restart keeps the mode the owner asked for. The hole that leaves
+     * is exactly the one that bit: the deck hung in USB MIDI mode, the task
+     * watchdog panicked it, it rebooted, it came back in USB MIDI mode, and it
+     * hung again. Unreachable, in a loop, with no way in from the cable and no
+     * way out but pulling the battery.
+     *
+     * So a reboot caused by a panic or a watchdog clears the mode. The owner
+     * loses USB MIDI and gets back a deck they can talk to and flash, which is
+     * the right way round every time: the rule this violates otherwise -
+     * docs/OS.md, the device must never become unreachable - outranks keeping
+     * a transport across a crash it may itself have caused.
+     *
+     * An ordinary '>usb on' reboot is ESP_RST_SW and is untouched. Only a
+     * crash spends the mode, and only once: the flag lives in RTC memory
+     * beside the loop counter and a clean boot does not set it. */
+    if (s_crashed_last_boot && usbdev_wanted()) {
+        usbdev_want(false);
+        ESP_LOGW(TAG, "crashed in USB MIDI mode - back to serial");
+        editor_message("crashed - USB MIDI off");
     }
 
     /* USB MIDI, if it is wanted and has not just failed three times. When it

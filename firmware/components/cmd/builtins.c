@@ -1141,9 +1141,32 @@ static cmd_status_t c_route(cmd_ctx_t *ctx)
     }
     char gen[16], src[16];
     two_words(ctx->arg, gen, sizeof gen, src, sizeof src);
-    if (viz_route(gen, src) != ESP_OK) {
-        cmd_out(ctx, "no generator '%s'", gen);
+    const esp_err_t re = viz_route(gen, src);
+    if (re == ESP_ERR_INVALID_ARG) {
+        cmd_out(ctx, "%s cannot follow itself", gen);
         return CMD_ERROR;
+    }
+    if (re != ESP_OK) {
+        cmd_out(ctx, "no primitive '%s'", gen);
+        cmd_out(ctx, "noise disc ramp grid");
+        cmd_out(ctx, "echo move warp shake");
+        cmd_out(ctx, "grow thin flip tile fold");
+        return CMD_ERROR;
+    }
+    /* A SOURCE THAT DOES NOT EXIST IS THE SILENT FAILURE HERE. The route is
+     * set, the primitive stops drawing because nothing ever triggers it, and
+     * nothing anywhere says why. Typing it is still allowed - the lane may be
+     * written on the next line - but it says so. */
+    if (src[0] != '\0') {
+        bool known = seq_lane_find(src, -1) != NULL;
+        const char *nm;
+        for (int i = 0; !known && viz_lane_info(i, &nm, NULL, NULL, NULL, NULL); i++) {
+            if (strcmp(nm, src) == 0) { known = true; }
+        }
+        if (!known) {
+            cmd_out(ctx, "no lane '%s' yet - it will", src);
+            cmd_out(ctx, "stay silent until there is one");
+        }
     }
     snprintf(ctx->msg, sizeof ctx->msg, src[0] ? "%s <- %s" : "%s unrouted",
              gen, src);
@@ -1463,6 +1486,30 @@ static cmd_status_t c_lanes(cmd_ctx_t *ctx)
         if (seq_dest_on(i)) {
             strncat(dests, seq_dest_name(i), sizeof dests - strlen(dests) - 2);
             strncat(dests, " ", sizeof dests - strlen(dests) - 1);
+        }
+    }
+    /* THE VISUAL HALF, IN THE SAME LISTING.
+     *
+     * A visual lane had no listing at all, so there was no way to see which
+     * primitives were live, which were muted, or what anything followed - and
+     * a route that was not working looked exactly like a route that was. One
+     * list, because they are one document and one clock. */
+    {
+        const char *nm, *src;
+        bool used, muted;
+        int steps, shown = 0;
+        for (int i = 0; viz_lane_info(i, &nm, &src, &used, &muted, &steps); i++) {
+            if (!used) { continue; }
+            if (shown == 0) { cmd_out(ctx, "-- visuals --"); }
+            shown++;
+            if (src[0] != '\0') {
+                cmd_out(ctx, "%c%-6s <- %s", muted ? '-' : ' ', nm, src);
+            } else {
+                cmd_out(ctx, "%c%-6s %d steps", muted ? '-' : ' ', nm, steps);
+            }
+        }
+        if (shown > 0) {
+            cmd_out(ctx, "- means muted. viz <name> to drop");
         }
     }
     cmd_out(ctx, "to: %s", dests[0] ? dests : "nowhere - try: send ble on");

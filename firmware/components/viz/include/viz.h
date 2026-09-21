@@ -102,6 +102,14 @@ void viz_forget_all(void);
  * `src` NULL or empty unroutes. */
 esp_err_t viz_route(const char *gen, const char *src);
 
+/* WHAT IS RUNNING, so '>lanes' can say. A visual lane was invisible: there was
+ * no way to see which primitives existed, which were muted, or what anything
+ * was routed from - so a route that was not working looked exactly like a
+ * route that was. Returns false past the last primitive. `steps` is the
+ * compiled step count, which is how you tell a live lane from a name. */
+bool viz_lane_info(int i, const char **name, const char **src,
+                   bool *used, bool *muted, int *steps);
+
 /* Told by the sequencer: this lane just played this value. Feeds routing. */
 void viz_lane_played(const char *lane, uint8_t value);
 

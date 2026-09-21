@@ -319,11 +319,36 @@ void viz_forget_all(void)
     clear_frame();
 }
 
+bool viz_lane_info(int i, const char **name, const char **src,
+                   bool *used, bool *muted, int *steps)
+{
+    if (i < 0 || i >= NGEN) { return false; }
+    if (name)  { *name  = s_names[i]; }
+    if (src)   { *src   = s_l[i].src; }
+    if (used)  { *used  = s_l[i].used; }
+    if (muted) { *muted = s_l[i].muted; }
+    if (steps) { *steps = s_l[i].steps; }
+    return true;
+}
+
 esp_err_t viz_route(const char *gen, const char *src)
 {
     const int gi = gen_index(gen);
     if (gi < 0) { return ESP_ERR_NOT_FOUND; }
+    /* A LANE CANNOT DRIVE ITSELF.
+     *
+     * Every primitive publishes what it drew so the others can follow it, so
+     * '>route disc disc' would have the disc re-trigger itself every frame,
+     * for ever, with nothing in the music able to stop it - a lane that plays
+     * on its own and ignores the clock, which is not a lane. Refused rather
+     * than quietly tolerated, because the line reads perfectly sensibly. */
+    if (src != NULL && strcmp(src, gen) == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
     snprintf(s_l[gi].src, sizeof s_l[gi].src, "%s", src ? src : "");
+    /* A route that has not fired yet must not be holding a stale trigger from
+     * whatever it used to follow. */
+    s_l[gi].trig = false;
     return ESP_OK;
 }
 

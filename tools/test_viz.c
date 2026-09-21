@@ -380,6 +380,47 @@ int main(void)
     viz_tick(120); viz_service(); snap();
     CHECK(frame_ink() > 0, "unrouted, its own pattern drives it again");
 
+    /* A LANE CANNOT DRIVE ITSELF. Every primitive publishes what it drew, so a
+     * self-route would re-trigger every frame for ever with nothing in the
+     * music able to stop it. */
+    printf("\n-- routing refuses the degenerate cases --\n");
+    CHECK(viz_route("disc", "disc") != ESP_OK, "disc cannot follow itself");
+    CHECK(viz_route("wibble", "kick") != ESP_OK, "an unknown primitive is refused");
+    CHECK(viz_route("disc", "kick") == ESP_OK, "an ordinary route is taken");
+    CHECK(viz_route("disc", "") == ESP_OK, "and can be cleared");
+
+    /* Re-routing must not carry a trigger over from the old source. */
+    clear_all_lanes();
+    viz_lane("disc", "9");
+    viz_route("disc", "kick");
+    viz_lane_played("kick", 127);        /* armed, but not drawn yet */
+    viz_route("disc", "snare");          /* re-pointed before the frame */
+    viz_tick(0); viz_service(); snap();
+    CHECK(frame_ink() == 0, "a re-routed lane drops the old trigger");
+
+    /* WHAT IS RUNNING HAS TO BE VISIBLE. A route that is not working looks
+     * exactly like one that is, unless something will say. */
+    printf("\n-- the listing reports the visual half --\n");
+    clear_all_lanes();
+    viz_lane("noise", "9");
+    viz_lane("disc", "9");
+    viz_route("disc", "kick");
+    viz_lane("noise", "9");              /* same line again: mute */
+    {
+        const char *nm, *src;
+        bool used, muted;
+        int steps, live = 0, found_route = 0, found_mute = 0;
+        for (int i = 0; viz_lane_info(i, &nm, &src, &used, &muted, &steps); i++) {
+            if (!used) { continue; }
+            live++;
+            if (strcmp(nm, "disc") == 0 && strcmp(src, "kick") == 0) { found_route = 1; }
+            if (strcmp(nm, "noise") == 0 && muted) { found_mute = 1; }
+        }
+        CHECK(live == 2, "two lanes are live (%d)", live);
+        CHECK(found_route, "disc reports it follows kick");
+        CHECK(found_mute, "noise reports it is muted");
+    }
+
     printf("\n-- the preview pane --\n");
     viz_split(true);
 
