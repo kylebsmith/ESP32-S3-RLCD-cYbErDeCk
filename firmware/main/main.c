@@ -161,6 +161,8 @@ static void dest_mon(uint8_t status, uint8_t d1, uint8_t d2, uint32_t when_us)
     }
 }
 
+static uint32_t s_boot_loops;
+
 static int64_t now_ms(void) { return esp_timer_get_time() / 1000; }
 
 /* The menu is a text file (docs/SUBSTRATE.md). If there is no guide yet,
@@ -313,6 +315,28 @@ void app_main(void)
      * is running - which means here, at the first opportunity the app gets.
      * Without this, a system reset that happened to preserve the domain would
      * send the deck back into download mode with no explanation. */
+    /* A BOOT LOOP MUST SAY SO.
+     *
+     * Panics now reboot silently, which is right for recovery and wrong for
+     * diagnosis: a deck crashing every two seconds looks exactly like a deck
+     * sitting quietly doing nothing. This counts reboots that were NOT a
+     * power-on, and says so on the panel - the one surface that still works
+     * when the console does not. Cleared by power loss, which is also the
+     * gesture that fixes most of what causes it. */
+    {
+        static RTC_NOINIT_ATTR uint32_t loop_magic;
+        static RTC_NOINIT_ATTR uint32_t loop_n;
+        const esp_reset_reason_t rr = esp_reset_reason();
+        if (loop_magic != 0xB0070009u) { loop_magic = 0xB0070009u; loop_n = 0; }
+        if (rr == ESP_RST_POWERON) {
+            loop_n = 0;
+        } else if (rr == ESP_RST_PANIC || rr == ESP_RST_TASK_WDT ||
+                   rr == ESP_RST_INT_WDT || rr == ESP_RST_WDT) {
+            loop_n++;
+        }
+        s_boot_loops = loop_n;
+    }
+
     /* WHY DID WE JUST BOOT? Logged first, because after a silent panic reboot
      * this is the only surviving evidence that anything went wrong - and a
      * deck that reboots itself and says nothing is indistinguishable from one
@@ -454,6 +478,13 @@ void app_main(void)
 
 
     run_boot_document();                 /* settings, as a document */
+
+    if (s_boot_loops > 0) {
+        char m[40];
+        snprintf(m, sizeof m, "crashed %ux - unplug to clear",
+                 (unsigned)s_boot_loops);
+        editor_message(m);
+    }
 
     ESP_ERROR_CHECK(editor_init());      /* margins; 30 x 10 inside them */
     tg_invalidate();

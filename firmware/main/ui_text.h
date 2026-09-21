@@ -67,7 +67,9 @@
     ">bpm 124\n" \
     ">scale dmin\n" \
     ">swing 50\n" \
-    ">density chunky\n"
+    ">density chunky\n" \
+    "# dense = 60 cols, smaller\n" \
+    "# fewer wrapped lines\n"
 
 #define GUIDE_TEXT \
     "Ctrl+Enter runs a line.\n" \

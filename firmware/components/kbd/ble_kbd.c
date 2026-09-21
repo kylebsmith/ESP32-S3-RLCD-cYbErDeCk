@@ -174,6 +174,7 @@ static void dispatch_usage(uint8_t usage, uint8_t mods, bool repeat)
     case 0x52: emit_m(KBD_EV_UP,        0, mods, repeat); return;
     case 0x4A: emit_m(KBD_EV_HOME,      0, mods, repeat); return;
     case 0x4D: emit_m(KBD_EV_END,       0, mods, repeat); return;
+    case 0x58: emit_m(KBD_EV_ENTER,     0, mods, repeat); return;  /* keypad */
     default: break;
     }
     /* A character with Ctrl or Alt held is a command, not text. It still
@@ -182,7 +183,12 @@ static void dispatch_usage(uint8_t usage, uint8_t mods, bool repeat)
     const char c = keymap_char(usage, shift);
     if (c != 0) {
         emit_m(KBD_EV_CHAR, c, mods, repeat);
+        return;
     }
+    /* A key that produced nothing. Logged rather than swallowed, because a
+     * silently dead key is indistinguishable from a broken keyboard - and
+     * that is exactly how the missing keypad range presented. */
+    ESP_LOGW(TAG, "unmapped key: usage 0x%02X mods 0x%02X", usage, mods);
 }
 
 /* An 8-byte boot keyboard report. Only newly-pressed keys fire; a key that

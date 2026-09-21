@@ -24,8 +24,26 @@ static const pair_t k[] = {
     /* 36 */ {',','<'}, {'.','>'}, {'/','?'},
 };
 
+/* THE KEYPAD RANGE, 0x54..0x63.
+ *
+ * On a compact keyboard like the Rii there is no separate number pad, so the
+ * digits and punctuation on the Fn layer are sent as KEYPAD usages rather than
+ * the main-row ones. The table above stops at 0x38, so those keys produced
+ * nothing at all - which is why the owner reported that typing '.' required
+ * Fn and then did not work. The character is the same; only the usage code
+ * differs, and a keypad key is never shifted. */
+static const char keypad[] = {
+    /* 54 */ '/', '*', '-', '+',
+    /* 58 */ 0,            /* keypad Enter - a named event, not a character */
+    /* 59 */ '1', '2', '3', '4', '5', '6', '7', '8', '9',
+    /* 62 */ '0', '.',
+};
+
 char keymap_char(uint8_t usage, bool shift)
 {
+    if (usage >= 0x54 && usage <= 0x63) {
+        return keypad[usage - 0x54];
+    }
     if (usage < 0x04 || usage > 0x38) {
         return 0;
     }

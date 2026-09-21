@@ -871,6 +871,26 @@ static cmd_status_t c_lanes(cmd_ctx_t *ctx)
         }
         bar[k] = '\0';
         cmd_out(ctx, "%c%-5s %s", l[i].muted ? '-' : ' ', l[i].name, bar);
+        /* Show the odds the brackets set. The bar can only render '?', so a
+         * listing without this cannot confirm that a '?[15]' was read at all -
+         * which is precisely the uncertainty that had the owner unable to tell
+         * whether probability was working. */
+        {
+            char od[32] = {0};
+            int any = 0;
+            for (int q = 0; q < l[i].steps && q < SEQ_MAX_STEPS; q++) {
+                if (l[i].prob[q] != 255) {
+                    char one[8];
+                    snprintf(one, sizeof one, "%s%u", any ? "," : "",
+                             (unsigned)l[i].prob[q]);
+                    strncat(od, one, sizeof od - strlen(od) - 1);
+                    any = 1;
+                }
+            }
+            if (any) {
+                cmd_out(ctx, "      odds %.23s", od);
+            }
+        }
     }
     /* THIRTY COLUMNS. This was "%d bpm  swing %d  key %s  clock %s", which
      * renders as 38 characters and wraps - on the one screen the player looks
