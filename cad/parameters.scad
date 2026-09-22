@@ -1523,3 +1523,61 @@ assert(grille_count * grille_slot_h + (grille_count - 1) * (grille_pitch - grill
 
 echo(str("cYbErDeCk envelope [", preset, "]: ",
          body_w, " x ", body_h, " x ", body_t, " mm"));
+
+// =============================================================================
+//  CONCRETE JACKET  (variant 3)
+// =============================================================================
+//  The printed chassis is NOT replaced. It stays exactly as validated and
+//  becomes the permanent core: it keeps every tolerance, every heat-set insert
+//  and every 115 checks that were run against it. Concrete is cast AROUND it as
+//  an outer jacket, doing only what concrete is good at - mass, face and edge.
+//
+//  WHY NOT CAST THE WHOLE ENCLOSURE. Plain concrete has no useful tensile
+//  strength and the wall here is 3.2 mm. Cast at that section it would craze on
+//  the first drop and would not hold an M2 heat-set insert at all - you cannot
+//  heat-set into stone. Both problems disappear if the plastic stays.
+//
+//  The jacket is captive by geometry, not by adhesive: it wraps the front face
+//  and all four sides, and its apertures are smaller than the body, so it
+//  cannot be slid off in any direction. Cast in place is the whole fixing.
+conc_t         = 7.00;   // [DESIGN] jacket wall. GFRC is reliable from about 6;
+                         //   below that it chips at edges, above 8 the object
+                         //   passes 600 g and stops being a handheld.
+conc_chamfer   = 1.60;   // [DESIGN] front edge break. Cast concrete will not
+                         //   hold a sharp arris - it spalls on demould.
+conc_draft_deg = 2.00;   // [DESIGN] per-side draft toward the open back so the
+                         //   casting releases from the collar. 1 deg is the
+                         //   floor for a rough mould face; 2 is safe.
+conc_aper_relief = 0.60; // [DESIGN] concrete apertures sit proud of the
+                         //   plastic ones, so the reveal reads as a deliberate
+                         //   plastic edge rather than as a bad register.
+conc_aper_draft  = 1.20; // [DESIGN] per-side flare of the aperture blockouts,
+                         //   outward toward the show face, so they pull.
+conc_top_open  = true;   // [DESIGN] leave the top edge free of concrete. The
+                         //   three buttons and both microphones open through
+                         //   that edge; burying them would mean lengthening
+                         //   every cap. A plastic control strip along the top
+                         //   is the honest answer and reads as deliberate.
+conc_density   = 2.10;   // [VENDOR] g/cm3, GFRC with acrylic fortifier
+
+//  ---- the mould ------------------------------------------------------------
+conc_mold_base   = 6.00; // [DESIGN] face plate thickness
+conc_mold_wall   = 6.00; // [DESIGN] collar wall
+conc_flange      = 14.0; // [DESIGN] bolt flange width
+conc_bolt_d      = 4.50; // [STANDARD] M4 clearance
+conc_pin_d       = 4.00; // [DESIGN] alignment dowel
+conc_pin_h       = 6.00; // [DESIGN]
+conc_mold_gap    = 0.15; // [DESIGN] collar-to-face-plate slip fit
+
+conc_w         = body_w + 2 * conc_t;              // [DERIVED] = 130.25
+conc_h         = body_h + 2 * conc_t;              // [DERIVED] = 154.25
+conc_stack     = body_t + conc_t;                  // [DERIVED] = 23.85
+conc_blend     = corner_blend + conc_t;            // [DERIVED]
+conc_draft     = conc_stack * tan(conc_draft_deg); // [DERIVED] total per side
+
+assert(conc_t >= 6.0,
+       "concrete jacket under 6 mm: GFRC chips at the edges below this");
+assert(conc_chamfer >= 1.0,
+       "a sharp cast arris spalls on demould; break the front edge");
+assert(conc_draft_deg >= 1.0,
+       "less than 1 degree of draft and the casting will not leave the collar");
