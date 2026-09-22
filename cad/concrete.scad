@@ -22,6 +22,7 @@
 
 include <parameters.scad>
 use <lib/util.scad>
+use <cyberdeck.scad>
 
 part = "jacket";
 $fn = 64;
@@ -235,11 +236,38 @@ module pour_dam() {
 }
 
 // ---------------------------------------------------------------------------
+//  EXPLANATORY VIEWS. Not parts - these exist so the arrangement can be looked
+//  at, because "the concrete is the gap between two things you printed" does
+//  not read off a parts list.
+module chassis_in_cast() {
+    translate([0, 0, conc_t + body_t]) mirror([0, 0, 1]) chassis();
+}
+
+module mould_assembly(gap = 0, ghost = 0.25) {
+    color("DimGray")            translate([0, 0, -conc_mold_base - gap]) mold_face();
+    color("DarkGray", ghost)    translate([0, 0, gap]) mold_collar();
+    color("Tan")                jacket();
+    color("SteelBlue")          chassis_in_cast();
+    color("Crimson")            side_features();
+}
+
+module mould_section() {
+    intersection() {
+        mould_assembly();
+        translate([-fw, -fh, -conc_mold_base - 10])
+            cube([fw, 2*fh, conc_stack + conc_mold_base + 40]);
+    }
+}
+
+// ---------------------------------------------------------------------------
 if (part == "jacket")           jacket();
 else if (part == "mold_face")   mold_face();
 else if (part == "mold_collar") mold_collar();
 else if (part == "cores")       cores();
 else if (part == "pour_dam")    pour_dam();
+else if (part == "mould_section")  mould_section();
+else if (part == "mould_exploded") mould_assembly(gap = 30);
+else if (part == "mould_ghost")    mould_assembly(gap = 0);
 else if (part == "assembly") {
     color("gray")             jacket();
     color("orange", 0.35)     skeleton_envelope();
