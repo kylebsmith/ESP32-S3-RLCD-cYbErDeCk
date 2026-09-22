@@ -239,7 +239,7 @@ counted among the audited rows.
 
 | | |
 |---|---|
-| **[DATUMS.md](docs/DATUMS.md)** | every dimension, its provenance, thirty-five recorded corrections, nine open items |
+| **[DATUMS.md](docs/DATUMS.md)** | every dimension, its provenance, thirty-seven recorded corrections, nine open items |
 | **[HARDWARE.md](docs/HARDWARE.md)** | the board itself: panel, controller, pin map, USB and power, all traced to vendor sources |
 | **[SUBSTRATE.md](docs/SUBSTRATE.md)** | the conceptual core: one data structure, one noun, three verbs |
 | **[CONCRETE.md](docs/CONCRETE.md)** | the cast concrete jacket, its mould, and the mix |

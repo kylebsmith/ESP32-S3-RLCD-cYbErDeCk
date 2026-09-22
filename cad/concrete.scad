@@ -62,14 +62,21 @@ module skeleton_envelope(grow = 0) {
 //  One aperture through the concrete face: widest at the show face so the
 //  blockout pulls, and standing conc_aper_relief proud of the plastic opening
 //  so the reveal reads as a deliberate plastic edge.
-module conc_aperture(w, h, blend) {
-    r  = conc_aper_relief;
-    d  = conc_aper_draft;
-    hull() {
-        translate([0, 0, -0.01])
-            rse_plate(w + 2*(r+d), h + 2*(r+d), 0.01, blend + r + d, form_n);
-        translate([0, 0, conc_t + 0.01])
-            rse_plate(w + 2*r, h + 2*r, 0.01, blend + r, form_n);
+module conc_aperture(w, h, blend, ramp) {
+    r    = conc_aper_relief;
+    land = conc_t - ramp;          // straight wall left at the aperture edge
+    union() {
+        // the ramp, opening outward toward the show face
+        hull() {
+            translate([0, 0, -0.01])
+                rse_plate(w + 2*(r+ramp), h + 2*(r+ramp), 0.01,
+                          blend + r + ramp, form_n);
+            translate([0, 0, ramp])
+                rse_plate(w + 2*r, h + 2*r, 0.01, blend + r, form_n);
+        }
+        // the land, straight through to the plastic
+        translate([0, 0, ramp - 0.01])
+            rse_plate(w + 2*r, h + 2*r, land + 0.02, blend + r, form_n);
     }
 }
 
@@ -78,9 +85,12 @@ module conc_aperture(w, h, blend) {
 //  keyboard. Cast coordinates share the chassis's X and Y exactly.
 module conc_apertures() {
     translate([0, board_bay_cy, 0])
-        conc_aperture(display_aper_w, display_aper_h, aper_blend_display);
+        conc_aperture(display_aper_w, display_aper_h, aper_blend_display,
+                      conc_aper_draft);
+    // The keyboard gets the deep ramp; nothing reaches into the display.
     translate([0, kbd_bay_cy, 0])
-        conc_aperture(kbd_aper_w, kbd_aper_h, aper_blend_kbd);
+        conc_aperture(kbd_aper_w, kbd_aper_h, aper_blend_kbd,
+                      conc_kbd_relief);
 }
 
 // ---------------------------------------------------------------------------
@@ -204,10 +214,32 @@ module mold_collar() {
 }
 
 // ---------------------------------------------------------------------------
+//  POUR DAM. A frame the back plate drops into while its outer face is flood-
+//  coated with two-part acrylic. Not part of the product; it comes off once the
+//  resin has gelled. Coat the plate OFF the device, cowl-down.
+module pour_dam() {
+    pw = inner_w - 2*fit_slide + 2*pour_dam_clear;
+    ph = body_h - bottom_wall - wall - 2*fit_slide + 2*pour_dam_clear;
+    h  = pour_dam_floor + back_t + pour_dam_rise;
+    difference() {
+        rse_plate(pw + 2*pour_dam_wall, ph + 2*pour_dam_wall, h,
+                  cavity_blend + pour_dam_wall, form_n);
+        // the pocket the plate sits in
+        translate([0, 0, pour_dam_floor])
+            rse_plate(pw, ph, h, cavity_blend + pour_dam_clear, form_n);
+        // relief for the battery cowl, which points DOWN into the jig
+        translate([board_cx + batt_off_x, board_cy + batt_off_y - plate_cy, -0.01])
+            rse_plate(batt_cowl_w + 4, batt_cowl_h + 4,
+                      pour_dam_floor + 0.02, batt_cowl_base_r + 2, form_n);
+    }
+}
+
+// ---------------------------------------------------------------------------
 if (part == "jacket")           jacket();
 else if (part == "mold_face")   mold_face();
 else if (part == "mold_collar") mold_collar();
 else if (part == "cores")       cores();
+else if (part == "pour_dam")    pour_dam();
 else if (part == "assembly") {
     color("gray")             jacket();
     color("orange", 0.35)     skeleton_envelope();

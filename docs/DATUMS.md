@@ -347,6 +347,92 @@ a wider recess behind it. This back plate is 3.2 mm thick and the header stands
 8.603 mm off the PCB back — **1.60 mm proud of the standoff plane** — so the
 body itself must pass through. The window here is sized from the body.
 
+### C-37 — The flood-coat dam was lying on two countersinks
+
+The back is finished with poured self-levelling acrylic, which needs a wall to
+level against. The obvious move is a dam around the plate's perimeter, and that
+is what was built: 1.20 mm high, 2.00 mm wall, following the plate outline.
+
+The audit rejected it immediately — **6 probes covered, up to 1.20 mm of
+material over the countersink**, on both M2.5 board screws at y = +62.83. That
+is [C-25](#c-25--the-cowl-was-lying-on-top-of-two-screws-and-a-window) again,
+exactly: a feature lying on top of a screw, dimensionally perfect and
+functionally impossible.
+
+**There is no ring that works.** The dam has to clear four M2.5 countersinks
+*and* the 82.80 mm battery cowl, on a 109.25 mm plate:
+
+| Constraint | Dam outer edge must be inboard of |
+|---|---|
+| Board screw heads at x = ±42.75 | x = 40.25 → 14.375 mm inset |
+| Board screw heads at y = +62.83 | y = 60.33 → 6.295 mm inset |
+| Battery cowl, 82.80 wide | x = 41.40 |
+
+A 14.4 mm inset leaves a flooded panel 76 mm wide — narrower than the cowl that
+crosses it. The geometry does not close.
+
+And the functional objection is worse than the geometric one: **a coat poured
+over the fasteners seals the plate shut.** The dam would have made the device
+harder to open, which is the opposite of the requirement it was serving.
+
+### The fix: the dam is a jig, not a feature
+
+The plate drops into a frame that stands `pour_dam_rise` proud of it, the resin
+levels inside that, and the frame comes off once the coat has gelled.
+
+It surrounds the plate rather than crossing it, so it is outboard of every
+fastener by construction and cannot foul anything. It touches no validated
+geometry. It is reusable, and it can be reprinted without reprinting a part of
+the device.
+
+The general lesson: **a fixture is not a worse answer than a feature, it is
+often the correct one.** The requirement was "the resin must have something to
+level against during the pour" — which is a statement about a *process*, and
+the instinct to solve it in the *product* is what put material over a screw.
+
+### C-36 — The battery cowl gained a millimetre, and the golden check caught it
+
+Not a defect. A deliberate change, recorded because `tools/check_golden.py`
+refused it and refusing it is the check working exactly as designed.
+
+The cowl is not only a cover for the cell. Resting on it the deck **leans
+toward the user**, which is the posture it is used in on a desk, and it is what
+the fingers wrap when it is held. Both wanted more of it.
+
+| | Was | Now |
+|---|---|---|
+| `batt_cowl_extra` | — | **1.00** |
+| `batt_cowl_rise` | 10.00 | **11.00** |
+| `batt_cowl_crown` | 0.700 | **0.622** |
+| Lean angle on the cowl | 6.38° | **7.01°** |
+
+7° sits inside the 5–11° band keyboards are normally tilted to.
+
+**`batt_cowl_crown` moved on its own, and that is correct.** It is
+`(cell clearance) / (rise - wall)`. The numerator — what the cell actually
+needs — is unchanged at 5.60 mm. Only the denominator grew, so the crown starts
+proportionally lower and **the extra millimetre goes into the dome rather than
+into the cavity**. The cell's clearance is preserved exactly while the form
+gets fuller, which is what a hand rest wants. Had the numerator moved, this
+would have been a defect.
+
+**Why the golden baseline was re-cut rather than the change gated.** `batt_cowl_*`
+is not in `check_golden.py`'s `V2_ONLY` list, so the change reaches v1's frozen
+surface. That list exists for parameters that *cannot* move v1 geometry; this
+one does, and pretending otherwise by widening the list would have made the
+check lie. The alternative — gating on `variant` — does not work either, because
+`check_golden` parses `parameters.scad` as written rather than forcing
+`variant = 1`, so a gated value would still read as changed. That is a latent
+weakness in the tool and is recorded here as such.
+
+So the baseline was re-cut with `--update`, which is the sanctioned path for a
+deliberate change. The check did its job: this did not happen silently, it
+happened in front of somebody who then had to write this down.
+
+**The already-printed chassis is unaffected.** The cowl is on the back plate,
+which is a separate part with unchanged mounting. Reprint the plate; keep
+everything else.
+
 ### C-35 — The crush ribs were narrower than the nozzle that had to print them
 
 Eight ribs, 0.35 mm tall, cut into the magnet bore so the discs would grip

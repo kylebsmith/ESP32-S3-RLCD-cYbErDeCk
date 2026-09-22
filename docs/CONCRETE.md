@@ -29,8 +29,8 @@ is the entire fixing; there is no adhesive to fail.
 | Jacket wall | **7.0 mm** |
 | Outer size | 131.9 × 148.1 × 23.9 mm |
 | Concrete volume | 98.2 cm³ |
-| **Concrete mass** | **206 g** |
-| All-in (jacket + skeleton + board + keyboard + cell) | **≈ 556 g** |
+| **Concrete mass** | **201 g** |
+| All-in (jacket + skeleton + board + keyboard + cell) | **≈ 551 g** |
 
 Below 6 mm GFRC chips at the edges; above 8 mm the object passes 600 g and
 stops being a handheld. 7 is the middle of that.
@@ -45,6 +45,69 @@ control strip along the top.
 This is a better object than the alternative — a concrete body with a visible
 functional band — and it removes five features from the mould. `conc_top_open`
 turns it off if you ever want the other version.
+
+## Ergonomics
+
+Three things shape how it is held, and all three are measured on the mesh
+rather than eyeballed.
+
+**Thumb relief at the keyboard.** The jacket puts 7 mm of concrete in front of
+the chassis face, and the keycaps sit just behind that face. Left square, the
+keyboard would be at the bottom of a 7 mm well and a thumb could not reach the
+outer keys at all. So the concrete **ramps away** from the aperture:
+
+| | |
+|---|---|
+| Opening at the show face | **117.9 × 67.2 mm** |
+| Opening at the plastic | 107.7 × 57.0 mm |
+| Lateral relief | **5.1 mm per side at 45°** |
+| Concrete land at the edge | 1.50 mm |
+
+A straight chamfer, not a cove: over the same depth a chamfer clears far more
+lateral room, and lateral room is what a thumb needs. The land is what stops
+the cast arris spalling — below about 1.5 mm it breaks away on demould.
+
+**The lean.** Resting on the battery cowl the deck tilts toward the user, which
+is the posture it is actually used in on a desk. The cowl gained a millimetre
+past what the cell needs, purely for that:
+
+| | Before | Now |
+|---|---|---|
+| Cowl rise | 10.0 mm | **11.0 mm** |
+| Lean angle | 6.38° | **7.01°** |
+
+7° sits inside the 5–11° band that keyboards are normally tilted to, and the
+same 45° ramp that serves a thumb also serves a finger coming in from this
+angle — which is why one relief covers both postures.
+
+**The cowl as a hand rest.** The extra millimetre also gives the fingers a
+fuller form to wrap when the deck is held rather than rested.
+
+## The back is flood-coated, using a jig
+
+The back plate is finished with poured self-levelling acrylic, which needs a
+wall to level against or it runs off the edge and starves the perimeter.
+
+**That wall cannot be part of the plate.** It was built that way first and the
+audit rejected it — a perimeter dam has to clear four M2.5 countersinks *and*
+the 82.80 mm battery cowl on a 109.25 mm plate, and no ring does both. Worse,
+a coat poured over the fasteners would seal the plate shut. See
+[DATUMS.md C-37](DATUMS.md#c-37--the-flood-coat-dam-was-lying-on-two-countersinks).
+
+So `pour_dam` is a **jig**: the plate drops into a frame standing 2.0 mm proud
+of it, the resin levels inside, the frame comes off once the coat has gelled.
+It surrounds the plate rather than crossing it, so it is outboard of every
+fastener by construction, and it is reusable.
+
+Coat the plate **off the device, cowl-down** — the jig has a relief for the
+cowl so the plate sits level. Two-part acrylic self-levels at roughly
+0.8–1.0 mm, so 2.0 mm of rise leaves headroom for the meniscus and a second
+coat.
+
+**The cowl itself cannot be flood-coated** — resin runs off a convex form.
+Brush it, and rely on its foot fillet to stop the brushed coat starving at the
+transition. **The concrete ring stays raw**; resin-coating cast concrete would
+throw away the one surface the material is there to provide.
 
 ## The mix — what to actually put in the bucket
 

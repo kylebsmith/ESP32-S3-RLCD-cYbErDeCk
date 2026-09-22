@@ -36,10 +36,30 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 DATUMS = os.path.join(ROOT, "docs", "DATUMS.md")
 
-WORDS = {21: "twenty-one", 22: "twenty-two", 30: "thirty", 31: "thirty-one",
-         32: "thirty-two", 33: "thirty-three", 34: "thirty-four",
-         35: "thirty-five", 36: "thirty-six", 5: "five", 6: "six",
-         7: "seven", 8: "eight", 9: "nine", 10: "ten", 11: "eleven"}
+_ONES = ["", "one", "two", "three", "four", "five", "six", "seven", "eight",
+         "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen",
+         "sixteen", "seventeen", "eighteen", "nineteen"]
+_TENS = {20: "twenty", 30: "thirty", 40: "forty", 50: "fifty", 60: "sixty"}
+
+
+def _word(n):
+    """Spell a small count. The table it replaces ran out at thirty-six and
+    reported the miss as 'None', which reads as a tool bug rather than as the
+    stale README it was actually looking at."""
+    if n < 20:
+        return _ONES[n]
+    t, o = (n // 10) * 10, n % 10
+    if t not in _TENS:
+        return str(n)
+    return _TENS[t] if o == 0 else f"{_TENS[t]}-{_ONES[o]}"
+
+
+class _Words(dict):
+    def get(self, n, default=None):
+        return _word(n)
+
+
+WORDS = _Words()
 
 SKIP_DIRS = {".git", "reference", "build", "stl", "__pycache__", ".github"}
 

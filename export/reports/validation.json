@@ -24,7 +24,7 @@
       "check": "backplate: watertight",
       "class": "MESH",
       "ok": true,
-      "detail": "16800 faces"
+      "detail": "17608 faces"
     },
     {
       "check": "backplate: single body",
@@ -36,7 +36,7 @@
       "check": "backplate: positive volume",
       "class": "MESH",
       "ok": true,
-      "detail": "45923 mm^3 -> 56.9 g in PLA"
+      "detail": "46183 mm^3 -> 57.3 g in PLA"
     },
     {
       "check": "buttons: watertight",
@@ -162,7 +162,7 @@
       "check": "backplate is not degenerate",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "109.25 x 133.25 x 13.20, 45923 mm^3"
+      "detail": "109.25 x 133.25 x 14.20, 46183 mm^3"
     },
     {
       "check": "buttons is not degenerate",
@@ -186,7 +186,7 @@
       "check": "backplate fits the print bed",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "109.2 x 133.2 x 13.2"
+      "detail": "109.2 x 133.2 x 14.2"
     },
     {
       "check": "buttons fits the print bed",
@@ -216,7 +216,7 @@
       "check": "board is inside the assembled envelope",
       "class": "FIT",
       "ok": true,
-      "detail": "bounds [[-46.25, -2.78, -5.0], [46.25, 66.32, 14.2]] in [-58.12, -70.12, -10.0]..[58.12, 70.12, 16.85]"
+      "detail": "bounds [[-46.25, -2.78, -5.0], [46.25, 66.32, 14.2]] in [-58.12, -70.12, -11.0]..[58.12, 70.12, 16.85]"
     },
     {
       "check": "keyboard does not clash with the chassis",
@@ -234,7 +234,7 @@
       "check": "keyboard is inside the assembled envelope",
       "class": "FIT",
       "ok": true,
-      "detail": "bounds [[-54.4, -65.4, 3.45], [54.4, -6.9, 14.84]] in [-58.12, -70.12, -10.0]..[58.12, 70.12, 16.85]"
+      "detail": "bounds [[-54.4, -65.4, 3.45], [54.4, -6.9, 14.84]] in [-58.12, -70.12, -11.0]..[58.12, 70.12, 16.85]"
     },
     {
       "check": "board pocket clearance",
@@ -270,19 +270,19 @@
       "check": "18650 fits inside the battery cowl",
       "class": "FIT",
       "ok": true,
-      "detail": "cell reaches z=-5.00, cowl inner face at z=-8.00, clearance 3.00 mm"
+      "detail": "cell reaches z=-5.00, cowl inner face at z=-9.00, clearance 4.00 mm"
     },
     {
       "check": "cowl clears the holder protrusion",
       "class": "FIT",
       "ok": true,
-      "detail": "holder reaches 5.00 mm past the back plate's outer face; cowl gives 8.00 mm of internal rise"
+      "detail": "holder reaches 5.00 mm past the back plate's outer face; cowl gives 9.00 mm of internal rise"
     },
     {
       "check": "cowl wall stays intact along its rise",
       "class": "FIT",
       "ok": true,
-      "detail": "thinnest 2.00 mm at 2.0 mm depth (2.5 beads at 0.8 mm)"
+      "detail": "thinnest 2.00 mm at 2.2 mm depth (2.5 beads at 0.8 mm)"
     },
     {
       "check": "front face lands on the panel module, not just past its glass",
@@ -420,7 +420,7 @@
       "check": "cowl cavity is at full section where the holder is deepest",
       "class": "STACK",
       "ok": true,
-      "detail": "narrowest cavity section 78.800 x 23.100 at z = -1.60 against a 77.80 x 22.10 holder: +0.500 mm per side, declared clearance 0.50"
+      "detail": "narrowest cavity section 78.800 x 23.100 at z = -1.80 against a 77.80 x 22.10 holder: +0.500 mm per side, declared clearance 0.50"
     },
     {
       "check": "keyboard still covers its aperture with the pocket play taken up",

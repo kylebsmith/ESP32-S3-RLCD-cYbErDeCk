@@ -389,8 +389,13 @@ batt_cowl_clear  = 0.5;    // [DESIGN] clearance over the holder
 //  derived from the cavity's rise. The reasoning behind both numbers is given
 //  at the end of this block, where the rise used to be defined.
 batt_cowl_head   = 2.5;    // [DESIGN] clear rise above the holder for the crown
+//  ERGONOMIC EXTRA. The cowl is not only a cover: resting on it the deck
+//  leans toward the user, which is the posture it is actually used in on a
+//  desk, and it is where the hands sit when it is held. One more millimetre
+//  deepens that lean and gives the fingers a fuller form to wrap.
+batt_cowl_extra  = 1.0;    // [DESIGN] ergonomic rise past what the cell needs
 batt_cowl_rise   = (batt_protrusion - back_t) + batt_cowl_clear + batt_cowl_wall
-                   + batt_cowl_head;
+                   + batt_cowl_head + batt_cowl_extra;
 //  THE COWL'S PLAN FORM IS NOT FREE, AND IT USED TO BE TREATED AS IF IT WERE.
 //  83.0 x 30.0 was taken from the reference's separate clip-on cover, which
 //  sits on a blank panel. This cowl does not: it is integral to the back
@@ -1581,3 +1586,51 @@ assert(conc_chamfer >= 1.0,
        "a sharp cast arris spalls on demould; break the front edge");
 assert(conc_draft_deg >= 1.0,
        "less than 1 degree of draft and the casting will not leave the collar");
+
+
+// =============================================================================
+//  BACK FACE: FLOOD-COATED WITH TWO-PART ACRYLIC, USING A JIG
+// =============================================================================
+//  The back plate is finished with poured self-levelling acrylic, and that only
+//  works inside a dam - without one the resin runs off the edge, starves the
+//  perimeter and leaves a lip of bare plastic exactly where the eye goes.
+//
+//  THE DAM CANNOT BE PART OF THE PLATE. It was built that way first and the
+//  audit rejected it: a perimeter wall must clear the four M2.5 countersinks
+//  AND the 82.80 mm battery cowl, and on a 109.25 mm plate there is no ring
+//  that does both. Printed over a countersink it is the C-25 defect exactly -
+//  something lying on top of a screw - and it would also have sealed the
+//  fasteners under the coat, which is worse than ugly.
+//
+//  So the dam is a JIG. The plate drops into a frame that stands proud of it,
+//  the resin levels inside that, and the frame comes off once the coat has
+//  gelled. It touches no validated geometry, it sits entirely outboard of every
+//  fastener because it surrounds the plate rather than crossing it, and it is
+//  reusable.
+pour_dam_clear = 0.30;   // [DESIGN] slip fit around the plate
+pour_dam_wall  = 3.00;   // [DESIGN] frame wall
+pour_dam_rise  = 2.00;   // [DESIGN] how far the frame stands above the plate
+                         //   face. Two-part acrylic self-levels at roughly
+                         //   0.8-1.0 mm; 2.0 leaves headroom for the meniscus
+                         //   and for a second coat.
+pour_dam_floor = 2.00;   // [DESIGN] frame floor, so the plate sits level
+
+assert(pour_dam_rise >= 1.5,
+       "pour dam under 1.5 mm gives a self-levelling coat no headroom");
+
+// =============================================================================
+//  CONCRETE: THUMB RELIEF AT THE KEYBOARD
+// =============================================================================
+//  The jacket puts 7 mm of concrete in front of the chassis face, and the
+//  keycaps sit just behind that face. Left square, the keyboard would be at the
+//  bottom of a 7 mm well and the outer keys would be unreachable by a thumb.
+//
+//  So the concrete ramps away from the keyboard aperture. A straight chamfer,
+//  not a cove: over the same depth a chamfer clears far more lateral room, and
+//  lateral room is what a thumb actually needs. The same ramp serves the other
+//  posture - resting on the battery cowl, leaning back, typed with fingers.
+conc_kbd_relief = 5.50;  // [DESIGN] per-side ramp at the keyboard, leaving
+                         //   conc_t - this = 1.50 mm of land at the aperture
+                         //   edge. Below about 1.5 a cast arris spalls.
+assert(conc_t - conc_kbd_relief >= 1.5,
+       "keyboard ramp leaves under 1.5 mm of concrete land; the edge will spall");
