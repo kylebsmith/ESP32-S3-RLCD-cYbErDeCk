@@ -4,6 +4,8 @@ A sleeve the whole deck slides into, vertically, like a side bag. Front, back,
 both flanks and the bottom; open only at the top. Every port is buried.
 **Two halves, bolted.** `cad/carrycase.scad`, checked by `tools/check_case.py`.
 
+![The case, assembled](img/case-iso.png)
+
 | | |
 |---|---|
 | Outside | **134.7 × 162.4 × 38.2 mm**, 162.6 over the rails |
@@ -89,6 +91,8 @@ Three things, none of them a snap feature:
 The four magnets add a positive seat at the end of the travel. They are **not**
 the retention and are not asked to be — at a 2 mm gap through the flock they are
 worth a couple of newtons each, which is a click, not a hold.
+
+![Flank, showing the rail](img/case-rail.png)
 
 ## Strap rails
 

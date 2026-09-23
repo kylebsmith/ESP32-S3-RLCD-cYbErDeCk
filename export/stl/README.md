@@ -2,13 +2,25 @@
 
 Regenerated from source by `./tools/build.sh`. **Do not edit these by hand** —
 every dimension in them comes from `cad/parameters.scad`, and a hand-edited STL
-silently detaches from the datum set and from all 71 checks.
+silently detaches from the datum set and from all 118 checks.
 
 | File | Size (mm) | Volume | ~PLA | Notes |
 |---|---|---|---|---|
 | `chassis.stl` | 116.60 × 139.10 × 16.85 | 42.9 cm³ | 53 g | the monocoque: front face, all four walls, the spine |
 | `backplate.stl` | 109.60 × 133.30 × 13.45 | 48.4 cm³ | 60 g | structural closure + battery cowl; the board bolts to this |
 | `buttons.stl` | 26.00 × 4.80 × 6.59 | 0.4 cm³ | 0.5 g | three caps on a sprue |
+
+The carry case is a separate object and prints separately:
+
+| File | Size (mm) | Volume | ~PLA | Notes |
+|---|---|---|---|---|
+| `case/carrycase-front.stl` | 162.65 × 162.45 × 22.12 | 202 cm³ | 138 g | print **face down**; holds the four magnets. 22.12 not 19.13 because the four locating pins stand 3 mm proud of the joint |
+| `case/carrycase-back.stl` | 162.65 × 162.45 × 19.12 | 258 cm³ | 176 g | print **back down**; holds the eight nuts |
+
+They bolt together with **8 × M5 × 25 socket cap and 8 × M5 nut**. Each needs a
+163 × 162 mm bed. An earlier one-piece `case/carrycase.stl` is gone: it could
+not be reached into to fit the magnets, and its spined back needed support. See
+[DATUMS.md C-41](../../docs/DATUMS.md#corrections).
 
 There is no separate window or screen protector: the display sits 2.65 mm
 below the outer face behind a 2.4 mm front panel, and that recess is the
