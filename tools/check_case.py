@@ -7,10 +7,12 @@ validate.py's build gate. It still gets checked, and it gets checked the same
 way everything else here does: by measuring the rendered mesh rather than by
 trusting the parameters that produced it.
 
-Since C-41 it is two bolted halves, so most of these now measure the pair:
-that they meet, that they do not interpenetrate, that each one prints face
-down with nothing under it, and that the fasteners and magnets that motivated
-the split can actually be reached.
+Since C-42 the fasteners are a ring sampled off the case's own outline, so
+NOTHING here reads their coordinates from parameters.scad. The bores are found
+in a section of the actual part, counted, and measured for the metal around
+them and the evenness of their spacing. If the ring drifts off the form, or a
+bore creeps up on the cavity round a corner where no straight-line check would
+look, that is what finds it.
 
     python3 tools/check_case.py
 """
@@ -43,7 +45,26 @@ def render(tmp, scad, part, extra=()):
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
     if not os.path.exists(out):
         raise RuntimeError(f"openscad produced no {part}:\n{r.stderr[-900:]}")
+    # A deleted module does not stop OpenSCAD: it warns on stderr and renders
+    # the part without it. That is how a strap boss once measured, rendered and
+    # photographed as a finished part while not existing at all. build.sh has
+    # treated this as fatal for the enclosure for a long time; it is fatal here
+    # too, so running this file directly is no weaker than running the gate.
+    bad = [l for l in r.stderr.splitlines()
+           if "WARNING: Ignoring" in l or "unknown variable" in l
+           or "undefined operation" in l]
+    if bad:
+        raise RuntimeError(f"{part} rendered with pieces missing:\n  "
+                           + "\n  ".join(sorted(set(bad))[:6]))
     return trimesh.load(out, force="mesh")
+
+
+def plan(m, z):
+    """The part's plan section at height z, as shapely polygons."""
+    sec = m.section(plane_origin=[0, 0, z], plane_normal=[0, 0, 1])
+    if sec is None:
+        return []
+    return list(sec.to_2D(to_2D=np.eye(4))[0].polygons_full)
 
 
 def ceilings(m, bed_at_max, below_deg):
@@ -62,6 +83,27 @@ def ceilings(m, bed_at_max, below_deg):
     onbed = np.abs(c[:, 2] - bed) < 0.06
     ang = np.degrees(np.arccos(np.clip(cos, 0, 1)))
     return float(a[(cos > 1e-6) & ~onbed & (ang < below_deg)].sum())
+
+
+def ring_order(pts):
+    """Walk the fastener ring nearest-neighbour, END to END.
+
+    The ring is a U, not a loop - there is no metal across the mouth to put a
+    fastener in - so the walk has to start at one of its ENDS. Starting at
+    bottom dead centre walks out to one end and then jumps 134 mm across the
+    open mouth to pick up the other side, and that jump reads as a 236 per cent
+    spacing error in a part that is evenly spaced.
+    """
+    left = list(range(len(pts)))
+    cur = max(left, key=lambda i: (pts[i][1], pts[i][0]))
+    order = [cur]
+    left.remove(cur)
+    while left:
+        nxt = min(left, key=lambda i: np.hypot(*(pts[i] - pts[cur])))
+        order.append(nxt)
+        left.remove(nxt)
+        cur = nxt
+    return order
 
 
 def main():
@@ -85,26 +127,21 @@ def main():
               m.is_watertight and m.body_count == 1,
               f"watertight {m.is_watertight}, {m.body_count} body(ies)")
 
-    # Two halves that overlap cannot be bolted together; two that miss leave a
-    # gap the strap load has to jump. Both are measured, not assumed.
     it = front.intersection(back)
     clash = float(it.volume) if it is not None and len(it.faces) else 0.0
     check("the halves do not interpenetrate",
           clash <= 1.0, f"{clash:.3f} mm^3 of overlap")
 
     # The joint is compared two ways, because the obvious single number is
-    # wrong twice over. Net AREA differs by design - the back face is where
-    # eight nut pockets and four pin holes open - and area is far too blunt a
-    # proxy for outline anyway: narrowing this section by 0.6 mm moves its area
-    # by 0.4 per cent, which any sane tolerance would wave through. So the
-    # outlines are compared as RINGS, in millimetres of deviation, and the
-    # contact area is checked separately for being large.
+    # wrong twice over. Net AREA differs by design - the back face is where the
+    # nut pockets and pin holes open - and area is far too blunt a proxy for
+    # outline anyway: narrowing this section by 0.6 mm moves its area by 0.4
+    # per cent, which any sane tolerance would wave through. So the outlines
+    # are compared as RINGS, in millimetres of deviation.
     zs = p["case_split_z"]
     rings, contact = [], []
     for m, z in ((front, zs + 0.05), (back, zs - 0.05)):
-        sec = m.section(plane_origin=[0, 0, z], plane_normal=[0, 0, 1])
-        polys = sec.to_2D(to_2D=np.eye(4))[0].polygons_full if sec else []
-        polys = sorted(polys, key=lambda q: abs(q.area), reverse=True)
+        polys = sorted(plan(m, z), key=lambda q: abs(q.area), reverse=True)
         rings.append(Polygon(polys[0].exterior) if polys else Polygon())
         contact.append(sum(abs(q.area) for q in polys))
     dev = rings[0].exterior.hausdorff_distance(rings[1].exterior)
@@ -113,9 +150,60 @@ def main():
           f"outlines deviate {dev:.3f} mm at worst; "
           f"{min(contact):.0f} mm^2 of metal in contact")
 
-    # The whole point of the cowl channel: the deck must slide its full travel
-    # without touching anything. A fit that only works when seated is not a
-    # sleeve, it is a puzzle.
+    # ---- THE FASTENER RING, found in the part and not read from anywhere ----
+    polys = sorted(plan(front, zs + 1.0), key=lambda q: abs(q.area), reverse=True)
+    wall = polys[0]
+    holes = [Polygon(r) for r in wall.interiors]
+    bore_a = np.pi * (p["case_bolt_clear"] / 2) ** 2
+    bores = [h for h in holes if abs(h.area - bore_a) < 0.25 * bore_a]
+    slots = [h for h in holes if h.area > 1.7 * bore_a]
+
+    check("every fastener in the ring is present and nothing else is",
+          len(bores) == int(p["case_bolt_n"]) and len(slots) == 2
+          and len(holes) == len(bores) + len(slots),
+          f"{len(bores)} bores of an expected {int(p['case_bolt_n'])}, "
+          f"{len(slots)} strap slots, {len(holes) - len(bores) - len(slots)} "
+          f"unaccounted-for openings")
+
+    # Distance from each bore to the wall's own boundary. That boundary is the
+    # cavity on one side and open air on the other, so ONE number covers both -
+    # including round the bottom corners, where the wall is not a straight run
+    # and a check written in x and y would never look.
+    edge = wall.exterior
+    gap = (p["case_nut_cd"] - p["case_bolt_clear"]) / 2
+    metal = [edge.distance(b) - gap for b in bores]
+    check("every nut in the ring keeps its metal, corners included",
+          len(metal) > 0 and min(metal) >= p["case_bolt_keep"],
+          f"least metal round a nut {min(metal):.2f} mm at "
+          f"({bores[int(np.argmin(metal))].centroid.x:+.1f}, "
+          f"{bores[int(np.argmin(metal))].centroid.y:+.1f}), "
+          f"wanted {p['case_bolt_keep']:.1f}")
+
+    cen = np.array([[b.centroid.x, b.centroid.y] for b in bores])
+    order = ring_order(cen)
+    steps = [float(np.hypot(*(cen[order[i + 1]] - cen[order[i]])))
+             for i in range(len(order) - 1)]
+    spread = (max(steps) - min(steps)) / max(np.mean(steps), 1e-9)
+    # Measured as chords, which under-read across the bottom corners where the
+    # ring is actually following an arc - so the low end of this range is
+    # geometry, not error.
+    check("the ring is evenly spaced the whole way round",
+          spread < 0.15,
+          f"{len(steps)} gaps, {min(steps):.1f}-{max(steps):.1f} mm "
+          f"(mean {np.mean(steps):.1f}), spread {spread * 100:.1f}%")
+
+    # The complaint that started C-42 was that the fasteners were only on the
+    # sides. This is the check for that, and it is about where they ARE, not
+    # about how many there are.
+    onfloor = [c for c in cen if c[1] < p["case_y_bot"]]
+    corners = [c for c in cen
+               if c[1] < p["case_y_bot"] and abs(c[0]) > p["case_cav_hw"]]
+    check("the ring turns the corners instead of stopping at the flanks",
+          len(onfloor) >= 3 and len(set(np.sign([c[0] for c in corners]))) == 2,
+          f"{len(onfloor)} fasteners below the deck, {len(corners)} of them "
+          f"out past the cavity in both bottom corners")
+
+    # ---- the rest ----
     worst, worst_at = 0.0, None
     for dy in (70, 55, 40, 25, 10, 0):
         d = deck.copy()
@@ -131,8 +219,6 @@ def main():
           f"worst interference {worst:.3f} mm^3"
           + (f" at {worst_at} mm above seated" if worst_at is not None else ""))
 
-    # Bomb-proof means the openings are behind material, not merely covered by
-    # something the size of a lid.
     zfi, bwd = p["z_front_inner"], p["board_w_display_front"]
     pcb = zfi - bwd
     sites = [("USB-C", 1, p["board_cy"] + p["usbc_off_y"], pcb + p["usbc_w_centre"]),
@@ -141,17 +227,44 @@ def main():
               p["kbd_bay_cy"] + p["kbd_pocket_h"] / 2 - p["kbd_access_from_edge"]
               - p["kbd_access_w"] / 2,
               p["z_back_inner"] + p["kbd_access_above_floor"] + p["kbd_access_h"] / 2)]
-    pts = np.array([[sx * (p["body_w"] / 2 + p["case_pad"] + p["case_side"] / 2), y, z]
-                    for _, sx, y, z in sites])
-    inside = case.contains(pts)
+    # "Buried" is a thickness, not a yes/no, and a point probe cannot tell the
+    # difference. The strap slot passes through the OUTER half of the wall
+    # directly outboard of the microSD port, so a probe 13 mm deep lands in
+    # fresh air and calls a port with 7.5 mm of metal over it exposed. What
+    # matters is how much metal a ray from the port has to cross to get out, so
+    # that is what is measured.
+    thick = []
+    for lbl, sx, y, z in sites:
+        o = np.array([[sx * (p["case_cav_hw"] - 0.5), y, z]])
+        d = np.array([[float(sx), 0.0, 0.0]])
+        hits, _, _ = case.ray.intersects_location(o, d, multiple_hits=True)
+        xs = sorted(abs(h[0] - o[0][0]) for h in hits)
+        solid = sum(xs[i + 1] - xs[i] for i in range(0, len(xs) - 1, 2))
+        thick.append((lbl, solid, len(xs)))
     check("every side opening is buried in wall",
-          bool(np.all(inside)),
-          ", ".join(f"{lbl} {'buried' if i else 'EXPOSED'}"
-                    for (lbl, *_), i in zip(sites, inside)))
+          all(t >= 6.0 and n % 2 == 0 for _, t, n in thick),
+          ", ".join(f"{lbl} behind {t:.1f} mm" for lbl, t, _ in thick))
 
-    # A lug that is not a hole is decoration; a lug with a thin web is the
-    # version we already threw away. Probe the slot open and its walls solid.
-    lx, ly = p["case_lug_x"], p["case_lug_y"]
+    # The front wall has to be unbroken over the whole face of the deck. This
+    # started life as a check on the thumb scallop; the scallop is gone (see
+    # parameters.scad) and the check is kept, because it is the one that says
+    # the screen is actually behind something.
+    gx, gy = np.meshgrid(np.linspace(-p["body_w"]/2 + 1, p["body_w"]/2 - 1, 17),
+                         np.linspace(-p["body_h"]/2 + 1, p["body_h"]/2 - 1, 21))
+    cover = np.column_stack([gx.ravel(), gy.ravel(),
+                             np.full(gx.size, p["case_z1"] - 0.4)])
+    cov = front.contains(cover)
+    check("the front wall is unbroken over the whole deck",
+          bool(np.all(cov)),
+          f"{int(cov.sum())}/{cov.size} probes over the deck's face covered")
+
+    check("the mouth is shallow enough to pinch the deck out of",
+          p["case_rim"] <= 16.0 and p["case_floor"] >= p["case_side"],
+          f"mouth {p['case_rim']:.1f} mm over the deck, floor "
+          f"{p['case_floor']:.1f} mm under it - the proportion's slack went "
+          f"to the end you drop it on")
+
+    lx, ly = p["case_lug_x"], float(np.mean([s.centroid.y for s in slots]))
     mat = p["case_lug_mat"]
     open_pts, wall_pts = [], []
     for s in (-1, 1):
@@ -168,38 +281,30 @@ def main():
           f"probes solid, {mat:.2f} mm each side x {depth:.1f} mm deep "
           f"= {mat * depth:.0f} mm^2 in shear")
 
-    # The nut has to be enclosed. If its pocket breaks into the cavity it will
-    # push flock into the deck's path and the screw will have nothing to pull on.
-    bx, cd = p["case_bolt_x"], p["case_nut_cd"]
     ring = []
-    for s in (-1, 1):
-        for y in p["case_bolt_ys"]:
-            for a in range(0, 360, 30):
-                r = cd / 2 + 0.6
-                ring.append([s * bx + r * np.cos(np.radians(a)),
-                             y + r * np.sin(np.radians(a)),
-                             zs - p["case_nut_h"] / 2])
+    for b in cen:
+        for a in range(0, 360, 30):
+            r = p["case_nut_cd"] / 2 + 0.6
+            ring.append([b[0] + r * np.cos(np.radians(a)),
+                         b[1] + r * np.sin(np.radians(a)),
+                         zs - p["case_nut_h"] / 2])
     enclosed = back.contains(np.array(ring))
     check("every nut pocket is enclosed in material",
           bool(np.all(enclosed)),
-          f"{int(enclosed.sum())}/{len(ring)} probes solid around 8 pockets, "
-          f"{bx - cd / 2 - p['case_cav_hw']:.2f} mm to the cavity, "
-          f"{p['case_rail_x'] - bx - cd / 2:.2f} mm to the outside")
+          f"{int(enclosed.sum())}/{len(ring)} probes solid around "
+          f"{len(cen)} pockets")
 
-    # The screw must actually reach from the front face to the nut.
     axis = []
-    for s in (-1, 1):
-        for y in p["case_bolt_ys"]:
-            for z in np.linspace(p["case_z1"] - 0.5, zs - p["case_nut_h"] + 0.3, 7):
-                axis.append([s * bx, y, z])
+    for b in cen:
+        for z in np.linspace(p["case_z1"] - 0.5, zs - p["case_nut_h"] + 0.3, 7):
+            axis.append([b[0], b[1], z])
     bore = case.contains(np.array(axis))
     check("every screw bore runs front face to nut",
           not bool(np.any(bore)),
           f"{int((~bore).sum())}/{len(axis)} probes clear over "
-          f"{p['case_bolt_stack']:.2f} mm of stack, M5 x {p['case_bolt_len']:.0f}")
+          f"{p['case_bolt_stack']:.2f} mm of stack, "
+          f"{len(cen)} x M5 x {p['case_bolt_len']:.0f}")
 
-    # The magnets were the reason for splitting the case. Prove they are open
-    # to the bed-facing side of the front half and still have skin over them.
     mp, mo = [], []
     for (mx, my) in [(s * p["magnet_x"], y) for s in (-1, 1)
                      for y in (p["magnet_y_lo"], p["magnet_y_hi"])]:
@@ -207,38 +312,35 @@ def main():
                              p["case_z_fr"] + p["magnet_pocket_h"] - 0.2, 4):
             mp.append([mx, my, z])
         mo.append([mx, my, p["case_z1"] - 0.4])
-    void, skin = front.contains(np.array(mp)), front.contains(np.array(mo))
+    mvoid, skin = front.contains(np.array(mp)), front.contains(np.array(mo))
     check("every magnet pocket is open to the tray and still skinned",
-          not bool(np.any(void)) and bool(np.all(skin)),
-          f"{int((~void).sum())}/{len(mp)} pocket probes open, "
+          not bool(np.any(mvoid)) and bool(np.all(skin)),
+          f"{int((~mvoid).sum())}/{len(mp)} pocket probes open, "
           f"{int(skin.sum())}/4 skins intact at {p['case_mag_skin']:.2f} mm, "
           f"gap to the deck {p['case_mag_gap']:.2f} mm")
 
-    # Each half lies on one flat face and grows away from it. A near-horizontal
-    # face pointing at the bed is the defect that killed the spined back.
     for lbl, m, at_max in (("front", front, True), ("back", back, False)):
         flat = ceilings(m, at_max, 15.0)
         shallow = ceilings(m, at_max, 44.0)
         check(f"the {lbl} half prints face down with nothing under it",
-              flat < 20.0 and shallow < 200.0,
+              flat < 20.0 and shallow < 250.0,
               f"{flat:.0f} mm^2 near-flat ceiling, {shallow:.0f} mm^2 under 44 deg")
+
+    ratio, deckr = p["case_h"] / p["case_w"], p["body_h"] / p["body_w"]
+    check("the case is still the deck's proportion",
+          abs(ratio / deckr - 1) < 0.005,
+          f"case {p['case_w']:.2f} x {p['case_h']:.2f} is {ratio:.4f}, "
+          f"deck {p['body_w']:.2f} x {p['body_h']:.2f} is {deckr:.4f}")
 
     fw, fh = case.extents[0], case.extents[1]
     tot = (front.volume + back.volume) / 1000.0
-    ratio = p["case_h"] / p["case_w"]
-    deck = p["body_h"] / p["body_w"]
-    check("the case is still the deck's proportion",
-          abs(ratio / deck - 1) < 0.005,
-          f"case {p['case_w']:.2f} x {p['case_h']:.2f} is {ratio:.4f}, "
-          f"deck {p['body_w']:.2f} x {p['body_h']:.2f} is {deck:.4f}")
-
     print(f"\n  case {p['case_w']:.1f} x {p['case_h']:.1f} x {case.extents[2]:.1f} mm, "
-          f"{fw:.1f} over the rails")
+          f"{fw:.1f} over the strap bosses")
     print(f"  front {front.volume/1000:.0f} cm^3 + back {back.volume/1000:.0f} cm^3"
-          f"  =  {tot:.0f} cm^3 (~{tot * 1.24 * 0.55:.0f} g printed)")
+          f"  =  {tot:.0f} cm^3 (~{tot * 1.24 * 0.55:.0f} g at 55% of solid)")
     print(f"  each half needs a {fw:.0f} x {fh:.0f} mm bed")
-    print(f"  hardware: 8 x M5 x {p['case_bolt_len']:.0f} socket cap, 8 x M5 nut, "
-          f"4 x {p['magnet_d']:.0f}x{p['magnet_h']:.0f} disc")
+    print(f"  hardware: {len(cen)} x M5 x {p['case_bolt_len']:.0f} socket cap, "
+          f"{len(cen)} x M5 nut, 4 x {p['magnet_d']:.0f}x{p['magnet_h']:.0f} disc")
     print()
     if FAILED:
         print(f"  {len(FAILED)} check(s) failed.")

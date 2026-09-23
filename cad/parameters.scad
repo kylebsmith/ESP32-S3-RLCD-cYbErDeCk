@@ -1754,29 +1754,42 @@ case_clear  = 0.40;   // [DESIGN] clearance on top of the flock
 case_pad    = case_flock + case_clear;              // [DERIVED] = 1.20
 
 //  ---- IT IS TWO PARTS, BOLTED -----------------------------------------------
-//  Version 1 was one piece printed mouth-up and it had two faults that are
-//  really the same fault: there was no way to get a hand inside it. The magnet
-//  pockets opened into a cavity 155 mm deep with nothing to reach them by, and
-//  the whole back had to be a spine so the part could stand on the bed.
+//  One piece could be printed. It could not be reached into - the magnet
+//  pockets opened into a cavity 155 mm deep with nothing to get at them by.
+//  A plane parallel to the face fixes that and pays four more times: both
+//  halves print flat and face-down, the magnet pockets open upward on the bed,
+//  the inside becomes two open trays to flock, and the back stops needing a
+//  spine to stand on.
 //
-//  Splitting it on a plane parallel to the front solves both and pays for
-//  itself three more times over:
-//    - both halves print face-down, flat, with no bridge and no support
-//    - the magnet pockets open upward on the bed, so they are filled by hand
-//    - the inside is two open trays, which is the only sane way to flock it
-//    - the back no longer needs a spine to stand on, so it becomes a flat slab
-//      (see THE BACK IS FLAT below)
-//  The seam is not hidden. Eight M5 socket screws down each flank, into hex
-//  nuts trapped at the parting face, and a 0.6 mm chamfer each side of the
-//  joint so it reads as a deliberate shadow gap rather than a crack.
+//  The seam is not hidden. A 0.6 mm chamfer each side makes it a 1.2 mm shadow
+//  gap, which is the only honest thing to do with a joint you cannot fill.
 case_wall   = 4.00;   // [DESIGN] front and back
-case_side   = 8.00;   // [DESIGN] flanks. An M5 nut needs 15 mm of flank to sit
-                      //   in, and a 16 mm flank made the case 150 x 155 - SQUARE,
-                      //   where the deck is plainly portrait. That is the
-                      //   opposite of echoing it. So the flank stays slim and
-                      //   the fasteners move out into the rails below, which
-                      //   have the material anyway.
-case_floor  = 6.00;   // [DESIGN] closed bottom, a plinth for the deck to land on
+
+//  ---- THE WALL IS UNIFORM, AND THAT IS WHY THE FASTENERS CAN GO ROUND -------
+//  v3 put the fasteners in two rectangular rails on the flanks. Two faults,
+//  and the owner named both: "the rectangular shapes where the holes are, plus
+//  the squircle-esque shape come together at this weird angle the geometry
+//  clashes ... the screw holes need to also attach all the way around."
+//
+//  They are the same fault. A rail is a STRAIGHT bar laid against an outline
+//  that is straight in the middle and curved at the ends, so its ends always
+//  land somewhere the body is turning and the wedge between them reads as a
+//  mistake. And a rail can only exist where the body is straight, which is why
+//  the fasteners could only be on the sides.
+//
+//  Make the wall one thickness the whole way round and both go away together.
+//  There is no rail to clash, because the fasteners sit ON the outline - see
+//  THE FASTENER RING below - and the outline goes round, so they go round.
+case_side   = 16.00;  // [DESIGN] flanks. WAS 8.00 with rails.
+//  THE MOUTH IS SET BY A HAND, THE FLOOR TAKES UP THE SLACK. Holding the deck's
+//  proportion fixes the case's HEIGHT; it does not say where to spend it. Spend
+//  it at the mouth and the deck sits 24 mm down a hole, which needs a scallop
+//  cut in the front to get it out - and a scallop big enough to matter eats the
+//  silhouette. Spend it at the floor and it is invisible, it needs no scallop,
+//  and it puts 28 mm of solid PLA at the end you actually drop the thing on.
+case_rim    = 12.00;  // [DESIGN] how far the mouth stands above the seated deck.
+                      //   12 is a finger pad: enough to pinch the deck's top
+                      //   edge front and back and draw it out.
 
 //  [MEASURED on the rendered back plate]
 case_cowl_w = 83.93;  // cowl foot, along X
@@ -1784,35 +1797,37 @@ case_cowl_r = 11.00;  // how far it stands off the back face
 
 case_cav_w  = body_w + 2 * case_pad;                // [DERIVED] = 118.65
 case_cav_hw = case_cav_w / 2;
-case_w      = case_cav_w + 2 * case_side;           // [DERIVED] = 134.65
+case_w      = case_cav_w + 2 * case_side;           // [DERIVED] = 150.65
 case_slot_w = case_cowl_w + 2 * case_pad;           // [DERIVED] =  86.33
 case_z_fr   = body_t + case_pad;                    // [DERIVED] cavity front
 case_z_bk   = -case_pad;                            // [DERIVED] cavity back
 case_z_cowl = -case_cowl_r - case_pad;              // [DERIVED] channel floor
-//  The mouth height is not chosen, it is solved for: it is whatever makes the
-//  case the DECK'S OWN PROPORTION. Same ratio, same superellipse exponent, same
-//  corner fraction - three numbers all pinned to the object inside it instead of
-//  to taste. It lands on 15.00 mm, which is deep enough to swallow the top edge
-//  and shallow enough to get the deck back out.
+
+//  The floor depth is not chosen, it is solved for: it is whatever makes the
+//  case the DECK'S OWN PROPORTION once the mouth has taken what a hand needs.
+//  Same ratio, same superellipse exponent, same corner fraction - all pinned to
+//  the object inside it instead of to taste.
 //
 //  ORDER MATTERS HERE, WHICH IT DOES NOT ELSEWHERE IN THIS FILE. OpenSCAD left
-//  this undef when it was written above case_w, and the assert below caught it
-//  - but tools/params.py resolved the same forward reference happily and
-//  reported 15.00. The Python reader is MORE FORGIVING THAN THE RENDERER, so a
-//  parameter that satisfies every tool here can still be undef in the part.
-case_rim    = case_w * body_h / body_w
-              - body_h - case_pad - case_floor;      // [DERIVED] = 15.00
+//  this undef when it was written above case_w, and tools/params.py resolved
+//  the same forward reference happily and reported a number. The Python reader
+//  is MORE FORGIVING THAN THE RENDERER, so a parameter that satisfies every
+//  tool here can still be undef in the part. validate.py's PARAM class now
+//  compares the two readers directly. See C-41.
+case_floor  = case_w * body_h / body_w
+              - body_h - case_pad - case_rim;        // [DERIVED] = 28.30
 case_y_bot  = -body_h/2 - case_pad;                 // [DERIVED] deck lands here
 case_y_top  =  body_h/2 + case_rim;                 // [DERIVED] the mouth
-case_y_floor= case_y_bot - case_floor;              // [DERIVED] = -77.325
-case_h      = case_y_top - case_y_floor;            // [DERIVED] = 162.45
-case_cy     = (case_y_top + case_y_floor) / 2;      // [DERIVED] =   3.90
+case_y_floor= case_y_bot - case_floor;              // [DERIVED] = -87.325
+case_h      = case_y_top - case_y_floor;            // [DERIVED] = 181.75
+case_cy     = (case_y_top + case_y_floor) / 2;      // [DERIVED] =   3.55
+case_cav_r  = corner_blend + case_pad;              // [DERIVED] =  12.40
 
 //  THE BACK IS FLAT, AND THAT IS A PRINT FINDING BEFORE IT IS A STYLE ONE.
 //  The obvious back is a slab with a raised spine carrying the cowl channel.
 //  Printed back-down the spine crown is the first layer and the slab bottom
 //  sits 11.00 mm above it - a downward-facing flat face 20 mm wide running the
-//  full 155 mm, 3,100 mm2 a side, needing support. Flaring the spine out to
+//  full height, 3,100 mm2 a side, needing support. Flaring the spine out to
 //  meet the slab does not fix it: 11 mm of rise over 28 mm of run is 21 deg,
 //  half of what FDM will hold. So the back drops to the channel floor
 //  everywhere. It costs 11 mm of depth, it prints with nothing under it, and a
@@ -1823,83 +1838,111 @@ case_split_z = (case_z0 + case_z1) / 2;             // [DERIVED] = 2.925
 case_seam_ch = 0.60;  // [DESIGN] chamfer each side of the joint -> 1.2 mm gap
 case_edge_ch = 2.00;  // [DESIGN] chamfer round the front and back faces
 
-case_cav_r  = corner_blend + case_pad;              // [DERIVED] =  12.40
-
 //  THE CORNER ECHOES THE DECK, IT DOES NOT INHERIT IT. Offsetting the deck's
-//  corner outward by the wall gives 20.40 mm on a 135 mm body - proportionally
-//  almost twice as round as the deck, which is why version 1 read as a pebble.
-//  Holding the RATIO instead gives a corner that is the same fraction of width
-//  the deck's is, on the same superellipse exponent. Same language, same
-//  proportion, no blobbing.
-case_r      = corner_blend * case_w / body_w;       // [DERIVED] =  12.97
+//  corner outward by the wall gives 28.60 mm on a 150 mm body - proportionally
+//  more than twice as round as the deck, which is why an early version read as
+//  a pebble. Holding the RATIO instead gives a corner that is the same fraction
+//  of width the deck's is, on the same exponent.
+case_r      = corner_blend * case_w / body_w;       // [DERIVED] =  14.51
 
-//  ---- STRAP RAILS ----------------------------------------------------------
-//  Three versions of this, and each one failed in the way the last one was
-//  fixed. v1 cut a 4 mm slot through a 10 mm flank at the top corner: a thin
-//  web where the outline was already turning. v2 grew a 32 mm pad on each
-//  flank: strong, and it read as two tabs stuck to a box - the bolted-on look
-//  that got the grip fingers thrown out back in C-38.
-//
-//  A tab is a local answer. So the rail is not local: one squared band per
-//  flank, 14 mm proud, 134 mm long, standing off with a HARD STEP - no fillet,
-//  the way a boss looks machined rather than grown. It carries all four
-//  fasteners AND the strap slot, so it is structure the whole length of the
-//  object rather than a feature bolted near one end. The slab stays slim; the
-//  weight is in the rails, where the load is.
-//
-//  Its ends stop inside the straight run of the flank, deliberately, so the
-//  termination is a clean step and never a step onto a curve.
-case_rail_proud = 14.00;  // [DESIGN] sets the material: 22 mm across the rail,
-                          //   6.27 mm either side of an M5 nut, 6.50 mm either
-                          //   side of the strap slot.
-case_rail_y0    = -63.00; // [DESIGN] both ends inside the straight flank
-case_rail_y1    =  71.00; // [DESIGN]
-case_rail_r     =   3.00; // [DESIGN] crisp
+//  ---- THE FASTENER RING ------------------------------------------------------
+//  The fasteners are not a list of coordinates. They are the case's own outline,
+//  inset to the middle of the wall and sampled at even arc length, so they
+//  follow the superellipse round the bottom corners instead of stopping where a
+//  straight rail would have to. Nothing can drift off the form, because the
+//  ring IS the form. cad/carrycase.scad builds it; these set its shape.
+case_bolt_ins = case_side / 2;   // [DERIVED] = 8.00, the wall's centreline
+case_bolt_m   = 6;               // [DESIGN] fasteners per side, past the one at
+                                 //   bottom dead centre. 13 in all, at a 35.7 mm
+                                 //   pitch, which is instrument-case spacing.
 
-case_lug_y      =  38.00; // [DESIGN] slot centre - midway between the
-                          //   fasteners at 19 and 57, 47 mm below the mouth.
-                          //   Lugs at the rim foul the hand drawing the deck
-                          //   out, and a bag hung from its rim tips forward.
-case_lug_slot_w =   9.00; // [DESIGN] takes 10 mm webbing or a split ring
-case_lug_slot_h =   5.00; // [DESIGN]
-case_lug_slot_r =   1.60; // [DESIGN]
+//  WHY THE RING IS A U AND NOT A CLOSED LOOP. Nothing is being conceded here:
+//  a fastener parallel to Z needs material through the WHOLE depth, and across
+//  the mouth there is none - the deck's own cross-section has to pass through
+//  there. The flanks and the floor have full-depth metal, the mouth cannot.
+//  So the ring runs as far up both flanks as it can and stops.
+case_bolt_top_back = 10.00;      // [DESIGN] how far short of the flank's end
+                                 //   the ring stops. Two reasons, both real:
+                                 //   it leaves 20 mm of metal above the top
+                                 //   fastener, and it gives the strap boss
+                                 //   straight flank to terminate on.
 
-case_rail_x  = case_w / 2 + case_rail_proud;                 // [DERIVED] = 81.325
-case_lug_x   = (case_cav_hw + case_rail_x) / 2;              // [DERIVED] = 70.325
-case_lug_mat = (case_rail_x - case_cav_hw - case_lug_slot_w) / 2;  // = 6.50 a side
-
-//  ---- FASTENERS ------------------------------------------------------------
-//  M5, because the user asked for M5 and because it is the smallest thread that
-//  still reads as hardware rather than as a fixing. The LENGTH is set by the
-//  geometry, not chosen: 19.125 mm of front half plus a 4.20 mm nut pocket is
-//  23.3 mm of stack, so M5 x 25. A 10 mm screw cannot span a 38 mm object.
-//
-//  The nut is trapped at the parting face and the screw is driven from the
-//  front, so the whole thing assembles with one hex key and no spanner - which
-//  matters, because nothing reaches down the side of a part this deep.
-case_bolt_d     = 5.00;   // [STANDARD] M5
+case_bolt_d     = 5.00;   // [STANDARD] M5, as asked for
 case_bolt_clear = 5.40;   // [STANDARD] ISO 273 medium fit
-case_bolt_len   = 25.00;  // [DERIVED->STANDARD] 23.33 needed, 25 is the stock size
+case_bolt_len   = 25.00;  // [DERIVED->STANDARD] 23.33 needed, 25 is stock.
+                          //   A 10 mm screw cannot span a 38 mm object.
 case_bolt_head_d= 8.50;   // [STANDARD] ISO 4762 socket cap
 case_nut_af     = 8.00;   // [STANDARD] ISO 4032 M5, across flats
 case_nut_t      = 4.00;   // [STANDARD] ISO 4032 M5, thickness
 case_fit        = 0.20;   // [DESIGN] press fit on the hex pocket
 case_bolt_relief= 3.00;   // [DESIGN] blind run-out past the nut
+case_bolt_keep  = 3.00;   // [DESIGN] least metal from a nut to any surface
 case_nut_h      = case_nut_t + case_fit;                     // [DERIVED] = 4.20
 case_nut_cd     = (case_nut_af + case_fit) / cos(30);        // [DERIVED] = 9.47
-case_bolt_x     = case_lug_x;   // in the rail, not the flank  [DERIVED] = 70.325
-case_bolt_ys    = [57, 19, -19, -57];  // [DESIGN] 38 mm pitch, symmetric
 case_bolt_end   = case_split_z - case_nut_h - case_bolt_relief;   // = -4.275
 case_bolt_stack = (case_z1 - case_split_z) + case_nut_h;     // [DERIVED] = 23.33
+case_bolt_n     = 2 * case_bolt_m + 1;                       // [DERIVED] = 13
 
-//  Locating pins. The bolts clamp but they float 0.20 mm in their clearance
-//  holes, and a 0.20 mm step at a seam that gets sanded is a seam you can feel.
-//  Two printed pins a side, on the bolt column, between the bolts. They carry
+//  Locating pins. Thirteen screws clamp but each floats 0.20 mm in its
+//  clearance hole, and a 0.20 mm step at a seam that gets sanded is a seam you
+//  can feel. Four printed pins, on the ring, halfway between screws. They carry
 //  nothing; they only stop the halves sliding while the screws go in.
 case_pin_d   = 4.00;  case_pin_h = 3.00;  case_pin_fit = 0.30;
-case_pin_ys  = [0, -38];
+case_pin_ks  = [0.5, 3.5];   // [DESIGN] where on the ring, in screw pitches
 
-//  ---- MAGNETS: BACK, AND WHAT THEY ACTUALLY DO -------------------------------
+//  ---- STRAP BOSSES -----------------------------------------------------------
+//  Five goes at this. A slot through a thin flank (fragile). A 32 mm pad (read
+//  as a tab stuck on). A 134 mm rectangular rail (clashed with the curve - the
+//  complaint that started C-42). A tangent stadium (still read as an ear).
+//
+//  The stadium failed for a reason worth writing down, because it rules out a
+//  whole family of answers. Tangency between two parallel faces 8 mm apart can
+//  only be made by a semicircle of radius 4 - no larger radius is tangent to
+//  both - so a tangent boss ALWAYS ends in a tight 4 mm turn, and a tight turn
+//  at each end is what an ear looks like. The escape is a long, shallow swell,
+//  and that is geometrically unavailable here: the slot has to sit high on the
+//  flank for a bag to hang flat, a swell centred there runs out of straight
+//  flank within about 44 mm, and a 44 mm swell needs r34 ends - a 40 degree
+//  junction, worse than the stadium it replaced.
+//
+//  So the boss stays local, and instead of fighting the outline it SPEAKS IT:
+//  a pad with the deck's own superelliptical corners on the deck's own
+//  exponent. The complaint was that a rectangle and a squircle met at a weird
+//  angle. There is no rectangle now.
+//
+//  It sits in the gap between the two topmost flank fasteners, so the strap
+//  load is taken into the joint by the screw above it and the screw below it
+//  rather than by printed plastic alone.
+case_lug_proud  = 8.00;  // [DESIGN] also the stadium's thickness, which is what
+                         //   sets the end radius at 4.00 and makes it tangent
+case_lug_len    = 46.00; // [DESIGN] long enough to take in the fastener above
+                         //   the slot and the one below it, so the screws read
+                         //   as sitting ON the pad rather than beside it.
+case_lug_cr     =  6.00; // [DESIGN] corner, on form_n - the deck's exponent
+case_lug_slot_w = 9.00;  // [DESIGN] takes 10 mm webbing or a split ring
+case_lug_slot_h = 5.00;  // [DESIGN]
+case_lug_slot_r = 1.60;  // [DESIGN]
+
+case_lug_root   = 6.00;  // [DESIGN] how deep the boss is rooted into the flank.
+                         //   Buried, never seen; it exists so the union has
+                         //   real overlap instead of a tangent plane, which is
+                         //   a degenerate boolean.
+case_lug_xo  = case_w/2 + case_lug_proud;                         // = 83.325
+case_lug_x   = (case_cav_hw + case_lug_xo) / 2;                   // = 71.325
+case_lug_mat = (case_lug_xo - case_cav_hw - case_lug_slot_w) / 2; // = 7.50 a side
+
+//  ---- NO THUMB SCALLOP, AND WHY IT IS RECORDED --------------------------------
+//  A 24 mm mouth was tried, with an 80 x 22 mm arc cut in the front to reach
+//  the deck. It worked and it was wrong: on a 150 mm face that arc is not a
+//  detail, it is the silhouette, and it turned a brutalist slab into a tote
+//  bag. Shrinking it to a subtle 8 mm dish keeps the silhouette and stops
+//  solving the problem - you cannot reach 24 mm down through an 8 mm relief.
+//
+//  Moving the height into the FLOOR removes the problem rather than styling
+//  around it. Recorded so nobody adds the scallop back without first asking
+//  why the mouth is 12 mm.
+
+//  ---- MAGNETS: WHAT THEY ACTUALLY DO -----------------------------------------
 //  In the one-piece sleeve these were indefensible - blind pockets 155 mm down
 //  a tube that nobody could reach. Split, they open upward on the bed and are
 //  dropped in by hand, so the objection is gone.
@@ -1922,21 +1965,24 @@ case_pin_ys  = [0, -38];
 case_mag_gap   = magnet_skin + case_pad;                     // [DERIVED] = 2.00
 case_mag_skin  = case_z1 - (case_z_fr + magnet_pocket_h);    // [DERIVED] = 1.85
 
+//  The root is measured inward from the flank, and the flank itself recedes by
+//  the chamfer, so what has to be positive is root MINUS chamfer - not root
+//  against the boss's thickness, which has nothing to do with it. 2 mm of real
+//  overlap at the worst level.
+assert(case_lug_cr <= (case_lug_proud + case_lug_root) / 2 - 0.5,
+       "pad corner is larger than the pad is thick");
+assert(case_lug_root - case_edge_ch >= 2.0,
+       "strap boss roots shallower than the chamfer recedes, so it will float");
 assert(case_lug_mat >= 6.0,
-       "strap slot leaves under 6 mm of rail either side");
+       "strap slot leaves under 6 mm of boss either side");
 assert(abs((case_h / case_w) / (body_h / body_w) - 1) < 0.005,
        "the case has stopped being the deck's proportion");
-assert(case_rail_y1 <= case_y_top  - case_r &&
-       case_rail_y0 >= case_y_floor + case_r,
-       "a rail end lands on the curve instead of the straight flank");
-assert(max(case_bolt_ys[0], -case_bolt_ys[3]) + case_bolt_clear/2 + 2.5
-       <= case_rail_y1 && case_lug_y + case_lug_slot_h/2
-       < case_bolt_ys[0] - case_bolt_clear/2 - 2.5,
-       "fasteners or the strap slot run out of the rail that carries them");
-assert(case_bolt_x - case_nut_cd/2 - case_cav_hw >= 3.0,
-       "nut pocket comes within 3 mm of the cavity");
-assert(case_rail_x - (case_bolt_x + case_nut_cd/2) >= 3.0,
-       "nut pocket comes within 3 mm of the outer face");
+assert(case_side / 2 - case_nut_cd / 2 >= case_bolt_keep,
+       "the wall is too thin for a nut on its centreline");
+assert(case_floor >= case_side - 0.001,
+       "floor thinner than the flank, so the ring cannot round the corner");
+assert(case_rim >= 10.0 && case_rim <= 16.0,
+       "mouth too deep to pinch the deck out of, or too shallow to hold it");
 assert(case_bolt_len >= case_bolt_stack,
        "M5 screw is shorter than the stack it has to span");
 assert(case_bolt_end > case_z0 + 3.0,

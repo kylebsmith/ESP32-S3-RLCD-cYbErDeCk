@@ -702,13 +702,13 @@
       "check": "no parameter is undef in the renderer",
       "class": "PARAM",
       "ok": true,
-      "detail": "382 scalars echoed out of OpenSCAD; none undef"
+      "detail": "385 scalars echoed out of OpenSCAD; none undef"
     },
     {
       "check": "both readers agree on every parameter",
       "class": "PARAM",
       "ok": true,
-      "detail": "382 shared scalars, both readers agree"
+      "detail": "385 shared scalars, both readers agree"
     }
   ]
 }

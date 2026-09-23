@@ -1864,3 +1864,135 @@ and to pass on the corrected file. Two checks, 116 → 118.
 The lesson is narrower than "tools disagree". It is that **the forgiving reader
 is the one every gate runs on**, so the gates were all measuring a file the
 renderer never saw.
+
+### C-42 — The rails clashed with the curve, and the fasteners only went down the sides
+
+Two complaints, and they turned out to be one fault: *"the combination of the
+rectangular shapes where the holes are, plus the squircle-esque shape come
+together at this weird angle the geometry clashes. Based on the curves and the
+rectangular, the screw holes need to also attach all the way around not just on
+the sides."*
+
+A rail is a **straight bar** laid against an outline that is straight in the
+middle and curved at the ends. Its ends always land somewhere the body is
+turning, and the wedge between them reads as a mistake. And a rail can only
+exist where the body is straight — which is exactly why the fasteners could
+only be on the sides. Same fault, two symptoms.
+
+### The fasteners are the outline now
+
+There is no list of screw coordinates anywhere in this project. `ring_path()`
+takes the case's own outline, insets it to the middle of the wall, and samples
+it at even arc length:
+
+    inset outline  ->  arc length  ->  13 fasteners at a 35.7 mm pitch
+
+So they follow the superellipse **round the bottom corners** instead of
+stopping where a straight bar would have to. Measured on the rendered part: 12
+gaps between **32.1 and 35.8 mm**, spread 10.3 % — and the low end is geometry,
+not error, because a chord under-reads an arc. Nothing can drift off the form,
+because the ring *is* the form.
+
+### The ring is a U, and that is physics, not a concession
+
+A fastener parallel to Z needs material through the **whole depth**. Across the
+mouth there is none — the deck's own cross-section has to pass through there.
+The flanks and the floor have full-depth metal; the mouth cannot. So the ring
+runs as far up both flanks as it can and stops, and `check_case.py` asserts it
+**turns the corners**: 5 fasteners below the deck, 2 of them out past the cavity
+in both bottom corners.
+
+### It was square, because of a nut — again
+
+A 16 mm wall is what an M5 nut needs (9.47 mm across corners leaves 3.27 mm of
+metal either side, and the ring runs down the middle of it). At 16 mm all round
+the case is **150.65 wide**, and holding the deck's proportion at that width
+makes it 181.75 tall. C-41 solved the same tension by shrinking the flank; that
+option is gone once the fasteners have to go round.
+
+Holding the proportion fixes the case's **height**. It does not say where to
+spend it, and that is the actual decision:
+
+| | mouth | floor | consequence |
+|---|---|---|---|
+| spend it at the mouth | 24.3 mm | 16.0 mm | deck sits down a hole, needs a scallop to reach |
+| **spend it at the floor** | **12.0 mm** | **28.3 mm** | invisible, no scallop, 28 mm of PLA on the drop end |
+
+### The scallop that got built and thrown away
+
+The 24 mm mouth was built, with an **80 × 22.3 mm r47 arc** cut through both
+halves to reach the deck. It worked. It was also, on a 150 mm face, not a
+detail but *the silhouette* — it turned a brutalist slab into a tote bag.
+Shrinking it to a subtle 8 mm dish keeps the silhouette and stops solving the
+problem: you cannot reach 24 mm down through an 8 mm relief.
+
+Moving the height into the floor removes the problem instead of styling around
+it. Recorded so nobody adds the scallop back without first asking why the mouth
+is 12 mm.
+
+### Five strap lugs, and the one that ruled out a family
+
+| version | what it was | why it went |
+|---|---|---|
+| 1 | 4 mm slot through a 10 mm flank, at the corner | thin web, awkward place |
+| 2 | 32 mm pad on the flank | read as a tab stuck on |
+| 3 | 134 mm rectangular rail | **clashed with the curve** — this correction |
+| 4 | tangent stadium, 8 mm proud | still read as an ear |
+| 5 | superellipse pad, 46 mm, form_n 3.2 | — |
+
+Version 4 failed for a reason worth writing down, because it rules out a whole
+family of answers. **Tangency between two parallel faces 8 mm apart can only be
+made by a semicircle of radius 4** — no larger radius is tangent to both — so a
+tangent boss always ends in a tight 4 mm turn, and a tight turn at each end is
+what an ear looks like. The escape is a long shallow swell, and that is
+geometrically unavailable here: the slot has to sit high on the flank for a bag
+to hang flat, a swell centred there runs out of straight flank within about
+44 mm, and a 44 mm swell needs r34 ends — a **40° junction, worse than the
+stadium it replaced.**
+
+So the boss stays local and stops fighting the outline. It **speaks it**: a pad
+on the deck's own superelliptical corners and the deck's own exponent. The
+complaint was that a rectangle and a squircle met at a weird angle. There is no
+rectangle now.
+
+### A boss that measured, rendered and photographed while not existing
+
+Replacing the stadium with the pad was done with two `str.replace()` calls. The
+first deleted the old module along with its comment; the second, which was
+supposed to rewrite that module, therefore matched nothing and **silently did
+nothing**. OpenSCAD does not stop for this — it prints
+
+    WARNING: Ignoring unknown module 'lug_pad'
+
+and renders the part without it. The render was produced, looked at, and
+described as *"integrated rather than hung on"* — of a boss that was not there.
+
+`build.sh` has treated that warning as fatal for the enclosure for a long time.
+The render that fooled me was an ad-hoc `openscad | grep '^ERROR'` that did not.
+`check_case.py`'s own `render()` now treats it as fatal too, so running the file
+directly is no weaker than running the gate.
+
+The lesson is not "read the warnings". It is that **a guard only guards the path
+it is on**, and the convenient path around it is the one that gets used while
+iterating.
+
+### What caught what
+
+Of the defects in this correction, the checks caught the pad (two failures, both
+real) only because `check_case.py` had been rewritten to find the fastener bores
+**in a section of the actual part** rather than read their coordinates from
+parameters. The headline number it reports — `166.6 over the strap bosses`
+against a 150.65 body — is the one that said the boss was missing.
+
+Two checks in the same file had to be fixed before they were worth anything:
+
+1. The port-burial check probed a point 13 mm into the wall. The strap slot
+   passes through the outer half of the wall **directly outboard of the microSD
+   port**, so the probe landed in fresh air and called a port with 7.5 mm of
+   metal over it exposed. "Buried" is a thickness, not a yes/no; it is measured
+   with a ray cast now — USB-C 24.0 mm, microSD 24.0 mm, keyboard 16.0 mm.
+2. The ring-spacing check walked the fasteners nearest-neighbour from bottom
+   dead centre. The ring is a **U, not a loop**, so that walk runs out to one
+   end and then jumps 134 mm across the open mouth to pick up the other side —
+   reported as a **236 % spacing error** on a part that is evenly spaced. It
+   starts at an end now.
