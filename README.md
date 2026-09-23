@@ -242,6 +242,7 @@ counted among the audited rows.
 | **[DATUMS.md](docs/DATUMS.md)** | every dimension, its provenance, forty recorded corrections, nine open items |
 | **[HARDWARE.md](docs/HARDWARE.md)** | the board itself: panel, controller, pin map, USB and power, all traced to vendor sources |
 | **[SUBSTRATE.md](docs/SUBSTRATE.md)** | the conceptual core: one data structure, one noun, three verbs |
+| **[CASE.md](docs/CASE.md)** | the carry case: how it guides, holds and prints |
 | **[CONCRETE.md](docs/CONCRETE.md)** | the cast concrete jacket, its mould, and the mix |
 | **[HANDOFF.md](HANDOFF.md)** | briefing for a session with the hardware in front of it |
 | **[OS.md](docs/OS.md)** | the firmware design: what it runs, why, and what it deliberately will not do |

@@ -1732,3 +1732,67 @@ conc_kbd_relief = 5.50;  // [DESIGN] per-side ramp at the keyboard, leaving
                          //   edge. Below about 1.5 a cast arris spalls.
 assert(conc_t - conc_kbd_relief >= 1.5,
        "keyboard ramp leaves under 1.5 mm of concrete land; the edge will spall");
+
+// =============================================================================
+//  CARRY CASE  (cad/carrycase.scad)
+// =============================================================================
+//  Not a cover. A sleeve the whole deck slides into, vertically, like a side
+//  bag: front, back, both flanks and the bottom, open only at the top. Every
+//  port is buried. It is meant to be flocked inside and filled, sanded and
+//  polished outside until it reads as one industrial object, so every external
+//  surface here is continuous and every internal one carries a flock allowance.
+//
+//  THE COWL IS THE GUIDE. The deck's battery cowl is 83.93 x 28.23 mm at its
+//  foot and stands 11.00 mm off the back - measured on the rendered plate, not
+//  assumed. A channel that width running the full height of the cavity lets the
+//  deck slide in and keys it in X and in rotation at the same time. The bump
+//  stops being a problem to accommodate and becomes the location feature.
+case_flock  = 0.80;   // [DESIGN] flock pile, per surface. Nylon flock lands
+                      //   0.5-1.0; 0.8 is the middle and it is the difference
+                      //   between a deck that slides and one that binds.
+case_clear  = 0.40;   // [DESIGN] clearance on top of the flock
+case_pad    = case_flock + case_clear;              // [DERIVED] = 1.20
+
+case_wall   = 4.00;   // [DESIGN] front and back
+case_side   = 10.00;  // [DESIGN] flanks. Not styling - this is the material the
+                      //   strap slots are cut through, and it is why the lugs
+                      //   need no bosses, ears or hardware.
+case_floor  = 6.00;   // [DESIGN] closed bottom, a plinth for the deck to land on
+case_rim    = 8.00;   // [DESIGN] how far the mouth stands above the seated deck
+
+//  [MEASURED on the rendered back plate]
+case_cowl_w = 83.93;  // cowl foot, along X
+case_cowl_r = 11.00;  // how far it stands off the back face
+
+case_cav_w  = body_w + 2 * case_pad;                // [DERIVED] = 118.65
+case_cav_hw = case_cav_w / 2;
+case_slot_w = case_cowl_w + 2 * case_pad;           // [DERIVED] =  86.33
+case_z_fr   = body_t + case_pad;                    // [DERIVED] cavity front
+case_z_bk   = -case_pad;                            // [DERIVED] cavity back
+case_z_cowl = -case_cowl_r - case_pad;              // [DERIVED] channel floor
+case_y_bot  = -body_h/2 - case_pad;                 // [DERIVED] deck lands here
+case_y_top  =  body_h/2 + case_rim;                 // [DERIVED] the mouth
+
+case_w      = case_cav_w + 2 * case_side;           // [DERIVED] = 138.65
+case_h      = case_y_top - (case_y_bot - case_floor);
+case_cy     = (case_y_top + case_y_bot - case_floor) / 2;
+case_r      = corner_blend + case_pad + case_side;  // [DERIVED] = 22.40
+
+//  ---- STRAP LUGS -----------------------------------------------------------
+//  No ears, no bosses, no hardware. Each lug is a slot cut straight through the
+//  flank, front to back. The flank is 10 mm of solid wall and 27 mm deep, so the
+//  material either side of a 4 mm slot carries 3.0 x 27.25 = 82 mm2 in shear -
+//  far past anything a strap will ever apply - while nothing protrudes at all.
+case_lug_w   = 4.00;   // [DESIGN] slot width, across the flank
+case_lug_h   = 16.00;  // [DESIGN] slot length, up the flank
+case_lug_r   = 1.60;   // [DESIGN] corner radius in the slot
+case_lug_dy  = 14.00;  // [DESIGN] centre, below the mouth rim
+case_lug_y   = case_y_top - case_lug_dy;
+case_lug_x   = case_cav_hw + case_side / 2;         // [DERIVED] mid-wall
+
+assert(case_lug_w + 2 * 2.4 <= case_side,
+       "strap slot leaves under 2.4 mm of flank either side");
+assert(case_slot_w < case_cav_w,
+       "cowl channel is wider than the cavity it runs in");
+assert(case_pad >= 0.8,
+       "no room for flock; the deck will bind once the inside is flocked");
