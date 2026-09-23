@@ -1432,6 +1432,67 @@ def check_print(parts, p):
     return ok
 
 
+def check_params_agree(p, tmp):
+    """Does the renderer read this parameter file the same way our tools do?
+
+    It did not, once, and nothing noticed. `case_rim` was written above the
+    `case_w` it depends on: params.py resolved the forward reference and
+    reported 15.00 mm, while OpenSCAD left it undef and propagated undef into
+    every dimension downstream of it. Every Python gate in this repo passed on
+    a parameter set the renderer could not evaluate.
+
+    So the two readers are now compared directly. Each scalar is echoed out of
+    OpenSCAD itself and matched against what params.py believes.
+    """
+    print("\n-- PARAMS --")
+    # Only names parameters.scad actually assigns. params.py invents a few
+    # defaults of its own (kbd_keeper, for one, which is really kbd_keeper_t
+    # and lives in cyberdeck.scad) and the renderer is right not to have them.
+    src_text = open(os.path.join(ROOT, "cad", "parameters.scad")).read()
+    assigned = set(re.findall(r"^\s*([A-Za-z_]\w*)\s*=", src_text, re.M))
+    names = sorted(k for k, v in p.items()
+                   if k in assigned and isinstance(v, (int, float))
+                   and not isinstance(v, bool))
+    src = os.path.join(tmp, "_echo.scad")
+    with open(src, "w") as f:
+        f.write('include <%s>\n' % os.path.join(ROOT, "cad", "parameters.scad"))
+        for n in names:
+            f.write('echo("PARAM", "%s", %s);\n' % (n, n))
+    r = subprocess.run(["openscad", "-o", os.path.join(tmp, "_echo.csg"), src],
+                       capture_output=True, text=True, timeout=600)
+    seen = {}
+    for line in r.stderr.splitlines():
+        m = re.match(r'ECHO: "PARAM", "([^"]+)", (.+)$', line.strip())
+        if m:
+            seen[m.group(1)] = m.group(2).strip()
+
+    undef = [n for n in names if seen.get(n) == "undef"]
+    missing = [n for n in names if n not in seen]
+    drift = []
+    for n in names:
+        v = seen.get(n)
+        if v is None or v == "undef":
+            continue
+        try:
+            # OpenSCAD echoes six significant figures, so the comparison is
+            # relative - an absolute 1e-4 flags its own rounding as drift.
+            if abs(float(v) - float(p[n])) > 1e-5 * max(1.0, abs(float(p[n]))):
+                drift.append(f"{n} {p[n]:.4f} vs {float(v):.4f}")
+        except ValueError:
+            pass
+
+    ok = check("no parameter is undef in the renderer", "PARAM",
+               not undef and not missing,
+               f"{len(names)} scalars echoed out of OpenSCAD; "
+               + ("none undef" if not undef and not missing
+                  else "UNDEF: " + ", ".join((undef + missing)[:6])))
+    ok &= check("both readers agree on every parameter", "PARAM",
+                not drift,
+                f"{len(names)} shared scalars, both readers agree"
+                if not drift else "DRIFT: " + "; ".join(drift[:4]))
+    return ok
+
+
 def check_datums(p):
     print("\n-- DATUM --")
     ok = True
@@ -1543,6 +1604,7 @@ def main():
         ok &= check_interface(parts, p)
         ok &= check_print(parts, p)
         ok &= check_datums(p)
+        ok &= check_params_agree(p, tmp)
 
         npass = sum(1 for r in RESULTS if r["ok"])
         print("\n" + "=" * 78)

@@ -1714,3 +1714,153 @@ build, put calipers on:
 
 `tools/validate.py` proves internal consistency. It cannot prove that the datums
 match reality; only calipers can do that.
+
+### C-41 — The carry case: three rejections, one plane
+
+Version 1 of the sleeve passed every check it had. The verdict named three
+things none of those checks asked about — *"those lugs sit in a way that make
+them super fucking fragile and awkward from a geometric standpoint, also this
+should echo the form of the device more directly. also there is no method of
+inserting those magnets whatsoever, no one could get their little grabbers in
+there to do that."*
+
+All three were true, and the third is the one that mattered, because it was not
+a styling complaint. It was a defect.
+
+### The magnets could not be fitted, and could not have held anything anyway
+
+The pockets opened into a cavity 155 mm deep, closed on five sides. Nothing
+reaches that. No check had asked whether a feature could be *assembled*, only
+whether it was geometrically correct, and it was geometrically correct.
+
+Worse, checking the retention arithmetic that had never been done:
+
+| gap to the deck's disc | 2.00 mm — its own 0.80 skin, 0.80 flock, 0.40 clearance |
+|---|---|
+| inverse square off the 0.80 mm vendor figure | 0.62 N a pair, **2.46 N** for four |
+| two-point fit through contact and 0.80 mm | 2.08 N a pair, **8.32 N** for four |
+| deck weight | **≈ 3.4 N** |
+| what resists, the deck leaving along Y | shear at 20.6 % → 0.51–1.71 N, plus µ≈0.4 friction → 1.0–3.3 N |
+
+Read as favourably as the data allows, four magnets are *comparable to* the
+deck's weight, not a multiple of it. They are a **seat**, not a latch, and
+parameters.scad now says so where someone would otherwise assume otherwise.
+
+### Splitting it on a plane answered all three
+
+The case is now two halves joined by eight M5 × 25 socket screws into hex nuts
+trapped at the parting face — driven from the front with one key, because no
+socket reaches down a 16 mm flank. The split was chosen for access, and paid
+four more times:
+
+- both halves print **face-down and flat**: measured **0 mm² of near-flat
+  ceiling** in each, against a budget of 20
+- the magnet pockets open **upward on the bed** and are filled by hand
+- the inside is two open trays, which is the only sane way to flock it
+- the back no longer needs a spine to stand on
+
+### The spine was a support trap, and the fix cost 11 mm of depth
+
+The one-piece back carried a raised spine for the cowl channel. Printed
+back-down, the spine crown is the first layer and the slab bottom sits
+**11.00 mm above it** — a downward-facing flat face **20 mm wide over the full
+155 mm, 3,100 mm² a side**. Flaring the spine out to meet the slab does not
+rescue it: 11 mm of rise over 28 mm of run is **21°**, half of what FDM holds.
+
+So the back drops to the channel floor everywhere. It costs 11 mm of depth and
+returns a part with nothing under it — and a solid rectangular block is the
+more honest object.
+
+### Form: it was square, and it was square because of the fastener
+
+The first attempt at this revision put the fasteners in the flank, which an M5
+nut needs **15 mm** of. That made the case **150.65 × 155.45 — square**, where
+the deck is plainly portrait at 1.2065. It had lost the proportion in service of
+a nut, which is the wrong thing to lose it for, and no check asked.
+
+So the flank went back to 8 mm and the fasteners moved into the rails, which
+have 22 mm of material anyway. Three numbers are now pinned to the deck and none
+to taste:
+
+| corner | `corner_blend × case_w / body_w` | **12.97** |
+|---|---|---|
+| mouth height | solved so `case_h/case_w == body_h/body_w` | **15.00** |
+| exponent | `form_n`, unchanged | **3.2** |
+
+Offsetting the deck's corner outward by the wall would have given 20.40 mm on a
+135 mm body — proportionally almost twice as round as the deck, which is why v1
+read as a pebble. `check_case.py` now measures the ratio: **1.2065 against
+1.2065**. The flat plinth v1 needed to stand on the bed is gone with the print
+orientation that forced it, so top and bottom are the same corner.
+
+### Lugs: a rail, not a tab, not a hole in a wall
+
+v1 cut a 4 mm slot through a 10 mm flank *at the top corner*, where the outline
+is already turning — 3 mm of wall each side. v2, written in this same
+revision, replaced it with a 32 mm pad on each flank. That measured strong and
+it read as **two tabs stuck to a box** — the same bolted-on look that got the
+grip fingers thrown out in C-38, arrived at again by a different route.
+
+A tab is a local answer to a global problem, which is the lesson C-39 already
+recorded and which did not transfer. So the third version is not local: **one
+squared band per flank, 14 mm proud, 134 mm long**, carrying all four fasteners
+*and* the strap slot.
+
+| | v1 | v2 (tab) | now (rail) |
+|---|---|---|---|
+| material each side of the slot | 3.00 mm | 7.50 mm | **6.50 mm** |
+| depth behind it | 27.25 mm | 38.25 mm | **38.25 mm** |
+| shear section a side | 82 mm² | 287 mm² | **249 mm²** |
+| length of flank it structures | 16 mm | 32 mm | **134 mm** |
+
+The rail gives up 38 mm² of shear against the tab and buys four times the
+length of engaged flank, which is the trade worth making. Both ends stop inside
+the **straight run** of the flank, so a termination is always a clean step and
+never a step onto a curve. The slot sits 47 mm below the mouth: lugs at the rim
+foul the hand drawing the deck out, and a bag hung from its rim tips forward.
+
+### Two checks in this file were worth less than nothing
+
+`check_case.py` gained a seam test, and the first two versions of it **passed on
+anything**:
+
+1. It measured containment against `trimesh.util.concatenate([front, back])`.
+   The halves share a face at the joint, so a ray crossing two coincident
+   surfaces flips parity twice and `contains()` reports solid material as open
+   air. It failed three true checks — *false* failures, which is the cheap
+   direction. Fixed with a real boolean union.
+2. It compared the mating faces by summing `polygon.exterior.area`. Shapely's
+   `.exterior` is a **LinearRing**, and a ring has zero area. The check read
+   *"outlines 0 and 0 mm², 0.00 % apart"* and passed. It would have passed on
+   any two shapes in existence.
+
+Fixing (2) to real areas was still not enough: narrowing the section by 0.6 mm
+moves its **area** by 0.4 %, under any sane tolerance. The joint is now compared
+as **rings, in millimetres** — `hausdorff_distance` — which reads 0.001 mm on
+the true pair and 0.330 mm on the deliberately mismatched one.
+
+**Three instruments, two of them worthless, before one measured the thing.**
+The pattern this file keeps recording is not that geometry is hard. It is that
+a check computing the wrong quantity is more dangerous than no check, because
+it is reported as a pass.
+
+### The two readers of parameters.scad did not agree
+
+Deriving the mouth height put `case_rim` above the `case_w` it depends on.
+`tools/params.py` resolved the forward reference and reported **15.00 mm**.
+OpenSCAD left it **undef** and propagated undef through every dimension
+downstream. Every Python gate in this repo passed on a parameter set the
+renderer could not evaluate.
+
+Two asserts happened to touch the affected values and caught it. That was luck:
+moving `case_edge_ch` the same way is silent — no assert touches it, the part
+still renders, and it renders **without its chamfers**.
+
+`validate.py` now echoes **every scalar parameters.scad assigns** out of
+OpenSCAD itself and compares it against what params.py believes — 382 of them,
+checked for undef and for drift. Verified to fail on exactly that silent case
+and to pass on the corrected file. Two checks, 116 → 118.
+
+The lesson is narrower than "tools disagree". It is that **the forgiving reader
+is the one every gate runs on**, so the gates were all measuring a file the
+renderer never saw.
