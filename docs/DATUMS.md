@@ -347,6 +347,67 @@ a wider recess behind it. This back plate is 3.2 mm thick and the header stands
 8.603 mm off the PCB back — **1.60 mm proud of the standoff plane** — so the
 body itself must pass through. The window here is sized from the body.
 
+### C-39 — The grip fingers were the wrong answer, correctly measured
+
+C-38 replaced a warped flat plate with a tray on six sprung grip fingers. Every
+number in it was good: six fingers biting 3.26 mm³ each, exactly even, zero
+support. It was still wrong, and the owner's verdict named both halves — *"fingers
+are gonna be fragile, visual aesthetic is of cheap consumer products."*
+
+**Discrete snap features are a local answer to a global problem.** Each finger is
+a small cantilever doing a job alone, so each is a place the part can break, and
+six little hooks in a row read as moulded consumer plastic. Measuring them
+evenly did not make them right. A mechanism had been bolted **onto** the object
+instead of the object **being** the mechanism.
+
+### The rim was already an undercut
+
+Measured on the rendered chassis, the flank tapers **1.023 mm per side over the
+last 3.60 mm** before the front face:
+
+| depth below the face | half-width | undercut |
+|---|---|---|
+| 0.05 | 56.928 | — |
+| 2.00 | 57.390 | 0.462 |
+| 3.60 | 57.951 | **1.023** |
+| 5.00 | 58.125 | 1.197 |
+
+So a single continuous eased lip hooks that rim **all the way round at once** —
+roughly 460 mm of engagement instead of six 9 mm fingers. Nothing local, nothing
+sprung, nothing to snap off. It goes on in one press: the lip rides a 1.5 mm
+ramp of the deck's own taper while the whole shell breathes a few tenths, and
+the four magnets — **unchanged, same sites, same pockets** — pull the last of it
+home.
+
+Measured: **92.7 mm³ of interference in exactly one region.** One ring, not six
+bites.
+
+### Depth was set by the ports, not by preference
+
+The USB-C opening's top edge is at chassis z = 12.78, so a wall deeper than
+**4.07 mm** starts covering it. 3.60 leaves 0.47 mm of clearance and still buys
+the full 1.023 mm undercut. The lip takes 0.50 of that — half — so the ramp
+stays gentle and the shell is never forced.
+
+### Two overhangs the measurement caught
+
+The lip's flare was built at 1:1, which is 45° on the straight runs but measured
+**40.2° at the corners**, where the superellipse takes a smaller radial step for
+the same rise. And the shell inherited the deck's own edge roll, which flares
+outward off the bed at ~42°.
+
+Raising the flare to 1.35:1 and giving the cover its own longer roll
+(`cover_edge_soft` 0.80, `cover_edge_roll` 0.24) took support from **85.3 mm² to
+0.00**. An intermediate attempt at 1.75:1 made it *worse* — 372 mm² — because it
+left only 0.61 mm of chamber; recorded because the obvious direction was the
+wrong one.
+
+### The checks
+
+`MAGNET` now asks about the **ring**, and the load-bearing one is that it *is* a
+ring: **more than one engagement region means the retention has gone local again
+without anyone deciding that it should.**
+
 ### C-38 — The cover was a flat plate, and flat plates warp
 
 The first cover was a 116 × 140 mm plate, 2.95 mm thick, held on four magnets.

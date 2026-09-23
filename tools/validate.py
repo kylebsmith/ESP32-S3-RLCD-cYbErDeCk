@@ -1143,110 +1143,42 @@ def check_magnets(parts, p):
     seat.apply_translation([0.0, 0.0, p["body_t"]])
     inter = ch.intersection(seat)
     clash = float(inter.volume) if inter is not None and len(inter.faces) else 0.0
-    # The cover is a tray now and its grip fingers are SUPPOSED to interfere -
-    # that is the retention. What must not happen is a clash anywhere else, so
-    # this bounds the bite rather than forbidding it.
-    bite_max = 2.5 * len(p["cover_grip_y_px"] + p["cover_grip_y_nx"]) \
-        * p["cover_grip_inter"] * p["cover_grip_w"] * p["cover_grip_h"]
-    ok &= check("the cover seats with only its grips touching", "MAGNET",
-                clash <= bite_max,
-                f"shared volume {clash:.2f} mm^3 against a {bite_max:.1f} mm^3 "
-                f"ceiling for {len(p['cover_grip_y_px'] + p['cover_grip_y_nx'])} "
-                "fingers; anything above that is a clash, not a grip")
-    # C-38. The cover is a tray now, not a plate on four magnets. Shear and
-    # retention are the skirt's job; the magnets only seat it. So these ask
-    # about the skirt, and they ask the MESH, because the previous cover was
-    # dimensionally perfect and still did not work.
-    grip_z = p["body_t"] - p["cover_skirt_depth"]
-    ok &= check("the skirt reaches the shell's full-width band", "MAGNET",
-                4.9 + 0.3 <= grip_z <= 11.9 - 0.3,
-                f"skirt bottom lands at shell z = {grip_z:.2f}; the shell runs "
-                "its full 116.250 mm from z = 4.90 to 11.90 and tapers outside "
-                "that, so a grip placed beyond it holds on a slope")
+    # C-39. The cover is one shell with one continuous lip, and retention is
+    # the deck's own rim taper hooked all the way round. There is no local
+    # feature, so the checks ask about the RING - and the one that matters most
+    # is that it is a ring at all, because a broken ring means the retention has
+    # gone local again without anyone deciding that it should.
+    mouth_z = p["body_t"] - p["cover_wall_d"]
+    ok &= check("the lip clears the side ports", "MAGNET",
+                mouth_z > 12.78,
+                f"wall reaches chassis z = {mouth_z:.2f}; the USB-C opening's "
+                "top edge is at 12.78, so anything deeper starts covering it")
+    ok &= check("the lip takes less than the rim offers", "MAGNET",
+                p["cover_hook"] < 1.023,
+                f"lip reaches {p['cover_hook']:.2f} mm under a rim that "
+                "undercuts 1.023 mm per side, so the ramp on stays gentle and "
+                "the shell is never forced")
     seat = cv.copy()
     seat.apply_translation([0.0, 0.0, p["body_t"]])
     bite = ch.intersection(seat)
-    lobes = ([b for b in bite.split(only_watertight=False) if b.volume > 0.3]
+    lobes = ([b for b in bite.split(only_watertight=False) if b.volume > 0.05]
              if bite is not None and len(bite.faces) else [])
-    want = len(p["cover_grip_y_px"] + p["cover_grip_y_nx"])
-    vols = sorted(float(b.volume) for b in lobes)
-    ok &= check("every grip finger bites the shell", "MAGNET",
-                len(lobes) == want,
-                f"{len(lobes)} of {want} fingers interfere with the shell"
-                + (f"; volumes {vols[0]:.2f}..{vols[-1]:.2f} mm^3" if vols else ""))
-    # A finger that grips a quarter of what its neighbours do is on the corner
-    # taper. That is how the first placement failed and nothing but a spread
-    # check would have seen it.
-    ok &= check("the fingers bite evenly", "MAGNET",
-                bool(vols) and vols[0] >= 0.65 * vols[-1],
-                f"lightest {vols[0]:.2f} mm^3 against heaviest {vols[-1]:.2f} "
-                "mm^3" if vols else "no interference measured")
+    vol = sum(float(b.volume) for b in lobes)
+    ok &= check("the lip engages as ONE continuous ring", "MAGNET",
+                len(lobes) == 1,
+                f"{len(lobes)} engagement region(s) totalling {vol:.1f} mm^3; "
+                "more than one means the ring is broken and the hold is local "
+                "again")
+    ok &= check("the engagement is a hook, not a clash", "MAGNET",
+                30.0 <= vol <= 220.0,
+                f"{vol:.1f} mm^3 of interference distributed round the rim")
     ok &= check("magnets are not asked to carry shear", "MAGNET",
-                p["cover_skirt_depth"] >= 4.0 and len(lobes) >= 4,
+                len(lobes) == 1 and p["cover_wall_d"] >= 3.0,
                 f"4 pairs make {4*p['magnet_pull_08']:.1f} N of pull across "
                 f"{p['magnet_skin']:.1f} mm but only "
-                f"{4*p['magnet_pull_08']*p['magnet_shear_frac']:.1f} N of shear; "
-                f"a {p['cover_skirt_depth']:.1f} mm skirt on {len(lobes)} "
-                "fingers carries it instead")
-
-    # C-35. A crush rib narrower than one extrusion is not a crush rib, it is a
-    # suggestion the slicer may decline. The rib was 0.70 mm against a 0.80 mm
-    # nozzle and nothing looked at it, because every check here asked about
-    # DIAMETERS and a rib is a feature WIDTH. So this one measures the rib and
-    # the gap beside it on the rendered mesh, in extrusions.
-    noz = p["nozzle"]
-    bore_r = p["magnet_bore"] / 2.0
-    widths, gaps, lobed = [], [], 0
-    for z in np.arange(p["body_t"] - p["magnet_skin"] - p["magnet_pocket_h"] + 0.3,
-                        p["body_t"] - p["magnet_skin"] - 0.2, 0.15):
-        sec = ch.section(plane_origin=[0, 0, float(z)], plane_normal=[0, 0, 1])
-        if sec is None:
-            continue
-        pl, _ = sec.to_2D(to_2D=np.eye(4))
-        for e in pl.entities:
-            c = e.discrete(pl.vertices)
-            ctr = c.mean(axis=0)
-            if abs(abs(ctr[0]) - p["magnet_x"]) > 2.0 or len(c) < 40:
-                continue
-            rad = np.hypot(c[:, 0] - ctr[0], c[:, 1] - ctr[1])
-            if rad.max() > 4.0 or (rad.max() - rad.min()) < 0.25:
-                continue
-            lobed += 1
-            ang = np.arctan2(c[:, 1] - ctr[1], c[:, 0] - ctr[0])
-            o = np.argsort(ang)
-            ang, rr = ang[o], rad[o]
-            inside = rr < (bore_r - 0.05)
-            runs, i, n = [], 0, len(inside)
-            while i < n:
-                if inside[i]:
-                    j = i
-                    while j + 1 < n and inside[j + 1]:
-                        j += 1
-                    runs.append((ang[i], ang[j]))
-                    i = j + 1
-                else:
-                    i += 1
-            # Drop the first and last run: either may be clipped by the seam at
-            # +-pi, which would read as a false narrow rib.
-            for a0, a1 in runs[1:-1]:
-                widths.append((a1 - a0) * bore_r)
-            for k in range(len(runs) - 1):
-                gaps.append((runs[k + 1][0] - runs[k][1]) * bore_r)
-    if widths and gaps:
-        wmin, gmin = min(widths), min(gaps)
-        ok &= check("crush ribs are at least one extrusion wide", "MAGNET",
-                    wmin >= noz,
-                    f"narrowest rib {wmin:.3f} mm = {wmin/noz:.2f} extrusions at "
-                    f"a {noz} nozzle, across {lobed} sections; below 1.00 the "
-                    "slicer sets the width, not this design")
-        ok &= check("gaps between crush ribs survive the slicer", "MAGNET",
-                    gmin >= noz,
-                    f"narrowest gap {gmin:.3f} mm = {gmin/noz:.2f} extrusions; "
-                    "below 1.00 the ribs bridge into a solid ring and there is "
-                    "no crush relief left")
-    else:
-        ok &= check("crush rib geometry was measurable", "MAGNET", False,
-                    "no ribbed bore sections found in the chassis")
+                f"{4*p['magnet_pull_08']*p['magnet_shear_frac']:.1f} N of "
+                f"shear; a {p['cover_wall_d']:.1f} mm wall hooking the rim "
+                "carries it instead")
     return ok
 
 

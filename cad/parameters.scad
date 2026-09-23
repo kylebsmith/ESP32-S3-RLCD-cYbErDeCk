@@ -1331,80 +1331,80 @@ function magnet_sites() = [ for (sy = [magnet_y_lo, magnet_y_hi],
 //  show face. Change magnet_h or magnet_skin and the cover follows.
 cover_t         = magnet_pocket_h + magnet_skin;   // [DERIVED] = 2.95
 cover_gap       = 0.15;   // [DESIGN] shadow gap per side; flush is a tolerance trap
-//  ---- THE COVER IS A TRAY, NOT A PLATE -------------------------------------
-//  The first cover was a flat plate held on four magnets. It printed warped -
-//  a 116 x 140 mm plate 2.95 mm thick is exactly the geometry that curls on an
-//  FDM bed - and a warped plate cannot register on a flat face. The magnets
-//  then have to pull the warp out, across four points, and they cannot.
+//  ---- THE COVER IS A SHELL THAT HOOKS THE RIM -----------------------------
+//  Version 1 was a flat plate on four magnets. It printed warped and could not
+//  clasp - a 116 x 140 mm plate 2.95 mm thick is exactly what curls on an FDM
+//  bed, and four magnets cannot pull that curl flat across a 520 mm perimeter.
 //
-//  Both halves of that failure have one fix. A closed perimeter skirt turns the
-//  part from a plate into a shallow box section, which barely warps to begin
-//  with; and it moves registration from the FACE, which warps, to the SIDES,
-//  which the skirt grips. The magnets go back to what they are good at -
-//  seating it and stopping it rattling - instead of being the structure.
+//  Version 2 answered that with six sprung grip fingers. It measured well and
+//  it was wrong: discrete snap features are fragile, and they read as cheap
+//  consumer plastic. A mechanism had been bolted ONTO the object instead of the
+//  object BEING the mechanism.
 //
-//  WHAT IT GRIPS. Measured on the rendered chassis, the shell is a barrel: it
-//  runs the full 116.250 mm from z = 4.90 to z = 11.90 and tapers to 113.914 at
-//  the front face. That is 1.168 mm per side of natural lead-in, already there,
-//  and the full-width band is the grip surface. No change to the enclosure.
-cover_skirt_clear = 0.35;  // [DESIGN] per side, so it drops on rather than
-                           //   needing to be aligned
-cover_skirt_wall  = 1.60;  // [DESIGN] two extrusions. Thicker is stiffer, and
-                           //   stiffer fingers crack instead of flexing.
-cover_skirt_depth = 8.00;  // [DESIGN] reaches chassis z = 8.85, well inside the
-                           //   4.90-11.90 full-width band. Also the cantilever
-                           //   length of the grip fingers, and the reason it is
-                           //   8 and not 5: strain at the finger root goes as
-                           //   1/L^2, and at 5 mm it is over PLA-CF's limit.
+//  This is the third answer and it has no features at all. The shell's flank
+//  tapers 1.023 mm per side over the last 3.60 mm before the front face -
+//  measured, not assumed - so that rim is already an undercut running the whole
+//  way round. A shell with one continuous eased lip hooks under all 460 mm of
+//  it at once. Nothing local, nothing sprung, nothing to snap off. It goes on
+//  with a single press: the lip rides a 1.5 mm ramp of the shell's own taper,
+//  the whole shell breathing a few tenths as it passes, and the magnets pull
+//  the last of it home.
+//
+//  DEPTH IS SET BY THE PORTS, not by preference. The USB-C opening's top edge
+//  is at chassis z = 12.78, so a wall deeper than 4.07 mm begins to cover it.
+//  3.60 leaves 0.47 mm and still buys a 1.023 mm undercut.
+cover_wall_d   = 3.60;   // [DESIGN] wall depth below the face
+cover_wall_t   = 2.00;   // [DESIGN] wall thickness
+cover_clear    = 0.35;   // [DESIGN] chamber clearance over the shell
+cover_hook     = 0.50;   // [DESIGN] how far the lip reaches under the rim, of
+                         //   the 1.023 mm available. Half, so the ramp stays
+                         //   gentle and the shell never has to be forced.
+cover_lip_t    = 0.60;   // [DESIGN] straight land on the lip
+cover_lip_entry = 0.60;  // [DESIGN] eased mouth, so it finds the rim by itself
 
-cover_skirt_id_w  = body_w + 2 * cover_skirt_clear;   // [DERIVED] = 116.95
-cover_skirt_id_h  = body_h + 2 * cover_skirt_clear;   // [DERIVED] = 140.95
-cover_w         = cover_skirt_id_w + 2 * cover_skirt_wall;   // [DERIVED] = 120.15
-cover_h         = cover_skirt_id_h + 2 * cover_skirt_wall;   // [DERIVED] = 144.15
-cover_corner_r  = corner_blend + cover_skirt_clear + cover_skirt_wall;
+//  [MEASURED on the rendered chassis] half-sizes at the mouth plane, chassis
+//  z = body_t - cover_wall_d. These are what the lip hooks.
+cover_rim_hw   = 57.951;
+cover_rim_hh   = 69.951;
 
-//  ---- GRIP FINGERS ---------------------------------------------------------
-//  A continuous interference band would have to be stretched by hoop strain
-//  over 116 mm of stiff wall: high insertion force, and PLA-CF cracks before it
-//  stretches. Discrete cantilever fingers flex locally instead, which also
-//  means each one finds its own position - so residual warp in the skirt costs
-//  nothing, because no finger depends on any other being where it should be.
-cover_grip_inter = 0.25;   // [DESIGN] interference per side. Root strain is
-                           //   3*d*t/(2*L^2) = 0.94% at t=1.60, L=8.00, inside
-                           //   PLA-CF's usable band. 0.30 takes it to 1.1%.
-cover_grip_w     =  9.0;   // [DESIGN] finger width. Narrow enough to fit the
-                           //   clear zones both flanks actually have; width
-                           //   sets insertion force, not root strain.
-cover_grip_h     = 2.40;   // [DESIGN] bead height along z
-cover_grip_slot  = 1.20;   // [DESIGN] flex slot either side of each finger
-cover_grip_zc    = -(cover_skirt_depth - 1.60);   // [DERIVED] bead centre, as
-                           //   far from the root as the wall allows
-cover_grip_prot  = cover_skirt_clear + cover_grip_inter;  // [DERIVED] = 0.60
-//  Three per long flank, and the two flanks do NOT share positions, because
-//  they do not have the same obstructions. On +X the USB-C tunnel occupies
-//  y = 25.5 to 38.0 and the microSD y = 43.9 to 57.9; on -X the keyboard
-//  service window spans y = -49.07 to -15.07. Both flanks lose everything
-//  beyond |y| = 58.9, where the corner blend starts and the shell begins to
-//  narrow - a finger placed at y = 62 in the first version landed on that
-//  taper and gripped a quarter of what the others did, which the interference
-//  measurement caught.
-//  Kept as two flat lists rather than a list of [sign, y] pairs, because
-//  tools/params.py keeps lists of numbers and silently drops lists of lists -
-//  which is how this first reached validate.py as a KeyError.
-cover_grip_y_px  = [-50.0, -20.0,  10.0];   // +X flank, clear of both ports
-cover_grip_y_nx  = [-54.0,   5.0,  40.0];   // -X flank, clear of the window
-cover_grip_n     = len(cover_grip_y_px) + len(cover_grip_y_nx);
+cover_mouth_w  = 2 * (cover_rim_hw - cover_hook);       // [DERIVED] = 114.902
+cover_mouth_h  = 2 * (cover_rim_hh - cover_hook);       // [DERIVED] = 138.902
+cover_cham_w   = body_w + 2 * cover_clear;              // [DERIVED] = 116.95
+cover_cham_h   = body_h + 2 * cover_clear;              // [DERIVED] = 140.95
+cover_w        = cover_cham_w + 2 * cover_wall_t;       // [DERIVED] = 120.95
+cover_h        = cover_cham_h + 2 * cover_wall_t;       // [DERIVED] = 144.95
+cover_corner_r = corner_blend + cover_clear + cover_wall_t;
+cover_flare    = (cover_cham_w - cover_mouth_w) / 2;    // [DERIVED] radial step
+//  The flare's AXIAL rise is not equal to its radial step. At 1:1 it is 45
+//  degrees on the straight runs but measured 40.2 at the corners, where the
+//  superellipse takes a smaller radial step for the same rise. 1.35:1 puts the
+//  shallowest part of it at 52 degrees, clear of the 45 rule everywhere.
+cover_flare_rise = cover_flare * 1.35;                  // [DERIVED]
 
-assert(cover_grip_prot * 2 < cover_grip_h,
-       "grip bead cannot carry a 45 degree lead-in on both faces; it will need support");
-assert(body_t - cover_skirt_depth > 4.9 + 0.5,
-       "cover skirt reaches past the shell's full-width band and loses its grip");
+//  The shell gets its own, tighter edge roll. The deck's own 1.20 / 0.28 makes
+//  a surface that flares outward as it rises off the bed at about 42 degrees -
+//  fine on the deck, which prints the other way up, marginal here.
+cover_edge_soft = 0.80;   // [DESIGN]
+cover_edge_roll = 0.24;   // [DESIGN]
+//  ONE affordance for removal, and it is a form, not a hole: a very shallow,
+//  very wide scallop on the bottom edge. Wide-and-shallow reads as drawn;
+//  small-and-round reads as a hole punched in a finished object.
+cover_relief_r = 210.0;  // [DESIGN] scallop radius
+cover_relief_d = 1.60;   // [DESIGN] bite into the edge -> a 51 mm wide sweep
 
-//  LOCATION, which magnets cannot supply. Both apertures are already drafted
-//  sockets, so the cover grows a platform into each: they carry every bit of
-//  shear, they self-centre as the cover closes, and they cost no new features
-//  on the show face. Depth is set by what is behind them - the glass at 2.65
-//  and the keycaps at 2.80 - with better than 1 mm to spare.
+assert(cover_hook < 1.023,
+       "lip reaches deeper than the rim's undercut; it would foul on the way on");
+assert(body_t - cover_wall_d > 12.78,
+       "cover wall is deep enough to cover the USB-C opening");
+//  The flare is 45 degrees by construction - the same number is used for the
+//  radial step and the axial rise - so this asserts it is a real step rather
+//  than a coincidence that it vanished. It is NOT hook + clear: the rim at the
+//  mouth plane is already 0.174 mm narrower than the shell's widest section.
+assert(cover_flare > 0.3,
+       "chamber and mouth have collapsed together; there is no lip left to hook");
+assert(cover_wall_d > cover_lip_entry + cover_lip_t + cover_flare_rise,
+       "lip zone is deeper than the wall; there is no chamber for the deck to sit in");
+
 cover_reg_depth = 0.00;   // [SUPERSEDED] the skirt carries shear now; see C-38
 cover_reg_clear = 0.30;   // [DESIGN] per side, at the outer face
 //  The platforms are RIMS, not slabs. A rim locates exactly as well as a solid
@@ -1433,9 +1433,6 @@ cover_reg_blend_kbd = aper_blend_kbd + kbd_aper_draft
 //  the keyboard service window - so the intended peel starts furthest from the
 //  hooked keyboard end. A scallop, not a lever: it says how the cover comes off
 //  without adding a mechanism.
-cover_notch_r     = 10.0;   // [DESIGN] scallop radius
-cover_notch_depth =  3.0;   // [DESIGN] how far it bites into the edge
-cover_notch_x     = 28.0;   // [DESIGN] right of centre, on the top edge
 
 //  A locating rib that stands taller than the gap to the LARGEST body stops
 //  that body entering at all, and one that strays into a corner blend or the

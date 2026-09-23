@@ -1,6 +1,6 @@
 {
-  "passed": 117,
-  "total": 117,
+  "passed": 115,
+  "total": 115,
   "results": [
     {
       "check": "chassis: watertight",
@@ -60,7 +60,7 @@
       "check": "cover: watertight",
       "class": "MESH",
       "ok": true,
-      "detail": "2636 faces"
+      "detail": "5496 faces"
     },
     {
       "check": "cover: single body",
@@ -72,7 +72,7 @@
       "check": "cover: positive volume",
       "class": "MESH",
       "ok": true,
-      "detail": "56869 mm^3 -> 70.5 g in PLA"
+      "detail": "54813 mm^3 -> 68.0 g in PLA"
     },
     {
       "check": "board: watertight",
@@ -174,7 +174,7 @@
       "check": "cover is not degenerate",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "120.15 x 144.15 x 10.95, 56869 mm^3"
+      "detail": "120.95 x 144.95 x 6.55, 54813 mm^3"
     },
     {
       "check": "chassis fits the print bed",
@@ -198,7 +198,7 @@
       "check": "cover fits the print bed",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "120.2 x 144.2 x 10.9"
+      "detail": "121.0 x 144.9 x 6.6"
     },
     {
       "check": "board does not clash with the chassis",
@@ -519,46 +519,34 @@
       "detail": "rib tips close the 5.50 bore to 4.80; the discs run 4.90..5.10, so interference is 0.10..0.30 mm diametral"
     },
     {
-      "check": "the cover seats with only its grips touching",
+      "check": "the lip clears the side ports",
       "class": "MAGNET",
       "ok": true,
-      "detail": "shared volume 19.58 mm^3 against a 81.0 mm^3 ceiling for 6 fingers; anything above that is a clash, not a grip"
+      "detail": "wall reaches chassis z = 13.25; the USB-C opening's top edge is at 12.78, so anything deeper starts covering it"
     },
     {
-      "check": "the skirt reaches the shell's full-width band",
+      "check": "the lip takes less than the rim offers",
       "class": "MAGNET",
       "ok": true,
-      "detail": "skirt bottom lands at shell z = 8.85; the shell runs its full 116.250 mm from z = 4.90 to 11.90 and tapers outside that, so a grip placed beyond it holds on a slope"
+      "detail": "lip reaches 0.50 mm under a rim that undercuts 1.023 mm per side, so the ramp on stays gentle and the shell is never forced"
     },
     {
-      "check": "every grip finger bites the shell",
+      "check": "the lip engages as ONE continuous ring",
       "class": "MAGNET",
       "ok": true,
-      "detail": "6 of 6 fingers interfere with the shell; volumes 3.26..3.26 mm^3"
+      "detail": "1 engagement region(s) totalling 92.7 mm^3; more than one means the ring is broken and the hold is local again"
     },
     {
-      "check": "the fingers bite evenly",
+      "check": "the engagement is a hook, not a clash",
       "class": "MAGNET",
       "ok": true,
-      "detail": "lightest 3.26 mm^3 against heaviest 3.26 mm^3"
+      "detail": "92.7 mm^3 of interference distributed round the rim"
     },
     {
       "check": "magnets are not asked to carry shear",
       "class": "MAGNET",
       "ok": true,
-      "detail": "4 pairs make 15.4 N of pull across 0.8 mm but only 3.2 N of shear; a 8.0 mm skirt on 6 fingers carries it instead"
-    },
-    {
-      "check": "crush ribs are at least one extrusion wide",
-      "class": "MAGNET",
-      "ok": true,
-      "detail": "narrowest rib 1.467 mm = 1.83 extrusions at a 0.8 nozzle, across 48 sections; below 1.00 the slicer sets the width, not this design"
-    },
-    {
-      "check": "gaps between crush ribs survive the slicer",
-      "class": "MAGNET",
-      "ok": true,
-      "detail": "narrowest gap 1.342 mm = 1.68 extrusions; below 1.00 the ribs bridge into a solid ring and there is no crush relief left"
+      "detail": "4 pairs make 15.4 N of pull across 0.8 mm but only 3.2 N of shear; a 3.6 mm wall hooking the rim carries it instead"
     },
     {
       "check": "back plate fits the chassis opening",

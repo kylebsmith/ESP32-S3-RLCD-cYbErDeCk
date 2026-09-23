@@ -459,77 +459,65 @@ module magnet_pocket(h) {
 //  One register platform: a drafted rim that drops into an aperture. Outer face
 //  tapers with the aperture so it self-centres; inner face is parallel to it,
 //  so the rim is a constant cover_reg_rim thick all the way round.
-//  ONE CONTINUOUS FORM, straight-sided. The first build made the plate an
-//  rse_soft barrel and the skirt a separate straight tube, and where they met
-//  the skirt stood proud of the plate's inset bottom - an unsupported annular
-//  ledge of roughly 1,200 mm2 facing down on the bed. Straight sides remove the
-//  ledge, hold the wall thickness constant, and are the more minimal object.
-module cover_shell() {
-    difference() {
-        translate([0, 0, -cover_skirt_depth])
-            rse_plate(cover_w, cover_h, cover_skirt_depth + cover_t,
-                      cover_corner_r, form_n);
-        translate([0, 0, -cover_skirt_depth - 0.01])
-            rse_plate(cover_skirt_id_w, cover_skirt_id_h,
-                      cover_skirt_depth + 0.01,
-                      max(cover_corner_r - cover_skirt_wall, 0.8), form_n);
+//  THE COVER. One shell, one continuous lip, no local features.
+//
+//  Local z: 0 is the face plane, sitting on the deck's front face. Negative z
+//  runs down over the shell, so the mouth is at -cover_wall_d.
+//
+//  The cavity is a wide chamber with a narrow mouth, and the step between them
+//  IS the retention - it hooks the rim's own taper all the way round. Read from
+//  the mouth inward: an eased entry, a short straight land, a 45 degree flare,
+//  then the chamber. The flare is 45 because printed show-face-down that
+//  surface is the only overhang in the part.
+module cover_cavity() {
+    d  = cover_wall_d;
+    e  = cover_lip_entry;
+    lt = cover_lip_t;
+    mr = max(cover_corner_r - cover_wall_t - cover_hook - cover_clear, 0.8);
+    cr = max(cover_corner_r - cover_wall_t, 0.8);
+    union() {
+        // eased entry: finds the rim without being aimed
+        hull() {
+            translate([0, 0, -d - 0.01])
+                rse_plate(cover_mouth_w + 2*e, cover_mouth_h + 2*e, 0.01, mr + e, form_n);
+            translate([0, 0, -d + e])
+                rse_plate(cover_mouth_w, cover_mouth_h, 0.01, mr, form_n);
+        }
+        // the land that actually holds
+        translate([0, 0, -d + e])
+            rse_plate(cover_mouth_w, cover_mouth_h, lt, mr, form_n);
+        // 45 degree flare up into the chamber
+        hull() {
+            translate([0, 0, -d + e + lt])
+                rse_plate(cover_mouth_w, cover_mouth_h, 0.01, mr, form_n);
+            translate([0, 0, -d + e + lt + cover_flare_rise])
+                rse_plate(cover_cham_w, cover_cham_h, 0.01, cr, form_n);
+        }
+        // the chamber the deck sits in
+        translate([0, 0, -d + e + lt + cover_flare_rise])
+            rse_plate(cover_cham_w, cover_cham_h,
+                      d - e - lt - cover_flare_rise + 0.01, cr, form_n);
     }
-}
-
-//  One grip bead, on the inner face of a flank. Symmetric 45 degree lead-ins
-//  top and bottom: printed show-face-down the lower one is the overhang, and 45
-//  is what makes it self-supporting. Symmetric also means it cams off as easily
-//  as it cams on, which is what a cover wants - retention is elastic
-//  interference against the shell's barrel, not a locking shoulder.
-module cover_grip(sx, gy) {
-    x_in  = cover_skirt_id_w / 2;
-    x_tip = x_in - cover_grip_prot;
-    z0 = cover_grip_zc - cover_grip_h / 2;
-    z1 = cover_grip_zc + cover_grip_h / 2;
-    translate([0, gy, 0]) mirror([sx > 0 ? 0 : 1, 0, 0])
-        rotate([90, 0, 0])
-            linear_extrude(height = cover_grip_w, center = true)
-                polygon([[x_in,  z0],
-                         [x_tip, z0 + cover_grip_prot],
-                         [x_tip, z1 - cover_grip_prot],
-                         [x_in,  z1]]);
-}
-
-//  Flex slots either side of each finger. Without them the whole loop has to
-//  stretch by hoop strain to go on, which takes a force that cracks PLA-CF.
-//  They cost 14.4 mm of a 529 mm perimeter, so the flange is still 97 per cent
-//  intact and still stiffens the plate against the warp that killed version 1.
-module cover_grip_slots() {
-    for (sx = [-1, 1])
-      for (gy = (sx > 0 ? cover_grip_y_px : cover_grip_y_nx))
-        for (sy = [-1, 1])
-            translate([sx * (cover_w / 2 + cover_skirt_wall / 2),
-                       gy + sy * (cover_grip_w + cover_grip_slot) / 2,
-                       -cover_skirt_depth / 2 - 0.5])
-                cube([cover_skirt_wall * 4, cover_grip_slot,
-                      cover_skirt_depth + 1.0], center = true);
 }
 
 module cover() {
     difference() {
-        union() {
-            cover_shell();
-            for (sx = [-1, 1])
-              for (gy = (sx > 0 ? cover_grip_y_px : cover_grip_y_nx))
-                cover_grip(sx, gy);
-        }
-        cover_grip_slots();
+        // one organic form. rse_soft eases both ends, so the mouth reads as a
+        // softened lip rather than a cut edge, and the face crowns very
+        // slightly - the same language as the deck it covers.
+        translate([0, 0, -cover_wall_d])
+            rse_soft(cover_w, cover_h, cover_wall_d + cover_t,
+                     cover_corner_r, form_n, cover_edge_soft, cover_edge_roll);
+        cover_cavity();
         // magnet pockets, opening on the INNER face. No skin on this side: it
         // is never seen, and halving the gap is worth more than another magnet.
         for (m = magnet_sites())
             translate([m[0], m[1], -0.01])
                 magnet_pocket(magnet_pocket_h + 0.01);
-        // thumb scallop - ONE affordance, to start the peel. It bites plate and
-        // skirt together so a thumb reaches the skirt edge and can lever.
-        translate([cover_notch_x,
-                   cover_h / 2 + cover_notch_r - cover_notch_depth,
-                   -cover_skirt_depth - 1])
-            cylinder(r = cover_notch_r, h = cover_t + cover_skirt_depth + 2);
+        // the one affordance: a wide shallow sweep on the bottom edge
+        translate([0, -cover_h/2 - cover_relief_r + cover_relief_d,
+                   -cover_wall_d - 1])
+            cylinder(r = cover_relief_r, h = cover_wall_d + cover_t + 2);
     }
 }
 
