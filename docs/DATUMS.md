@@ -347,6 +347,75 @@ a wider recess behind it. This back plate is 3.2 mm thick and the header stands
 8.603 mm off the PCB back — **1.60 mm proud of the standoff plane** — so the
 body itself must pass through. The window here is sized from the body.
 
+### C-40 — "It'll warp and float" — so the lip was tested warped
+
+The v3 shell was reported against before it was printed: *"PLA warps and shit
+over time so eventually it won't sit level and flush and it's not designed to
+actually engage with the enclosure so it's just a floating slab on top."*
+
+Half of that was wrong and half of it found a real defect.
+
+**It did engage** — a continuous lip hooking the rim, 92.7 mm³ in one ring. But
+the warp concern was right, and it was right about a mechanism the design had
+not addressed at all.
+
+### The inner face was a mating surface, and should not have been
+
+The cover's whole inner face met the deck's whole front face. **Two large flat
+surfaces meeting is exactly what rocks when either one bows**, and PLA bows —
+on the bed, and again over months as it relaxes. The lip could be perfect and
+the cover would still sit proud in the middle.
+
+So the middle is not a mating surface any more. The inner face is recessed
+0.50 mm across everything except a 5 mm perimeter land — which the wall
+stiffens and keeps true — and four pads at the magnets, which stay at full
+height because 0.5 mm of extra gap costs roughly half the pull.
+
+**It floats over a void by design, rather than floating because it does not
+fit.**
+
+### Then the lip was deformed and asked again
+
+A part that fits when perfect is not the question. The lip ring was displaced
+under two failure modes and re-tested against the shell solid:
+
+| | v3 as drawn | now |
+|---|---|---|
+| bow, corners lift 0.8 mm | 99.2 % held | **99.2 %** |
+| splay, mouth opens 0.2 mm | **2.2 %** | 99.2 % |
+| splay 0.3 mm | 0.0 % | **99.2 %** |
+| splay 0.4 mm | 0.0 % | 37.8 % |
+| bow 0.8 **and** splay 0.3 | — | **99.2 %** |
+
+**Bow was never the problem** — the relieved face absorbs it completely. Splay
+was, and the cause was the design's own arithmetic: **the hook is measured at
+the mouth, but the land sits above it**, where the shell has already narrowed.
+A 0.50 mm hook behind a 0.60 mm entry chamfer left **0.17 mm of real
+engagement** — a third of the number it was being quoted as.
+
+Cutting the entry to 0.20 and deepening the hook to 0.70 doubled the splay
+tolerance, 0.17 → 0.35 mm. Every 0.1 mm of entry chamfer is 0.1 mm of
+engagement given away.
+
+### Two process failures worth recording
+
+**A parameter edit silently did nothing.** The hook change was applied with an
+unchecked string replacement that did not match, and the warp improvement was
+reported from the *relief* change alone. It was caught by `git diff --stat`
+showing **insertions and no deletions** on a patch that was supposed to replace
+three lines. Parameter edits now assert the line they are replacing.
+
+**A magic number failed the moment the design moved.** The interference check
+carried a hand-picked 220 mm³ ceiling and rejected the deeper hook at 270.7.
+The bound is now derived — rim length × hook depth × lip height = 359 mm³ —
+so it tracks the design instead of freezing one version of it.
+
+### Nothing outside the cover moved
+
+Verified rather than asserted: the only changed parameters are `cover_*`, the
+only changed module is `cover()`, and `check_golden --stl` reports chassis,
+backplate and buttons identical to **0.00000 mm and 0.0000 mm³**.
+
 ### C-39 — The grip fingers were the wrong answer, correctly measured
 
 C-38 replaced a warped flat plate with a tray on six sprung grip fingers. Every

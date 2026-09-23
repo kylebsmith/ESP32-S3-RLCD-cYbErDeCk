@@ -1,6 +1,6 @@
 {
-  "passed": 115,
-  "total": 115,
+  "passed": 116,
+  "total": 116,
   "results": [
     {
       "check": "chassis: watertight",
@@ -60,7 +60,7 @@
       "check": "cover: watertight",
       "class": "MESH",
       "ok": true,
-      "detail": "5496 faces"
+      "detail": "6424 faces"
     },
     {
       "check": "cover: single body",
@@ -72,7 +72,7 @@
       "check": "cover: positive volume",
       "class": "MESH",
       "ok": true,
-      "detail": "54813 mm^3 -> 68.0 g in PLA"
+      "detail": "48273 mm^3 -> 59.9 g in PLA"
     },
     {
       "check": "board: watertight",
@@ -174,7 +174,7 @@
       "check": "cover is not degenerate",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "120.95 x 144.95 x 6.55, 54813 mm^3"
+      "detail": "120.95 x 144.95 x 6.55, 48273 mm^3"
     },
     {
       "check": "chassis fits the print bed",
@@ -528,19 +528,25 @@
       "check": "the lip takes less than the rim offers",
       "class": "MAGNET",
       "ok": true,
-      "detail": "lip reaches 0.50 mm under a rim that undercuts 1.023 mm per side, so the ramp on stays gentle and the shell is never forced"
+      "detail": "lip reaches 0.70 mm under a rim that undercuts 1.023 mm per side, so the ramp on stays gentle and the shell is never forced"
     },
     {
       "check": "the lip engages as ONE continuous ring",
       "class": "MAGNET",
       "ok": true,
-      "detail": "1 engagement region(s) totalling 92.7 mm^3; more than one means the ring is broken and the hold is local again"
+      "detail": "1 engagement region(s) totalling 270.7 mm^3; more than one means the ring is broken and the hold is local again"
     },
     {
       "check": "the engagement is a hook, not a clash",
       "class": "MAGNET",
       "ok": true,
-      "detail": "92.7 mm^3 of interference distributed round the rim"
+      "detail": "270.7 mm^3 round a 513 mm rim, against a 359 mm^3 ceiling for a 0.70 mm hook over a 1.00 mm lip"
+    },
+    {
+      "check": "the lip still holds after the part has warped",
+      "class": "MAGNET",
+      "ok": true,
+      "detail": "lip engaged over 99% of its length at 0.8 mm of bow, 99% at 0.3 mm of splay, 99% at both together"
     },
     {
       "check": "magnets are not asked to carry shear",

@@ -1356,11 +1356,22 @@ cover_gap       = 0.15;   // [DESIGN] shadow gap per side; flush is a tolerance 
 cover_wall_d   = 3.60;   // [DESIGN] wall depth below the face
 cover_wall_t   = 2.00;   // [DESIGN] wall thickness
 cover_clear    = 0.35;   // [DESIGN] chamber clearance over the shell
-cover_hook     = 0.50;   // [DESIGN] how far the lip reaches under the rim, of
+cover_hook     = 0.70;   // [DESIGN] of the 1.023 mm the rim offers. See the
+                         //   note below on why this is not the engagement.
                          //   the 1.023 mm available. Half, so the ramp stays
                          //   gentle and the shell never has to be forced.
-cover_lip_t    = 0.60;   // [DESIGN] straight land on the lip
-cover_lip_entry = 0.60;  // [DESIGN] eased mouth, so it finds the rim by itself
+cover_lip_t    = 0.80;   // [DESIGN] straight land on the lip
+cover_lip_entry = 0.20;  // [DESIGN] just enough ease to find the rim.
+//
+//  THE HOOK IS MEASURED AT THE MOUTH, BUT THE LAND SITS ABOVE IT, and the
+//  shell has already narrowed by then. A 0.50 hook behind a 0.60 entry
+//  chamfer left 0.17 mm of real engagement at the middle of the land - a
+//  third of the number it was being quoted as. A warp test found it: the lip
+//  let go at 0.20 mm of splay, inside what a part might creep to.
+//
+//  Every 0.1 mm of entry chamfer is 0.1 mm of engagement given away, so the
+//  entry is cut to 0.20 and the hook deepened to 0.70. Engagement across the
+//  land now runs 0.65 down to 0.38 mm instead of 0.31 down to 0.10.
 
 //  [MEASURED on the rendered chassis] half-sizes at the mouth plane, chassis
 //  z = body_t - cover_wall_d. These are what the lip hooks.
@@ -1386,6 +1397,30 @@ cover_flare_rise = cover_flare * 1.35;                  // [DERIVED]
 //  fine on the deck, which prints the other way up, marginal here.
 cover_edge_soft = 0.80;   // [DESIGN]
 cover_edge_roll = 0.24;   // [DESIGN]
+//  ---- THE INNER FACE DOES NOT TOUCH ---------------------------------------
+//  Two large flat faces meeting is what rocks when either one bows, and PLA
+//  bows: on the bed, and again over months as it relaxes. A lip can be perfect
+//  and the cover will still sit proud in the middle.
+//
+//  So the middle is not a mating surface at all. The inner face is recessed
+//  across everything except a narrow perimeter land - which the wall stiffens
+//  and keeps true - and four pads at the magnets, which must stay at full
+//  height because 0.5 mm of extra gap costs roughly half the pull.
+//
+//  The consequence is the point: warp in the centre of the plate has nothing to
+//  bear against, so it cannot lift the edges or rock the part. It is floating
+//  over a void BY DESIGN, rather than floating because it does not fit.
+cover_land     = 5.00;   // [DESIGN] perimeter contact band
+cover_recess   = 0.50;   // [DESIGN] how far the middle is held clear. Deeper
+                         //   than any warp this part will realistically take,
+                         //   and it costs nothing - the plate is 2.95 thick.
+cover_pad_d    = magnet_boss_d;   // [DERIVED] magnet pads stay at full height
+
+assert(cover_recess < cover_t - 1.2,
+       "recess leaves under 1.2 mm of plate over the magnet pockets");
+assert(cover_land >= 3.0,
+       "perimeter land too narrow to seat on without digging in");
+
 //  ONE affordance for removal, and it is a form, not a hole: a very shallow,
 //  very wide scallop on the bottom edge. Wide-and-shallow reads as drawn;
 //  small-and-round reads as a hole punched in a finished object.

@@ -239,7 +239,7 @@ counted among the audited rows.
 
 | | |
 |---|---|
-| **[DATUMS.md](docs/DATUMS.md)** | every dimension, its provenance, thirty-nine recorded corrections, nine open items |
+| **[DATUMS.md](docs/DATUMS.md)** | every dimension, its provenance, forty recorded corrections, nine open items |
 | **[HARDWARE.md](docs/HARDWARE.md)** | the board itself: panel, controller, pin map, USB and power, all traced to vendor sources |
 | **[SUBSTRATE.md](docs/SUBSTRATE.md)** | the conceptual core: one data structure, one noun, three verbs |
 | **[CONCRETE.md](docs/CONCRETE.md)** | the cast concrete jacket, its mould, and the mix |
@@ -257,7 +257,7 @@ counted among the audited rows.
 |---|---|
 | `tools/params.py` | the single reader for `parameters.scad`; every other tool goes through it |
 | `tools/measure_reference.py` | metrology harness — regenerates every measured datum |
-| `tools/validate.py` | 115-check design audit — the build gate |
+| `tools/validate.py` | 116-check design audit — the build gate |
 | `tools/audit_reference.py` | component-facing accuracy against the reference |
 | `tools/test_primitives.py` | unit tests for the geometry helpers; catches a primitive that lies |
 | `tools/structure.py` | section properties from the mesh; stiffness against the reference |
@@ -279,7 +279,7 @@ cad/
 tools/
   params.py             the single reader for parameters.scad
   measure_reference.py  metrology harness — regenerates every measured datum
-  validate.py           115-check design audit — the build gate
+  validate.py           116-check design audit — the build gate
   audit_reference.py    component-facing accuracy against the reference
   test_primitives.py    unit tests for the geometry helpers
   structure.py          section properties, stiffness, weak-point location

@@ -45,6 +45,7 @@ import params
 
 try:
     import numpy as np
+    import shapely.geometry
     import trimesh
     from shapely.geometry import Polygon, Point
     from shapely.ops import unary_union
@@ -1169,9 +1170,55 @@ def check_magnets(parts, p):
                 f"{len(lobes)} engagement region(s) totalling {vol:.1f} mm^3; "
                 "more than one means the ring is broken and the hold is local "
                 "again")
+    # Derived, not guessed. The lip's own wedge can be at most its hook depth by
+    # its full height, all the way round; anything past that is material
+    # somewhere it should not be. The first version of this check carried a
+    # hand-picked 220 mm^3 and failed the moment the hook was deepened, which is
+    # what a magic number does.
+    rim = 2.0 * (p["body_w"] + p["body_h"])
+    bite_max = rim * p["cover_hook"] * (p["cover_lip_t"] + p["cover_lip_entry"])
     ok &= check("the engagement is a hook, not a clash", "MAGNET",
-                30.0 <= vol <= 220.0,
-                f"{vol:.1f} mm^3 of interference distributed round the rim")
+                0.25 * bite_max <= vol <= bite_max,
+                f"{vol:.1f} mm^3 round a {rim:.0f} mm rim, against a "
+                f"{bite_max:.0f} mm^3 ceiling for a {p['cover_hook']:.2f} mm "
+                f"hook over a {p['cover_lip_t'] + p['cover_lip_entry']:.2f} mm "
+                "lip")
+    # C-40. The question that actually matters about this part is not whether it
+    # fits when perfect - it is whether it still holds once the PLA has moved.
+    # So deform the lip and ask again. Bow is the FDM failure mode (corners curl
+    # off the bed); splay is the one the hook is sensitive to, because the land
+    # sits above the mouth plane where the shell has already narrowed.
+    try:
+        zl = -p["cover_wall_d"] + p["cover_lip_entry"] + p["cover_lip_t"] / 2.0
+        sec = cv.section(plane_origin=[0, 0, zl], plane_normal=[0, 0, 1])
+        pl2, _ = sec.to_2D(to_2D=np.eye(4))
+        po2 = max(pl2.polygons_full, key=lambda q: q.area)
+        ring = np.array(max((shapely.geometry.Polygon(r) for r in po2.interiors),
+                            key=lambda q: q.area).exterior.coords)
+        ring = ring[np.linspace(0, len(ring) - 1, 300).astype(int)]
+        hw, hh = p["cover_w"] / 2.0, p["cover_h"] / 2.0
+
+        def held(dz=0.0, splay=0.0):
+            x, y = ring[:, 0].copy(), ring[:, 1].copy()
+            r2 = (x / hw) ** 2 + (y / hh) ** 2
+            if splay:
+                nn = np.hypot(x, y)
+                nn[nn == 0] = 1.0
+                x = x + splay * (x / nn) * r2
+                y = y + splay * (y / nn) * r2
+            z = np.full_like(x, p["body_t"] + zl) + dz * r2
+            return float(np.mean(ch.contains(np.c_[x, y, z])))
+
+        bow = held(dz=-0.8)
+        spl = held(splay=0.3)
+        both = held(dz=-0.8, splay=0.3)
+        ok &= check("the lip still holds after the part has warped", "MAGNET",
+                    min(bow, spl, both) >= 0.90,
+                    f"lip engaged over {bow:.0%} of its length at 0.8 mm of bow, "
+                    f"{spl:.0%} at 0.3 mm of splay, {both:.0%} at both together")
+    except Exception as exc:
+        ok &= check("warp tolerance test ran", "MAGNET", False, str(exc))
+
     ok &= check("magnets are not asked to carry shear", "MAGNET",
                 len(lobes) == 1 and p["cover_wall_d"] >= 3.0,
                 f"4 pairs make {4*p['magnet_pull_08']:.1f} N of pull across "

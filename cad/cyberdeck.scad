@@ -509,6 +509,18 @@ module cover() {
             rse_soft(cover_w, cover_h, cover_wall_d + cover_t,
                      cover_corner_r, form_n, cover_edge_soft, cover_edge_roll);
         cover_cavity();
+        // The middle of the inner face, held clear. Everything except a
+        // perimeter land and four magnet pads.
+        difference() {
+            translate([0, 0, -0.01])
+                rse_plate(cover_cham_w - 2*cover_land, cover_cham_h - 2*cover_land,
+                          cover_recess + 0.01,
+                          max(cover_corner_r - cover_wall_t - cover_land, 0.8),
+                          form_n);
+            for (m = magnet_sites())
+                translate([m[0], m[1], -0.02])
+                    cylinder(d = cover_pad_d, h = cover_recess + 0.03);
+        }
         // magnet pockets, opening on the INNER face. No skin on this side: it
         // is never seen, and halving the gap is worth more than another magnet.
         for (m = magnet_sites())
