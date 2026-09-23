@@ -1143,22 +1143,51 @@ def check_magnets(parts, p):
     seat.apply_translation([0.0, 0.0, p["body_t"]])
     inter = ch.intersection(seat)
     clash = float(inter.volume) if inter is not None and len(inter.faces) else 0.0
-    ok &= check("the cover seats on the front face without clashing", "MAGNET",
-                clash <= 0.01,
-                f"shared volume {clash:.4f} mm^3 with both register platforms "
-                "engaged in their apertures")
-    reach = p["cover_reg_depth"]
-    ok &= check("register platforms clear the glass and the keycaps", "MAGNET",
-                reach + 0.8 <= 2.65 and reach + 0.8 <= 2.80,
-                f"platforms reach {reach:.2f} mm in; the glass is 2.65 below the "
-                f"face ({2.65-reach:.2f} clear) and the keycaps 2.80 "
-                f"({2.80-reach:.2f} clear)")
+    # The cover is a tray now and its grip fingers are SUPPOSED to interfere -
+    # that is the retention. What must not happen is a clash anywhere else, so
+    # this bounds the bite rather than forbidding it.
+    bite_max = 2.5 * len(p["cover_grip_y_px"] + p["cover_grip_y_nx"]) \
+        * p["cover_grip_inter"] * p["cover_grip_w"] * p["cover_grip_h"]
+    ok &= check("the cover seats with only its grips touching", "MAGNET",
+                clash <= bite_max,
+                f"shared volume {clash:.2f} mm^3 against a {bite_max:.1f} mm^3 "
+                f"ceiling for {len(p['cover_grip_y_px'] + p['cover_grip_y_nx'])} "
+                "fingers; anything above that is a clash, not a grip")
+    # C-38. The cover is a tray now, not a plate on four magnets. Shear and
+    # retention are the skirt's job; the magnets only seat it. So these ask
+    # about the skirt, and they ask the MESH, because the previous cover was
+    # dimensionally perfect and still did not work.
+    grip_z = p["body_t"] - p["cover_skirt_depth"]
+    ok &= check("the skirt reaches the shell's full-width band", "MAGNET",
+                4.9 + 0.3 <= grip_z <= 11.9 - 0.3,
+                f"skirt bottom lands at shell z = {grip_z:.2f}; the shell runs "
+                "its full 116.250 mm from z = 4.90 to 11.90 and tapers outside "
+                "that, so a grip placed beyond it holds on a slope")
+    seat = cv.copy()
+    seat.apply_translation([0.0, 0.0, p["body_t"]])
+    bite = ch.intersection(seat)
+    lobes = ([b for b in bite.split(only_watertight=False) if b.volume > 0.3]
+             if bite is not None and len(bite.faces) else [])
+    want = len(p["cover_grip_y_px"] + p["cover_grip_y_nx"])
+    vols = sorted(float(b.volume) for b in lobes)
+    ok &= check("every grip finger bites the shell", "MAGNET",
+                len(lobes) == want,
+                f"{len(lobes)} of {want} fingers interfere with the shell"
+                + (f"; volumes {vols[0]:.2f}..{vols[-1]:.2f} mm^3" if vols else ""))
+    # A finger that grips a quarter of what its neighbours do is on the corner
+    # taper. That is how the first placement failed and nothing but a spread
+    # check would have seen it.
+    ok &= check("the fingers bite evenly", "MAGNET",
+                bool(vols) and vols[0] >= 0.65 * vols[-1],
+                f"lightest {vols[0]:.2f} mm^3 against heaviest {vols[-1]:.2f} "
+                "mm^3" if vols else "no interference measured")
     ok &= check("magnets are not asked to carry shear", "MAGNET",
-                p["cover_reg_depth"] >= 1.0,
+                p["cover_skirt_depth"] >= 4.0 and len(lobes) >= 4,
                 f"4 pairs make {4*p['magnet_pull_08']:.1f} N of pull across "
                 f"{p['magnet_skin']:.1f} mm but only "
                 f"{4*p['magnet_pull_08']*p['magnet_shear_frac']:.1f} N of shear; "
-                f"the two {p['cover_reg_depth']:.1f} mm platforms carry it instead")
+                f"a {p['cover_skirt_depth']:.1f} mm skirt on {len(lobes)} "
+                "fingers carries it instead")
 
     # C-35. A crush rib narrower than one extrusion is not a crush rib, it is a
     # suggestion the slicer may decline. The rib was 0.70 mm against a 0.80 mm

@@ -1331,15 +1331,81 @@ function magnet_sites() = [ for (sy = [magnet_y_lo, magnet_y_hi],
 //  show face. Change magnet_h or magnet_skin and the cover follows.
 cover_t         = magnet_pocket_h + magnet_skin;   // [DERIVED] = 2.95
 cover_gap       = 0.15;   // [DESIGN] shadow gap per side; flush is a tolerance trap
-cover_w         = body_w - 2 * cover_gap;
-cover_h         = body_h - 2 * cover_gap;
+//  ---- THE COVER IS A TRAY, NOT A PLATE -------------------------------------
+//  The first cover was a flat plate held on four magnets. It printed warped -
+//  a 116 x 140 mm plate 2.95 mm thick is exactly the geometry that curls on an
+//  FDM bed - and a warped plate cannot register on a flat face. The magnets
+//  then have to pull the warp out, across four points, and they cannot.
+//
+//  Both halves of that failure have one fix. A closed perimeter skirt turns the
+//  part from a plate into a shallow box section, which barely warps to begin
+//  with; and it moves registration from the FACE, which warps, to the SIDES,
+//  which the skirt grips. The magnets go back to what they are good at -
+//  seating it and stopping it rattling - instead of being the structure.
+//
+//  WHAT IT GRIPS. Measured on the rendered chassis, the shell is a barrel: it
+//  runs the full 116.250 mm from z = 4.90 to z = 11.90 and tapers to 113.914 at
+//  the front face. That is 1.168 mm per side of natural lead-in, already there,
+//  and the full-width band is the grip surface. No change to the enclosure.
+cover_skirt_clear = 0.35;  // [DESIGN] per side, so it drops on rather than
+                           //   needing to be aligned
+cover_skirt_wall  = 1.60;  // [DESIGN] two extrusions. Thicker is stiffer, and
+                           //   stiffer fingers crack instead of flexing.
+cover_skirt_depth = 8.00;  // [DESIGN] reaches chassis z = 8.85, well inside the
+                           //   4.90-11.90 full-width band. Also the cantilever
+                           //   length of the grip fingers, and the reason it is
+                           //   8 and not 5: strain at the finger root goes as
+                           //   1/L^2, and at 5 mm it is over PLA-CF's limit.
+
+cover_skirt_id_w  = body_w + 2 * cover_skirt_clear;   // [DERIVED] = 116.95
+cover_skirt_id_h  = body_h + 2 * cover_skirt_clear;   // [DERIVED] = 140.95
+cover_w         = cover_skirt_id_w + 2 * cover_skirt_wall;   // [DERIVED] = 120.15
+cover_h         = cover_skirt_id_h + 2 * cover_skirt_wall;   // [DERIVED] = 144.15
+cover_corner_r  = corner_blend + cover_skirt_clear + cover_skirt_wall;
+
+//  ---- GRIP FINGERS ---------------------------------------------------------
+//  A continuous interference band would have to be stretched by hoop strain
+//  over 116 mm of stiff wall: high insertion force, and PLA-CF cracks before it
+//  stretches. Discrete cantilever fingers flex locally instead, which also
+//  means each one finds its own position - so residual warp in the skirt costs
+//  nothing, because no finger depends on any other being where it should be.
+cover_grip_inter = 0.25;   // [DESIGN] interference per side. Root strain is
+                           //   3*d*t/(2*L^2) = 0.94% at t=1.60, L=8.00, inside
+                           //   PLA-CF's usable band. 0.30 takes it to 1.1%.
+cover_grip_w     =  9.0;   // [DESIGN] finger width. Narrow enough to fit the
+                           //   clear zones both flanks actually have; width
+                           //   sets insertion force, not root strain.
+cover_grip_h     = 2.40;   // [DESIGN] bead height along z
+cover_grip_slot  = 1.20;   // [DESIGN] flex slot either side of each finger
+cover_grip_zc    = -(cover_skirt_depth - 1.60);   // [DERIVED] bead centre, as
+                           //   far from the root as the wall allows
+cover_grip_prot  = cover_skirt_clear + cover_grip_inter;  // [DERIVED] = 0.60
+//  Three per long flank, and the two flanks do NOT share positions, because
+//  they do not have the same obstructions. On +X the USB-C tunnel occupies
+//  y = 25.5 to 38.0 and the microSD y = 43.9 to 57.9; on -X the keyboard
+//  service window spans y = -49.07 to -15.07. Both flanks lose everything
+//  beyond |y| = 58.9, where the corner blend starts and the shell begins to
+//  narrow - a finger placed at y = 62 in the first version landed on that
+//  taper and gripped a quarter of what the others did, which the interference
+//  measurement caught.
+//  Kept as two flat lists rather than a list of [sign, y] pairs, because
+//  tools/params.py keeps lists of numbers and silently drops lists of lists -
+//  which is how this first reached validate.py as a KeyError.
+cover_grip_y_px  = [-50.0, -20.0,  10.0];   // +X flank, clear of both ports
+cover_grip_y_nx  = [-54.0,   5.0,  40.0];   // -X flank, clear of the window
+cover_grip_n     = len(cover_grip_y_px) + len(cover_grip_y_nx);
+
+assert(cover_grip_prot * 2 < cover_grip_h,
+       "grip bead cannot carry a 45 degree lead-in on both faces; it will need support");
+assert(body_t - cover_skirt_depth > 4.9 + 0.5,
+       "cover skirt reaches past the shell's full-width band and loses its grip");
 
 //  LOCATION, which magnets cannot supply. Both apertures are already drafted
 //  sockets, so the cover grows a platform into each: they carry every bit of
 //  shear, they self-centre as the cover closes, and they cost no new features
 //  on the show face. Depth is set by what is behind them - the glass at 2.65
 //  and the keycaps at 2.80 - with better than 1 mm to spare.
-cover_reg_depth = 1.50;   // [DESIGN] into each aperture
+cover_reg_depth = 0.00;   // [SUPERSEDED] the skirt carries shear now; see C-38
 cover_reg_clear = 0.30;   // [DESIGN] per side, at the outer face
 //  The platforms are RIMS, not slabs. A rim locates exactly as well as a solid
 //  block, adds stiffness where a flat plate wants it most - around the two big

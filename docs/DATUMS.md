@@ -347,6 +347,73 @@ a wider recess behind it. This back plate is 3.2 mm thick and the header stands
 8.603 mm off the PCB back — **1.60 mm proud of the standoff plane** — so the
 body itself must pass through. The window here is sized from the body.
 
+### C-38 — The cover was a flat plate, and flat plates warp
+
+The first cover was a 116 × 140 mm plate, 2.95 mm thick, held on four magnets.
+It printed warped, and a warped plate cannot register on a flat face. Reported
+from the print: *"it prints unflat so it doesn't actually clasp."*
+
+Nothing was dimensionally wrong with it. It is the **geometry itself** that is
+the defect — a thin wide plate is exactly what curls on an FDM bed, and this
+design then asked four discrete magnets to pull that curl flat across a
+520 mm perimeter. They cannot. The plate and its retention were both wrong for
+the same reason: **the design registered on the face, and the face is the part
+that moves.**
+
+### One fix for both halves
+
+A closed perimeter skirt turns the part from a plate into a shallow box
+section, which barely warps to begin with, and moves registration from the
+face to the **sides**, which do not.
+
+**The shell was already the right shape for this.** Measured on the rendered
+chassis, it is a barrel: full 116.250 mm from z = 4.90 to z = 11.90, tapering
+to 113.914 at the front face. That is **1.168 mm per side of lead-in that
+already existed**, and a full-width band to grip. No enclosure change — the
+geometry was frozen, and it did not need to move.
+
+| | Was | Now |
+|---|---|---|
+| Form | flat plate | tray, 8.00 mm skirt |
+| Registers on | the front face | the shell's flanks |
+| Retention | 4 magnets | 6 grip fingers + the same 4 magnets |
+| Magnets | structure | seating and anti-rattle |
+| Shear | `cover_reg_depth` platforms in the apertures | the skirt |
+
+The magnet configuration is **unchanged** — same four sites, same pockets, same
+gap.
+
+### Three things the measurements caught
+
+**Fingers, not a continuous band.** A continuous interference lip would have to
+be stretched by hoop strain over 116 mm of stiff wall. PLA-CF cracks before it
+stretches. Discrete cantilevers flex locally — and because each finds its own
+position, **residual warp costs nothing, since no finger depends on another
+being where it should be.** Root strain is `3δt/2L²` = **0.94 %** at δ = 0.25,
+t = 1.60, L = 8.00. That is also why the skirt is 8 mm and not 5: strain goes
+as 1/L², and at 5 mm it is over PLA-CF's limit.
+
+**A finger on the corner gripped a quarter of its neighbours.** The first
+placement put one at y = 62, past where the corner blend starts at y = 58.9 and
+the shell begins to narrow. Measured interference: **2.68 and 1.21 mm³ against
+5.08** for the others. A presence check would have passed it. The fix was to
+stop sharing positions between the flanks — they do not have the same
+obstructions, since +X carries the USB-C and microSD tunnels and −X the
+keyboard service window. All six now bite **3.26 mm³ each, exactly even.**
+
+**An unsupported ledge, 1,200 mm² of it.** The plate was an `rse_soft` barrel
+and the skirt a separate straight tube; where they met, the skirt stood proud
+of the plate's inset bottom, leaving an annular overhang facing the bed. One
+continuous straight-sided form removes it, holds the wall constant, and is the
+more minimal object. Printed show-face-down the part now needs **0.00 mm² of
+support**.
+
+### The checks
+
+`MAGNET` loses the two register-platform checks and gains three that ask the
+mesh: that the skirt lands inside the full-width band, that every finger bites,
+and — the one that would have caught the corner — **that they bite evenly**.
+
 ### C-37 — The flood-coat dam was lying on two countersinks
 
 The back is finished with poured self-levelling acrylic, which needs a wall to

@@ -1,6 +1,6 @@
 {
-  "passed": 115,
-  "total": 115,
+  "passed": 117,
+  "total": 117,
   "results": [
     {
       "check": "chassis: watertight",
@@ -60,7 +60,7 @@
       "check": "cover: watertight",
       "class": "MESH",
       "ok": true,
-      "detail": "7288 faces"
+      "detail": "2636 faces"
     },
     {
       "check": "cover: single body",
@@ -72,7 +72,7 @@
       "check": "cover: positive volume",
       "class": "MESH",
       "ok": true,
-      "detail": "49231 mm^3 -> 61.0 g in PLA"
+      "detail": "56869 mm^3 -> 70.5 g in PLA"
     },
     {
       "check": "board: watertight",
@@ -174,7 +174,7 @@
       "check": "cover is not degenerate",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "115.95 x 139.95 x 4.45, 49231 mm^3"
+      "detail": "120.15 x 144.15 x 10.95, 56869 mm^3"
     },
     {
       "check": "chassis fits the print bed",
@@ -198,7 +198,7 @@
       "check": "cover fits the print bed",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "116.0 x 139.9 x 4.5"
+      "detail": "120.2 x 144.2 x 10.9"
     },
     {
       "check": "board does not clash with the chassis",
@@ -519,22 +519,34 @@
       "detail": "rib tips close the 5.50 bore to 4.80; the discs run 4.90..5.10, so interference is 0.10..0.30 mm diametral"
     },
     {
-      "check": "the cover seats on the front face without clashing",
+      "check": "the cover seats with only its grips touching",
       "class": "MAGNET",
       "ok": true,
-      "detail": "shared volume 0.0000 mm^3 with both register platforms engaged in their apertures"
+      "detail": "shared volume 19.58 mm^3 against a 81.0 mm^3 ceiling for 6 fingers; anything above that is a clash, not a grip"
     },
     {
-      "check": "register platforms clear the glass and the keycaps",
+      "check": "the skirt reaches the shell's full-width band",
       "class": "MAGNET",
       "ok": true,
-      "detail": "platforms reach 1.50 mm in; the glass is 2.65 below the face (1.15 clear) and the keycaps 2.80 (1.30 clear)"
+      "detail": "skirt bottom lands at shell z = 8.85; the shell runs its full 116.250 mm from z = 4.90 to 11.90 and tapers outside that, so a grip placed beyond it holds on a slope"
+    },
+    {
+      "check": "every grip finger bites the shell",
+      "class": "MAGNET",
+      "ok": true,
+      "detail": "6 of 6 fingers interfere with the shell; volumes 3.26..3.26 mm^3"
+    },
+    {
+      "check": "the fingers bite evenly",
+      "class": "MAGNET",
+      "ok": true,
+      "detail": "lightest 3.26 mm^3 against heaviest 3.26 mm^3"
     },
     {
       "check": "magnets are not asked to carry shear",
       "class": "MAGNET",
       "ok": true,
-      "detail": "4 pairs make 15.4 N of pull across 0.8 mm but only 3.2 N of shear; the two 1.5 mm platforms carry it instead"
+      "detail": "4 pairs make 15.4 N of pull across 0.8 mm but only 3.2 N of shear; a 8.0 mm skirt on 6 fingers carries it instead"
     },
     {
       "check": "crush ribs are at least one extrusion wide",
