@@ -1179,7 +1179,7 @@ variant = 2;   // [DESIGN] 1 = v1.0 as printed, 2 = adds the magnetic cover
 face_roll_1       = 0.984;   // [DERIVED] roll_f(1, edge_roll) at edge_roll = 0.28
 front_face_inset  = edge_soft * face_roll_1;        // [DERIVED] = 1.1808
 front_face_half_w = body_w / 2 - front_face_inset;  // [DERIVED] = 56.944
-front_face_half_h = body_h / 2 - front_face_inset;  // [DERIVED] = 68.244
+front_face_half_h = body_h / 2 - front_face_inset;  // [DERIVED] = 68.944
 
 //  ---- THE MAGNETS -----------------------------------------------------------
 //  Ø5 x 2 mm N52 NdFeB discs, Ni-Cu-Ni plated. A genuine catalogue standard
@@ -1263,7 +1263,7 @@ magnet_seat_clear = 0.15;          // [DESIGN] so the disc can bottom on the ski
 magnet_pocket_h   = magnet_h + magnet_seat_clear;   // [DERIVED] = 2.15
 magnet_skin       = 0.80;          // [DESIGN] 4 layers over the disc, show face
 magnet_boss_wall  = 1.60;          // [DESIGN] 4 extrusions around the bore
-magnet_boss_d     = magnet_bore + 2 * magnet_boss_wall;   // [DERIVED] = 8.50
+magnet_boss_d     = magnet_bore + 2 * magnet_boss_wall;   // [DERIVED] = 8.70
 //  front_t is 2.4 and the stack needs 2.95, so the pocket grows INWARD as a
 //  local boss rather than thinning the show face.
 magnet_boss_rise  = max(0, magnet_skin + magnet_pocket_h - front_t);  // = 0.55
@@ -1302,8 +1302,8 @@ magnet_x     = (magnet_x_min + magnet_x_max) / 2;               // [DERIVED]
 //  centres; the stations sit exactly there, which is also as far apart as they
 //  can get, and spacing is what resists peel.
 magnet_boss_keepout = shell_screw_boss_d / 2 + magnet_boss_d / 2 + 1.0;
-magnet_y_lo = boss_rows[0] + magnet_boss_keepout;   // [DERIVED] =  7.975
-magnet_y_hi = boss_rows[1] - magnet_boss_keepout;   // [DERIVED] = 54.575
+magnet_y_lo = boss_rows[0] + magnet_boss_keepout;   // [DERIVED] =  8.575
+magnet_y_hi = boss_rows[1] - magnet_boss_keepout;   // [DERIVED] = 53.600
 
 //  ONE list, consumed by the shell AND by the cover. Hard-coding these twice is
 //  exactly the surgery-on-every-script failure this section exists to avoid.
@@ -1378,8 +1378,8 @@ cover_lip_entry = 0.20;  // [DESIGN] just enough ease to find the rim.
 cover_rim_hw   = 57.951;
 cover_rim_hh   = 69.951;
 
-cover_mouth_w  = 2 * (cover_rim_hw - cover_hook);       // [DERIVED] = 114.902
-cover_mouth_h  = 2 * (cover_rim_hh - cover_hook);       // [DERIVED] = 138.902
+cover_mouth_w  = 2 * (cover_rim_hw - cover_hook);       // [DERIVED] = 114.502
+cover_mouth_h  = 2 * (cover_rim_hh - cover_hook);       // [DERIVED] = 138.502
 cover_cham_w   = body_w + 2 * cover_clear;              // [DERIVED] = 116.95
 cover_cham_h   = body_h + 2 * cover_clear;              // [DERIVED] = 140.95
 cover_w        = cover_cham_w + 2 * cover_wall_t;       // [DERIVED] = 120.95
@@ -1818,9 +1818,9 @@ case_floor  = case_w * body_h / body_w
               - body_h - case_pad - case_rim;        // [DERIVED] = 28.30
 case_y_bot  = -body_h/2 - case_pad;                 // [DERIVED] deck lands here
 case_y_top  =  body_h/2 + case_rim;                 // [DERIVED] the mouth
-case_y_floor= case_y_bot - case_floor;              // [DERIVED] = -87.325
+case_y_floor= case_y_bot - case_floor;              // [DERIVED] = -99.627
 case_h      = case_y_top - case_y_floor;            // [DERIVED] = 181.75
-case_cy     = (case_y_top + case_y_floor) / 2;      // [DERIVED] =   3.55
+case_cy     = (case_y_top + case_y_floor) / 2;      // [DERIVED] =   -8.75
 case_cav_r  = corner_blend + case_pad;              // [DERIVED] =  12.40
 
 //  THE BACK IS FLAT, AND THAT IS A PRINT FINDING BEFORE IT IS A STYLE ONE.
@@ -1869,18 +1869,31 @@ case_bolt_top_back = 10.00;      // [DESIGN] how far short of the flank's end
 
 case_bolt_d     = 5.00;   // [STANDARD] M5, as asked for
 case_bolt_clear = 5.40;   // [STANDARD] ISO 273 medium fit
-case_bolt_len   = 25.00;  // [DERIVED->STANDARD] 23.33 needed, 25 is stock.
+case_nut_seat   = 8.20;   // [DESIGN] how far the hex counterbore sinks from the
+                          //   back face. Set by the screw: seat it deeper and a
+                          //   35 mm screw will not reach the nut, shallower and
+                          //   it would have to be longer than the object.
+case_bolt_len   = 35.00;  // [DERIVED->STANDARD] 34.75 needed, 35 is stock.
                           //   A 10 mm screw cannot span a 38 mm object.
 case_bolt_head_d= 8.50;   // [STANDARD] ISO 4762 socket cap
-case_nut_af     = 8.00;   // [STANDARD] ISO 4032 M5, across flats
-case_nut_t      = 4.00;   // [STANDARD] ISO 4032 M5, thickness
-case_fit        = 0.20;   // [DESIGN] press fit on the hex pocket
-case_bolt_relief= 3.00;   // [DESIGN] blind run-out past the nut
+case_nut_af     = 8.00;   // [STANDARD] ISO 4032 / DIN 934 M5, across flats
+case_nut_t      = 4.70;   // [STANDARD] ISO 4032 M5, m_max. WAS 4.00, which is
+                          //   the DIN 934 figure under an ISO 4032 label - a
+                          //   legal ISO nut stands up to 0.50 mm proud of a
+                          //   pocket cut for it. Taking the larger of the two
+                          //   makes the pocket accept either.
+case_fit        = 0.20;   // [DESIGN] clearance on the hex: +0.10 a side. NOT a
+                          //   press fit - the hex only has to key the nut
+                          //   against rotation. The screw pulls it onto its
+                          //   seat, so it does not need to be held there.
 case_bolt_keep  = 3.00;   // [DESIGN] least metal from a nut to any surface
-case_nut_h      = case_nut_t + case_fit;                     // [DERIVED] = 4.20
+case_nut_h      = case_nut_t + case_fit;                     // [DERIVED] = 4.90
 case_nut_cd     = (case_nut_af + case_fit) / cos(30);        // [DERIVED] = 9.47
-case_bolt_end   = case_split_z - case_nut_h - case_bolt_relief;   // = -4.275
-case_bolt_stack = (case_z1 - case_split_z) + case_nut_h;     // [DERIVED] = 23.33
+case_nut_z      = case_z0 + case_nut_seat;                   // [DERIVED] = -8.00
+case_nut_roof   = case_split_z - case_nut_z;                 // [DERIVED] = 10.93
+case_bolt_end   = case_nut_z;                                // bore stops here
+case_bolt_stack = (case_z1 - case_nut_z) + case_nut_t;       // [DERIVED] = 34.75
+case_bolt_tip   = case_z1 - case_bolt_len;                   // [DERIVED] = -12.95
 case_bolt_n     = 2 * case_bolt_m + 1;                       // [DERIVED] = 13
 
 //  Locating pins. Thirteen screws clamp but each floats 0.20 mm in its
@@ -1985,8 +1998,15 @@ assert(case_rim >= 10.0 && case_rim <= 16.0,
        "mouth too deep to pinch the deck out of, or too shallow to hold it");
 assert(case_bolt_len >= case_bolt_stack,
        "M5 screw is shorter than the stack it has to span");
-assert(case_bolt_end > case_z0 + 3.0,
-       "bolt run-out breaks out of the back face");
+//  The check that would have caught C-43 at the parameter level. If the nut has
+//  no back-half metal above it, the screw clamps the front half to itself and
+//  the joint carries nothing.
+assert(case_nut_roof >= 4.0,
+       "no back-half roof over the nut, so the screws clamp nothing");
+assert(case_bolt_tip <= case_nut_z - case_nut_t,
+       "screw does not reach through the nut");
+assert(case_bolt_tip > case_z0 + 1.0,
+       "screw tip breaks out of the back face");
 assert(case_split_z > case_z_bk && case_split_z < case_z_fr,
        "parting plane misses the cavity, so one half has no tray to flock");
 assert(case_mag_skin >= 4 * layer_h,

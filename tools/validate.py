@@ -1481,7 +1481,29 @@ def check_params_agree(p, tmp):
         except ValueError:
             pass
 
-    ok = check("no parameter is undef in the renderer", "PARAM",
+    # A [DERIVED] = N comment is a claim, and claims rot. Nine of them in this
+    # file were wrong when this check was written - seven in the frozen
+    # enclosure, stale since whatever edit moved their inputs. The expressions
+    # were all correct; only the numbers a reader would trust were not. Matched
+    # strictly on the file's own "[DERIVED] = N" form, so prose that happens to
+    # contain an equals sign is not mistaken for a claim.
+    claim = re.compile(r"^\s*([A-Za-z_]\w*)\s*=.*?//.*?\[DERIVED\]\s*=\s*"
+                       r"([+-]?\d+\.?\d*)")
+    stale = []
+    for ln in src_text.split("\n"):
+        m = claim.match(ln)
+        if not m:
+            continue
+        n, c = m.group(1), float(m.group(2))
+        if n in p and isinstance(p[n], (int, float)) and abs(p[n] - c) > 0.02:
+            stale.append(f"{n} says {c:g}, is {p[n]:.3f}")
+    ok = check("every [DERIVED] = N comment tells the truth", "PARAM",
+               not stale,
+               f"{sum(1 for l in src_text.split(chr(10)) if claim.match(l))} "
+               f"claims checked against the value they name"
+               if not stale else "STALE: " + "; ".join(stale[:4]))
+
+    ok &= check("no parameter is undef in the renderer", "PARAM",
                not undef and not missing,
                f"{len(names)} scalars echoed out of OpenSCAD; "
                + ("none undef" if not undef and not missing

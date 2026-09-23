@@ -1996,3 +1996,108 @@ Two checks in the same file had to be fixed before they were worth anything:
    end and then jumps 134 mm across the open mouth to pick up the other side —
    reported as a **236 % spacing error** on a part that is evenly spaced. It
    starts at an end now.
+
+### C-43 — Thirteen screws that clamped nothing
+
+An adversarial review of the C-42 case, run across five independent lenses,
+confirmed four findings out of twenty-three claims. Two lenses — print and
+structure — arrived separately at the same one, and it is the worst defect this
+project has recorded:
+
+**The thirteen M5 screws put zero clamp force across the joint.**
+
+### Why
+
+The hex pockets opened at the parting face. A screw pulls its nut **toward the
+head**, and on that side the pocket had no roof — so the nut rose the 0.20 mm
+of float and bore on the **front half's own parting face**. Head and nut then
+both reacted against the front half. The load closed on itself inside one part.
+
+Measured on the rendered halves, probing the nut's bearing annulus (r = 3.2 mm,
+outside the Ø5.40 bore, inside the hex's 4.10 mm inradius) at all 13 sites and
+18 angles, just below the joint:
+
+| | |
+|---|---|
+| back-half material above the nut | **0 / 234** |
+| front-half material the nut bears on | **234 / 234** |
+
+`parameters.scad` had encoded the fault in its own arithmetic and nobody read
+it: `case_bolt_stack = (case_z1 - case_split_z) + case_nut_h` — front half plus
+nut pocket, with **zero back-half thickness in the stack**. The assert then
+checked a 25 mm screw against it and passed.
+
+So **8,300 mm² of mating face carried nothing**, and the two halves were held
+together by four slip-fit Ø4 pins.
+
+### All twenty checks passed, and two of them certified it
+
+- *"every nut pocket is enclosed in material"* probed a **lateral** ring and
+  never looked up.
+- *"every screw bore runs front face to nut"* asserted the axis was **clear** —
+  it actively certified the absence of the material that would have clamped.
+
+This is the project's named defect class in its purest form yet: the geometry
+that mattered was geometry no check interrogated, and the checks that existed
+were confidently measuring the wrong thing.
+
+### The fix
+
+The hex is now a **counterbore at the back face** with **10.93 mm** of back-half
+metal above it. The nut bears **up** on that roof, pushing the back half onto
+the front half, and the bore runs all the way through:
+
+    head -> front half (19.125) -> back half (10.925) -> nut (4.70)
+    stack 34.75 mm, screw M5 x 35, tip 3.25 mm inside the back face
+
+It still assembles with one hex key and no spanner: the hex keys the nut against
+rotation, and a nut dropped in loose is caught by the screw and drawn onto its
+seat. The back face gains thirteen hex wells — the "unbroken back" of C-41 is
+gone, and that is the right trade for a joint that actually closes.
+
+**The check that would have caught it** measures the load path itself: back-half
+material in the nut's bearing annulus, from its seat to the joint, at every
+site. Verified to fail on the C-42 geometry — **468/936** — and pass on this one
+at 936/936.
+
+### The nut was the wrong nut
+
+`case_nut_t = 4.00` was labelled **ISO 4032**. 4.00 is the **DIN 934** figure;
+ISO 4032 M5 is m = 4.40 min / **4.70 max**. A legal ISO nut would have stood up
+to 0.50 mm proud of a pocket cut for it, and the joint would have closed only by
+ploughing all thirteen nuts into their pocket floors. Now 4.70, which accepts
+either standard.
+
+The `case_fit = 0.20` comment also claimed a "press fit" while specifying
+**+0.10 mm a side of clearance**. It is a clearance fit; the comment says so now,
+and explains why that is correct here — the hex only has to key the nut against
+rotation, because the screw seats it.
+
+### Nine [DERIVED] comments were lying
+
+The review's minor finding was two stale `[DERIVED] = N` comments. Checking the
+whole file found **nine**, seven of them in the frozen enclosure and stale since
+whatever edit moved their inputs:
+
+| | claimed | actual |
+|---|---|---|
+| `front_face_half_h` | 68.244 | **68.944** |
+| `magnet_boss_d` | 8.50 | **8.70** |
+| `magnet_y_lo` / `magnet_y_hi` | 7.975 / 54.575 | **8.575 / 53.600** |
+| `cover_mouth_w` / `cover_mouth_h` | 114.902 / 138.902 | **114.502 / 138.502** |
+| `case_y_floor` / `case_cy` | −87.325 / 3.550 | **−99.627 / −8.751** |
+| `case_nut_h` | 4.200 | **4.900** |
+
+**No geometry moved** — every expression was right; only the numbers a reader
+would trust were not. `validate.py` now checks all 52 such claims against the
+value they name, matched strictly on the file's own `[DERIVED] = N` form so that
+prose containing an equals sign is not mistaken for a claim. 118 → 119 checks.
+
+### What this says about review
+
+The C-42 work ran twenty checks, four gates and a visual inspection, and shipped
+a case that does not bolt shut. What found it was **five reviewers who had not
+written it**, told to refute rather than agree, with instructions to measure the
+mesh rather than read the source. Nineteen of their twenty-three claims did not
+survive their own verification pass — the four that did were worth the other
+nineteen.

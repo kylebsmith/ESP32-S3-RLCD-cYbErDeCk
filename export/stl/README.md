@@ -15,9 +15,9 @@ The carry case is a separate object and prints separately:
 | File | Size (mm) | Volume | ~PLA | Notes |
 |---|---|---|---|---|
 | `case/carrycase-front.stl` | 166.65 × 181.75 × 22.12 | 252 cm³ | 172 g | print **face down**; holds the four magnets. 22.12 not 19.13 because the four locating pins stand 3 mm proud of the joint |
-| `case/carrycase-back.stl` | 166.65 × 181.75 × 19.12 | 308 cm³ | 210 g | print **back down**; holds the thirteen nuts |
+| `case/carrycase-back.stl` | 166.65 × 181.75 × 19.12 | 302 cm³ | 206 g | print **back down**; the thirteen hex wells open on the bed |
 
-They bolt together with **13 × M5 × 25 socket cap and 13 × M5 nut** in a ring
+They bolt together with **13 × M5 × 35 socket cap and 13 × M5 nut** in a ring
 that follows the case outline all the way round the flanks and the floor. Each
 needs a 167 × 182 mm bed. An earlier one-piece `case/carrycase.stl` is gone: it could
 not be reached into to fit the magnets, and its spined back needed support. See

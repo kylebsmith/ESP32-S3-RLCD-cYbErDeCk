@@ -1,6 +1,6 @@
 {
-  "passed": 118,
-  "total": 118,
+  "passed": 119,
+  "total": 119,
   "results": [
     {
       "check": "chassis: watertight",
@@ -699,16 +699,22 @@
       "detail": "34.0 x 8.0 mm window reaches the keyboard's power switch and charging port, which share one short edge"
     },
     {
+      "check": "every [DERIVED] = N comment tells the truth",
+      "class": "PARAM",
+      "ok": true,
+      "detail": "52 claims checked against the value they name"
+    },
+    {
       "check": "no parameter is undef in the renderer",
       "class": "PARAM",
       "ok": true,
-      "detail": "385 scalars echoed out of OpenSCAD; none undef"
+      "detail": "388 scalars echoed out of OpenSCAD; none undef"
     },
     {
       "check": "both readers agree on every parameter",
       "class": "PARAM",
       "ok": true,
-      "detail": "385 shared scalars, both readers agree"
+      "detail": "388 shared scalars, both readers agree"
     }
   ]
 }

@@ -158,21 +158,24 @@ module case_lug_slots() {
                  case_z1 - case_z0 + 2, case_lug_slot_r);
 }
 
-//  Screw clearance, blind: it stops short of the back face so the back stays an
-//  unbroken surface and there is nowhere for grit to get in.
+//  Screw clearance, through both halves, stopping at the nut's seat.
 module bolt_holes() {
     for (b = bolt_sites())
-        translate([b[0], b[1], case_bolt_end])
-            cylinder(d = case_bolt_clear, h = case_z1 + 1 - case_bolt_end);
+        translate([b[0], b[1], case_nut_z])
+            cylinder(d = case_bolt_clear, h = case_z1 + 1 - case_nut_z);
 }
 
-//  Hex pockets open at the parting face. Drop the nuts in, close the case,
-//  drive from the front with one key - nothing reaches down a 16 mm wall with
-//  a socket.
+//  Hex counterbores at the BACK FACE. The nut bears UP on the roof of this
+//  pocket and that roof is back-half metal, which is what puts the back half in
+//  the load path. A pocket opening at the parting face does not - see THE NUT
+//  SEATS AT THE BACK FACE in parameters.scad, and C-43.
+//
+//  It opens on the bed while the back half prints, so it needs no support; all
+//  it leaves is a 2.03 mm annular ledge at the roof, which bridges.
 module nut_pockets() {
     for (b = bolt_sites())
-        translate([b[0], b[1], case_split_z - case_nut_h])
-            cylinder(d = case_nut_cd, h = case_nut_h + 0.01, $fn = 6);
+        translate([b[0], b[1], case_z0 - 1])
+            cylinder(d = case_nut_cd, h = case_nut_seat + 1, $fn = 6);
 }
 
 module pins(d, h, z) {

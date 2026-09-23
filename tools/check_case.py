@@ -67,7 +67,7 @@ def plan(m, z):
     return list(sec.to_2D(to_2D=np.eye(4))[0].polygons_full)
 
 
-def ceilings(m, bed_at_max, below_deg):
+def ceilings(m, bed_at_max, below_deg, ignore=None, ignore_r=0.0):
     """Area of faces that point at the bed, steeper than the FDM limit.
 
     Expressed in the print frame: `bed_at_max` says the part is laid on its
@@ -82,7 +82,15 @@ def ceilings(m, bed_at_max, below_deg):
         bed, cos = m.bounds[0][2], -n[:, 2]
     onbed = np.abs(c[:, 2] - bed) < 0.06
     ang = np.degrees(np.arccos(np.clip(cos, 0, 1)))
-    return float(a[(cos > 1e-6) & ~onbed & (ang < below_deg)].sum())
+    keep = (cos > 1e-6) & ~onbed & (ang < below_deg)
+    if ignore is not None and len(ignore):
+        # A counterbore roof is a flat ceiling and it is fine: it is a narrow
+        # annulus round a hole, which bridges. It is excluded here and measured
+        # on its own terms by the ledge-width check instead, so this number
+        # stays a number about UNSUPPORTED SPANS rather than about fasteners.
+        d = np.linalg.norm(c[:, None, :2] - np.asarray(ignore)[None, :, :2], axis=2)
+        keep &= d.min(axis=1) > ignore_r
+    return float(a[keep].sum())
 
 
 def ring_order(pts):
@@ -287,23 +295,49 @@ def main():
             r = p["case_nut_cd"] / 2 + 0.6
             ring.append([b[0] + r * np.cos(np.radians(a)),
                          b[1] + r * np.sin(np.radians(a)),
-                         zs - p["case_nut_h"] / 2])
+                         p["case_nut_z"] - p["case_nut_t"] / 2])
     enclosed = back.contains(np.array(ring))
     check("every nut pocket is enclosed in material",
           bool(np.all(enclosed)),
           f"{int(enclosed.sum())}/{len(ring)} probes solid around "
           f"{len(cen)} pockets")
 
+    # THE ONE THAT MATTERS. A screw clamps nothing unless the nut bears on the
+    # half the head is NOT on. The previous design put the hex at the parting
+    # face with no roof: the nut rose 0.2 mm and bore on the FRONT half's own
+    # parting face, so head and nut both reacted against the front half and the
+    # back half carried zero load. Every other check in this file passed on it -
+    # two of them actively certified it, one by probing the pocket only
+    # SIDEWAYS and one by asserting the bore was clear.
+    #
+    # So this measures the load path itself: back-half metal in the nut's
+    # bearing annulus, all the way from its seat to the joint.
+    rad = [(p["case_bolt_clear"] / 2 + p["case_nut_cd"] * np.cos(np.radians(30)) / 2) / 2]
+    roof, nz = [], p["case_nut_z"]
+    for b in cen:
+        for r in rad:
+            for a in range(0, 360, 30):
+                for z in np.linspace(nz + 0.2, zs - 0.2, 6):
+                    roof.append([b[0] + r * np.cos(np.radians(a)),
+                                 b[1] + r * np.sin(np.radians(a)), z])
+    bears = back.contains(np.array(roof))
+    check("every nut bears on the back half, so the screws actually clamp",
+          bool(np.all(bears)),
+          f"{int(bears.sum())}/{len(roof)} probes solid through "
+          f"{p['case_nut_roof']:.2f} mm of back-half roof over {len(cen)} nuts; "
+          f"stack {p['case_bolt_stack']:.2f} mm of M5 x {p['case_bolt_len']:.0f}")
+
     axis = []
     for b in cen:
-        for z in np.linspace(p["case_z1"] - 0.5, zs - p["case_nut_h"] + 0.3, 7):
+        for z in np.linspace(p["case_z1"] - 0.5, p["case_nut_z"] + 0.3, 11):
             axis.append([b[0], b[1], z])
     bore = case.contains(np.array(axis))
-    check("every screw bore runs front face to nut",
-          not bool(np.any(bore)),
-          f"{int((~bore).sum())}/{len(axis)} probes clear over "
-          f"{p['case_bolt_stack']:.2f} mm of stack, "
-          f"{len(cen)} x M5 x {p['case_bolt_len']:.0f}")
+    tip_in = p["case_bolt_tip"] > p["case_z0"]
+    check("every screw bore runs front face to nut, through both halves",
+          not bool(np.any(bore)) and tip_in,
+          f"{int((~bore).sum())}/{len(axis)} probes clear from the front face "
+          f"to the nut seat; tip lands {p['case_bolt_tip'] - p['case_z0']:.2f} mm "
+          f"inside the back face")
 
     mp, mo = [], []
     for (mx, my) in [(s * p["magnet_x"], y) for s in (-1, 1)
@@ -319,12 +353,21 @@ def main():
           f"{int(skin.sum())}/4 skins intact at {p['case_mag_skin']:.2f} mm, "
           f"gap to the deck {p['case_mag_gap']:.2f} mm")
 
+    seats = [[b[0], b[1]] for b in cen]
+    sr = p["case_nut_cd"] / 2
     for lbl, m, at_max in (("front", front, True), ("back", back, False)):
-        flat = ceilings(m, at_max, 15.0)
-        shallow = ceilings(m, at_max, 44.0)
+        flat = ceilings(m, at_max, 15.0, seats, sr)
+        shallow = ceilings(m, at_max, 44.0, seats, sr)
         check(f"the {lbl} half prints face down with nothing under it",
               flat < 20.0 and shallow < 250.0,
-              f"{flat:.0f} mm^2 near-flat ceiling, {shallow:.0f} mm^2 under 44 deg")
+              f"{flat:.0f} mm^2 near-flat ceiling, {shallow:.0f} mm^2 under 44 deg"
+              f" (fastener seats excluded, measured below)")
+
+    ledge = (p["case_nut_cd"] * np.cos(np.radians(30)) - p["case_bolt_clear"]) / 2
+    check("each nut seat is a ledge narrow enough to bridge",
+          ledge <= 2.5,
+          f"{ledge:.2f} mm of annular roof round a {p['case_bolt_clear']:.2f} mm "
+          f"bore, {len(cen)} of them, all opening on the bed")
 
     ratio, deckr = p["case_h"] / p["case_w"], p["body_h"] / p["body_w"]
     check("the case is still the deck's proportion",

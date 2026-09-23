@@ -10,9 +10,9 @@ both flanks and the bottom; open only at the top. Every port is buried.
 |---|---|
 | Outside | **150.7 × 181.8 × 38.2 mm**, 166.6 over the strap pads |
 | Proportion | **1.2065** — the deck's own, to four figures |
-| Material | 546 cm³ → **≈ 372 g** printed, both halves |
+| Material | 554 cm³ → **≈ 378 g** printed, both halves |
 | Walls | 4.0 front and back, **16.0 all the way round**, 28.3 floor, 12.0 rim |
-| Hardware | **13 × M5 × 25 socket cap, 13 × M5 nut**, 4 × Ø5×2 disc |
+| Hardware | **13 × M5 × 35 socket cap, 13 × M5 nut**, 4 × Ø5×2 disc |
 | Flock allowance | 0.80 mm per surface, + 0.40 clearance |
 | Bed needed | **167 × 182 mm** per half |
 
@@ -165,10 +165,11 @@ only things that break the surface, and all three are meant to be seen.
 1. Glue the four discs into the front half's pockets, flush with the tray face,
    **polarity matched to the deck** — check with the deck before the glue grabs.
 2. Flock both trays.
-3. Drop thirteen M5 nuts into the hex pockets at the back half's parting face.
-   They are a 0.20 mm press fit and stay put while you close it.
-4. Mate the halves on the four printed locating pins and drive thirteen
-   M5 × 25 from the front.
+3. Mate the halves on the four printed locating pins.
+4. Drop thirteen M5 nuts into the hex wells in the **back face** and drive
+   thirteen M5 × 35 from the front. Each nut is caught by its screw and drawn
+   up onto its seat; the hex stops it turning. Snug, not gorilla — the bearing
+   annulus is 35 mm² of PLA.
 
 ## Open
 
@@ -180,7 +181,7 @@ only things that break the surface, and all three are meant to be seen.
    are comparable to the deck's weight, not a multiple of it, and they are only
    fighting it in shear. Retention is the cowl channel, the flock, and carrying
    it mouth-up. The arithmetic is in C-41 and in `parameters.scad`.
-3. **372 g is computed**, at 55 % of solid, not weighed. It is a heavy object;
+3. **378 g is computed**, at 55 % of solid, not weighed. It is a heavy object;
    that was the brief.
 4. **Flock pile is assumed at 0.80 mm.** Adhesive thickness varies by
    application; check a test coupon before committing the whole inside.
