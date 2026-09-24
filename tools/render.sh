@@ -97,3 +97,16 @@ for v in "detail-left-flank 78 -90 300 chassis" "detail-top-edge 78 180 260 chas
     echo "color(\"#cfcabf\") import(\"$PWD/export/stl/$part.stl\");" > "$T/$n.scad"
     shot "$n" "$rx" "$rz" "$d" "$T/$n.scad"
 done
+
+# --- the carry case ---------------------------------------------------------
+# Its own object, its own frame: the case spans x +/-75.8, y -94.4..82.7,
+# z -15.8..21.65, so it centres on (0, -5.83, 2.93). Rendered from the CSG
+# rather than the STLs so the two halves keep their own colours at the seam.
+CX=0; CY=-5.83; CZ=2.93
+C=cad/carrycase.scad
+for v in "case-iso 58 25 620 assembly" "case-front 0 0 560 assembly" \
+         "case-flank 78 -90 520 assembly" "case-back 180 0 560 assembly" \
+         "case-fitcheck 58 25 620 fitcheck"; do
+    read -r n rx rz d part <<<"$v"
+    shot "$n" "$rx" "$rz" "$d" "$C" "-D part=\"$part\""
+done

@@ -6,17 +6,19 @@ silently detaches from the datum set and from all 118 checks.
 
 | File | Size (mm) | Volume | ~PLA | Notes |
 |---|---|---|---|---|
-| `case/carrycase-front.stl` | 149.85 × 175.93 × 16.00 | 150 cm³ | ~186 g | print **face down**; holds the four magnets; 13.00 of body + 3.00 of locating pin |
-| `case/carrycase-back.stl` | 151.60 × 177.08 × 24.45 | 298 cm³ | ~243 g | print **back down**; takes the seven heat-set inserts |
+| `case/carrycase-front.stl` | 150.82 × 176.29 × 16.00 | 158 cm³ | ~190 g | print **face down**; holds the four magnets; 13.00 of body + 3.00 of locating pin |
+| `case/carrycase-back.stl` | 151.63 × 177.07 × 24.45 | 306 cm³ | ~245 g | print **back down**; takes the seven heat-set inserts |
 
 They bolt together with **7 × M5 × 16 socket cap into 7 × M5 × 10 heat-set
 inserts**, in a ring that outsets the deck cavity by 6.50 mm and so follows the
 case's own superellipse round the flanks and the floor. The heads lie flush: a
 Ø9.00 × 5.00 counterbore under an r11.00 dish cut 1.00 mm into the face.
 
-Each needs a **152 × 177 mm** bed. Both are one watertight body with **0 mm² of
-near-flat ceiling** — the only overhang in either is the 1.80 mm annular roof of
-each counterbore, and all seven of those open on the bed.
+Each needs a **154 × 179 mm** bed. Both are one watertight body with **0 mm² of
+near-flat ceiling**. The two overhangs either has are both deliberate: the
+1.80 mm annular roof of each counterbore, all seven opening on the bed, and the
+rim facet at **55–61° off horizontal**, which is 10° clear of the limit at
+worst.
 
 An earlier one-piece `case/carrycase.stl` is gone: it could not be reached into
 to fit the magnets, and its spined back needed support. See

@@ -104,29 +104,71 @@ function _swell_at(p, sites, i = 0, acc = 1) =
 //  only part of a 10.50 mm swell arrives in x - it measured 68.22 where 71.83
 //  was wanted. rse_poly runs counter-clockwise, so the outward normal of a
 //  tangent (tx, ty) is (ty, -tx).
+//  THREE: ONE outline, offset along its own normals. Every layer used to be a
+//  separately built superellipse, narrowed by 2*ins with its corner radius
+//  narrowed by ins - and shrinking the corner MOVES EVERY VERTEX ALONG THE
+//  FLANK. Vertex j sat at a different y on each layer, so it sampled the swell
+//  at a different place, and the swell shrank by about what the inset gave
+//  back: a 4.00 mm facet cut at 55 degrees delivered 0.47 mm of run instead of
+//  2.80 and came out at 83 degrees, which is an arris with extra steps.
+//
+//  Offsetting one outline keeps vertex j on one ray for the whole depth, so the
+//  swell is genuinely constant and the inset is genuinely the inset.
 function pebble_poly(ins, sites, q) =
-    let (base = rse_poly(case_w - 2*ins, case_h - 2*ins,
-                         max(case_r - ins, 0.8), form_n, q),
-         n = len(base))
+    let (ref = rse_poly(case_w, case_h, case_r, form_n, q),
+         n = len(ref))
     [ for (j = [0 : n - 1])
-        let (p  = [base[j][0], base[j][1] + case_cy],
-             a  = base[(j + n - 1) % n],
-             b  = base[(j + 1) % n],
+        let (p  = [ref[j][0], ref[j][1] + case_cy],
+             a  = ref[(j + n - 1) % n],
+             b  = ref[(j + 1) % n],
              tg = [b[0] - a[0], b[1] - a[1]],
              tl = max(norm(tg), 1e-9),
              nx = tg[1] / tl,
              ny = -tg[0] / tl,
-             s  = _swell_at(p, sites))
+             s  = _swell_at(p, sites) - ins)
         [p[0] + nx * s, p[1] + ny * s] ];
 
-module full_body(nz = 44, q = 20) {
+//  The section profile, as INSET against distance from the nearer face.
+//
+//  Three regions, and the first of them is the one the render caught. The
+//  version before this ran the smoothstep the whole way, and a smoothstep's
+//  derivative is ZERO at its ends - so the flank left the face VERTICALLY and
+//  met the flat cap at a 90-degree arris, 1782 edges of it all the way round.
+//  It measured 90.0 degrees at worst. That is a curved rectangle, whatever the
+//  middle of the section does.
+//
+//    d <= case_face_ch          a straight facet at case_face_ang off horizontal
+//    up to the half-depth       the roll, taking what the facet left to zero
+//    beyond                     full girth
+function edge_profile(u) =
+    let (t   = case_z1 - case_z0,
+         d   = min(u, 1 - u) * t,
+         mid = t * case_roll)
+      d >= mid          ? 0
+    : d <= case_face_ch ? case_soft - d / tan(case_face_ang)
+    : (case_soft - case_face_run)
+      * (1 - sstep((d - case_face_ch) / (mid - case_face_ch)));
+
+//  The layer heights are NOT evenly spaced: a facet 4.00 mm tall sampled on an
+//  0.85 mm grid comes out as five steps, which is a stair, not a chamfer. Both
+//  ends of the facet get a layer of their own, so it renders as one ruled
+//  surface, and the rest of the depth is divided evenly.
+function body_levels(nm) =
+    let (a = case_z0 + case_face_ch, b = case_z1 - case_face_ch)
+    concat([case_z0, a],
+           [ for (i = [1 : nm - 1]) a + i * (b - a) / nm ],
+           [b, case_z1]);
+
+module full_body(nm = 40, q = 32) {
     na = 4 * (q + 1);
     sites = boss_sites();
-    layers = [ for (i = [0 : nz])
-                 pebble_poly(case_soft * roll_f(i/nz, case_roll), sites, q) ];
+    zs = body_levels(nm);
+    nz = len(zs) - 1;
+    layers = [ for (z = zs)
+                 pebble_poly(edge_profile((z - case_z0) / (case_z1 - case_z0)),
+                             sites, q) ];
     pts = [ for (i = [0 : nz], j = [0 : na - 1])
-              [layers[i][j][0], layers[i][j][1],
-               case_z0 + (i / nz) * (case_z1 - case_z0)] ];
+              [layers[i][j][0], layers[i][j][1], zs[i]] ];
     // wound as rse_soft winds: clockwise seen from OUTSIDE
     sides = [ for (i = [0 : nz - 1], j = [0 : na - 1])
                 [ i*na + j, (i+1)*na + j,

@@ -1884,15 +1884,40 @@ case_seam_ch = 0.30;  // [DESIGN] a hairline at the joint, not a shadow gap:
                       //   mismatch showing as a step. WAS 0.60.
 
 //  ---- RIVER ROCK -------------------------------------------------------------
-//  Not a chamfered slab and not a curved rectangle. The section rolls
-//  continuously from face to face with no straight run anywhere - case_roll at
-//  0.50 means the inset is falling the whole way from one face to the middle
-//  and rising again to the other, so there is no flat band and no arris.
+//  A river stone worn flat on two sides, which is the only rock this can be.
+//
+//  THE TWO FACES ARE FLAT AND THAT IS NOT A STYLE CHOICE. Both halves print
+//  face-down, and that is what makes the two-part split pay: one flat bed face
+//  and one open tray each, no bridge, no support. A face that blended smoothly
+//  into the curved flank would leave a near-horizontal DOWNWARD-facing band all
+//  the way round the rim - the one overhang FDM cannot do unsupported. Crowning
+//  the face outward is the same fault at 5 degrees over 75 mm. So the plateau
+//  stays: 23,665 mm^2 of it, 88% of the bounding rectangle. Measured, not
+//  estimated - the version that claimed "no flat band and no arris" had exactly
+//  this plateau and a 90-degree edge round it. See C-49.
+//
+//  EVERYTHING BETWEEN THE FACES IS CURVE. case_roll at 0.50 means the inset is
+//  falling the whole way from one face to the middle and rising again to the
+//  other: no straight run, no girth line, no parting crease.
+//
+//  AND THE RIM IS A DELIBERATE FACET, not the 90-degree arris it used to be.
+//  case_face_ang is off HORIZONTAL, so it is also the overhang angle when that
+//  face is on the bed: 45 is the FDM limit, so 55 is a facet you can cut and
+//  still not need support. It is the one chamfer on the object and it is meant
+//  to be seen.
 //
 //  The roll is not free: it pulls the FRONT FACE in, and the bolt heads have to
 //  sit in it. That is what sizes the swells - see case_boss_amp.
 case_soft    = 4.00;  // [DESIGN] how far each face draws in
 case_roll    = 0.50;  // [DESIGN] the whole half-depth, so nothing is flat
+case_face_ch  = 4.00; // [DESIGN] the facet at each face rim, as rise
+case_face_ang = 55;   // [DESIGN] degrees off horizontal; 45 is the overhang limit
+case_face_run = case_face_ch / tan(case_face_ang);   // [DERIVED] = 2.80
+
+assert(case_face_ang > 46,
+       "the rim facet is a near-flat ceiling when that face is on the bed");
+assert(case_face_run < case_soft,
+       "the rim facet eats the whole face inset before the roll starts");
 
 //  THE CORNER ECHOES THE DECK, IT DOES NOT INHERIT IT. Offsetting the deck's
 //  corner outward by the wall gives 28.60 mm on a 150 mm body - proportionally

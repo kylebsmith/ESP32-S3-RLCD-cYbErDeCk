@@ -365,6 +365,60 @@ def main():
           f"{ledge:.2f} mm of annular roof round a {p['case_bolt_clear']:.2f} mm "
           f"bore, {len(cen)} of them, all opening on the bed")
 
+    # WHAT THE RENDER CAUGHT AND TWENTY CHECKS DID NOT. Every check above is
+    # about holes, metal and overhang; not one of them looks at the SHAPE, and
+    # a version of this part described in its own source as having "no flat
+    # band and no arris" turned out to have 23,665 mm^2 of dead-flat face
+    # meeting the flank at a 90-degree edge all the way round. It passed all
+    # twenty. So the edge is measured now, in degrees, on the rendered part.
+    #
+    # The plateau itself is NOT a failure and is reported rather than budgeted:
+    # both halves print face-down, and any smooth blend out of a flat bed face
+    # is a near-horizontal downward band. The flat is forced. The arris is not.
+    sites = np.array([[b_[0], b_[1]] for b_ in cen]
+                     + [[h.centroid.x, h.centroid.y] for h in dr])
+    # Measured on each HALF, not on the union: a boolean remeshes the rim into
+    # slivers that read as 180-degree edges. And the edge is located by its OWN
+    # midpoint, not by the midpoint of the two face centroids - a cap triangle
+    # can be 60 mm long, which put every strap-hole and dish rim 24 mm from
+    # where it actually is and walked all of them straight through the filter.
+    keep = p["case_cb_d"] / 2 + 3.0
+    worst, count, flat_at = 0.0, 0, {}
+    for lbl, m, sgn in (("front", front, 1.0), ("back", back, -1.0)):
+        nrm, ctr_f = m.face_normals, m.triangles_center
+        zf = m.bounds[1][2] if sgn > 0 else m.bounds[0][2]
+        cap = (nrm[:, 2] * sgn > np.cos(np.radians(5))) & (
+            abs(ctr_f[:, 2] - zf) < 0.25)
+        flat_at[lbl] = float(m.area_faces[cap].sum())
+        capset = set(np.nonzero(cap)[0].tolist())
+        emid = m.vertices[m.face_adjacency_edges].mean(axis=1)
+        for k, ((i, j), a, cvx) in enumerate(zip(
+                m.face_adjacency, m.face_adjacency_angles,
+                m.face_adjacency_convex)):
+            if not cvx or ((i in capset) == (j in capset)):
+                continue
+            deg = np.degrees(a)
+            if deg > 170.0:            # a sliver left by triangulation
+                continue
+            if float(np.min(np.hypot(*(sites - emid[k][:2]).T))) < keep:
+                continue               # a counterbore, a dish or a strap hole
+            worst = max(worst, deg)
+            count += 1
+    # The facet is case_face_ang on a straight flank and steepens to about 61
+    # on a swell SHOULDER, where the outline runs oblique to the push so a
+    # 2.80 mm move along the normal buys less than 2.80 of true run. Steeper is
+    # the safe direction for an overhang, so it is allowed for rather than
+    # chased. What this check is for is the 90-degree arris, which is 30 clear.
+    budget = p["case_face_ang"] + 8.0
+    check("the face meets the flank as a facet, not an arris",
+          worst <= budget and count > 100,
+          f"the rim turns {worst:.1f} deg at worst over {count} edges, "
+          f"budget {budget:.0f} - a {p['case_face_ch']:.2f} mm facet at "
+          f"{p['case_face_ang']:.0f} deg off horizontal, steepest at a swell "
+          f"shoulder. The flat it bounds is "
+          f"{flat_at['front']:.0f} mm^2 front, {flat_at['back']:.0f} mm^2 back, "
+          f"and is forced: both halves print face-down")
+
     check("the split is not in the middle",
           abs((zs - p["case_z0"]) / (p["case_z1"] - p["case_z0"]) - 0.5) > 0.08,
           f"front {p['case_z1'] - zs:.2f} / back {zs - p['case_z0']:.2f} "
@@ -374,8 +428,14 @@ def main():
     tot = (front.volume + back.volume) / 1000.0
     print(f"\n  case {p['case_w']:.1f} x {p['case_h']:.1f} x {case.extents[2]:.1f} mm, "
           f"{fw:.1f} over the strap bosses")
+    # Volume x a fudge is not filament. At 0.8 mm and 3 perimeters the shell is
+    # 2.4 mm and 94% of this part is shell, so the number that moves is AREA.
+    shell = sum(min(m.area * 2.4, m.volume) for m in (front, back))
+    infill = sum(max(m.volume - min(m.area * 2.4, m.volume), 0.0)
+                 for m in (front, back))
     print(f"  front {front.volume/1000:.0f} cm^3 + back {back.volume/1000:.0f} cm^3"
-          f"  =  {tot:.0f} cm^3 (~{tot * 1.24 * 0.55:.0f} g at 55% of solid)")
+          f"  =  {tot:.0f} cm^3, {(front.area + back.area)/100:.0f} cm^2 of surface"
+          f"  ->  ~{(shell + infill * 0.15) / 1000 * 1.24:.0f} g of filament")
     print(f"  each half needs a {fw:.0f} x {fh:.0f} mm bed")
     print(f"  hardware: {len(cen)} x M5 x {p['case_bolt_len']:.0f} socket cap, "
           f"{len(cen)} x M5 x {p['case_insert_len']:.0f} heat-set insert, "

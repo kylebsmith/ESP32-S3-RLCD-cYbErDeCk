@@ -9,14 +9,15 @@ both flanks and the bottom; open only at the top. Every port is buried.
 | | |
 |---|---|
 | Outside | **130.7 × 166.4 × 37.4 mm** at the waist, **151.6 × 177.1** over the swells |
+| Faces | two flat plateaus, **23,443 and 23,904 mm²** — forced by printing face-down |
 | Seam | **1:1.88**, low on the flank — not in the middle |
-| Material | 448 cm³ model → **≈ 430 g of filament** (94 % of it perimeter shell) |
+| Material | 464 cm³ model, 1382 cm² of surface → **≈ 436 g of filament** (94 % of it shell) |
 | Walls | **3.6 front and back**, 6.0 flank at the waist → 16.5 at each fastener, 13.0 floor, 12.0 rim |
-| Edge | **no chamfer, no flat** — the section rolls 4.0 mm in at each face, continuously |
+| Edge | one **4.0 mm facet at 55°** round each face, then a continuous roll to full girth |
 | Hardware | **7 × M5 × 16 socket cap + 7 × M5 × 10 heat-set insert**, 4 × Ø5×2 disc |
 | Heads | flush: Ø9.0 × 5.0 counterbore under an r11 dish, 1.0 deep |
 | Flock allowance | 0.80 mm per surface, + 0.40 clearance |
-| Bed needed | **152 × 177 mm** per half |
+| Bed needed | **154 × 179 mm** per half |
 
 ## It is two parts, and not for printing
 
@@ -98,29 +99,57 @@ end you actually drop the thing on.
 
 So the mouth is **12 mm**, which is a finger pad, and the floor takes the rest.
 
-## A river rock, not a rounded box
+## A stone worn flat on two sides
 
-Two things make it a rock, and neither is applied afterwards.
+**The two faces are flat and that is not a style choice.** Both halves print
+face-down, and that is what makes the two-part split pay: one flat bed face and
+one open tray each, no bridge, no support. Any surface that blends smoothly out
+of a flat bed face leaves a near-horizontal *downward-facing* band all the way
+round the rim, which is the one overhang FDM cannot do unsupported. Crowning the
+face outward is the same fault — 3 mm over 75 mm is a 5° ceiling. So the plateau
+stays: **23,443 mm² front and 23,904 mm² back, 88 % of the bounding rectangle.**
 
-**The section rolls the whole way.** `case_roll = 0.50` means the draw-in is
-falling from one face to the middle and rising again to the other — there is no
-flat band anywhere and no arris. An earlier version softened each face by 3 mm
-and left the middle straight, which reads as a curved rectangle, and the one
-before that gave each half its own roll and put a crease down the seam.
+A version of this file said "no flat band anywhere and no arris". It had exactly
+this plateau, and a **90° edge** round it, 1,782 edges of it. Twenty checks
+passed and not one of them looked at the shape (C-49).
+
+What *is* a choice is everything between the faces, and there are three things:
+
+**The rim is a deliberate facet.** 4.00 mm of rise at **55° off horizontal** —
+which is also its overhang angle when that face is on the bed, so 45° is the
+floor and 55° is the facet you can cut and still not need support. Measured on
+the part it runs 55° on a straight flank and steepens to **60.7°** on a swell
+shoulder, where the outline runs oblique to the push.
+
+**The section rolls the rest of the way.** `case_roll = 0.50`: past the facet
+the inset falls to zero at mid-depth and rises again to the other face. No
+straight run, no girth line, no parting crease.
 
 **The wall is 6 mm and swells to 16.5 where it has to be.** Not by adding a pad
-— by pushing the plan *outline* outward at each of the nine sites with a
+— by offsetting the plan *outline* outward at each of the nine sites with a
 cos-squared falloff, so there is no junction to crease at. Swells combine as
 `1 − Π(1 − f)` rather than summing, so two near each other blend instead of
 stacking to twice the amplitude.
 
-It is built as **one polyhedron**, 45 layers of 84 points. A stack of hulls
-cannot do it: the outline dips back between swells, so it is not convex and
-`hull()` would fill the dips.
+It is built as **one polyhedron**, 43 levels of 132 points, offset along the
+normals of a single reference outline. Three things about that are load-bearing
+and all three were wrong once:
+
+- a stack of hulls cannot do it — the outline dips back between swells, so it is
+  not convex and `hull()` fills the dips;
+- every level offsets **one** outline, because building each level as its own
+  narrowed superellipse also narrows the corner radius, which slides every
+  vertex along the flank and makes it sample the swell somewhere else;
+- the swell is measured on the **full-girth** outline, so the push is rigid.
 
 **The counterbore, not the bolt, sizes the swell.** A flush Ø9.00 counterbore
-plus a rim has to sit inside a front face that the roll pulls in by 4.00 mm.
-That chain is what sets 16.50, and it is an assert, not a taste.
+plus a rim has to sit inside a front face that the facet and roll pull in by
+4.00 mm. That chain is what sets 16.50, and it is an assert, not a taste.
+
+**It is not a river rock, and it cannot be one in this orientation.** It is a
+stone worn flat on two sides. A form with no flat anywhere needs a different
+print strategy — supports on the outside faces, or a split that puts no face on
+the bed — and both cost more than the shape is worth here.
 
 ## Where the filament actually goes
 
@@ -150,13 +179,13 @@ It costs more, not less:
 | | volume | surface | filament |
 |---|---|---|---|
 | 13 mm wall, flat slab | 396 cm³ | 1310 cm² | **390 g** |
-| 6 mm wall + 9 swells | 448 cm³ | 1371 cm² | **430 g** |
+| 6 mm wall + 9 swells + facet | 464 cm³ | 1382 cm² | **436 g** |
 
 Both went up, because at 94 % shell **surface is what you pay for**, and nine
 swells overlap until the wall is thick nearly everywhere anyway. Pulling the
 reach in from 26 to 18 mm recovered about 12 g of the 48; 14 mm would recover
-another 4 and start to look like warts. So the rock is a form decision that
-costs roughly 10 % more filament than the slab it replaced, and that is the
+another 4 and start to look like warts. So the shape is a form decision that
+costs roughly **12 % more filament** than the slab it replaced, and that is the
 honest price of it (C-48).
 
 ## The strap lug is a hole
@@ -192,9 +221,10 @@ reaches about 28° in the middle. The smoother edge is also the safer print.
 
 The only ceiling left is the counterbore roof: **1.80 mm of annulus** round a
 5.40 mm bore, seven of them, every one opening on the bed. That is a ledge, not
-a bridge.
+a bridge. The rim facet is the other thing that could have needed support and
+does not: at 55–61° off horizontal it is 10° clear of the limit at worst.
 
-Both halves need a **152 × 177 mm** bed. The front is 13.00 mm of body plus
+Both halves need a **154 × 179 mm** bed. The front is 13.00 mm of body plus
 3.00 mm of locating pin — 16.00 overall.
 
 ## Finishing
@@ -206,8 +236,8 @@ is the only sane way to do it.
 
 The outside is meant to be filled, sanded and polished — but **not across the
 seam**, which is a joint, not a blemish. Fill and sand each half, then assemble;
-the 0.30 mm hairline and seven dished bolt heads are the only things that break
-the surface, and both are meant to be seen.
+the 0.30 mm hairline, the rim facet and seven dished bolt heads are the only
+things that break the surface, and all three are meant to be seen.
 
 ## Assembly
 
@@ -230,7 +260,7 @@ the surface, and both are meant to be seen.
    are comparable to the deck's weight, not a multiple of it, and they are only
    fighting it in shear. Retention is the cowl channel, the flock, and carrying
    it mouth-up. The arithmetic is in C-41 and in `parameters.scad`.
-3. **430 g is computed**, from surface area and a 2.4 mm shell, not weighed. It
+3. **436 g is computed**, from surface area and a 2.4 mm shell, not weighed. It
    is a heavy object; that was the brief. Two perimeters instead of three takes
    it to about 300 g and is a slicer setting, not a redesign.
 4. **Flock pile is assumed at 0.80 mm.** Adhesive thickness varies by

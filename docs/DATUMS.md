@@ -2514,3 +2514,79 @@ of the 48. And the roll itself adds surface.
 So "thin the walls except at the bolts" is a **form** decision, not a material
 one. It costs roughly 10 % more filament than the flat slab it replaced, and
 that is the honest price of the rock.
+
+### C-49 — The part had a flat face and a 90° arris while the source said it had neither
+
+C-48 shipped with this sentence in `parameters.scad` and again in `CASE.md`:
+
+> *the inset is falling the whole way from one face to the middle and rising
+> again to the other, so there is no flat band and no arris.*
+
+The part had **23,665 mm² of dead-flat face** — 88 % of its bounding rectangle —
+meeting the flank at a **90.0° edge**, 1,782 edges of it, all the way round both
+faces. Twenty checks passed. Every one of them is about holes, metal, clearance
+or overhang; **not one looked at the shape.**
+
+It was caught by *looking at the render*, which is the second time in this
+project (C-44 was the first) that the renderer was the only thing telling the
+truth. The difference is that in C-44 I looked at a render and described a boss
+that was not in it; here I looked at a render and saw a claim that was not in
+the part. Both say the same thing: **a render is evidence and has to be read
+against the claim, not for it.**
+
+### Why the flat stays
+
+Both halves print **face-down**, which is what makes the two-part split pay: one
+flat bed face and one open tray each, no bridge, no support. Any surface that
+blends smoothly out of a flat bed face leaves a near-horizontal *downward*
+band all the way round the rim — the one overhang FDM cannot do unsupported.
+Crowning the face outward is the same fault: 3 mm of crown over 75 mm of radius
+is a 5° ceiling across the whole face.
+
+So the plateau is not a defect and is **reported, not budgeted**. The arris is
+the defect, and it is now a deliberate **4.00 mm facet at 55° off horizontal** —
+the same number twice, because that angle is also the overhang angle when the
+face is on the bed, and 45° is the limit.
+
+### Three things had to be wrong for a 4 mm facet to render as 0.47 mm
+
+Cutting the facet changed the measured rim from 90° to **83°**. It had 0.473 mm
+of run where 2.80 was asked for. Two faults, in the loft:
+
+**The swell was evaluated at the moving outline.** As the inset falls the
+outline walks *away* from each site, the cos-squared falloff drops, and the
+swell shrinks by roughly what the inset just gave back. Inside a swell the two
+cancel and the wall comes out vertical. The C-48 comment already claimed the
+swell was "a constant push"; the code did not do that.
+
+**Each level was its own narrowed superellipse.** Narrowing it by `2·ins` also
+narrows its corner radius by `ins` — and **moving a corner slides every vertex
+along the flank.** Vertex *j* sat at a different *y* on every level, so it
+sampled the swell somewhere else each time. Fixed by offsetting **one**
+reference outline along its own normals: vertex *j* now stays on one ray for the
+whole depth, so the swell is genuinely constant and the inset is genuinely the
+inset.
+
+And one fault in the new check itself, which is the part worth keeping:
+
+**It located each edge at the midpoint of its two face centroids.** A cap
+triangle can be 60 mm long, so a strap-hole rim reported itself 24 mm from where
+it was and walked straight through the "ignore anything near a fastener" filter.
+Every hole rim in the part — 90° by definition — was being counted as the
+silhouette. It also measured on `front.union(back)`, and the boolean remeshes
+the rim into slivers that read as 180° edges. It measures each half on its own
+mesh now, at the real edge midpoint.
+
+### What it measures
+
+**55.0° on a straight flank, 60.7° at its worst**, which is on a swell shoulder:
+there the outline runs oblique to the push, so 2.80 mm along the normal buys
+less than 2.80 mm of true run and the facet comes out steeper. Steeper is the
+safe direction for an overhang, so it is allowed for rather than chased. The
+check's budget is 63°; an arris is 90°.
+
+### The honest summary
+
+It is **not a river rock**. It is a stone worn flat on two sides. A form with no
+flat anywhere needs supports on the outside faces or a split that puts no face
+on the bed, and both cost more than the shape is worth. Filament went 430 → 436 g.
