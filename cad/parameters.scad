@@ -1835,7 +1835,10 @@ case_cav_r  = corner_blend + case_pad;              // [DERIVED] =  12.40
 case_z0     = case_z_cowl - case_wall;              // [DERIVED] = -16.20 back
 case_z1     = case_z_fr   + case_wall;              // [DERIVED] =  22.05 front
 case_split_z = (case_z0 + case_z1) / 2;             // [DERIVED] = 2.925
-case_seam_ch = 0.60;  // [DESIGN] chamfer each side of the joint -> 1.2 mm gap
+case_seam_ch = 0.30;  // [DESIGN] a hairline at the joint, not a shadow gap:
+                      //   the object reads as one piece, so this is only
+                      //   enough relief to stop a few tenths of print
+                      //   mismatch showing as a step. WAS 0.60.
 
 //  ---- THE EDGE IS ROLLED, NOT CHAMFERED --------------------------------------
 //  A chamfer is two arrises and a flat. It reads machined, which is what the

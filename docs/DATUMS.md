@@ -2203,3 +2203,62 @@ first render, named all three, and cost about a minute.
 C-42 records the same class of failure costing an entire review cycle and a
 render I looked at and described approvingly. The difference between the two is
 one `grep`.
+
+### C-45 — The widest line was the seam
+
+*"the corner radius for the smoothing shouldnt be individual for each side so
+that they come together with a crease in the middle, it should feel like a
+seamless single object"*
+
+C-44 rolled **each half separately, from the seam outward**. Both halves were
+therefore at their widest AT the parting plane and the surface curved away from
+it in both directions — so the object's widest line ran all the way round at
+mid-height. Two pillows stacked, not one case.
+
+The outer form is built once now, over the whole 38.25 mm, and the halves are
+cut out of it. The roll belongs to the **object**, and lives at its two outer
+faces where an edge actually is. Measured through the depth:
+
+| z | −16 | −8 | −4 → +10 | +16 | +20 |
+|---|---|---|---|---|---|
+| width | 144.68 | 149.45 | **150.65** | 147.89 | 145.17 |
+
+Straight for 14 mm through the middle, which is where the seam falls. The joint
+chamfer drops 0.60 → **0.30**: a hairline, not a shadow gap, because the object
+is meant to read as one piece.
+
+It is built as the **intersection of two one-ended rolls facing opposite ways**.
+Each is full width where the other is rolled, so the intersection takes the roll
+at both faces and full width between. They cross only where both are at full
+width *and* both have zero slope, so they meet tangentially and add no line of
+their own.
+
+### 0.01 mm over 8,800 mm²
+
+The first build of it failed `the halves do not interpenetrate` by **86.87 mm³**
+— which over the 8,792 mm² mating face is exactly **0.01 mm**. `rse_plate`
+extrudes upward from its origin, so the mirrored half's pinch plate sat one
+plate-thickness past the parting plane and the two halves overlapped across
+their whole joint.
+
+Harmless in print and wrong in the model, and the only reason it was seen at all
+is that the check measures a boolean intersection volume rather than asking
+whether the two halves *look* like they meet.
+
+### Open, and waiting on reference images
+
+Three of the same message's asks are not resolved and are deliberately not
+guessed at:
+
+1. **M5 × 20 does not fit.** The depth is set by the deck (16.85) plus its
+   battery cowl (11.00) plus flock and walls: **38.25 mm**, none of it styling.
+   A 20 mm screw entering the front face reaches z = +2.05 and stops 18.25 mm
+   short of the back face where the nut goes. M5 × 40 is the shortest that
+   reaches an inlaid nut.
+2. **Inlaid hex on the back** needs 7.73 mm of metal outboard of the bolt axis
+   and the rolled edge leaves 1.77 mm at the face. It needs either a thicker
+   wall, a smaller roll, or the ring moved inboard against its cavity margin.
+3. **The silhouette and the strap lugs.** Six lug versions have now been
+   rejected (C-38 → C-44) and each was inferred from a verbal description. The
+   owner offered reference images; that is a better instrument than a seventh
+   guess, and this is recorded as an open item rather than another attempt.

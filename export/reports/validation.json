@@ -1,5 +1,5 @@
 {
-  "passed": 118,
+  "passed": 119,
   "total": 119,
   "results": [
     {
@@ -701,8 +701,8 @@
     {
       "check": "every [DERIVED] = N comment tells the truth",
       "class": "PARAM",
-      "ok": false,
-      "detail": "STALE: case_bolt_n says 13, is 7.000"
+      "ok": true,
+      "detail": "50 claims checked against the value they name"
     },
     {
       "check": "no parameter is undef in the renderer",

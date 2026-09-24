@@ -89,46 +89,57 @@ function pin_sites() =
 //  ===========================================================================
 //  FORM
 //  ===========================================================================
-//  THE BODY IS ONE ROLLED SLAB PER HALF.
+//  THE BODY IS ONE OBJECT. THE SPLIT IS A CUT THROUGH IT, NOT A JOIN BETWEEN
+//  TWO OF THEM.
 //
-//  Earlier versions built each half by hulling four superellipse slices at
-//  different insets, which gives a chamfer: two arrises and a flat. That reads
-//  machined, and machined is not what was asked for any more - "the form should
-//  be more natural and flowing and smoothed". So this is the deck's own rolled
-//  edge instead. rse_soft lofts the outline through a smoothstep whose value
-//  AND first derivative both vanish at the face, so the surface arrives there
-//  with zero slope and leaves no arris at all.
+//  The previous version rolled each half separately from the seam outward. Both
+//  halves were therefore at their WIDEST at the parting plane, and the surface
+//  curved away from it in both directions - so the object's widest line ran all
+//  the way round at mid-height and read as a ridge. Two pillows stacked, not one
+//  case. That is the crease.
 //
-//  The seam end stays at full width (u = 0, no inset) so the halves meet on one
-//  flat face, and the roll is entirely at the outer end.
-module rolled_half(t, flip) {
-    translate([0, case_cy, case_split_z]) {
-        if (flip)
-            mirror([0, 0, 1])
-                rse_soft(case_w, case_h, t, case_r, form_n,
-                         case_soft, case_roll);
-        else
-            rse_soft(case_w, case_h, t, case_r, form_n,
-                     case_soft, case_roll);
+//  So the outer form is built once, over the whole 38.25 mm, and the halves are
+//  cut out of it. The roll now belongs to the OBJECT and lives at its two outer
+//  faces, where an edge actually is; through the middle the sides are straight,
+//  which is where the seam happens to fall.
+//
+//  Built as the intersection of two one-ended rolls facing opposite ways: each
+//  is full width where the other is rolled, so the intersection takes the roll
+//  at both faces and full width between. They cross only where both are at full
+//  width AND both have zero slope, so they meet tangentially and add no line of
+//  their own.
+module full_body() {
+    t = case_z1 - case_z0;
+    intersection() {
+        translate([0, case_cy, case_z0])
+            rse_soft(case_w, case_h, t, case_r, form_n, case_soft, case_roll);
+        translate([0, case_cy, case_z1]) mirror([0, 0, 1])
+            rse_soft(case_w, case_h, t, case_r, form_n, case_soft, case_roll);
     }
 }
 
-//  The seam chamfer is cut back in by intersection, because it is the one edge
-//  that SHOULD be crisp: it is a joint, and a joint you cannot fill reads as a
-//  shadow gap or as a crack, with nothing in between.
-module half_body(t, flip) {
+//  One half, cut from that. case_seam_ch is a hairline, not a shadow gap: the
+//  object is meant to read as one piece, so the joint gets just enough relief
+//  to stop a few tenths of print mismatch showing as a step.
+module half_body(flip) {
     ch = case_seam_ch;
     d  = flip ? -1 : 1;
+    t  = case_z1 - case_z0;
+    big = 24;
     intersection() {
-        rolled_half(t, flip);
+        full_body();
         hull() {
-            translate([0, case_cy, case_split_z])
+            // rse_plate extrudes UPWARD from its origin, so the mirrored
+            // half's pinch plate would sit 0.01 mm past the parting plane and
+            // the two halves would interfere over the whole 8,800 mm2 face.
+            // 88 mm3 of overlap, which is what that number was.
+            translate([0, case_cy, case_split_z - (d < 0 ? 0.01 : 0)])
                 rse_plate(case_w - 2*ch, case_h - 2*ch, 0.01,
                           max(case_r - ch, 0.8), form_n);
             translate([0, case_cy, case_split_z + d * ch])
-                rse_plate(case_w, case_h, 0.01, case_r, form_n);
+                rse_plate(case_w + big, case_h + big, 0.01, case_r + big/2, form_n);
             translate([0, case_cy, case_split_z + d * (t + 1)])
-                rse_plate(case_w, case_h, 0.01, case_r, form_n);
+                rse_plate(case_w + big, case_h + big, 0.01, case_r + big/2, form_n);
         }
     }
 }
@@ -189,7 +200,7 @@ module case_magnets() {
 module case_front() {
     difference() {
         union() {
-            half_body(case_z1 - case_split_z, false);
+            half_body(false);
             pins(case_pin_d, case_pin_h + 0.01, case_split_z - case_pin_h);
         }
         case_cavity();
@@ -201,7 +212,7 @@ module case_front() {
 
 module case_back() {
     difference() {
-        half_body(case_split_z - case_z0, true);
+        half_body(true);
         case_cavity();
         case_lug_slots();
         bolt_holes();
