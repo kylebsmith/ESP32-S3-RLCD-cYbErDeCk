@@ -8,14 +8,14 @@ both flanks and the bottom; open only at the top. Every port is buried.
 
 | | |
 |---|---|
-| Outside | **144.7 × 174.5 × 38.2 mm** — nothing stands off it |
-| Proportion | **1.2065** — the deck's own, to four figures |
-| Material | 459 cm³ → **≈ 313 g** printed, both halves |
-| Walls | 4.0 front and back, **13.0 all the way round**, 21.1 floor, 12.0 rim |
+| Outside | **144.7 × 166.4 × 37.4 mm** — nothing stands off it |
+| Seam | **1:2.52**, low on the flank — not in the middle |
+| Material | 396 cm³ model → **≈ 390 g of filament** (94 % of it perimeter shell) |
+| Walls | **3.6 front and back**, 13.0 flanks, 13.0 floor, 12.0 rim |
 | Edge | **1.0 mm chamfer at the faces**, superellipse corners in plan |
-| Hardware | **7 × M5 × 20 socket cap + 7 × M5 × 10 heat-set insert**, 2 × 1¼in D-ring, 4 × Ø5×2 disc |
+| Hardware | **7 × M5 × 20 socket cap + 7 × M5 × 10 heat-set insert**, 4 × Ø5×2 disc |
 | Flock allowance | 0.80 mm per surface, + 0.40 clearance |
-| Bed needed | **145 × 175 mm** per half |
+| Bed needed | **145 × 166 mm** per half |
 
 ## It is two parts, and not for printing
 
@@ -81,25 +81,40 @@ end you actually drop the thing on.
 
 So the mouth is **12 mm**, which is a finger pad, and the floor takes the rest.
 
-## The D-ring is trapped, not bolted on
+## Where the filament actually goes
 
-Seven versions of a strap lug were rejected (C-38 → C-44), every one either an
-object stuck to the outside or a rectangle cut through the wall. A closed D-ring
-cannot be threaded onto a finished part — but a case that comes apart can do what
-a solid one cannot.
+Model volume is not filament. At 0.8 mm nozzle, 3 perimeters, 15 % infill, the
+shell is 2.4 mm thick and this part is thin-walled enough that **94 % of it is
+shell** — the front half is *entirely* perimeter. Hollowing saves nothing; the
+infill is 6 % of the total.
 
-A **Ø5.20 bore runs front-to-back through the flank**, straddling the parting
-plane. The ring's straight bar lies in it and its arch comes out through a
-tapered relief at each end. Close the case and it is captive: no fixings, no
-plate, nothing that can work loose, and the mechanism is invisible.
+So the levers are not where four revisions of argument put them:
 
-It is captive because the bore is **closed for 16.45 mm between the two
-reliefs** — a 31.75 mm bar cannot lift out through two windows that far apart.
-That closed run is the whole retention claim, so it is measured.
+| | saves |
+|---|---|
+| perimeters 3 → 2 | **130 g** — slicer setting |
+| a 0.6 mm nozzle | **98 g** — slicer setting |
+| floor 21.1 → 13.0 | 30 g |
+| wall 4.0 → 3.6 | 25 g |
+| flank 13 → 11 | 5 g |
 
-**Ring size decides this.** The only axis long enough without running vertically
-is front-to-back, and that is the case's depth: 1¼ in (31.75) leaves 6.50 mm of
-margin; 1½ in (38.10) leaves 0.15 and does not fit.
+**The flank cannot get thinner**, and the chain is short: the mouth has to pass
+the deck, so there is no full-depth material across the top; fasteners therefore
+live in the flanks and the floor; an M5 insert is Ø7.00 and wants 3 mm of metal
+a side. 13 mm. The ways out are an external boss, M3 instead of M5, or accepting
+it — not a wall-thickness decision.
+
+## The strap lug is a hole
+
+Eight versions. The last trapped a D-ring's bar in a bore straddling the parting
+plane — clever, fiddly to print, fiddly to assemble, and it made the strap depend
+on two 6 mm windows.
+
+This is a hole. **Ø7.00, front to back through the flank**, so a cord or split
+ring wraps the full 13 mm of wall and hangs outward, and the load goes into the
+whole height of the flank above it. The parting plane cuts across it, so each
+half prints it as a plain vertical bore with nothing overhanging. 3.00 mm of
+metal either side — the same margin every fastener bore gets.
 
 ## Soft in plan, crisp at the face
 

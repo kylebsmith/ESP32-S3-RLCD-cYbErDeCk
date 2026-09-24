@@ -2368,3 +2368,79 @@ Two print findings are worth keeping from the attempt:
 
 Case **144.7 × 174.5 × 38.2 mm**, 459 cm³, ~313 g. 19/19 case checks,
 119/119 validate.
+
+### C-47 — Ninety-four per cent of it is shell
+
+*"this thing is gonna eat up filament, this shouldnt be a fucking brick of
+plastic ... the fucking attachment of the D ring part should just be a chunky
+hole strong robust. not this fiddly little cutout bullshit."*
+
+### The material question, measured before anything was changed
+
+Model volume is not filament. At the repo's own settings — 0.8 mm nozzle,
+3 perimeters, 15 % infill — a perimeter shell is **2.4 mm thick**, and this part
+is thin-walled enough that almost all of it is shell:
+
+| | model | filament | of which shell |
+|---|---|---|---|
+| front half | 146.6 cm³ | 146.1 cm³ | **100 %** |
+| back half | 312.8 cm³ | 203.0 cm³ | 90 % |
+| **total** | 459 cm³ | **349 cm³ → 433 g** | **94 %** |
+
+The front half is *entirely* perimeter: its volume is less than its surface area
+× 2.4. **So hollowing saves nothing** — the 15 % infill is only 6 % of the
+filament. What drives this part is **surface area**, and surface area is set by
+the deck it has to contain.
+
+That reorders every lever:
+
+| | saves |
+|---|---|
+| perimeters 3 → 2 | **130 g** — slicer setting, no geometry change |
+| a 0.6 mm nozzle (3 perims = 1.8 mm) | **98 g** — slicer setting |
+| floor 21.06 → 13.00 | 30 g |
+| wall 4.00 → 3.60 | 25 g |
+| flank 13 → 11 | 5 g |
+
+**The two biggest levers are not geometry at all.** Recorded because four
+revisions of this case have been argued about in terms of wall thickness, and
+wall thickness is worth 5 g.
+
+### Why the flank cannot get thinner
+
+The chain is short and it closes:
+
+1. The mouth has to pass the deck, so there is **no full-depth material across
+   the top** — a fastener parallel to Z cannot go there.
+2. So fasteners live in the flanks and the floor.
+3. An M5 heat-set insert is Ø7.00 and wants 3 mm of metal a side: **13 mm**.
+4. The flanks are the largest single region of the part.
+
+The ways out are an external boss (rejected seven times), M3 instead of M5, or
+accepting it. Not a wall-thickness decision.
+
+### What did change
+
+The proportion rule is **gone**. `case_floor` used to be solved so `case_h/case_w`
+matched the deck's ratio. That was my idea, not a requirement, and it was buying
+a number nobody looks at with **9 mm of solid plastic across a 145 × 38 section**.
+The case is now as big as it has to be: **144.7 × 166.4 × 37.4**, 396 cm³,
+**390 g — 10 % off**, with the remaining 90 % explained above rather than
+hidden.
+
+### The strap lug is a hole
+
+Eight versions now. The last trapped a D-ring's bar in a bore straddling the
+parting plane with tapered reliefs for the arch. It was clever and it was wrong:
+fiddly to print, fiddly to assemble, and it made the strap depend on two 6 mm
+windows.
+
+This is **a hole**. Ø7.00, front to back through the flank, so a cord or split
+ring wraps the full 13 mm of wall and hangs outward, and the load goes into the
+whole height of the flank above it rather than into any feature. The parting
+plane cuts across it, so each half prints it as a plain vertical bore with
+nothing overhanging. 3.00 mm of metal either side — the same margin every
+fastener bore gets.
+
+Ø7 is what the wall allows. A bigger hole needs a local pad, and a pad is the
+thing that has been rejected seven times.

@@ -1763,7 +1763,12 @@ case_pad    = case_flock + case_clear;              // [DERIVED] = 1.20
 //
 //  The seam is not hidden. A 0.6 mm chamfer each side makes it a 1.2 mm shadow
 //  gap, which is the only honest thing to do with a joint you cannot fill.
-case_wall   = 4.00;   // [DESIGN] front and back
+case_wall   = 3.60;   // [DESIGN] front and back. WAS 4.00. These two faces are
+                      //   solid slabs - 4.00 mm is five extrusions at a 0.8
+                      //   nozzle, so nothing in them is infill - and they are
+                      //   a quarter of the filament. The floor is the magnet
+                      //   skin: case_mag_skin must clear 4 layers, which puts
+                      //   the wall at 3.35 minimum.
 
 //  ---- THE WALL IS UNIFORM, AND THAT IS WHY THE FASTENERS CAN GO ROUND -------
 //  v3 put the fasteners in two rectangular rails on the flanks. Two faults,
@@ -1806,24 +1811,19 @@ case_z_fr   = body_t + case_pad;                    // [DERIVED] cavity front
 case_z_bk   = -case_pad;                            // [DERIVED] cavity back
 case_z_cowl = -case_cowl_r - case_pad;              // [DERIVED] channel floor
 
-//  The floor depth is not chosen, it is solved for: it is whatever makes the
-//  case the DECK'S OWN PROPORTION once the mouth has taken what a hand needs.
-//  Same ratio, same superellipse exponent, same corner fraction - all pinned to
-//  the object inside it instead of to taste.
-//
-//  ORDER MATTERS HERE, WHICH IT DOES NOT ELSEWHERE IN THIS FILE. OpenSCAD left
-//  this undef when it was written above case_w, and tools/params.py resolved
-//  the same forward reference happily and reported a number. The Python reader
-//  is MORE FORGIVING THAN THE RENDERER, so a parameter that satisfies every
-//  tool here can still be undef in the part. validate.py's PARAM class now
-//  compares the two readers directly. See C-41.
-case_floor  = case_w * body_h / body_w
-              - body_h - case_pad - case_rim;        // [DERIVED] = 25.30
+//  THE FLOOR IS 12, NOT 21, AND THE PROPORTION RULE IS GONE.
+//  case_floor used to be solved so that case_h/case_w matched the deck's own
+//  ratio. That was my idea, not a requirement, and it was buying a number
+//  nobody looks at with 9 mm of solid plastic across the full 145 x 38 section.
+//  The case is now as big as it has to be and no bigger.
+case_floor  = 13.00;  // [DESIGN] enough to land on, and no less than the flank so
+                      //   the fastener ring rounds the corner at the same margin
+
 case_y_bot  = -body_h/2 - case_pad;                 // [DERIVED] deck lands here
 case_y_top  =  body_h/2 + case_rim;                 // [DERIVED] the mouth
-case_y_floor= case_y_bot - case_floor;              // [DERIVED] = -92.388
-case_h      = case_y_top - case_y_floor;            // [DERIVED] = 174.51
-case_cy     = (case_y_top + case_y_floor) / 2;      // [DERIVED] =   -5.13
+case_y_floor= case_y_bot - case_floor;              // [DERIVED] = -84.325
+case_h      = case_y_top - case_y_floor;            // [DERIVED] = 166.45
+case_cy     = (case_y_top + case_y_floor) / 2;      // [DERIVED] =   -1.10
 case_cav_r  = corner_blend + case_pad;              // [DERIVED] =  12.40
 
 //  THE BACK IS FLAT, AND THAT IS A PRINT FINDING BEFORE IT IS A STYLE ONE.
@@ -1835,8 +1835,8 @@ case_cav_r  = corner_blend + case_pad;              // [DERIVED] =  12.40
 //  half of what FDM will hold. So the back drops to the channel floor
 //  everywhere. It costs 11 mm of depth, it prints with nothing under it, and a
 //  solid rectangular block is the more honest object anyway.
-case_z0     = case_z_cowl - case_wall;              // [DERIVED] = -16.20 back
-case_z1     = case_z_fr   + case_wall;              // [DERIVED] =  22.05 front
+case_z0     = case_z_cowl - case_wall;              // [DERIVED] = -15.80 back
+case_z1     = case_z_fr   + case_wall;              // [DERIVED] =  21.65 front
 //  THE SPLIT IS NOT IN THE MIDDLE, AND THAT IS THE POINT.
 //  It sat at exactly 50 % of the depth, so the seam read as a crack down the
 //  centre of a brick rather than as a line anyone chose. It is free to move -
@@ -1950,9 +1950,9 @@ case_bolt_keep  = 3.00;   // [DESIGN] least metal from a nut to any surface
 case_nut_h      = case_nut_t + case_fit;                     // [DERIVED] = 4.90
 case_nut_cd     = (case_nut_af + case_fit) / cos(30);        // [DERIVED] = 9.47
 case_insert_z   = case_split_z - case_insert_len;            // [DERIVED] = 1.00
-case_bolt_stack = (case_z1 - case_split_z) + 8.0;            // [DERIVED] = 19.05
-case_bolt_tip   = case_z1 - case_bolt_len;                   // [DERIVED] = 2.05
-case_bolt_grip  = case_split_z - case_bolt_tip;              // [DERIVED] = 8.95
+case_bolt_stack = (case_z1 - case_split_z) + 8.0;            // [DERIVED] = 18.65
+case_bolt_tip   = case_z1 - case_bolt_len;                   // [DERIVED] = 1.65
+case_bolt_grip  = case_split_z - case_bolt_tip;              // [DERIVED] = 9.35
 case_bolt_n     = 2 * case_bolt_m + 1;                       // [DERIVED] = 7
 
 //  Locating pins. Thirteen screws clamp but each floats 0.20 mm in its
@@ -1962,47 +1962,25 @@ case_bolt_n     = 2 * case_bolt_m + 1;                       // [DERIVED] = 7
 case_pin_d   = 4.00;  case_pin_h = 3.00;  case_pin_fit = 0.30;
 case_pin_ks  = [0.5, 3.5];   // [DESIGN] where on the ring, in screw pitches
 
-//  ---- THE D-RING IS CAPTIVE, NOT BOLTED ON -----------------------------------
-//  Seven versions of a strap lug have been rejected (C-38 -> C-44) and every one
-//  of them was either an object stuck to the outside or a rectangle cut through
-//  the wall. This is neither.
+//  ---- THE STRAP LUG IS A HOLE ------------------------------------------------
+//  Eight versions of this now. The last one trapped a D-ring's bar in a bore
+//  that straddled the parting plane, with tapered reliefs at each end for the
+//  arch to come out of. It was clever and it was wrong: fiddly to print, fiddly
+//  to assemble, and it made the strap depend on two 6 mm windows.
 //
-//  A closed D-ring cannot be threaded onto a finished part, so a case that comes
-//  apart can do something a solid one cannot: TRAP IT. A bore runs front-to-back
-//  through the flank, straddling the parting plane. The ring's straight bar lies
-//  in it and its arch comes out through a rounded relief at each end of the
-//  bore. Close the case and the ring is captive - no fixings, no plate, nothing
-//  that can work loose, and the mechanism is invisible.
+//  This is a hole. It runs front to back through the flank, so a cord or a
+//  split ring wraps the full 13 mm of wall and hangs outward, and the load goes
+//  into the whole height of the flank above it rather than into any feature.
+//  The parting plane cuts across it, so each half prints it as a plain vertical
+//  bore with nothing overhanging.
 //
-//  It is captive because the bore is CLOSED for 20.4 mm between the two 6 mm
-//  reliefs. A 31.75 mm bar cannot lift out through two windows that far apart.
-//
-//  WHICH RING. The only axis long enough to take the bar without running
-//  vertically is front-to-back, and that is the case's depth: 38.25 mm.
-//    1 1/4 in = 31.75 mm bar  ->  6.50 mm of margin. This is what is drawn.
-//    1 1/2 in = 38.10 mm bar  ->  0.15 mm. It does not fit; the case would need
-//                                 to be about 4 mm deeper, which is 4 mm of
-//                                 dead air in front of the deck.
-//  One parameter if the answer is the other one.
-case_dring_bar   = 31.75; // [VENDOR] 1 1/4 in, the flat side
-case_dring_wire  =  4.50; // [VENDOR] wire diameter
-case_dring_clear =  0.70; // [DESIGN] the ring has to turn freely in its bore
-case_dring_y     = 40.00; // [DESIGN] 42 mm below the mouth: a lug at the rim
-                          //   fouls the hand drawing the deck out, and a bag
-                          //   hung from its rim tips forward
-case_dring_relief_r = 9.00; // [DESIGN] the rounded opening the arch comes out of
-case_dring_relief_w = 8.00; // [DESIGN] how much of the bore each one opens. It
-                            //   is TAPERED over this length rather than cut
-                            //   square: a square relief leaves its inner end as
-                            //   190 mm2 of flat ceiling pointing at the bed.
-                            //   8 mm of run against 6.4 of radius is 51 deg off
-                            //   horizontal, which prints with nothing under it.
-
-case_dring_bore = case_dring_wire + case_dring_clear;        // = 5.20
-case_dring_len  = case_dring_bar  + case_dring_clear;        // = 32.45
-case_dring_x    = case_w / 2 - case_side / 2;                // = 65.825
-case_dring_z0   = (case_z0 + case_z1 - case_dring_len) / 2;  // = -13.30
-case_dring_shut = case_dring_len - 2 * case_dring_relief_w;  // closed run
+//  O7.00 is what the wall allows: 3.00 mm of metal either side, which is the
+//  same margin every fastener bore gets. A bigger hole needs a local pad, and
+//  a pad is the thing that has been rejected seven times.
+case_lug_d  = 7.00;   // [DESIGN] takes 6 mm cord or a split ring
+case_lug_y  = 45.00;  // [DESIGN] high on the flank, so a strap hangs flat
+case_lug_x  = case_w / 2 - case_side / 2;                    // = 65.825
+case_lug_mat = (case_side - case_lug_d) / 2;                 // = 3.00 a side
 
 //  ---- NO THUMB SCALLOP, AND WHY IT IS RECORDED --------------------------------
 //  A 24 mm mouth was tried, with an 80 x 22 mm arc cut in the front to reach
@@ -2036,19 +2014,10 @@ case_dring_shut = case_dring_len - 2 * case_dring_relief_w;  // closed run
 //  carrying it mouth-up. Recorded here so nobody later reads four magnets as a
 //  reason to trust the case upside down.
 case_mag_gap   = magnet_skin + case_pad;                     // [DERIVED] = 2.00
-case_mag_skin  = case_z1 - (case_z_fr + magnet_pocket_h);    // [DERIVED] = 1.85
+case_mag_skin  = case_z1 - (case_z_fr + magnet_pocket_h);    // [DERIVED] = 1.45
 
-assert(case_dring_len < case_z1 - case_z0 - 4.0,
-       "D-ring bar is longer than the case is deep");
-assert(case_dring_shut > case_dring_bar / 2,
-       "the bore does not close over enough of the bar to trap it");
-assert(case_dring_x - case_dring_bore/2 - case_cav_hw >= 3.0 &&
-       case_w/2 - case_dring_x - case_dring_bore/2 >= 2.5,
-       "the D-ring bore comes too close to the cavity or the outside");
-assert(case_dring_x + case_dring_relief_r > case_w / 2,
-       "the relief never breaks the surface, so the arch cannot get out");
-assert(abs((case_h / case_w) / (body_h / body_w) - 1) < 0.005,
-       "the case has stopped being the deck's proportion");
+assert(case_lug_mat >= 3.0,
+       "strap hole leaves under 3 mm of wall either side");
 assert(case_split_z > case_z_bk + 1 && case_split_z < case_z_fr - 1,
        "the split plane cuts the cowl channel or the magnet pockets");
 assert(case_floor >= case_side - 0.001,

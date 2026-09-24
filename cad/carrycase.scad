@@ -162,41 +162,14 @@ module case_cavity() {
     }
 }
 
-//  THE D-RING IS TRAPPED, NOT BOLTED ON. A closed ring cannot be threaded onto
-//  a finished part - but a case that comes apart can do what a solid one cannot.
-//  The bar lies in a bore running front to back through the flank; the arch
-//  comes out through a rounded relief at each end of it. Close the case and the
-//  ring is captive, with no fixings and nothing that can work loose.
-//
-//  It is captive because the bore is CLOSED for 20.45 mm between the two 6 mm
-//  reliefs: a 31.75 mm bar cannot lift out through two windows that far apart.
-module _half_disc(sx, r, h) {
-    intersection() {
-        cylinder(r = r, h = h);
-        translate([sx > 0 ? 0 : -2*r, -r, -1]) cube([2*r, 2*r, h + 2]);
-    }
-}
-
-module dring() {
-    rr = case_dring_relief_r;
-    rw = case_dring_relief_w;
-    for (sx = [-1, 1]) {
-        translate([sx * case_dring_x, case_dring_y, case_dring_z0])
-            cylinder(d = case_dring_bore, h = case_dring_len);
-        // Tapered, not cut square: a square relief leaves its inner end as a
-        // flat ceiling pointing at the bed. This runs out to the bore over
-        // 8 mm, which is 51 deg off horizontal.
-        for (dir = [-1, 1]) {
-            zo = dir < 0 ? case_dring_z0
-                         : case_dring_z0 + case_dring_len;
-            translate([sx * case_dring_x, case_dring_y, 0]) hull() {
-                translate([0, 0, zo - (dir < 0 ? 0 : 0.01)])
-                    _half_disc(sx, rr, 0.01);
-                translate([0, 0, zo + dir * -rw])
-                    _half_disc(sx, case_dring_bore / 2, 0.01);
-            }
-        }
-    }
+//  THE STRAP LUG IS A HOLE. It runs front to back through the flank, so a cord
+//  or a split ring wraps the full wall and hangs outward, and the load goes into
+//  the whole height of the flank above it. The parting plane cuts across it, so
+//  each half prints it as a plain vertical bore with nothing overhanging.
+module lug_holes() {
+    for (sx = [-1, 1])
+        translate([sx * case_lug_x, case_lug_y, case_z0 - 1])
+            cylinder(d = case_lug_d, h = case_z1 - case_z0 + 2);
 }
 
 //  Screw clearance: the front face down to the insert. The screw crosses ONE
@@ -239,7 +212,7 @@ module case_front() {
             pins(case_pin_d, case_pin_h + 0.01, case_split_z - case_pin_h);
         }
         case_cavity();
-        dring();
+        lug_holes();
         bolt_holes();
         case_magnets();
     }
@@ -249,7 +222,7 @@ module case_back() {
     difference() {
         half_body(true);
         case_cavity();
-        dring();
+        lug_holes();
         bolt_holes();
         insert_bores();
         pins(case_pin_d + case_pin_fit, case_pin_h + 0.2,
