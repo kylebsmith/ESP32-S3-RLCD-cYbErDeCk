@@ -702,19 +702,19 @@
       "check": "every [DERIVED] = N comment tells the truth",
       "class": "PARAM",
       "ok": true,
-      "detail": "50 claims checked against the value they name"
+      "detail": "51 claims checked against the value they name"
     },
     {
       "check": "no parameter is undef in the renderer",
       "class": "PARAM",
       "ok": true,
-      "detail": "382 scalars echoed out of OpenSCAD; none undef"
+      "detail": "390 scalars echoed out of OpenSCAD; none undef"
     },
     {
       "check": "both readers agree on every parameter",
       "class": "PARAM",
       "ok": true,
-      "detail": "382 shared scalars, both readers agree"
+      "detail": "390 shared scalars, both readers agree"
     }
   ]
 }

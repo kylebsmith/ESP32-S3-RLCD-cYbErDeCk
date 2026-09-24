@@ -2262,3 +2262,109 @@ guessed at:
    rejected (C-38 → C-44) and each was inferred from a verbal description. The
    owner offered reference images; that is a better instrument than a seventh
    guess, and this is recorded as an open item rather than another attempt.
+
+### C-46 — Heat-set inserts, an off-centre seam, and a captive D-ring
+
+*"instead of the bolt going all the way through it should be 7 total bolts and
+we use M5x10 mm heat inserts on one side ... the holes for the lugs should not
+be rectangles they should be holes and they should allow for a D ring ... the
+sillouette can be rectangular but not be just a brick, the gemoetry can be more
+intersting and midcentury modern."*
+
+### The insert changes three things at once
+
+| | through-bolt | heat-set insert |
+|---|---|---|
+| what the wall carries | M5 nut, 9.47 across corners | **Ø7.00 insert** |
+| wall it needs | 15.47 | **13.00** |
+| what the screw spans | the whole 38.25 mm object | **one half** |
+| screw | M5 × 45 | **M5 × 20** |
+
+So **M5 × 20 works after all** — it was impossible as a through-bolt and is
+comfortable here, because the screw only has to cross the front half. The wall
+drops 16 → 13 and the case narrows 150.65 → **144.65**.
+
+The C-43 load path still has to be right, and an insert gets it right for a
+different reason than a through-bolt does: it is anchored in the back half's
+plastic by its knurls, so tension runs head → front half → insert → back half
+with nowhere to short-circuit. Measured: 84/84 probes solid round every bore,
+grip **8.95 mm = 1.79 diameters**.
+
+### The seam was at exactly 50 %
+
+That is the single most brick-making number in the object, and it was free to
+move the whole time. The only constraints are that the cowl channel stays in the
+back half and the magnet pockets stay in the front, leaving the window
+**z ∈ (−1.20, +18.05)**.
+
+At **z = +11.00** the halves are 11.05 and 27.20 — a **1:2.46** datum line at a
+proportion someone chose. It also happens to be what makes the screw work:
+11.05 + 8 mm of thread is 19.05.
+
+### Soft in plan, crisp at the face
+
+The previous version softened every axis at once — superellipse corners *and* a
+3 mm roll at both faces. An object with no defined planes reads as a pillow. One
+axis gets the softness now: generous corners in plan, a hard **1 mm chamfer** at
+the faces, so there is a top plane and a bottom plane and all the turning
+happens at the corner.
+
+### The D-ring is trapped, not bolted on
+
+A closed ring cannot be threaded onto a finished part — but a case that comes
+apart can do what a solid one cannot. A **Ø5.20 bore runs front-to-back through
+the flank**, straddling the parting plane; the ring's straight bar lies in it and
+its arch comes out through a tapered relief at each end. Close the case and it is
+captive. No fixings, no plate, nothing that can work loose, and the mechanism is
+invisible.
+
+It is captive because the bore is **closed for 16.45 mm between the two
+reliefs** — a 31.75 mm bar cannot lift out through two windows that far apart.
+That closed run is the whole retention claim, so `check_case.py` measures it.
+
+**Which ring, and why it matters.** The only axis long enough to take the bar
+without running vertically is front-to-back, and that is the case's depth:
+
+| | bar | margin in 38.25 mm |
+|---|---|---|
+| 1¼ in | 31.75 | **+6.50** — drawn |
+| 1½ in | 38.10 | +0.15 — does not fit |
+
+A 1½ in ring needs the case about 4 mm deeper, which is 4 mm of dead air in
+front of the deck. One parameter either way.
+
+### The plinth was built and taken out
+
+A stepped foot is a real midcentury move and it cannot coexist with a fastener
+ring that goes all the way round:
+
+    the ring crosses the floor 6.50 mm in from the bottom edge, so a bore there
+    has 3.80 mm of metal to it. case_bolt_keep wants 3.00. The plinth gets 0.80.
+
+Worse, a plinth **shorter than the corner radius (13.94) sits inside the bottom
+corner's curve and never reads as one** — so the version that would read has to
+be ~18 mm tall, which puts the two bottom-corner fasteners inside it as well. A
+15 mm wall buys 1.80 mm of plinth; that is the trade if it is wanted.
+
+Two print findings are worth keeping from the attempt:
+
+1. Insetting the **depth** as well — the more correct plinth — cannot be
+   printed. The halves lie on their faces, so a Z inset is a ledge pointing at
+   the bed: **377 mm² of it, measured.**
+2. **Tapering that ledge made it worse, not better.** 2.5 mm of rise over 3.3 mm
+   of run is 53° off vertical — past the limit rather than under it. I had the
+   angle the wrong way round and the measurement caught it. X and Y are both
+   in-plane, so an X-only splay would have been free at any angle.
+
+### Two checks that were measuring nothing useful
+
+- The fastener census classified holes **by area**, and the D-ring bore is Ø5.20
+  against a bolt's Ø5.40 — 7 % apart, so any tolerance loose enough to find the
+  bolts swallowed the D-ring too. Classified by **position** now.
+- The plinth check measured **vertices** in a band near the foot. The outline's
+  straight flank carries no vertices between its two ends, so it sampled
+  whatever happened to be there and reported a **5.52 mm inset on a 2.50 mm
+  step**. Sections, not vertices.
+
+Case **144.7 × 174.5 × 38.2 mm**, 459 cm³, ~313 g. 19/19 case checks,
+119/119 validate.

@@ -1780,7 +1780,10 @@ case_wall   = 4.00;   // [DESIGN] front and back
 //  Make the wall one thickness the whole way round and both go away together.
 //  There is no rail to clash, because the fasteners sit ON the outline - see
 //  THE FASTENER RING below - and the outline goes round, so they go round.
-case_side   = 16.00;  // [DESIGN] flanks. WAS 8.00 with rails.
+case_side   = 13.00;  // [DESIGN] flanks. WAS 16.00, which is what a captive M5
+                      //   NUT needs. A heat-set insert is O7.0 against the
+                      //   nut's 9.47 across corners, so it needs 13.0 and gives
+                      //   6 mm back off the width.
 //  THE MOUTH IS SET BY A HAND, THE FLOOR TAKES UP THE SLACK. Holding the deck's
 //  proportion fixes the case's HEIGHT; it does not say where to spend it. Spend
 //  it at the mouth and the deck sits 24 mm down a hole, which needs a scallop
@@ -1797,7 +1800,7 @@ case_cowl_r = 11.00;  // how far it stands off the back face
 
 case_cav_w  = body_w + 2 * case_pad;                // [DERIVED] = 118.65
 case_cav_hw = case_cav_w / 2;
-case_w      = case_cav_w + 2 * case_side;           // [DERIVED] = 150.65
+case_w      = case_cav_w + 2 * case_side;           // [DERIVED] = 144.65
 case_slot_w = case_cowl_w + 2 * case_pad;           // [DERIVED] =  86.33
 case_z_fr   = body_t + case_pad;                    // [DERIVED] cavity front
 case_z_bk   = -case_pad;                            // [DERIVED] cavity back
@@ -1815,12 +1818,12 @@ case_z_cowl = -case_cowl_r - case_pad;              // [DERIVED] channel floor
 //  tool here can still be undef in the part. validate.py's PARAM class now
 //  compares the two readers directly. See C-41.
 case_floor  = case_w * body_h / body_w
-              - body_h - case_pad - case_rim;        // [DERIVED] = 28.30
+              - body_h - case_pad - case_rim;        // [DERIVED] = 25.30
 case_y_bot  = -body_h/2 - case_pad;                 // [DERIVED] deck lands here
 case_y_top  =  body_h/2 + case_rim;                 // [DERIVED] the mouth
-case_y_floor= case_y_bot - case_floor;              // [DERIVED] = -99.627
-case_h      = case_y_top - case_y_floor;            // [DERIVED] = 181.75
-case_cy     = (case_y_top + case_y_floor) / 2;      // [DERIVED] =   -8.75
+case_y_floor= case_y_bot - case_floor;              // [DERIVED] = -92.388
+case_h      = case_y_top - case_y_floor;            // [DERIVED] = 174.51
+case_cy     = (case_y_top + case_y_floor) / 2;      // [DERIVED] =   -5.13
 case_cav_r  = corner_blend + case_pad;              // [DERIVED] =  12.40
 
 //  THE BACK IS FLAT, AND THAT IS A PRINT FINDING BEFORE IT IS A STYLE ONE.
@@ -1834,32 +1837,60 @@ case_cav_r  = corner_blend + case_pad;              // [DERIVED] =  12.40
 //  solid rectangular block is the more honest object anyway.
 case_z0     = case_z_cowl - case_wall;              // [DERIVED] = -16.20 back
 case_z1     = case_z_fr   + case_wall;              // [DERIVED] =  22.05 front
-case_split_z = (case_z0 + case_z1) / 2;             // [DERIVED] = 2.925
+//  THE SPLIT IS NOT IN THE MIDDLE, AND THAT IS THE POINT.
+//  It sat at exactly 50 % of the depth, so the seam read as a crack down the
+//  centre of a brick rather than as a line anyone chose. It is free to move -
+//  the only constraints are that the cowl channel stays in the back half
+//  (z > case_z_bk) and the magnet pockets stay in the front (z < case_z_fr),
+//  which leaves the whole window from -1.20 to +18.05.
+//
+//  At +11.00 the halves are 11.05 and 27.20: a 1:2.46 datum line at a
+//  proportion someone picked. It also makes the screw work - the front half is
+//  the only thing a screw has to cross before it reaches its insert, and
+//  11.05 + 8 of thread is 19.05, so M5 x 20 spans it with 0.95 to spare.
+case_split_z = 11.00;                               // [DESIGN]
+//  ---- NO PLINTH, AND WHY IT IS RECORDED --------------------------------------
+//  A stepped foot was built and taken out again. It cannot coexist with a
+//  fastener ring that goes all the way round, and the arithmetic is flat:
+//
+//    the ring crosses the floor 6.50 mm in from the bottom edge, so a bore
+//    there has 3.80 mm of metal to that edge. case_bolt_keep wants 3.00. The
+//    plinth therefore gets 0.80 mm, which disappears under sanding.
+//
+//  It gets worse than merely subtle. A plinth shorter than the corner radius
+//  (13.94) sits entirely inside the bottom corner's curve and never reads as a
+//  plinth at all, so the version that WOULD read has to be ~18 mm tall - which
+//  puts the two bottom-corner fasteners inside it too.
+//
+//  A 15 mm wall buys 1.80 mm of plinth. That is the trade if it is wanted: 4 mm
+//  on the case width for a foot.
+//
+//  Two print findings from the attempt, worth keeping. Insetting the DEPTH as
+//  well - the more correct plinth - cannot be printed: the halves lie on their
+//  faces, so a Z inset is a ledge pointing at the bed, 377 mm2 of it measured.
+//  And tapering that ledge made it worse, not better: 2.5 mm of rise over 3.3
+//  of run is 53 degrees off vertical, past the limit rather than under it.
+
 case_seam_ch = 0.30;  // [DESIGN] a hairline at the joint, not a shadow gap:
                       //   the object reads as one piece, so this is only
                       //   enough relief to stop a few tenths of print
                       //   mismatch showing as a step. WAS 0.60.
 
-//  ---- THE EDGE IS ROLLED, NOT CHAMFERED --------------------------------------
-//  A chamfer is two arrises and a flat. It reads machined, which is what the
-//  earlier versions wanted, and it is the wrong reading now: "the form should be
-//  more natural and flowing and smoothed". So the outer faces use the deck's own
-//  rolled edge - a smoothstep whose value AND first derivative vanish at the
-//  face, so the surface arrives at it with zero slope and leaves no arris at all.
-//
-//  case_soft is the per-side inset at the outer face, and it is not free: the
-//  fastener bores are straight while the surface rolls inward, so every
-//  millimetre of roll is a millimetre off the metal outboard of a bore. That is
-//  what moves the ring inboard - see case_bolt_ins.
-case_soft    = 3.00;  // [DESIGN] how far each face draws in
-case_roll    = 0.30;  // [DESIGN] how much of the depth the roll occupies
+//  ---- SOFT IN PLAN, CRISP AT THE FACE ----------------------------------------
+//  The previous version was soft everywhere: superellipse corners in plan AND a
+//  3 mm roll at both faces. Softened on every axis at once, an object has no
+//  defined planes and reads as a pillow. The midcentury convention is to pick
+//  ONE axis - generous wrap-around corners in plan, a hard small chamfer at the
+//  faces - so the object keeps a top and a bottom plane and the softness is all
+//  in how it turns the corner.
+case_edge_ch = 1.00;  // [DESIGN] chamfer at the front and back faces
 
 //  THE CORNER ECHOES THE DECK, IT DOES NOT INHERIT IT. Offsetting the deck's
 //  corner outward by the wall gives 28.60 mm on a 150 mm body - proportionally
 //  more than twice as round as the deck, which is why an early version read as
 //  a pebble. Holding the RATIO instead gives a corner that is the same fraction
 //  of width the deck's is, on the same exponent.
-case_r      = corner_blend * case_w / body_w;       // [DERIVED] =  14.51
+case_r      = corner_blend * case_w / body_w;       // [DERIVED] =  13.94
 
 //  ---- THE FASTENER RING ------------------------------------------------------
 //  The fasteners are not a list of coordinates. They are the case's own outline,
@@ -1867,10 +1898,9 @@ case_r      = corner_blend * case_w / body_w;       // [DERIVED] =  14.51
 //  follow the superellipse round the bottom corners instead of stopping where a
 //  straight rail would have to. Nothing can drift off the form, because the
 //  ring IS the form. cad/carrycase.scad builds it; these set its shape.
-//  The ring does NOT sit on the wall's centreline. The outer face rolls in by
-//  case_soft, so a bore centred in the wall would have case_soft less metal
-//  outboard than inboard. Splitting the difference puts 3.80 mm each side.
-case_bolt_ins = (case_side + case_soft) / 2;   // [DERIVED] = 9.50
+//  Back on the wall's centreline: with a 1 mm chamfer rather than a 3 mm roll
+//  there is no longer a reason to bias it inboard.
+case_bolt_ins = case_side / 2;                 // [DERIVED] = 6.50
 case_bolt_m   = 3;               // [DESIGN] pitches per side. WAS 6, which with
                                  //   one at bottom dead centre made thirteen -
                                  //   an absurd number, and it was. Three gives
@@ -1898,8 +1928,13 @@ case_bolt_top_back = 10.00;      // [DESIGN] how far short of the flank's end
 
 case_bolt_d     = 5.00;   // [STANDARD] M5, as asked for
 case_bolt_clear = 5.40;   // [STANDARD] ISO 273 medium fit
-case_bolt_len   = 45.00;  // [DERIVED->STANDARD] 42.95 needed, 45 is stock.
-                          //   A 10 mm screw cannot span a 38 mm object.
+case_bolt_len   = 20.00;  // [STANDARD] 19.05 needed against the 11.05 mm front
+                          //   half plus 8 of thread.
+case_insert_d   =  7.00;  // [VENDOR] M5 heat-set insert, outside diameter once
+                          //   it has melted in - this is what the wall has to
+                          //   carry, not the drilled bore
+case_insert_bore=  6.20;  // [VENDOR] the printed hole it is driven into
+case_insert_len = 10.00;  // [VENDOR] as specified
 case_bolt_head_d= 8.50;   // [STANDARD] ISO 4762 socket cap
 case_nut_af     = 8.00;   // [STANDARD] ISO 4032 / DIN 934 M5, across flats
 case_nut_t      = 4.70;   // [STANDARD] ISO 4032 M5, m_max. WAS 4.00, which is
@@ -1914,9 +1949,10 @@ case_fit        = 0.20;   // [DESIGN] clearance on the hex: +0.10 a side. NOT a
 case_bolt_keep  = 3.00;   // [DESIGN] least metal from a nut to any surface
 case_nut_h      = case_nut_t + case_fit;                     // [DERIVED] = 4.90
 case_nut_cd     = (case_nut_af + case_fit) / cos(30);        // [DERIVED] = 9.47
-case_nut_z      = case_z0;                                   // bears on the back face
-case_bolt_stack = (case_z1 - case_z0) + case_nut_t;          // [DERIVED] = 42.95
-case_bolt_tip   = case_z1 - case_bolt_len;                   // [DERIVED] = -22.95
+case_insert_z   = case_split_z - case_insert_len;            // [DERIVED] = 1.00
+case_bolt_stack = (case_z1 - case_split_z) + 8.0;            // [DERIVED] = 19.05
+case_bolt_tip   = case_z1 - case_bolt_len;                   // [DERIVED] = 2.05
+case_bolt_grip  = case_split_z - case_bolt_tip;              // [DERIVED] = 8.95
 case_bolt_n     = 2 * case_bolt_m + 1;                       // [DERIVED] = 7
 
 //  Locating pins. Thirteen screws clamp but each floats 0.20 mm in its
@@ -1926,30 +1962,47 @@ case_bolt_n     = 2 * case_bolt_m + 1;                       // [DERIVED] = 7
 case_pin_d   = 4.00;  case_pin_h = 3.00;  case_pin_fit = 0.30;
 case_pin_ks  = [0.5, 3.5];   // [DESIGN] where on the ring, in screw pitches
 
-//  ---- STRAP SLOTS, AND NO BOSS -----------------------------------------------
-//  Six goes at this: a slot in a thin flank, a pad, a rail, a tangent stadium,
-//  a superellipse pad. Every one of them was an object stuck to the outside of
-//  another object, and four of the six were rejected on sight for exactly that.
+//  ---- THE D-RING IS CAPTIVE, NOT BOLTED ON -----------------------------------
+//  Seven versions of a strap lug have been rejected (C-38 -> C-44) and every one
+//  of them was either an object stuck to the outside or a rectangle cut through
+//  the wall. This is neither.
 //
-//  The wall is 16 mm because an M5 bore needs it to be. That is already enough
-//  to put a strap slot straight through with 5.50 mm of metal either side and
-//  38.25 mm of depth behind it - 210 mm2 in shear a side, which is far past
-//  anything a strap applies. The boss was never carrying the load. It was
-//  carrying the idea of carrying the load.
+//  A closed D-ring cannot be threaded onto a finished part, so a case that comes
+//  apart can do something a solid one cannot: TRAP IT. A bore runs front-to-back
+//  through the flank, straddling the parting plane. The ring's straight bar lies
+//  in it and its arch comes out through a rounded relief at each end of the
+//  bore. Close the case and the ring is captive - no fixings, no plate, nothing
+//  that can work loose, and the mechanism is invisible.
 //
-//  So there is no boss. The silhouette is unbroken and the slot is a hole in it.
-case_lug_y      = 40.00; // [DESIGN] slot centre. 42 mm below the mouth: lugs at
-                         //   the rim foul the hand drawing the deck out, and a
-                         //   bag hung from its rim tips forward.
-case_lug_slot_w =  5.00; // [DESIGN] across the wall
-case_lug_slot_h = 14.00; // [DESIGN] up the flank - 10 mm webbing passes through
-                         //   this way round, or a split ring
-case_lug_slot_r =  1.60; // [DESIGN]
+//  It is captive because the bore is CLOSED for 20.4 mm between the two 6 mm
+//  reliefs. A 31.75 mm bar cannot lift out through two windows that far apart.
+//
+//  WHICH RING. The only axis long enough to take the bar without running
+//  vertically is front-to-back, and that is the case's depth: 38.25 mm.
+//    1 1/4 in = 31.75 mm bar  ->  6.50 mm of margin. This is what is drawn.
+//    1 1/2 in = 38.10 mm bar  ->  0.15 mm. It does not fit; the case would need
+//                                 to be about 4 mm deeper, which is 4 mm of
+//                                 dead air in front of the deck.
+//  One parameter if the answer is the other one.
+case_dring_bar   = 31.75; // [VENDOR] 1 1/4 in, the flat side
+case_dring_wire  =  4.50; // [VENDOR] wire diameter
+case_dring_clear =  0.70; // [DESIGN] the ring has to turn freely in its bore
+case_dring_y     = 40.00; // [DESIGN] 42 mm below the mouth: a lug at the rim
+                          //   fouls the hand drawing the deck out, and a bag
+                          //   hung from its rim tips forward
+case_dring_relief_r = 9.00; // [DESIGN] the rounded opening the arch comes out of
+case_dring_relief_w = 8.00; // [DESIGN] how much of the bore each one opens. It
+                            //   is TAPERED over this length rather than cut
+                            //   square: a square relief leaves its inner end as
+                            //   190 mm2 of flat ceiling pointing at the bed.
+                            //   8 mm of run against 6.4 of radius is 51 deg off
+                            //   horizontal, which prints with nothing under it.
 
-//  Biased inboard for the same reason the ring is: the rolled face is nearer.
-case_lug_x   = (case_cav_hw + case_w/2 - case_soft) / 2;          // = 65.825
-case_lug_mat = min(case_lug_x - case_lug_slot_w/2 - case_cav_hw,
-                   case_w/2 - case_soft - case_lug_x - case_lug_slot_w/2);
+case_dring_bore = case_dring_wire + case_dring_clear;        // = 5.20
+case_dring_len  = case_dring_bar  + case_dring_clear;        // = 32.45
+case_dring_x    = case_w / 2 - case_side / 2;                // = 65.825
+case_dring_z0   = (case_z0 + case_z1 - case_dring_len) / 2;  // = -13.30
+case_dring_shut = case_dring_len - 2 * case_dring_relief_w;  // closed run
 
 //  ---- NO THUMB SCALLOP, AND WHY IT IS RECORDED --------------------------------
 //  A 24 mm mouth was tried, with an 80 x 22 mm arc cut in the front to reach
@@ -1985,12 +2038,19 @@ case_lug_mat = min(case_lug_x - case_lug_slot_w/2 - case_cav_hw,
 case_mag_gap   = magnet_skin + case_pad;                     // [DERIVED] = 2.00
 case_mag_skin  = case_z1 - (case_z_fr + magnet_pocket_h);    // [DERIVED] = 1.85
 
-assert(case_lug_mat >= 3.5,
-       "strap slot leaves under 3.5 mm of wall either side");
+assert(case_dring_len < case_z1 - case_z0 - 4.0,
+       "D-ring bar is longer than the case is deep");
+assert(case_dring_shut > case_dring_bar / 2,
+       "the bore does not close over enough of the bar to trap it");
+assert(case_dring_x - case_dring_bore/2 - case_cav_hw >= 3.0 &&
+       case_w/2 - case_dring_x - case_dring_bore/2 >= 2.5,
+       "the D-ring bore comes too close to the cavity or the outside");
+assert(case_dring_x + case_dring_relief_r > case_w / 2,
+       "the relief never breaks the surface, so the arch cannot get out");
 assert(abs((case_h / case_w) / (body_h / body_w) - 1) < 0.005,
        "the case has stopped being the deck's proportion");
-assert(case_w/2 - case_soft - case_bolt_ins - case_nut_cd/2 >= 0.5,
-       "the nut overhangs the rolled edge it has to bear on");
+assert(case_split_z > case_z_bk + 1 && case_split_z < case_z_fr - 1,
+       "the split plane cuts the cowl channel or the magnet pockets");
 assert(case_floor >= case_side - 0.001,
        "floor thinner than the flank, so the ring cannot round the corner");
 assert(case_rim >= 10.0 && case_rim <= 16.0,
@@ -1999,10 +2059,12 @@ assert(case_bolt_len >= case_bolt_stack,
        "M5 screw is shorter than the stack it has to span");
 //  The C-43 guard, restated for a through-bolt: the nut has to bear on the far
 //  side of the back half, not somewhere inside the front one.
-assert(case_bolt_tip <= case_z0 - case_nut_t,
-       "screw does not reach through the nut on the back face");
-assert(case_side / 2 - case_soft / 2 - case_bolt_clear / 2 >= 3.0,
-       "the rolled edge leaves under 3 mm of metal outboard of a bore");
+assert(case_bolt_grip >= 1.2 * case_bolt_d,
+       "under 1.2 diameters of thread engaged in the insert");
+assert(case_bolt_tip > case_insert_z + 0.5,
+       "screw bottoms out in its insert before the joint closes");
+assert((case_side - case_insert_d) / 2 >= 3.0,
+       "under 3 mm of metal round a heat-set insert");
 assert(case_split_z > case_z_bk && case_split_z < case_z_fr,
        "parting plane misses the cavity, so one half has no tray to flock");
 assert(case_mag_skin >= 4 * layer_h,

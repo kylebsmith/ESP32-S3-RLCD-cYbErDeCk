@@ -162,16 +162,23 @@ def main():
     polys = sorted(plan(front, zs + 1.0), key=lambda q: abs(q.area), reverse=True)
     wall = polys[0]
     holes = [Polygon(r) for r in wall.interiors]
+    # Classified by POSITION, not by area: the D-ring bore is O5.20 against a
+    # bolt's O5.40, which is 7 per cent apart - any area tolerance loose enough
+    # to find the bolts would swallow the D-ring too.
+    def near_dring(h):
+        return (abs(abs(h.centroid.x) - p["case_dring_x"]) < 3.0
+                and abs(h.centroid.y - p["case_dring_y"]) < 3.0)
+    dr = [h for h in holes if near_dring(h)]
     bore_a = np.pi * (p["case_bolt_clear"] / 2) ** 2
-    bores = [h for h in holes if abs(h.area - bore_a) < 0.25 * bore_a]
-    slots = [h for h in holes if h.area > 1.7 * bore_a]
+    bores = [h for h in holes if not near_dring(h)
+             and abs(h.area - bore_a) < 0.25 * bore_a]
+    other = [h for h in holes if h not in dr and h not in bores]
 
     check("every fastener in the ring is present and nothing else is",
-          len(bores) == int(p["case_bolt_n"]) and len(slots) == 2
-          and len(holes) == len(bores) + len(slots),
+          len(bores) == int(p["case_bolt_n"]) and len(dr) == 2,
           f"{len(bores)} bores of an expected {int(p['case_bolt_n'])}, "
-          f"{len(slots)} strap slots, {len(holes) - len(bores) - len(slots)} "
-          f"unaccounted-for openings")
+          f"{len(dr)} D-ring bores, {len(other)} other opening(s) "
+          f"(locating pins)")
 
     # Distance from each bore to the wall's own boundary. That boundary is the
     # cavity on one side and open air on the other, so ONE number covers both -
@@ -271,62 +278,67 @@ def main():
           f"{p['case_floor']:.1f} mm under it - the proportion's slack went "
           f"to the end you drop it on")
 
-    lx, ly = p["case_lug_x"], float(np.mean([s.centroid.y for s in slots]))
-    mat = p["case_lug_mat"]
-    open_pts, wall_pts = [], []
-    for s in (-1, 1):
-        for z in (p["case_z0"] + 3, zs + 4, p["case_z1"] - 3):
-            open_pts.append([s * lx, ly, z])
-            wall_pts.append([s * (lx + p["case_lug_slot_w"] / 2 + mat / 2), ly, z])
-            wall_pts.append([s * (lx - p["case_lug_slot_w"] / 2 - mat / 2), ly, z])
-    is_open = ~case.contains(np.array(open_pts))
-    is_wall = case.contains(np.array(wall_pts))
-    depth = p["case_z1"] - p["case_z0"]
-    near = min(float(np.hypot(*(np.array([abs(b[0]), b[1]]) -
-                              np.array([lx, ly])))) for b in cen)
-    check("both strap slots go straight through the wall, no boss",
-          bool(np.all(is_open)) and bool(np.all(is_wall))
-          and near > p["case_lug_slot_h"] / 2 + p["case_bolt_clear"] / 2 + 4.0,
-          f"{int(is_open.sum())}/6 slot probes open, {int(is_wall.sum())}/12 wall "
-          f"probes solid, {mat:.2f} mm each side x {depth:.1f} mm deep "
-          f"= {mat * depth:.0f} mm^2 in shear; nearest bolt {near:.1f} mm away")
-
-    # THE C-43 GUARD, RESTATED FOR A THROUGH-BOLT. A screw clamps nothing unless
-    # the nut bears on the half the head is NOT on. C-43 records a hex pocket
-    # that opened at the parting face: the nut rose out of it and bore on the
-    # FRONT half's own parting face, so head and nut both reacted against one
-    # part and 8,300 mm2 of joint carried zero load - with all twenty checks
-    # passing, two of them actively certifying it.
-    #
-    # A through-bolt cannot do that, but it can still be got wrong, so the two
-    # things that make it right are measured: the bore is open end to end, and
-    # the nut's bearing annulus at the BACK face is solid back-half material.
-    r_bear = (p["case_bolt_clear"] / 2 + p["case_nut_af"] / 2) / 2
-    seat = []
-    for b in cen:
-        for a in range(0, 360, 30):
-            seat.append([b[0] + r_bear * np.cos(np.radians(a)),
-                         b[1] + r_bear * np.sin(np.radians(a)),
-                         p["case_z0"] + 0.4])
-    bears = back.contains(np.array(seat))
-    check("every nut bears on the outside of the back half",
-          bool(np.all(bears)),
-          f"{int(bears.sum())}/{len(seat)} probes solid under the nut faces of "
-          f"{len(cen)} bolts")
+    # THE C-43 GUARD, RESTATED FOR A HEAT-SET INSERT. A screw clamps nothing
+    # unless what it threads into is anchored in the half its head is NOT on.
+    # C-43 records a hex pocket at the parting face: the nut rose out of it and
+    # bore on the FRONT half's own parting face, so head and nut both reacted
+    # against one part and the joint carried zero load - with every check
+    # passing. An insert is anchored by its knurls in the BACK half, so what is
+    # measured here is that its bore really is in the back half, full depth,
+    # with metal all round it.
+    ring, deep = [], []
+    r_ins = p["case_insert_d"] / 2 + 1.0
+    for b_ in cen:
+        for ang in range(0, 360, 30):
+            ring.append([b_[0] + r_ins * np.cos(np.radians(ang)),
+                         b_[1] + r_ins * np.sin(np.radians(ang)),
+                         p["case_insert_z"] + p["case_insert_len"] / 2])
+        for z in np.linspace(p["case_insert_z"] + 0.3, zs - 0.3, 6):
+            deep.append([b_[0], b_[1], z])
+    walled = back.contains(np.array(ring))
+    open_b = back.contains(np.array(deep))
+    check("every insert bore is in the back half, full depth, with metal round it",
+          bool(np.all(walled)) and not bool(np.any(open_b)),
+          f"{int(walled.sum())}/{len(ring)} probes solid at r={r_ins:.2f}, "
+          f"{int((~open_b).sum())}/{len(deep)} clear down "
+          f"{p['case_insert_len']:.1f} mm of bore; "
+          f"{(p['case_side'] - p['case_insert_d']) / 2:.2f} mm of metal a side")
 
     axis = []
-    for b in cen:
-        for z in np.linspace(p["case_z1"] - 0.5, p["case_z0"] + 0.5, 15):
-            axis.append([b[0], b[1], z])
-    bore = case.contains(np.array(axis))
-    thru = p["case_bolt_tip"] <= p["case_z0"] - p["case_nut_t"]
-    check("every bolt runs clean through both halves and out past its nut",
-          not bool(np.any(bore)) and thru,
+    for b_ in cen:
+        for z in np.linspace(p["case_z1"] - 0.5, zs + 0.3, 9):
+            axis.append([b_[0], b_[1], z])
+    bore = front.contains(np.array(axis))
+    check("every screw crosses the front half and grips its insert",
+          not bool(np.any(bore)) and p["case_bolt_grip"] >= 1.2 * p["case_bolt_d"],
           f"{int((~bore).sum())}/{len(axis)} probes clear over "
-          f"{p['case_z1'] - p['case_z0']:.2f} mm of object; "
-          f"M5 x {p['case_bolt_len']:.0f} ends "
-          f"{p['case_z0'] - p['case_nut_t'] - p['case_bolt_tip']:.2f} mm past "
-          f"the nut's far face")
+          f"{p['case_z1'] - zs:.2f} mm of front half; M5 x "
+          f"{p['case_bolt_len']:.0f} grips {p['case_bolt_grip']:.2f} mm "
+          f"= {p['case_bolt_grip'] / p['case_bolt_d']:.2f} diameters")
+
+    # The D-ring is captive because the bore is CLOSED between its two reliefs.
+    # That closed run is the whole retention claim, so it is measured.
+    dx, dy = p["case_dring_x"], p["case_dring_y"]
+    zs_lo = p["case_dring_z0"] + p["case_dring_relief_w"] + 0.5
+    zs_hi = p["case_dring_z0"] + p["case_dring_len"] - p["case_dring_relief_w"] - 0.5
+    shut = []
+    for sx in (-1, 1):
+        for z in np.linspace(zs_lo, zs_hi, 12):
+            half = front if z > zs else back
+            shut.append(half.contains(np.array(
+                [[sx * (dx + p["case_dring_bore"] / 2 + 1.2), dy, z]]))[0])
+    ends = []
+    for sx in (-1, 1):
+        for z in (p["case_dring_z0"] + 2.0,
+                  p["case_dring_z0"] + p["case_dring_len"] - 2.0):
+            half = front if z > zs else back
+            ends.append(not half.contains(np.array(
+                [[sx * (p["case_w"] / 2 - 1.0), dy, z]]))[0])
+    check("the D-ring bore closes over the bar, and opens only at its ends",
+          all(shut) and all(ends),
+          f"{sum(shut)}/{len(shut)} probes solid over the "
+          f"{p['case_dring_shut']:.2f} mm closed run, {sum(ends)}/4 reliefs "
+          f"open; {p['case_dring_bar']:.2f} mm bar cannot lift out")
 
     mp, mo = [], []
     for (mx, my) in [(s * p["magnet_x"], y) for s in (-1, 1)
@@ -342,14 +354,27 @@ def main():
           f"{int(skin.sum())}/4 skins intact at {p['case_mag_skin']:.2f} mm, "
           f"gap to the deck {p['case_mag_gap']:.2f} mm")
 
+    # The D-ring bore is blind in the front half, so its end cap is a flat
+    # ceiling. It is a O5.20 circle and every printer bridges that, so it is
+    # excluded here and checked on its own terms below.
+    ig = [[s_ * p["case_dring_x"], p["case_dring_y"]] for s_ in (-1, 1)]
     for lbl, m, at_max in (("front", front, True), ("back", back, False)):
-        flat = ceilings(m, at_max, 15.0)
-        shallow = ceilings(m, at_max, 44.0)
+        flat = ceilings(m, at_max, 15.0, ig, p["case_dring_bore"])
+        shallow = ceilings(m, at_max, 44.0, ig, p["case_dring_bore"])
         check(f"the {lbl} half prints face down with nothing under it",
               flat < 20.0 and shallow < 250.0,
               f"{flat:.0f} mm^2 near-flat ceiling, {shallow:.0f} mm^2 under 44 deg"
               f" - the rolled edge included, which is the thing most likely to "
               f"need support here")
+
+    check("the blind D-ring bore is narrow enough to bridge",
+          p["case_dring_bore"] <= 6.0,
+          f"O{p['case_dring_bore']:.2f} end cap, 2 of them")
+
+    check("the split is not in the middle",
+          abs((zs - p["case_z0"]) / (p["case_z1"] - p["case_z0"]) - 0.5) > 0.08,
+          f"front {p['case_z1'] - zs:.2f} / back {zs - p['case_z0']:.2f} "
+          f"= 1:{(zs - p['case_z0']) / (p['case_z1'] - zs):.2f}")
 
     ratio, deckr = p["case_h"] / p["case_w"], p["body_h"] / p["body_w"]
     check("the case is still the deck's proportion",
@@ -365,7 +390,8 @@ def main():
           f"  =  {tot:.0f} cm^3 (~{tot * 1.24 * 0.55:.0f} g at 55% of solid)")
     print(f"  each half needs a {fw:.0f} x {fh:.0f} mm bed")
     print(f"  hardware: {len(cen)} x M5 x {p['case_bolt_len']:.0f} socket cap, "
-          f"{len(cen)} x M5 nut (8 mm spanner), "
+          f"{len(cen)} x M5 x {p['case_insert_len']:.0f} heat-set insert, "
+          f"2 x 1-1/4in D-ring, "
           f"4 x {p['magnet_d']:.0f}x{p['magnet_h']:.0f} disc")
     print()
     if FAILED:

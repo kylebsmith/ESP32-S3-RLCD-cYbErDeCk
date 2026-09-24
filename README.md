@@ -239,7 +239,7 @@ counted among the audited rows.
 
 | | |
 |---|---|
-| **[DATUMS.md](docs/DATUMS.md)** | every dimension, its provenance, forty-five recorded corrections, nine open items |
+| **[DATUMS.md](docs/DATUMS.md)** | every dimension, its provenance, forty-six recorded corrections, nine open items |
 | **[HARDWARE.md](docs/HARDWARE.md)** | the board itself: panel, controller, pin map, USB and power, all traced to vendor sources |
 | **[SUBSTRATE.md](docs/SUBSTRATE.md)** | the conceptual core: one data structure, one noun, three verbs |
 | **[CASE.md](docs/CASE.md)** | the carry case: how it guides, holds and prints |

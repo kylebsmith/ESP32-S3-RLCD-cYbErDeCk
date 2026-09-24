@@ -109,44 +109,44 @@ function pin_sites() =
 //  width AND both have zero slope, so they meet tangentially and add no line of
 //  their own.
 module full_body() {
-    t = case_z1 - case_z0;
-    intersection() {
+    e = 0.01;
+    ch = case_edge_ch;
+    hull() {
         translate([0, case_cy, case_z0])
-            rse_soft(case_w, case_h, t, case_r, form_n, case_soft, case_roll);
-        translate([0, case_cy, case_z1]) mirror([0, 0, 1])
-            rse_soft(case_w, case_h, t, case_r, form_n, case_soft, case_roll);
+            rse_plate(case_w - 2*ch, case_h - 2*ch, e, max(case_r - ch, 0.8), form_n);
+        translate([0, case_cy, case_z0 + ch])
+            rse_plate(case_w, case_h, e, case_r, form_n);
+        translate([0, case_cy, case_z1 - ch - e])
+            rse_plate(case_w, case_h, e, case_r, form_n);
+        translate([0, case_cy, case_z1 - e])
+            rse_plate(case_w - 2*ch, case_h - 2*ch, e, max(case_r - ch, 0.8), form_n);
     }
 }
 
-//  One half, cut from that. case_seam_ch is a hairline, not a shadow gap: the
-//  object is meant to read as one piece, so the joint gets just enough relief
-//  to stop a few tenths of print mismatch showing as a step.
+//  One half, cut from that. case_seam_ch is a hairline, not a shadow gap.
 module half_body(flip) {
     ch = case_seam_ch;
     d  = flip ? -1 : 1;
     t  = case_z1 - case_z0;
     big = 24;
-    intersection() {
-        full_body();
-        hull() {
-            // rse_plate extrudes UPWARD from its origin, so the mirrored
-            // half's pinch plate would sit 0.01 mm past the parting plane and
-            // the two halves would interfere over the whole 8,800 mm2 face.
-            // 88 mm3 of overlap, which is what that number was.
-            translate([0, case_cy, case_split_z - (d < 0 ? 0.01 : 0)])
-                rse_plate(case_w - 2*ch, case_h - 2*ch, 0.01,
-                          max(case_r - ch, 0.8), form_n);
-            translate([0, case_cy, case_split_z + d * ch])
-                rse_plate(case_w + big, case_h + big, 0.01, case_r + big/2, form_n);
-            translate([0, case_cy, case_split_z + d * (t + 1)])
-                rse_plate(case_w + big, case_h + big, 0.01, case_r + big/2, form_n);
+    difference() {
+        intersection() {
+            full_body();
+            hull() {
+                // rse_plate extrudes UPWARD from its origin, so the mirrored
+                // half's pinch plate would sit 0.01 mm past the parting plane
+                // and the halves would interfere across the whole joint.
+                translate([0, case_cy, case_split_z - (d < 0 ? 0.01 : 0)])
+                    rse_plate(case_w - 2*ch, case_h - 2*ch, 0.01,
+                              max(case_r - ch, 0.8), form_n);
+                translate([0, case_cy, case_split_z + d * ch])
+                    rse_plate(case_w + big, case_h + big, 0.01, case_r + big/2, form_n);
+                translate([0, case_cy, case_split_z + d * (t + 1)])
+                    rse_plate(case_w + big, case_h + big, 0.01, case_r + big/2, form_n);
+            }
         }
     }
 }
-
-//  ===========================================================================
-//  SUBTRACTIONS
-//  ===========================================================================
 //  Everything the deck occupies, plus the flock allowance, running out the top.
 module case_cavity() {
     over = 40;                                   // run the mouth well clear
@@ -162,23 +162,58 @@ module case_cavity() {
     }
 }
 
-//  The strap slot: straight through the boss, front to back, so a split ring or
-//  webbing passes through the object rather than round a hook.
-module case_lug_slots() {
-    for (sx = [-1, 1])
-        translate([sx * case_lug_x, case_lug_y, case_z0 - 1])
-            rbox(case_lug_slot_w, case_lug_slot_h,
-                 case_z1 - case_z0 + 2, case_lug_slot_r);
+//  THE D-RING IS TRAPPED, NOT BOLTED ON. A closed ring cannot be threaded onto
+//  a finished part - but a case that comes apart can do what a solid one cannot.
+//  The bar lies in a bore running front to back through the flank; the arch
+//  comes out through a rounded relief at each end of it. Close the case and the
+//  ring is captive, with no fixings and nothing that can work loose.
+//
+//  It is captive because the bore is CLOSED for 20.45 mm between the two 6 mm
+//  reliefs: a 31.75 mm bar cannot lift out through two windows that far apart.
+module _half_disc(sx, r, h) {
+    intersection() {
+        cylinder(r = r, h = h);
+        translate([sx > 0 ? 0 : -2*r, -r, -1]) cube([2*r, 2*r, h + 2]);
+    }
 }
 
-//  One straight bore, right through the object. Head proud on the front face,
-//  plain nut proud on the back. Nothing recessed, nothing hidden, and nowhere
-//  for the clamp to short-circuit inside one half - C-43 records what that
-//  looks like when it does.
+module dring() {
+    rr = case_dring_relief_r;
+    rw = case_dring_relief_w;
+    for (sx = [-1, 1]) {
+        translate([sx * case_dring_x, case_dring_y, case_dring_z0])
+            cylinder(d = case_dring_bore, h = case_dring_len);
+        // Tapered, not cut square: a square relief leaves its inner end as a
+        // flat ceiling pointing at the bed. This runs out to the bore over
+        // 8 mm, which is 51 deg off horizontal.
+        for (dir = [-1, 1]) {
+            zo = dir < 0 ? case_dring_z0
+                         : case_dring_z0 + case_dring_len;
+            translate([sx * case_dring_x, case_dring_y, 0]) hull() {
+                translate([0, 0, zo - (dir < 0 ? 0 : 0.01)])
+                    _half_disc(sx, rr, 0.01);
+                translate([0, 0, zo + dir * -rw])
+                    _half_disc(sx, case_dring_bore / 2, 0.01);
+            }
+        }
+    }
+}
+
+//  Screw clearance: the front face down to the insert. The screw crosses ONE
+//  half, which is what lets it be M5 x 20 on a 38.25 mm object.
 module bolt_holes() {
     for (b = bolt_sites())
-        translate([b[0], b[1], case_z0 - 1])
-            cylinder(d = case_bolt_clear, h = case_z1 - case_z0 + 2);
+        translate([b[0], b[1], case_insert_z])
+            cylinder(d = case_bolt_clear, h = case_z1 + 1 - case_insert_z);
+}
+
+//  The insert bore, in the BACK half, driven from its parting face. The brass
+//  anchors in the plastic by its knurls, so tension runs head -> front half ->
+//  insert -> back half with nowhere to short-circuit. See C-43.
+module insert_bores() {
+    for (b = bolt_sites())
+        translate([b[0], b[1], case_insert_z])
+            cylinder(d = case_insert_bore, h = case_insert_len);
 }
 
 module pins(d, h, z) {
@@ -204,7 +239,7 @@ module case_front() {
             pins(case_pin_d, case_pin_h + 0.01, case_split_z - case_pin_h);
         }
         case_cavity();
-        case_lug_slots();
+        dring();
         bolt_holes();
         case_magnets();
     }
@@ -214,8 +249,9 @@ module case_back() {
     difference() {
         half_body(true);
         case_cavity();
-        case_lug_slots();
+        dring();
         bolt_holes();
+        insert_bores();
         pins(case_pin_d + case_pin_fit, case_pin_h + 0.2,
              case_split_z - case_pin_h - 0.2 + 0.01);
     }

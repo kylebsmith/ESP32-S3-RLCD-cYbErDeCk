@@ -8,14 +8,14 @@ both flanks and the bottom; open only at the top. Every port is buried.
 
 | | |
 |---|---|
-| Outside | **150.7 × 181.8 × 38.2 mm** — nothing stands off it |
+| Outside | **144.7 × 174.5 × 38.2 mm** — nothing stands off it |
 | Proportion | **1.2065** — the deck's own, to four figures |
-| Material | 517 cm³ → **≈ 353 g** printed, both halves |
-| Walls | 4.0 front and back, **16.0 all the way round**, 28.3 floor, 12.0 rim |
-| Edge | **rolled 3.0 mm**, zero slope at the face — no arris |
-| Hardware | **7 × M5 × 45 socket cap, 7 × M5 nut**, 4 × Ø5×2 disc |
+| Material | 459 cm³ → **≈ 313 g** printed, both halves |
+| Walls | 4.0 front and back, **13.0 all the way round**, 21.1 floor, 12.0 rim |
+| Edge | **1.0 mm chamfer at the faces**, superellipse corners in plan |
+| Hardware | **7 × M5 × 20 socket cap + 7 × M5 × 10 heat-set insert**, 2 × 1¼in D-ring, 4 × Ø5×2 disc |
 | Flock allowance | 0.80 mm per surface, + 0.40 clearance |
-| Bed needed | **151 × 182 mm** per half |
+| Bed needed | **145 × 175 mm** per half |
 
 ## It is two parts, and not for printing
 
@@ -81,16 +81,33 @@ end you actually drop the thing on.
 
 So the mouth is **12 mm**, which is a finger pad, and the floor takes the rest.
 
-## Strap slots, and no boss
+## The D-ring is trapped, not bolted on
 
-Six versions of a strap lug (C-38 → C-44), five of which were an object stuck to
-the outside of another object. The wall is 16 mm because an M5 bore needs it to
-be, and that is already enough to put a slot straight through with **4.00 mm of
-metal either side and 38.25 mm of depth behind it — 153 mm² in shear a side**,
-far past anything a strap applies.
+Seven versions of a strap lug were rejected (C-38 → C-44), every one either an
+object stuck to the outside or a rectangle cut through the wall. A closed D-ring
+cannot be threaded onto a finished part — but a case that comes apart can do what
+a solid one cannot.
 
-**The boss was never carrying the load. It was carrying the idea of carrying
-the load.** So there is none, and the silhouette is unbroken.
+A **Ø5.20 bore runs front-to-back through the flank**, straddling the parting
+plane. The ring's straight bar lies in it and its arch comes out through a
+tapered relief at each end. Close the case and it is captive: no fixings, no
+plate, nothing that can work loose, and the mechanism is invisible.
+
+It is captive because the bore is **closed for 16.45 mm between the two
+reliefs** — a 31.75 mm bar cannot lift out through two windows that far apart.
+That closed run is the whole retention claim, so it is measured.
+
+**Ring size decides this.** The only axis long enough without running vertically
+is front-to-back, and that is the case's depth: 1¼ in (31.75) leaves 6.50 mm of
+margin; 1½ in (38.10) leaves 0.15 and does not fit.
+
+## Soft in plan, crisp at the face
+
+The version before this softened every axis at once — superellipse corners *and*
+a 3 mm roll at both faces — and an object with no defined planes reads as a
+pillow. One axis gets the softness now: generous corners in plan, a hard **1 mm
+chamfer** at the faces, so there is a top plane and a bottom plane and all the
+turning happens at the corner.
 
 ## Print it face down
 

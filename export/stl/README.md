@@ -14,8 +14,8 @@ The carry case is a separate object and prints separately:
 
 | File | Size (mm) | Volume | ~PLA | Notes |
 |---|---|---|---|---|
-| `case/carrycase-front.stl` | 150.65 × 181.75 × 22.12 | 231 cm³ | 158 g | print **face down**; holds the four magnets |
-| `case/carrycase-back.stl` | 150.65 × 181.75 × 19.12 | 286 cm³ | 195 g | print **back down** |
+| `case/carrycase-front.stl` | 144.65 × 174.51 × 14.05 | 147 cm³ | 100 g | print **face down**; holds the four magnets |
+| `case/carrycase-back.stl` | 144.65 × 174.51 × 27.20 | 313 cm³ | 213 g | print **back down**; takes the seven heat-set inserts |
 
 They bolt together with **7 × M5 × 45 socket cap and 7 × M5 nut** in a ring that
 follows the case outline all the way round the flanks and the floor, straight
