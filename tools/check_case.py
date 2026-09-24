@@ -302,7 +302,8 @@ def main():
           f"{int(walled.sum())}/{len(ring)} probes solid at r={r_ins:.2f}, "
           f"{int((~open_b).sum())}/{len(deep)} clear down "
           f"{p['case_insert_len']:.1f} mm of bore; "
-          f"{(p['case_side'] - p['case_insert_d']) / 2:.2f} mm of metal a side")
+          f"{(p['case_side'] + p['case_boss_amp'] - p['case_insert_d']) / 2:.2f} "
+          f"mm of metal a side at the swell it sits in")
 
     axis = []
     for b_ in cen:
@@ -345,14 +346,24 @@ def main():
           f"{int(skin.sum())}/4 skins intact at {p['case_mag_skin']:.2f} mm, "
           f"gap to the deck {p['case_mag_gap']:.2f} mm")
 
+    # A counterbore roof is a flat ceiling and it is fine: a 1.8 mm annulus round
+    # a bore bridges. Excluded here and measured on its own terms below, so this
+    # number stays a number about UNSUPPORTED SPANS rather than about fasteners.
+    seats = [[b_[0], b_[1]] for b_ in cen]
     for lbl, m, at_max in (("front", front, True), ("back", back, False)):
-        flat = ceilings(m, at_max, 15.0)
-        shallow = ceilings(m, at_max, 44.0)
+        flat = ceilings(m, at_max, 15.0, seats, p["case_cb_d"] / 2)
+        shallow = ceilings(m, at_max, 44.0, seats, p["case_cb_d"] / 2)
         check(f"the {lbl} half prints face down with nothing under it",
               flat < 20.0 and shallow < 250.0,
               f"{flat:.0f} mm^2 near-flat ceiling, {shallow:.0f} mm^2 under 44 deg"
               f" - the rolled edge included, which is the thing most likely to "
               f"need support here")
+
+    ledge = (p["case_cb_d"] - p["case_bolt_clear"]) / 2
+    check("each counterbore roof is a ledge narrow enough to bridge",
+          ledge <= 2.5,
+          f"{ledge:.2f} mm of annular roof round a {p['case_bolt_clear']:.2f} mm "
+          f"bore, {len(cen)} of them, all opening on the bed")
 
     check("the split is not in the middle",
           abs((zs - p["case_z0"]) / (p["case_z1"] - p["case_z0"]) - 0.5) > 0.08,

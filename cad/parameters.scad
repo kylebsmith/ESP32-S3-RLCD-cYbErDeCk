@@ -1785,10 +1785,17 @@ case_wall   = 3.60;   // [DESIGN] front and back. WAS 4.00. These two faces are
 //  Make the wall one thickness the whole way round and both go away together.
 //  There is no rail to clash, because the fasteners sit ON the outline - see
 //  THE FASTENER RING below - and the outline goes round, so they go round.
-case_side   = 13.00;  // [DESIGN] flanks. WAS 16.00, which is what a captive M5
-                      //   NUT needs. A heat-set insert is O7.0 against the
-                      //   nut's 9.47 across corners, so it needs 13.0 and gives
-                      //   6 mm back off the width.
+//  ---- THIN EVERYWHERE, THICK ONLY AT THE FASTENERS ---------------------------
+//  Every version until now carried a wall thick enough for a fastener ALL THE
+//  WAY ROUND, because a uniform wall is the only kind a plain offset can make.
+//  That put 13 mm of PLA everywhere to serve nine holes, and the flanks were
+//  measured at 36 per cent of the filament.
+//
+//  The wall is 6 mm now and SWELLS to 16.5 at each of the nine sites. The swell
+//  is not a pad stuck on: the plan outline itself is pushed outward with a
+//  smooth falloff, so the surface has no junction anywhere - which is also what
+//  a river rock is.
+case_side   = 6.00;   // [DESIGN] the thin wall, between the swells
 //  THE MOUTH IS SET BY A HAND, THE FLOOR TAKES UP THE SLACK. Holding the deck's
 //  proportion fixes the case's HEIGHT; it does not say where to spend it. Spend
 //  it at the mouth and the deck sits 24 mm down a hole, which needs a scallop
@@ -1805,7 +1812,7 @@ case_cowl_r = 11.00;  // how far it stands off the back face
 
 case_cav_w  = body_w + 2 * case_pad;                // [DERIVED] = 118.65
 case_cav_hw = case_cav_w / 2;
-case_w      = case_cav_w + 2 * case_side;           // [DERIVED] = 144.65
+case_w      = case_cav_w + 2 * case_side;           // [DERIVED] = 130.65
 case_slot_w = case_cowl_w + 2 * case_pad;           // [DERIVED] =  86.33
 case_z_fr   = body_t + case_pad;                    // [DERIVED] cavity front
 case_z_bk   = -case_pad;                            // [DERIVED] cavity back
@@ -1848,7 +1855,7 @@ case_z1     = case_z_fr   + case_wall;              // [DERIVED] =  21.65 front
 //  proportion someone picked. It also makes the screw work - the front half is
 //  the only thing a screw has to cross before it reaches its insert, and
 //  11.05 + 8 of thread is 19.05, so M5 x 20 spans it with 0.95 to spare.
-case_split_z = 11.00;                               // [DESIGN]
+case_split_z = 8.65;                                // [DESIGN] front half 13.00
 //  ---- NO PLINTH, AND WHY IT IS RECORDED --------------------------------------
 //  A stepped foot was built and taken out again. It cannot coexist with a
 //  fastener ring that goes all the way round, and the arithmetic is flat:
@@ -1876,21 +1883,23 @@ case_seam_ch = 0.30;  // [DESIGN] a hairline at the joint, not a shadow gap:
                       //   enough relief to stop a few tenths of print
                       //   mismatch showing as a step. WAS 0.60.
 
-//  ---- SOFT IN PLAN, CRISP AT THE FACE ----------------------------------------
-//  The previous version was soft everywhere: superellipse corners in plan AND a
-//  3 mm roll at both faces. Softened on every axis at once, an object has no
-//  defined planes and reads as a pillow. The midcentury convention is to pick
-//  ONE axis - generous wrap-around corners in plan, a hard small chamfer at the
-//  faces - so the object keeps a top and a bottom plane and the softness is all
-//  in how it turns the corner.
-case_edge_ch = 1.00;  // [DESIGN] chamfer at the front and back faces
+//  ---- RIVER ROCK -------------------------------------------------------------
+//  Not a chamfered slab and not a curved rectangle. The section rolls
+//  continuously from face to face with no straight run anywhere - case_roll at
+//  0.50 means the inset is falling the whole way from one face to the middle
+//  and rising again to the other, so there is no flat band and no arris.
+//
+//  The roll is not free: it pulls the FRONT FACE in, and the bolt heads have to
+//  sit in it. That is what sizes the swells - see case_boss_amp.
+case_soft    = 4.00;  // [DESIGN] how far each face draws in
+case_roll    = 0.50;  // [DESIGN] the whole half-depth, so nothing is flat
 
 //  THE CORNER ECHOES THE DECK, IT DOES NOT INHERIT IT. Offsetting the deck's
 //  corner outward by the wall gives 28.60 mm on a 150 mm body - proportionally
 //  more than twice as round as the deck, which is why an early version read as
 //  a pebble. Holding the RATIO instead gives a corner that is the same fraction
 //  of width the deck's is, on the same exponent.
-case_r      = corner_blend * case_w / body_w;       // [DERIVED] =  13.94
+case_r      = corner_blend * case_w / body_w;       // [DERIVED] =  12.59
 
 //  ---- THE FASTENER RING ------------------------------------------------------
 //  The fasteners are not a list of coordinates. They are the case's own outline,
@@ -1900,7 +1909,17 @@ case_r      = corner_blend * case_w / body_w;       // [DERIVED] =  13.94
 //  ring IS the form. cad/carrycase.scad builds it; these set its shape.
 //  Back on the wall's centreline: with a 1 mm chamfer rather than a 3 mm roll
 //  there is no longer a reason to bias it inboard.
-case_bolt_ins = case_side / 2;                 // [DERIVED] = 6.50
+//  The ring is an OUTSET OF THE CAVITY, not an inset of the outline. With a
+//  wall that varies from 6 to 16.5 there is no single inset that lands a bore
+//  6.50 mm outboard of the cavity everywhere, which is what the 3 mm metal
+//  margin needs.
+case_bolt_out = 6.50;                          // [DESIGN] outboard of the cavity
+case_ring_w   = 2 * (case_cav_hw + case_bolt_out);           // = 131.65
+case_ring_bot = case_y_floor + case_bolt_out;
+case_ring_topline = case_y_top - case_bolt_out;
+case_ring_h   = case_ring_topline - case_ring_bot;
+case_ring_cy  = (case_ring_topline + case_ring_bot) / 2;
+case_ring_r   = case_cav_r + case_bolt_out;                  // = 18.90
 case_bolt_m   = 3;               // [DESIGN] pitches per side. WAS 6, which with
                                  //   one at bottom dead centre made thirteen -
                                  //   an absurd number, and it was. Three gives
@@ -1920,7 +1939,7 @@ case_bolt_m   = 3;               // [DESIGN] pitches per side. WAS 6, which with
 //  the mouth there is none - the deck's own cross-section has to pass through
 //  there. The flanks and the floor have full-depth metal, the mouth cannot.
 //  So the ring runs as far up both flanks as it can and stops.
-case_bolt_top_back = 10.00;      // [DESIGN] how far short of the flank's end
+case_bolt_top_back = 16.00;      // [DESIGN] how far short of the flank's end
                                  //   the ring stops. Two reasons, both real:
                                  //   it leaves 20 mm of metal above the top
                                  //   fastener, and it gives the strap boss
@@ -1928,8 +1947,25 @@ case_bolt_top_back = 10.00;      // [DESIGN] how far short of the flank's end
 
 case_bolt_d     = 5.00;   // [STANDARD] M5, as asked for
 case_bolt_clear = 5.40;   // [STANDARD] ISO 273 medium fit
-case_bolt_len   = 20.00;  // [STANDARD] 19.05 needed against the 11.05 mm front
-                          //   half plus 8 of thread.
+//  THE HEADS SIT FLUSH. A 4.80 mm head in a 5.00 mm counterbore lands 0.20
+//  below the surface, and a shallow dish blends its rim into the curve so it
+//  reads as an inset rather than a drilled hole.
+//
+//  That counterbore is what fixes the screw length: it eats 5.00 mm of the
+//  13.00 mm front half, so 8.00 of thread reaches the insert and M5 x 16 is
+//  the size. M5 x 20 would bottom out in a 10 mm insert.
+case_bolt_head_h = 4.80;  // [VENDOR] as specified
+case_cb_d        = 9.00;  // [DESIGN] clears an ISO 4762 O8.50 head
+case_cb_deep     = 5.00;  // [DESIGN] 0.20 below flush
+//  THE DISH IS SIZED BY ITS FOOTPRINT, NOT BY HOW DEEP IT LOOKS. A sphere of
+//  radius R cutting d deep leaves a footprint 2*sqrt(2Rd - d^2) wide, so r30 at
+//  1.2 mm is 16.80 mm across - nearly twice the counterbore it was blending -
+//  and it cut straight out through the rolled edge. r11 at 1.00 is 9.17 across
+//  and leaves a 1.42 mm rim. Built and measured as r30 first; it broke out.
+case_dish_r      = 11.00; // [DESIGN] the concave blend at the rim
+case_dish_d      =  1.00; // [DESIGN] how deep it dishes
+case_dish_w      = 2 * sqrt(2*case_dish_r*case_dish_d - pow(case_dish_d,2));
+case_bolt_len   = 16.00;  // [STANDARD]
 case_insert_d   =  7.00;  // [VENDOR] M5 heat-set insert, outside diameter once
                           //   it has melted in - this is what the wall has to
                           //   carry, not the drilled bore
@@ -1946,13 +1982,14 @@ case_fit        = 0.20;   // [DESIGN] clearance on the hex: +0.10 a side. NOT a
                           //   press fit - the hex only has to key the nut
                           //   against rotation. The screw pulls it onto its
                           //   seat, so it does not need to be held there.
-case_bolt_keep  = 3.00;   // [DESIGN] least metal from a nut to any surface
+case_bolt_keep  = 3.00;   // [DESIGN] least metal from a bore to any surface
 case_nut_h      = case_nut_t + case_fit;                     // [DERIVED] = 4.90
 case_nut_cd     = (case_nut_af + case_fit) / cos(30);        // [DERIVED] = 9.47
-case_insert_z   = case_split_z - case_insert_len;            // [DERIVED] = 1.00
-case_bolt_stack = (case_z1 - case_split_z) + 8.0;            // [DERIVED] = 18.65
-case_bolt_tip   = case_z1 - case_bolt_len;                   // [DERIVED] = 1.65
-case_bolt_grip  = case_split_z - case_bolt_tip;              // [DERIVED] = 9.35
+case_insert_z   = case_split_z - case_insert_len;            // [DERIVED] = -1.35
+case_bolt_seat  = case_z1 - case_cb_deep;                    // [DERIVED] = 16.65
+case_bolt_tip   = case_bolt_seat - case_bolt_len;            // [DERIVED] = 0.65
+case_bolt_grip  = case_split_z - case_bolt_tip;              // [DERIVED] = 8.00
+case_bolt_stack = case_cb_deep + case_bolt_len;              // [DERIVED] = 21.00
 case_bolt_n     = 2 * case_bolt_m + 1;                       // [DERIVED] = 7
 
 //  Locating pins. Thirteen screws clamp but each floats 0.20 mm in its
@@ -1961,6 +1998,25 @@ case_bolt_n     = 2 * case_bolt_m + 1;                       // [DERIVED] = 7
 //  nothing; they only stop the halves sliding while the screws go in.
 case_pin_d   = 4.00;  case_pin_h = 3.00;  case_pin_fit = 0.30;
 case_pin_ks  = [0.5, 3.5];   // [DESIGN] where on the ring, in screw pitches
+
+//  ---- THE SWELLS -------------------------------------------------------------
+//  The counterbore, not the bolt, sizes these. A flush head needs its O9.00
+//  counterbore plus a 1.50 mm rim to sit INSIDE the front face, and the roll
+//  pulls that face in by case_soft. So the swell has to reach
+//      bolt_x + cb/2 + rim - (cav + side) + soft  =  10.50 mm
+//  which takes the local wall to 16.50 where a fastener is and leaves it at
+//  6.00 where none is.
+//
+//  The falloff is cos-squared over case_boss_reach, and overlapping swells are
+//  combined as 1 - prod(1 - f) rather than summed, so two sites near each other
+//  blend instead of stacking to twice the amplitude.
+case_boss_amp   = 10.50;  // [DERIVED->DESIGN] see above
+case_boss_reach = 18.00;  // [DESIGN] how far along the outline it dies away.
+                          //   26 was tried: nine swells at that reach overlap
+                          //   and the wall ends up thick everywhere anyway,
+                          //   which is the opposite of the point.
+case_boss_lift  =  6.50;  // [DESIGN] the swell peaks over the bore, which sits
+                          //   this far outboard of the cavity
 
 //  ---- THE STRAP LUG IS A HOLE ------------------------------------------------
 //  Eight versions of this now. The last one trapped a D-ring's bar in a bore
@@ -1978,9 +2034,9 @@ case_pin_ks  = [0.5, 3.5];   // [DESIGN] where on the ring, in screw pitches
 //  same margin every fastener bore gets. A bigger hole needs a local pad, and
 //  a pad is the thing that has been rejected seven times.
 case_lug_d  = 7.00;   // [DESIGN] takes 6 mm cord or a split ring
-case_lug_y  = 45.00;  // [DESIGN] high on the flank, so a strap hangs flat
-case_lug_x  = case_w / 2 - case_side / 2;                    // = 65.825
-case_lug_mat = (case_side - case_lug_d) / 2;                 // = 3.00 a side
+case_lug_y  = 62.00;  // [DESIGN] high on the flank, so a strap hangs flat
+case_lug_x  = case_cav_hw + case_bolt_out;                   // = 65.825
+case_lug_mat = (case_side + case_boss_amp - case_lug_d) / 2; // = 4.75 a side
 
 //  ---- NO THUMB SCALLOP, AND WHY IT IS RECORDED --------------------------------
 //  A 24 mm mouth was tried, with an 80 x 22 mm arc cut in the front to reach
@@ -2016,24 +2072,31 @@ case_lug_mat = (case_side - case_lug_d) / 2;                 // = 3.00 a side
 case_mag_gap   = magnet_skin + case_pad;                     // [DERIVED] = 2.00
 case_mag_skin  = case_z1 - (case_z_fr + magnet_pocket_h);    // [DERIVED] = 1.45
 
-assert(case_lug_mat >= 3.0,
-       "strap hole leaves under 3 mm of wall either side");
+assert((case_side + case_boss_amp - case_lug_d) / 2 >= 3.0,
+       "strap hole leaves under 3 mm of wall either side at its swell");
 assert(case_split_z > case_z_bk + 1 && case_split_z < case_z_fr - 1,
        "the split plane cuts the cowl channel or the magnet pockets");
-assert(case_floor >= case_side - 0.001,
-       "floor thinner than the flank, so the ring cannot round the corner");
+
 assert(case_rim >= 10.0 && case_rim <= 16.0,
        "mouth too deep to pinch the deck out of, or too shallow to hold it");
-assert(case_bolt_len >= case_bolt_stack,
-       "M5 screw is shorter than the stack it has to span");
+assert(case_bolt_stack <= case_z1 - case_insert_z,
+       "the screw and its counterbore are deeper than the metal they go into");
 //  The C-43 guard, restated for a through-bolt: the nut has to bear on the far
 //  side of the back half, not somewhere inside the front one.
 assert(case_bolt_grip >= 1.2 * case_bolt_d,
        "under 1.2 diameters of thread engaged in the insert");
 assert(case_bolt_tip > case_insert_z + 0.5,
        "screw bottoms out in its insert before the joint closes");
-assert((case_side - case_insert_d) / 2 >= 3.0,
-       "under 3 mm of metal round a heat-set insert");
+//  The wall is thin BETWEEN the swells; what has to hold is the wall AT one.
+assert((case_side + case_boss_amp - case_insert_d) / 2 >= 3.0,
+       "under 3 mm of metal round a heat-set insert, even at a swell");
+//  The DISH, not the counterbore, is the wide one. Sizing the swell against the
+//  counterbore alone passed while the dish cut out through the rolled edge.
+assert(case_boss_amp - case_soft
+       >= case_bolt_out + max(case_cb_d, case_dish_w)/2 + 1.0 - case_side,
+       "the roll pulls the front face in past the counterbores or their dishes");
+assert(case_cb_deep > case_bolt_head_h,
+       "the head stands proud of its counterbore");
 assert(case_split_z > case_z_bk && case_split_z < case_z_fr,
        "parting plane misses the cavity, so one half has no tray to flock");
 assert(case_mag_skin >= 4 * layer_h,

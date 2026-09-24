@@ -1,37 +1,28 @@
 //  carrycase.scad - a two-part sleeve the whole deck slides into.
 //
 //  Front half and back half, split on a plane parallel to the face, drawn
-//  together by thirteen M5 socket screws into hex nuts trapped at the joint.
-//  Every port is buried. Meant to be flocked inside and filled, sanded and
-//  polished outside. Nothing stands off it: the strap slots go straight through
-//  the wall, and the only things breaking the surface are six bolt heads on the
-//  front and six nuts on the back, which are meant to be seen.
+//  together by seven M5 socket screws into heat-set inserts. Every port is
+//  buried. Meant to be flocked inside and filled, sanded and polished outside.
 //
-//  WHY TWO PARTS. Not for printing alone. One piece could be printed; it could
-//  not be reached into. The magnets, the flock and the bed all want the inside
-//  open, and a plane does that. See parameters.scad, IT IS TWO PARTS, BOLTED.
+//  THE FORM IS A RIVER ROCK. Two things make it one, and neither is styling
+//  applied afterwards:
+//    - the section rolls continuously from face to face, with no flat band
+//      anywhere and no arris
+//    - the wall is 6 mm and SWELLS to 16.5 at each of the nine fastener and
+//      strap sites, by pushing the plan OUTLINE outward rather than by adding a
+//      pad, so there is no junction to crease at
+//  The swells are also what pays for the thin wall: 13 mm everywhere was
+//  serving nine holes, and the flanks measured 36 per cent of the filament.
 //
-//  WHY THERE ARE NO RAILS. A rail is a straight bar laid against an outline
-//  that is straight in the middle and curved at the ends, so its ends always
-//  land where the body is turning. Here the fasteners sit ON the outline - the
-//  wall's own centreline, sampled at even arc length - so they follow the
-//  superellipse round the bottom corners and there is no straight bar to clash
-//  with the curve. See THE FASTENER RING in parameters.scad.
-//
-//  HOW IT HOLDS THE DECK. Three things, none of them a snap feature:
-//    - the cowl channel, which keys the deck in X and in rotation for its whole
-//      travel and bottoms it out on the floor
-//    - the flock, a compliant interference fit once it is in
-//    - gravity, because it is carried mouth-up
-//  The four magnets are a seat at the end of that travel, not a latch. The
-//  numbers are in parameters.scad under MAGNETS and they are not flattering.
+//  HOW IT HOLDS THE DECK. The cowl channel, which keys it in X and rotation for
+//  its whole travel; the flock; and gravity, because it is carried mouth-up.
+//  The four magnets are a seat at the end of that travel, not a latch - the
+//  numbers are in parameters.scad and they are not flattering.
 //
 //  PRINTING. Front half face-down, back half back-down. Both are then a flat
-//  bed face and an open tray, no bridge, no support, and the two surfaces that
-//  get looked at are the two that touch glass.
+//  bed face and an open tray, no bridge, no support.
 //
-//  Coordinates are the deck's own, so alignment needs no arithmetic: the deck
-//  occupies x +-58.125, y +-70.125, z -11.00 (cowl crown) to +16.85 (front).
+//  Coordinates are the deck's own, so alignment needs no arithmetic.
 
 include <parameters.scad>
 use <lib/util.scad>
@@ -43,26 +34,25 @@ $fn = 64;
 //  ===========================================================================
 //  THE FASTENER RING
 //  ===========================================================================
-//  The right half of the path, as a polyline: bottom dead centre, along the
-//  floor, round the bottom-right corner, up the flank, stopping short of where
-//  the flank begins to turn. The corner comes out of rse_poly itself rather
-//  than being approximated, so the fasteners sit on the outline the part is
-//  actually cut from and cannot drift off it.
+//  An OUTSET OF THE CAVITY, not an inset of the outline. With a wall that goes
+//  from 6 to 16.5 there is no single inset of the outline that lands every bore
+//  6.50 mm outboard of the cavity, which is what the 3 mm metal margin needs.
+//
+//  The right half of the path: bottom dead centre, along the floor, round the
+//  corner, up the flank, stopping short of the mouth. The corner comes out of
+//  rse_poly itself, so the fasteners sit on a real curve and cannot drift.
 function ring_path() =
-    let (W  = case_w - 2 * case_bolt_ins,
-         H  = case_h - 2 * case_bolt_ins,
-         C  = max(case_r - case_bolt_ins, 0.8),
+    let (W  = case_ring_w,
+         H  = case_ring_h,
+         C  = case_ring_r,
          q  = 32,
          o  = rse_poly(W, H, C, form_n, q),
          ay = H / 2 - C,
-         // rse_poly's fourth quadrant is the bottom-right corner, running from
-         // (ax, -H/2) to (W/2, -ay).
          q4 = [ for (i = [3 * (q + 1) : 4 * (q + 1) - 1]) o[i] ])
     [ for (p = concat([[0, -H / 2]], q4,
                       [[W / 2, ay - case_bolt_top_back]]))
-        [p[0], p[1] + case_cy] ];
+        [p[0], p[1] + case_ring_cy] ];
 
-//  Cumulative arc length, and a point at a given distance along it.
 function _cum(p, i = 1, a = [0]) =
     i >= len(p) ? a : _cum(p, i + 1, concat(a, [a[i-1] + norm(p[i] - p[i-1])]));
 
@@ -72,8 +62,6 @@ function _at(p, a, s, i = 1) =
                    * ((s - a[i-1]) / max(a[i] - a[i-1], 1e-9))
                  : _at(p, a, s, i + 1);
 
-//  f = 0 at bottom dead centre, 1 at the top of the run. Fasteners land on
-//  whole pitches, locating pins on half pitches.
 function ring_at(f) =
     let (p = ring_path(), a = _cum(p)) _at(p, a, a[len(a) - 1] * f);
 
@@ -87,69 +75,100 @@ function pin_sites() =
     _mirrored([ for (k = case_pin_ks) ring_at(k / case_bolt_m) ]);
 
 //  ===========================================================================
-//  FORM
+//  THE FORM
 //  ===========================================================================
-//  THE BODY IS ONE OBJECT. THE SPLIT IS A CUT THROUGH IT, NOT A JOIN BETWEEN
-//  TWO OF THEM.
+//  Built as ONE polyhedron. A stack of hulls cannot do it: the outline dips
+//  back between swells, so it is not convex and hull() would fill the dips.
+function boss_sites() =
+    concat(bolt_sites(),
+           [ for (sx = [-1, 1]) [sx * case_lug_x, case_lug_y] ]);
+
+//  Swells combine as 1 - prod(1 - f), not as a sum, so two sites near each
+//  other blend instead of stacking to twice the amplitude.
+function _swell_at(p, sites, i = 0, acc = 1) =
+    i >= len(sites) ? case_boss_amp * (1 - acc)
+    : let (d = max(0, norm(p - sites[i]) - case_boss_lift),
+           f = pow(cos(min(90, 90 * d / case_boss_reach)), 2))
+      _swell_at(p, sites, i + 1, acc * (1 - f));
+
+//  Two corrections live in this function, both found by measuring the rendered
+//  section rather than by reading it.
 //
-//  The previous version rolled each half separately from the seam outward. Both
-//  halves were therefore at their WIDEST at the parting plane, and the surface
-//  curved away from it in both directions - so the object's widest line ran all
-//  the way round at mid-height and read as a ridge. Two pillows stacked, not one
-//  case. That is the crease.
+//  ONE: the roll inset is applied to the BASE outline only. Subtracting it from
+//  the swell as well applies it twice - the face outline came out at 65.61 where
+//  the bolts sit at 65.825, so four of the seven counterbores cut out through
+//  the edge. The swell is a constant push and rolls with the outline it pushes.
 //
-//  So the outer form is built once, over the whole 38.25 mm, and the halves are
-//  cut out of it. The roll now belongs to the OBJECT and lives at its two outer
-//  faces, where an edge actually is; through the middle the sides are straight,
-//  which is where the seam happens to fall.
-//
-//  Built as the intersection of two one-ended rolls facing opposite ways: each
-//  is full width where the other is rolled, so the intersection takes the roll
-//  at both faces and full width between. They cross only where both are at full
-//  width AND both have zero slope, so they meet tangentially and add no line of
-//  their own.
-module full_body() {
-    e = 0.01;
-    ch = case_edge_ch;
-    hull() {
-        translate([0, case_cy, case_z0])
-            rse_plate(case_w - 2*ch, case_h - 2*ch, e, max(case_r - ch, 0.8), form_n);
-        translate([0, case_cy, case_z0 + ch])
-            rse_plate(case_w, case_h, e, case_r, form_n);
-        translate([0, case_cy, case_z1 - ch - e])
-            rse_plate(case_w, case_h, e, case_r, form_n);
-        translate([0, case_cy, case_z1 - e])
-            rse_plate(case_w - 2*ch, case_h - 2*ch, e, max(case_r - ch, 0.8), form_n);
-    }
+//  TWO: the push is along the outline's NORMAL, not radially from its centre.
+//  Radially, a point high on the flank is mostly sideways from the centre, so
+//  only part of a 10.50 mm swell arrives in x - it measured 68.22 where 71.83
+//  was wanted. rse_poly runs counter-clockwise, so the outward normal of a
+//  tangent (tx, ty) is (ty, -tx).
+function pebble_poly(ins, sites, q) =
+    let (base = rse_poly(case_w - 2*ins, case_h - 2*ins,
+                         max(case_r - ins, 0.8), form_n, q),
+         n = len(base))
+    [ for (j = [0 : n - 1])
+        let (p  = [base[j][0], base[j][1] + case_cy],
+             a  = base[(j + n - 1) % n],
+             b  = base[(j + 1) % n],
+             tg = [b[0] - a[0], b[1] - a[1]],
+             tl = max(norm(tg), 1e-9),
+             nx = tg[1] / tl,
+             ny = -tg[0] / tl,
+             s  = _swell_at(p, sites))
+        [p[0] + nx * s, p[1] + ny * s] ];
+
+module full_body(nz = 44, q = 20) {
+    na = 4 * (q + 1);
+    sites = boss_sites();
+    layers = [ for (i = [0 : nz])
+                 pebble_poly(case_soft * roll_f(i/nz, case_roll), sites, q) ];
+    pts = [ for (i = [0 : nz], j = [0 : na - 1])
+              [layers[i][j][0], layers[i][j][1],
+               case_z0 + (i / nz) * (case_z1 - case_z0)] ];
+    // wound as rse_soft winds: clockwise seen from OUTSIDE
+    sides = [ for (i = [0 : nz - 1], j = [0 : na - 1])
+                [ i*na + j, (i+1)*na + j,
+                  (i+1)*na + (j+1)%na, i*na + (j+1)%na ] ];
+    bottom = [ for (j = [0 : na - 1]) j ];
+    top    = [ for (j = [na - 1 : -1 : 0]) nz*na + j ];
+    polyhedron(points = pts, faces = concat(sides, [bottom], [top]),
+               convexity = 12);
 }
 
-//  One half, cut from that. case_seam_ch is a hairline, not a shadow gap.
+//  One half, cut from that. case_seam_ch is a hairline, not a shadow gap: the
+//  object reads as one piece, so the joint gets only enough relief to stop a
+//  few tenths of print mismatch showing as a step.
 module half_body(flip) {
-    ch = case_seam_ch;
-    d  = flip ? -1 : 1;
-    t  = case_z1 - case_z0;
-    big = 24;
-    difference() {
-        intersection() {
-            full_body();
-            hull() {
-                // rse_plate extrudes UPWARD from its origin, so the mirrored
-                // half's pinch plate would sit 0.01 mm past the parting plane
-                // and the halves would interfere across the whole joint.
-                translate([0, case_cy, case_split_z - (d < 0 ? 0.01 : 0)])
-                    rse_plate(case_w - 2*ch, case_h - 2*ch, 0.01,
-                              max(case_r - ch, 0.8), form_n);
-                translate([0, case_cy, case_split_z + d * ch])
-                    rse_plate(case_w + big, case_h + big, 0.01, case_r + big/2, form_n);
-                translate([0, case_cy, case_split_z + d * (t + 1)])
-                    rse_plate(case_w + big, case_h + big, 0.01, case_r + big/2, form_n);
-            }
+    ch   = case_seam_ch;
+    d    = flip ? -1 : 1;
+    t    = case_z1 - case_z0;
+    big  = 40;
+    grow = case_boss_amp;
+    intersection() {
+        full_body();
+        hull() {
+            // rse_plate extrudes UPWARD from its origin, so the mirrored half's
+            // pinch plate would sit 0.01 mm past the parting plane and the
+            // halves would interfere across the whole joint.
+            translate([0, case_cy, case_split_z - (d < 0 ? 0.01 : 0)])
+                rse_plate(case_w + 2*grow - 2*ch, case_h + 2*grow - 2*ch, 0.01,
+                          case_r + grow - ch, form_n);
+            translate([0, case_cy, case_split_z + d * ch])
+                rse_plate(case_w + big, case_h + big, 0.01, case_r + big/2, form_n);
+            translate([0, case_cy, case_split_z + d * (t + 1)])
+                rse_plate(case_w + big, case_h + big, 0.01, case_r + big/2, form_n);
         }
     }
 }
+
+//  ===========================================================================
+//  SUBTRACTIONS
+//  ===========================================================================
 //  Everything the deck occupies, plus the flock allowance, running out the top.
 module case_cavity() {
-    over = 40;                                   // run the mouth well clear
+    over = 40;
     h    = (case_y_top + over) - case_y_bot;
     cy   = (case_y_top + over + case_y_bot) / 2;
     union() {
@@ -162,18 +181,31 @@ module case_cavity() {
     }
 }
 
-//  THE STRAP LUG IS A HOLE. It runs front to back through the flank, so a cord
-//  or a split ring wraps the full wall and hangs outward, and the load goes into
-//  the whole height of the flank above it. The parting plane cuts across it, so
-//  each half prints it as a plain vertical bore with nothing overhanging.
+//  THE STRAP LUG IS A HOLE. Front to back through the flank, so a cord or split
+//  ring wraps the full wall at its swell and hangs outward, and the load goes
+//  into the whole height of the flank above it rather than into any feature.
+//  The parting plane cuts across it, so each half prints it as a plain vertical
+//  bore with nothing overhanging.
 module lug_holes() {
     for (sx = [-1, 1])
         translate([sx * case_lug_x, case_lug_y, case_z0 - 1])
             cylinder(d = case_lug_d, h = case_z1 - case_z0 + 2);
 }
 
-//  Screw clearance: the front face down to the insert. The screw crosses ONE
-//  half, which is what lets it be M5 x 20 on a 38.25 mm object.
+//  THE HEADS SIT FLUSH, IN A DISH. A 4.80 mm head in a 5.00 mm counterbore
+//  lands 0.20 below the surface; the shallow sphere blends the counterbore's
+//  rim into the curve so it reads as an inset rather than a drilled hole.
+module head_dishes() {
+    for (b = bolt_sites()) {
+        translate([b[0], b[1], case_bolt_seat])
+            cylinder(d = case_cb_d, h = case_cb_deep + 2);
+        translate([b[0], b[1], case_z1 + case_dish_r - case_dish_d])
+            sphere(r = case_dish_r, $fn = 96);
+    }
+}
+
+//  Screw clearance: the counterbore down to the insert. The screw crosses ONE
+//  half, which is what lets it be M5 x 16 on a 37 mm object.
 module bolt_holes() {
     for (b = bolt_sites())
         translate([b[0], b[1], case_insert_z])
@@ -193,9 +225,8 @@ module pins(d, h, z) {
     for (b = pin_sites()) translate([b[0], b[1], z]) cylinder(d = d, h = h);
 }
 
-//  Magnet pockets, opening at the cavity face of the front half - which is the
-//  face pointing at the ceiling while it prints. The disc is glued in flush and
-//  the flock goes over it.
+//  Magnet pockets, opening at the cavity face of the front half - the face
+//  pointing at the ceiling while it prints. Glued in flush, flocked over.
 module case_magnets() {
     for (m = magnet_sites())
         translate([m[0], m[1], case_z_fr - 0.01])
@@ -214,6 +245,7 @@ module case_front() {
         case_cavity();
         lug_holes();
         bolt_holes();
+        head_dishes();
         case_magnets();
     }
 }

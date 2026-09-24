@@ -2444,3 +2444,73 @@ fastener bore gets.
 
 Ø7 is what the wall allows. A bigger hole needs a local pad, and a pad is the
 thing that has been rejected seven times.
+
+### C-48 — A river rock, and the thin wall that made it heavier
+
+*"thin the walls not around the bolts, and also the bolts need to have a concave
+inset so the top of the bolt will lay flush ... the whole exterior ... should be
+a seamless smooth river rock, not like a curved rectangle."*
+
+### The form
+
+Two things make it a rock rather than a rounded box, and neither is applied
+afterwards:
+
+1. **The section rolls continuously face to face.** `case_roll` at 0.50 means
+   the inset is falling the whole way from one face to the middle and rising
+   again to the other — no flat band anywhere, no arris.
+2. **The wall is 6 mm and swells to 16.5 at each of the nine fastener and strap
+   sites**, by pushing the plan *outline* outward with a cos-squared falloff
+   rather than by adding a pad. There is no junction to crease at.
+
+Built as **one polyhedron**. A stack of hulls cannot do it: the outline dips
+back between swells, so it is not convex and `hull()` would fill the dips.
+Swells combine as `1 - prod(1 - f)` rather than summing, so neighbours blend
+instead of stacking to twice the amplitude.
+
+### The counterbore, not the bolt, sizes the swells
+
+A flush head needs its Ø9.00 counterbore *plus a rim* to sit **inside the front
+face**, and the roll pulls that face in by `case_soft`. That is the whole
+constraint chain, and it is what takes the local wall to 16.50.
+
+### Three things measured that reading would not have caught
+
+**The dish is the wide one.** r30 cutting 1.20 deep leaves a footprint
+**16.80 mm across** — nearly twice the counterbore it was blending — and it cut
+straight out through the rolled edge. A sphere's footprint is
+`2·sqrt(2Rd - d²)`, which is not intuition-sized. Now r11 at 1.00: 9.17 across,
+1.42 mm of rim. The assert had checked the counterbore and not the dish.
+
+**The roll inset was applied twice.** Once to the base outline and again to the
+swell, so the face outline came out at **65.61 where the bolts sit at 65.825** —
+four of seven counterbores broke out of the edge.
+
+**The swell was pushed the wrong way.** Radially from the outline's centre, a
+point high on a flank is mostly *sideways* from that centre, so only part of a
+10.50 mm swell arrives where it is needed: **68.22 measured against 71.83
+wanted.** It pushes along the outline **normal** now — for a counter-clockwise
+polygon, the outward normal of tangent (tx, ty) is (ty, −tx).
+
+All three were found by sectioning the rendered part and counting closed holes.
+A section with **9 closed holes** is a part where nothing broke out; one with 3
+is not, and it looks identical in a render until you turn it.
+
+### The thin wall made it heavier
+
+This is the finding worth keeping. C-47 established that **94 % of this part is
+perimeter shell**, so surface area is what you pay for. Thinning the wall from
+13 to 6 and swelling it back at nine sites:
+
+| | volume | surface | filament |
+|---|---|---|---|
+| 13 mm wall, flat slab | 396 cm³ | 1310 cm² | **390 g** |
+| 6 mm wall + 9 swells | 448 cm³ | 1371 cm² | **430 g** |
+
+**Both went up.** Nine swells at a 26 mm reach overlap, so the wall ends up
+thick almost everywhere anyway — the reach is 18 now, which recovers about 12 g
+of the 48. And the roll itself adds surface.
+
+So "thin the walls except at the bolts" is a **form** decision, not a material
+one. It costs roughly 10 % more filament than the flat slab it replaced, and
+that is the honest price of the rock.

@@ -6,21 +6,20 @@ silently detaches from the datum set and from all 118 checks.
 
 | File | Size (mm) | Volume | ~PLA | Notes |
 |---|---|---|---|---|
-| `chassis.stl` | 116.60 × 139.10 × 16.85 | 42.9 cm³ | 53 g | the monocoque: front face, all four walls, the spine |
-| `backplate.stl` | 109.60 × 133.30 × 13.45 | 48.4 cm³ | 60 g | structural closure + battery cowl; the board bolts to this |
-| `buttons.stl` | 26.00 × 4.80 × 6.59 | 0.4 cm³ | 0.5 g | three caps on a sprue |
+| `case/carrycase-front.stl` | 149.85 × 175.93 × 16.00 | 150 cm³ | ~186 g | print **face down**; holds the four magnets; 13.00 of body + 3.00 of locating pin |
+| `case/carrycase-back.stl` | 151.60 × 177.08 × 24.45 | 298 cm³ | ~243 g | print **back down**; takes the seven heat-set inserts |
 
-The carry case is a separate object and prints separately:
+They bolt together with **7 × M5 × 16 socket cap into 7 × M5 × 10 heat-set
+inserts**, in a ring that outsets the deck cavity by 6.50 mm and so follows the
+case's own superellipse round the flanks and the floor. The heads lie flush: a
+Ø9.00 × 5.00 counterbore under an r11.00 dish cut 1.00 mm into the face.
 
-| File | Size (mm) | Volume | ~PLA | Notes |
-|---|---|---|---|---|
-| `case/carrycase-front.stl` | 144.65 × 166.45 × 13.65 | 124 cm³ | ~155 g | print **face down**; holds the four magnets |
-| `case/carrycase-back.stl` | 144.65 × 166.45 × 26.80 | 271 cm³ | ~235 g | print **back down**; takes the seven heat-set inserts |
+Each needs a **152 × 177 mm** bed. Both are one watertight body with **0 mm² of
+near-flat ceiling** — the only overhang in either is the 1.80 mm annular roof of
+each counterbore, and all seven of those open on the bed.
 
-They bolt together with **7 × M5 × 45 socket cap and 7 × M5 nut** in a ring that
-follows the case outline all the way round the flanks and the floor, straight
-through both halves. Each needs a 151 × 182 mm bed. An earlier one-piece `case/carrycase.stl` is gone: it could
-not be reached into to fit the magnets, and its spined back needed support. See
+An earlier one-piece `case/carrycase.stl` is gone: it could not be reached into
+to fit the magnets, and its spined back needed support. See
 [DATUMS.md C-41](../../docs/DATUMS.md#corrections).
 
 There is no separate window or screen protector: the display sits 2.65 mm
