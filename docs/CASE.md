@@ -8,13 +8,14 @@ both flanks and the bottom; open only at the top. Every port is buried.
 
 | | |
 |---|---|
-| Outside | **150.7 × 181.8 × 38.2 mm**, 166.6 over the strap pads |
+| Outside | **150.7 × 181.8 × 38.2 mm** — nothing stands off it |
 | Proportion | **1.2065** — the deck's own, to four figures |
-| Material | 554 cm³ → **≈ 378 g** printed, both halves |
+| Material | 517 cm³ → **≈ 353 g** printed, both halves |
 | Walls | 4.0 front and back, **16.0 all the way round**, 28.3 floor, 12.0 rim |
-| Hardware | **13 × M5 × 35 socket cap, 13 × M5 nut**, 4 × Ø5×2 disc |
+| Edge | **rolled 3.0 mm**, zero slope at the face — no arris |
+| Hardware | **7 × M5 × 45 socket cap, 7 × M5 nut**, 4 × Ø5×2 disc |
 | Flock allowance | 0.80 mm per surface, + 0.40 clearance |
-| Bed needed | **167 × 182 mm** per half |
+| Bed needed | **151 × 182 mm** per half |
 
 ## It is two parts, and not for printing
 
@@ -80,53 +81,16 @@ end you actually drop the thing on.
 
 So the mouth is **12 mm**, which is a finger pad, and the floor takes the rest.
 
-## Strap pads
+## Strap slots, and no boss
 
-Five goes at this (C-38 through C-42). The one that rules out a whole family is
-worth knowing: **tangency between two parallel faces 8 mm apart can only be made
-by a semicircle of radius 4** — no larger radius is tangent to both — so a
-tangent boss always ends in a tight 4 mm turn, and a tight turn at each end is
-what an ear looks like.
+Six versions of a strap lug (C-38 → C-44), five of which were an object stuck to
+the outside of another object. The wall is 16 mm because an M5 bore needs it to
+be, and that is already enough to put a slot straight through with **4.00 mm of
+metal either side and 38.25 mm of depth behind it — 153 mm² in shear a side**,
+far past anything a strap applies.
 
-The escape would be a long shallow swell, and that is geometrically unavailable:
-the slot has to sit high on the flank for a bag to hang flat, a swell centred
-there runs out of straight flank within about 44 mm, and a 44 mm swell needs r34
-ends — a 40° junction, *worse* than the stadium it replaced.
-
-So the boss stays local and stops fighting the outline. It **speaks it**: a
-46 mm pad, 8 mm proud, on the deck's own superelliptical corners and the deck's
-own exponent. The complaint was that a rectangle and a squircle met at a weird
-angle; there is no rectangle now. The slot gets **7.50 mm of metal either side
-× 38.25 mm deep = 287 mm² in shear**, and the fastener above it and the one
-below it take the strap load into the joint.
-
-## The cowl is the guide
-
-The deck's battery cowl is **83.93 × 28.23 mm at its foot and stands 11.00 mm
-off the back** — measured on the rendered plate, not assumed. A channel that
-width running the **full height** of the cavity lets the deck slide in and keys
-it in X and in rotation at the same time.
-
-The bump stops being a problem to accommodate and becomes the location feature.
-It does not read on the outside at all: the back is flat (see above), so the
-channel is a recess in a solid block rather than a spine raised off one.
-
-**Measured: the deck slides its whole travel at 0.000 mm³ of interference**,
-sampled at 70, 55, 40, 25, 10 and 0 mm above seated. A fit that only works when
-seated is not a sleeve, it is a puzzle.
-
-## How it holds
-
-Three things, none of them a snap feature:
-
-- **the cowl channel**, which keys the deck for its whole travel and bottoms out
-  on the floor
-- **the flock**, which is a compliant interference fit once it is in
-- **gravity**, because it is carried mouth-up
-
-The four magnets add a positive seat at the end of the travel. They are **not**
-the retention and are not asked to be — at a 2 mm gap through the flock they are
-worth a couple of newtons each, which is a click, not a hold.
+**The boss was never carrying the load. It was carrying the idea of carrying
+the load.** So there is none, and the silhouette is unbroken.
 
 ## Print it face down
 
@@ -139,12 +103,12 @@ Measured on the rendered halves, in each one's own print frame:
 | | front | back | budget |
 |---|---|---|---|
 | near-flat ceiling (< 15°) | **0 mm²** | **0 mm²** | 20 |
-| shallow face (< 44°) | 206 mm² | 206 mm² | 250 |
+| shallow face (< 44°) | **0 mm²** | **0 mm²** | 250 |
 
-The 206 mm² is the 45° seam and edge chamfers caught by tessellation on the
-superellipse corners — chamfers at exactly the limit, not ledges. **Zero
-near-flat ceiling is the number that matters**, because a flat face pointing at
-the bed is the defect that killed the spined back.
+Both zero, because the edge is **rolled rather than chamfered**. A 45° chamfer
+sits exactly on the FDM limit and shows up in this measurement; a roll whose
+derivative vanishes at both ends is *vertical* where it meets each face and only
+reaches about 28° in the middle. The smoother edge is also the safer print.
 
 Both halves need a **167 × 182 mm** bed.
 
@@ -157,7 +121,7 @@ is the only sane way to do it.
 
 The outside is meant to be filled, sanded and polished — but **not across the
 seam**, which is a joint, not a blemish. Fill and sand each half, then assemble;
-the 1.2 mm shadow gap, the thirteen screw heads and the two strap pads are the
+the 1.2 mm shadow gap, seven bolt heads and seven nuts are the
 only things that break the surface, and all three are meant to be seen.
 
 ## Assembly
@@ -166,10 +130,8 @@ only things that break the surface, and all three are meant to be seen.
    **polarity matched to the deck** — check with the deck before the glue grabs.
 2. Flock both trays.
 3. Mate the halves on the four printed locating pins.
-4. Drop thirteen M5 nuts into the hex wells in the **back face** and drive
-   thirteen M5 × 35 from the front. Each nut is caught by its screw and drawn
-   up onto its seat; the hex stops it turning. Snug, not gorilla — the bearing
-   annulus is 35 mm² of PLA.
+4. Drive seven M5 × 45 from the front, holding each nut on the back with an
+   8 mm spanner. Snug, not gorilla — the bearing annulus is PLA.
 
 ## Open
 

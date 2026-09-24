@@ -1836,7 +1836,20 @@ case_z0     = case_z_cowl - case_wall;              // [DERIVED] = -16.20 back
 case_z1     = case_z_fr   + case_wall;              // [DERIVED] =  22.05 front
 case_split_z = (case_z0 + case_z1) / 2;             // [DERIVED] = 2.925
 case_seam_ch = 0.60;  // [DESIGN] chamfer each side of the joint -> 1.2 mm gap
-case_edge_ch = 2.00;  // [DESIGN] chamfer round the front and back faces
+
+//  ---- THE EDGE IS ROLLED, NOT CHAMFERED --------------------------------------
+//  A chamfer is two arrises and a flat. It reads machined, which is what the
+//  earlier versions wanted, and it is the wrong reading now: "the form should be
+//  more natural and flowing and smoothed". So the outer faces use the deck's own
+//  rolled edge - a smoothstep whose value AND first derivative vanish at the
+//  face, so the surface arrives at it with zero slope and leaves no arris at all.
+//
+//  case_soft is the per-side inset at the outer face, and it is not free: the
+//  fastener bores are straight while the surface rolls inward, so every
+//  millimetre of roll is a millimetre off the metal outboard of a bore. That is
+//  what moves the ring inboard - see case_bolt_ins.
+case_soft    = 3.00;  // [DESIGN] how far each face draws in
+case_roll    = 0.30;  // [DESIGN] how much of the depth the roll occupies
 
 //  THE CORNER ECHOES THE DECK, IT DOES NOT INHERIT IT. Offsetting the deck's
 //  corner outward by the wall gives 28.60 mm on a 150 mm body - proportionally
@@ -1851,10 +1864,23 @@ case_r      = corner_blend * case_w / body_w;       // [DERIVED] =  14.51
 //  follow the superellipse round the bottom corners instead of stopping where a
 //  straight rail would have to. Nothing can drift off the form, because the
 //  ring IS the form. cad/carrycase.scad builds it; these set its shape.
-case_bolt_ins = case_side / 2;   // [DERIVED] = 8.00, the wall's centreline
-case_bolt_m   = 6;               // [DESIGN] fasteners per side, past the one at
-                                 //   bottom dead centre. 13 in all, at a 35.7 mm
-                                 //   pitch, which is instrument-case spacing.
+//  The ring does NOT sit on the wall's centreline. The outer face rolls in by
+//  case_soft, so a bore centred in the wall would have case_soft less metal
+//  outboard than inboard. Splitting the difference puts 3.80 mm each side.
+case_bolt_ins = (case_side + case_soft) / 2;   // [DERIVED] = 9.50
+case_bolt_m   = 3;               // [DESIGN] pitches per side. WAS 6, which with
+                                 //   one at bottom dead centre made thirteen -
+                                 //   an absurd number, and it was. Three gives
+                                 //   SEVEN: dead centre, each bottom corner,
+                                 //   each mid-flank, and each flank TOP.
+                                 //
+                                 //   Six were tried, sampled on half pitches so
+                                 //   nothing sat at dead centre. It is the worse
+                                 //   arrangement: it puts the topmost fastener
+                                 //   44 mm below the mouth and leaves the one
+                                 //   end of the ring that is already open
+                                 //   unclamped. Seven costs one bolt and holds
+                                 //   the mouth shut.
 
 //  WHY THE RING IS A U AND NOT A CLOSED LOOP. Nothing is being conceded here:
 //  a fastener parallel to Z needs material through the WHOLE depth, and across
@@ -1869,11 +1895,7 @@ case_bolt_top_back = 10.00;      // [DESIGN] how far short of the flank's end
 
 case_bolt_d     = 5.00;   // [STANDARD] M5, as asked for
 case_bolt_clear = 5.40;   // [STANDARD] ISO 273 medium fit
-case_nut_seat   = 8.20;   // [DESIGN] how far the hex counterbore sinks from the
-                          //   back face. Set by the screw: seat it deeper and a
-                          //   35 mm screw will not reach the nut, shallower and
-                          //   it would have to be longer than the object.
-case_bolt_len   = 35.00;  // [DERIVED->STANDARD] 34.75 needed, 35 is stock.
+case_bolt_len   = 45.00;  // [DERIVED->STANDARD] 42.95 needed, 45 is stock.
                           //   A 10 mm screw cannot span a 38 mm object.
 case_bolt_head_d= 8.50;   // [STANDARD] ISO 4762 socket cap
 case_nut_af     = 8.00;   // [STANDARD] ISO 4032 / DIN 934 M5, across flats
@@ -1889,12 +1911,10 @@ case_fit        = 0.20;   // [DESIGN] clearance on the hex: +0.10 a side. NOT a
 case_bolt_keep  = 3.00;   // [DESIGN] least metal from a nut to any surface
 case_nut_h      = case_nut_t + case_fit;                     // [DERIVED] = 4.90
 case_nut_cd     = (case_nut_af + case_fit) / cos(30);        // [DERIVED] = 9.47
-case_nut_z      = case_z0 + case_nut_seat;                   // [DERIVED] = -8.00
-case_nut_roof   = case_split_z - case_nut_z;                 // [DERIVED] = 10.93
-case_bolt_end   = case_nut_z;                                // bore stops here
-case_bolt_stack = (case_z1 - case_nut_z) + case_nut_t;       // [DERIVED] = 34.75
-case_bolt_tip   = case_z1 - case_bolt_len;                   // [DERIVED] = -12.95
-case_bolt_n     = 2 * case_bolt_m + 1;                       // [DERIVED] = 13
+case_nut_z      = case_z0;                                   // bears on the back face
+case_bolt_stack = (case_z1 - case_z0) + case_nut_t;          // [DERIVED] = 42.95
+case_bolt_tip   = case_z1 - case_bolt_len;                   // [DERIVED] = -22.95
+case_bolt_n     = 2 * case_bolt_m + 1;                       // [DERIVED] = 7
 
 //  Locating pins. Thirteen screws clamp but each floats 0.20 mm in its
 //  clearance hole, and a 0.20 mm step at a seam that gets sanded is a seam you
@@ -1903,46 +1923,30 @@ case_bolt_n     = 2 * case_bolt_m + 1;                       // [DERIVED] = 13
 case_pin_d   = 4.00;  case_pin_h = 3.00;  case_pin_fit = 0.30;
 case_pin_ks  = [0.5, 3.5];   // [DESIGN] where on the ring, in screw pitches
 
-//  ---- STRAP BOSSES -----------------------------------------------------------
-//  Five goes at this. A slot through a thin flank (fragile). A 32 mm pad (read
-//  as a tab stuck on). A 134 mm rectangular rail (clashed with the curve - the
-//  complaint that started C-42). A tangent stadium (still read as an ear).
+//  ---- STRAP SLOTS, AND NO BOSS -----------------------------------------------
+//  Six goes at this: a slot in a thin flank, a pad, a rail, a tangent stadium,
+//  a superellipse pad. Every one of them was an object stuck to the outside of
+//  another object, and four of the six were rejected on sight for exactly that.
 //
-//  The stadium failed for a reason worth writing down, because it rules out a
-//  whole family of answers. Tangency between two parallel faces 8 mm apart can
-//  only be made by a semicircle of radius 4 - no larger radius is tangent to
-//  both - so a tangent boss ALWAYS ends in a tight 4 mm turn, and a tight turn
-//  at each end is what an ear looks like. The escape is a long, shallow swell,
-//  and that is geometrically unavailable here: the slot has to sit high on the
-//  flank for a bag to hang flat, a swell centred there runs out of straight
-//  flank within about 44 mm, and a 44 mm swell needs r34 ends - a 40 degree
-//  junction, worse than the stadium it replaced.
+//  The wall is 16 mm because an M5 bore needs it to be. That is already enough
+//  to put a strap slot straight through with 5.50 mm of metal either side and
+//  38.25 mm of depth behind it - 210 mm2 in shear a side, which is far past
+//  anything a strap applies. The boss was never carrying the load. It was
+//  carrying the idea of carrying the load.
 //
-//  So the boss stays local, and instead of fighting the outline it SPEAKS IT:
-//  a pad with the deck's own superelliptical corners on the deck's own
-//  exponent. The complaint was that a rectangle and a squircle met at a weird
-//  angle. There is no rectangle now.
-//
-//  It sits in the gap between the two topmost flank fasteners, so the strap
-//  load is taken into the joint by the screw above it and the screw below it
-//  rather than by printed plastic alone.
-case_lug_proud  = 8.00;  // [DESIGN] also the stadium's thickness, which is what
-                         //   sets the end radius at 4.00 and makes it tangent
-case_lug_len    = 46.00; // [DESIGN] long enough to take in the fastener above
-                         //   the slot and the one below it, so the screws read
-                         //   as sitting ON the pad rather than beside it.
-case_lug_cr     =  6.00; // [DESIGN] corner, on form_n - the deck's exponent
-case_lug_slot_w = 9.00;  // [DESIGN] takes 10 mm webbing or a split ring
-case_lug_slot_h = 5.00;  // [DESIGN]
-case_lug_slot_r = 1.60;  // [DESIGN]
+//  So there is no boss. The silhouette is unbroken and the slot is a hole in it.
+case_lug_y      = 40.00; // [DESIGN] slot centre. 42 mm below the mouth: lugs at
+                         //   the rim foul the hand drawing the deck out, and a
+                         //   bag hung from its rim tips forward.
+case_lug_slot_w =  5.00; // [DESIGN] across the wall
+case_lug_slot_h = 14.00; // [DESIGN] up the flank - 10 mm webbing passes through
+                         //   this way round, or a split ring
+case_lug_slot_r =  1.60; // [DESIGN]
 
-case_lug_root   = 6.00;  // [DESIGN] how deep the boss is rooted into the flank.
-                         //   Buried, never seen; it exists so the union has
-                         //   real overlap instead of a tangent plane, which is
-                         //   a degenerate boolean.
-case_lug_xo  = case_w/2 + case_lug_proud;                         // = 83.325
-case_lug_x   = (case_cav_hw + case_lug_xo) / 2;                   // = 71.325
-case_lug_mat = (case_lug_xo - case_cav_hw - case_lug_slot_w) / 2; // = 7.50 a side
+//  Biased inboard for the same reason the ring is: the rolled face is nearer.
+case_lug_x   = (case_cav_hw + case_w/2 - case_soft) / 2;          // = 65.825
+case_lug_mat = min(case_lug_x - case_lug_slot_w/2 - case_cav_hw,
+                   case_w/2 - case_soft - case_lug_x - case_lug_slot_w/2);
 
 //  ---- NO THUMB SCALLOP, AND WHY IT IS RECORDED --------------------------------
 //  A 24 mm mouth was tried, with an 80 x 22 mm arc cut in the front to reach
@@ -1978,35 +1982,24 @@ case_lug_mat = (case_lug_xo - case_cav_hw - case_lug_slot_w) / 2; // = 7.50 a si
 case_mag_gap   = magnet_skin + case_pad;                     // [DERIVED] = 2.00
 case_mag_skin  = case_z1 - (case_z_fr + magnet_pocket_h);    // [DERIVED] = 1.85
 
-//  The root is measured inward from the flank, and the flank itself recedes by
-//  the chamfer, so what has to be positive is root MINUS chamfer - not root
-//  against the boss's thickness, which has nothing to do with it. 2 mm of real
-//  overlap at the worst level.
-assert(case_lug_cr <= (case_lug_proud + case_lug_root) / 2 - 0.5,
-       "pad corner is larger than the pad is thick");
-assert(case_lug_root - case_edge_ch >= 2.0,
-       "strap boss roots shallower than the chamfer recedes, so it will float");
-assert(case_lug_mat >= 6.0,
-       "strap slot leaves under 6 mm of boss either side");
+assert(case_lug_mat >= 3.5,
+       "strap slot leaves under 3.5 mm of wall either side");
 assert(abs((case_h / case_w) / (body_h / body_w) - 1) < 0.005,
        "the case has stopped being the deck's proportion");
-assert(case_side / 2 - case_nut_cd / 2 >= case_bolt_keep,
-       "the wall is too thin for a nut on its centreline");
+assert(case_w/2 - case_soft - case_bolt_ins - case_nut_cd/2 >= 0.5,
+       "the nut overhangs the rolled edge it has to bear on");
 assert(case_floor >= case_side - 0.001,
        "floor thinner than the flank, so the ring cannot round the corner");
 assert(case_rim >= 10.0 && case_rim <= 16.0,
        "mouth too deep to pinch the deck out of, or too shallow to hold it");
 assert(case_bolt_len >= case_bolt_stack,
        "M5 screw is shorter than the stack it has to span");
-//  The check that would have caught C-43 at the parameter level. If the nut has
-//  no back-half metal above it, the screw clamps the front half to itself and
-//  the joint carries nothing.
-assert(case_nut_roof >= 4.0,
-       "no back-half roof over the nut, so the screws clamp nothing");
-assert(case_bolt_tip <= case_nut_z - case_nut_t,
-       "screw does not reach through the nut");
-assert(case_bolt_tip > case_z0 + 1.0,
-       "screw tip breaks out of the back face");
+//  The C-43 guard, restated for a through-bolt: the nut has to bear on the far
+//  side of the back half, not somewhere inside the front one.
+assert(case_bolt_tip <= case_z0 - case_nut_t,
+       "screw does not reach through the nut on the back face");
+assert(case_side / 2 - case_soft / 2 - case_bolt_clear / 2 >= 3.0,
+       "the rolled edge leaves under 3 mm of metal outboard of a bore");
 assert(case_split_z > case_z_bk && case_split_z < case_z_fr,
        "parting plane misses the cavity, so one half has no tray to flock");
 assert(case_mag_skin >= 4 * layer_h,

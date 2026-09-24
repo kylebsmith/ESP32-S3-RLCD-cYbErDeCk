@@ -3,8 +3,9 @@
 //  Front half and back half, split on a plane parallel to the face, drawn
 //  together by thirteen M5 socket screws into hex nuts trapped at the joint.
 //  Every port is buried. Meant to be flocked inside and filled, sanded and
-//  polished outside, so the only things that break the surface are the screw
-//  heads and the two strap bosses - and those are meant to be seen.
+//  polished outside. Nothing stands off it: the strap slots go straight through
+//  the wall, and the only things breaking the surface are six bolt heads on the
+//  front and six nuts on the back, which are meant to be seen.
 //
 //  WHY TWO PARTS. Not for printing alone. One piece could be printed; it could
 //  not be reached into. The magnets, the flock and the bed all want the inside
@@ -85,48 +86,49 @@ function bolt_sites() =
 function pin_sites() =
     _mirrored([ for (k = case_pin_ks) ring_at(k / case_bolt_m) ]);
 
-//  The strap boss spans the two topmost fasteners on the flank and puts the
-//  slot between them, so the strap load goes into the joint through the two
-//  screws either side of it rather than through printed plastic alone.
-function lug_y() =
-    (ring_at((case_bolt_m - 1) / case_bolt_m)[1] + ring_at(1)[1]) / 2;
-
 //  ===========================================================================
 //  FORM
 //  ===========================================================================
-//  One cross-section, taken at an inset. Every chamfer in the part is a hull
-//  between two of these, so there is exactly one place the outline is defined.
-//  The slab and the bosses are hulled SEPARATELY - together they are not
-//  convex, and hull() of the pair would quietly fill the notch where a boss
-//  meets the flank.
-module slab_slice(ins, t) {
-    translate([0, case_cy, 0])
-        rse_plate(case_w - 2*ins, case_h - 2*ins, t, max(case_r - ins, 0.8), form_n);
+//  THE BODY IS ONE ROLLED SLAB PER HALF.
+//
+//  Earlier versions built each half by hulling four superellipse slices at
+//  different insets, which gives a chamfer: two arrises and a flat. That reads
+//  machined, and machined is not what was asked for any more - "the form should
+//  be more natural and flowing and smoothed". So this is the deck's own rolled
+//  edge instead. rse_soft lofts the outline through a smoothstep whose value
+//  AND first derivative both vanish at the face, so the surface arrives there
+//  with zero slope and leaves no arris at all.
+//
+//  The seam end stays at full width (u = 0, no inset) so the halves meet on one
+//  flat face, and the roll is entirely at the outer end.
+module rolled_half(t, flip) {
+    translate([0, case_cy, case_split_z]) {
+        if (flip)
+            mirror([0, 0, 1])
+                rse_soft(case_w, case_h, t, case_r, form_n,
+                         case_soft, case_roll);
+        else
+            rse_soft(case_w, case_h, t, case_r, form_n,
+                     case_soft, case_roll);
+    }
 }
 
-//  The pad carries the deck's own corner: a superellipse on form_n, the same
-//  exponent the case outline and the deck itself are drawn with. A rectangle
-//  meeting a squircle is the thing that clashed; this is a squircle meeting a
-//  squircle. Its inner half is buried in the flank and never seen - that is
-//  what gives the union real overlap instead of a tangent plane, which is a
-//  degenerate boolean.
-module lug_pad(sx, ins, t) {
-    xo = case_lug_xo - ins;               // outer face, pulled in by the chamfer
-    xi = case_w / 2 - case_lug_root;      // rooted inside the flank, never seen
-    translate([sx * (xo + xi) / 2, lug_y(), 0])
-        rse_plate(xo - xi, case_lug_len - 2 * ins, t,
-                  max(case_lug_cr - ins, 0.8), form_n);
-}
-
-//  A half of the outer solid. ch0 is the chamfer at z0, ch1 at z1; the caller
-//  passes the seam chamfer at the joint and the edge chamfer at the free face.
-module half_body(z0, z1, ch0, ch1) {
-    e = 0.01;
-    levels = [[z0, ch0], [z0 + ch0, 0], [z1 - ch1, 0], [z1 - e, ch1]];
-    union() {
-        hull() for (l = levels) translate([0, 0, l[0]]) slab_slice(l[1], e);
-        for (sx = [-1, 1]) {
-            hull() for (l = levels) translate([0, 0, l[0]]) lug_pad(sx, l[1], e);
+//  The seam chamfer is cut back in by intersection, because it is the one edge
+//  that SHOULD be crisp: it is a joint, and a joint you cannot fill reads as a
+//  shadow gap or as a crack, with nothing in between.
+module half_body(t, flip) {
+    ch = case_seam_ch;
+    d  = flip ? -1 : 1;
+    intersection() {
+        rolled_half(t, flip);
+        hull() {
+            translate([0, case_cy, case_split_z])
+                rse_plate(case_w - 2*ch, case_h - 2*ch, 0.01,
+                          max(case_r - ch, 0.8), form_n);
+            translate([0, case_cy, case_split_z + d * ch])
+                rse_plate(case_w, case_h, 0.01, case_r, form_n);
+            translate([0, case_cy, case_split_z + d * (t + 1)])
+                rse_plate(case_w, case_h, 0.01, case_r, form_n);
         }
     }
 }
@@ -153,29 +155,19 @@ module case_cavity() {
 //  webbing passes through the object rather than round a hook.
 module case_lug_slots() {
     for (sx = [-1, 1])
-        translate([sx * case_lug_x, lug_y(), case_z0 - 1])
+        translate([sx * case_lug_x, case_lug_y, case_z0 - 1])
             rbox(case_lug_slot_w, case_lug_slot_h,
                  case_z1 - case_z0 + 2, case_lug_slot_r);
 }
 
-//  Screw clearance, through both halves, stopping at the nut's seat.
+//  One straight bore, right through the object. Head proud on the front face,
+//  plain nut proud on the back. Nothing recessed, nothing hidden, and nowhere
+//  for the clamp to short-circuit inside one half - C-43 records what that
+//  looks like when it does.
 module bolt_holes() {
     for (b = bolt_sites())
-        translate([b[0], b[1], case_nut_z])
-            cylinder(d = case_bolt_clear, h = case_z1 + 1 - case_nut_z);
-}
-
-//  Hex counterbores at the BACK FACE. The nut bears UP on the roof of this
-//  pocket and that roof is back-half metal, which is what puts the back half in
-//  the load path. A pocket opening at the parting face does not - see THE NUT
-//  SEATS AT THE BACK FACE in parameters.scad, and C-43.
-//
-//  It opens on the bed while the back half prints, so it needs no support; all
-//  it leaves is a 2.03 mm annular ledge at the roof, which bridges.
-module nut_pockets() {
-    for (b = bolt_sites())
         translate([b[0], b[1], case_z0 - 1])
-            cylinder(d = case_nut_cd, h = case_nut_seat + 1, $fn = 6);
+            cylinder(d = case_bolt_clear, h = case_z1 - case_z0 + 2);
 }
 
 module pins(d, h, z) {
@@ -197,7 +189,7 @@ module case_magnets() {
 module case_front() {
     difference() {
         union() {
-            half_body(case_split_z, case_z1, case_seam_ch, case_edge_ch);
+            half_body(case_z1 - case_split_z, false);
             pins(case_pin_d, case_pin_h + 0.01, case_split_z - case_pin_h);
         }
         case_cavity();
@@ -209,11 +201,10 @@ module case_front() {
 
 module case_back() {
     difference() {
-        half_body(case_z0, case_split_z, case_edge_ch, case_seam_ch);
+        half_body(case_split_z - case_z0, true);
         case_cavity();
         case_lug_slots();
         bolt_holes();
-        nut_pockets();
         pins(case_pin_d + case_pin_fit, case_pin_h + 0.2,
              case_split_z - case_pin_h - 0.2 + 0.01);
     }

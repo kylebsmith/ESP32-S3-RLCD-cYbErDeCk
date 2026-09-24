@@ -2101,3 +2101,105 @@ written it**, told to refute rather than agree, with instructions to measure the
 mesh rather than read the source. Nineteen of their twenty-three claims did not
 survive their own verification pass — the four that did were worth the other
 nineteen.
+
+### C-44 — Take the ornament off
+
+*"Thats an absurd amount of M5 bolts, and these bolts should go all the way
+through industrial interesting brutalist, the form should be more natural and
+flowing and smoothed ... output the fundamental fundamental ass shrink wrapped
+shape but robust, two part, elegant, and I will work on creating the silouette
+more intersting in tinkercad."*
+
+Four things, and the last one changes what the job is: this is now a **base
+object for someone else to shape**, so everything that was there to be looked at
+comes off and only what has to be right stays.
+
+### Thirteen to seven, and why not six
+
+Thirteen at a 35.7 mm pitch was instrument-case spacing applied without asking
+whether this is an instrument case. Seven: bottom dead centre, both bottom
+corners, both mid-flanks, both flank **tops**.
+
+Six was tried first — sampled on half pitches so nothing sits at dead centre,
+which is tidier. It is the worse object. It puts the topmost fastener **44 mm
+below the mouth** and leaves the one end of the ring that is already open
+unclamped. Seven costs one bolt and holds the mouth shut. Measured: 6 gaps,
+66.1–70.7 mm, 6.6 % spread.
+
+### The bolt goes all the way through
+
+Head proud on the front face, plain hex nut proud on the back, nothing recessed.
+It is what was asked for and it is also the only one of the three arrangements
+tried here that is structurally obvious — C-43 had to reason carefully about
+where a buried nut bears; a through-bolt has nowhere for the load to
+short-circuit. **M5 × 45**, ending 2.05 mm past the nut's far face.
+
+The cost is a spanner. Nothing keys the nut, because a hex recess deep enough to
+hold it needs 7.73 mm of metal outboard and the rolled edge does not leave it.
+Seven nuts, one 8 mm spanner.
+
+### Rolled, not chamfered
+
+A chamfer is two arrises and a flat — it reads machined. `rse_soft` lofts the
+outline through a smoothstep whose value **and first derivative** both vanish at
+the face, so the surface arrives there with zero slope and leaves no arris at
+all.
+
+It is also, unexpectedly, the more printable edge:
+
+| | chamfered (C-43) | rolled |
+|---|---|---|
+| near-flat ceiling | 0 mm² | **0 mm²** |
+| face under 44° | 206 mm² | **0 mm²** |
+
+The 206 mm² was the 45° chamfers themselves sitting exactly on the limit. A
+roll whose derivative vanishes at both ends is **vertical where it meets each
+face** and only reaches ~28° in the middle, so there is nothing marginal left.
+
+`case_soft` is not free, though: the bores are straight while the surface rolls
+inward, so every millimetre of roll is a millimetre off the metal outboard of a
+bore. That is what moves the ring off the wall's centreline —
+`case_bolt_ins = (case_side + case_soft) / 2`, which puts 3.80 mm each side
+instead of 8.00 inboard and 5.00 out.
+
+### Six strap bosses, and then none
+
+| version | what it was | why it went |
+|---|---|---|
+| 1 | slot through a 10 mm flank, at the corner | thin web, awkward place |
+| 2 | 32 mm pad | read as a tab stuck on |
+| 3 | 134 mm rectangular rail | clashed with the curve (C-42) |
+| 4 | tangent stadium | still read as an ear |
+| 5 | superellipse pad | the best of them, and still an object stuck on |
+| 6 | **nothing** | — |
+
+The wall is 16 mm because an M5 bore needs it to be. That is already enough to
+put a slot straight through with **4.00 mm of metal either side and 38.25 mm of
+depth** — 153 mm² in shear a side, far past anything a strap applies. **The boss
+was never carrying the load. It was carrying the idea of carrying the load.**
+
+### Shrink-wrapped is not available, and here is the number
+
+"Shrink wrapped" cannot mean thin walls while M5 bolts pass through them:
+
+| thread | bore | min wall | case width |
+|---|---|---|---|
+| M5 | 5.40 | 14.4 | 147.5 |
+| M4 | 4.50 | 13.5 | 145.7 |
+| M3 | 3.40 | 12.4 | 143.5 |
+
+Dropping two thread sizes buys **4 mm** of width on a 150 mm object. The cavity
+alone is 118.65 wide. So the wall stays at 16, and what "stripped back" actually
+buys is the ornament: no bosses, no chamfers, no counterbores, six fewer bolts,
+and an unbroken silhouette to work from.
+
+### The guard held this time
+
+Rewriting this file broke halfway through a scripted edit and left
+`carrycase.scad` referencing three variables that no longer existed. The render
+guard added in C-42 — `WARNING: Ignoring` treated as fatal — caught it on the
+first render, named all three, and cost about a minute.
+
+C-42 records the same class of failure costing an entire review cycle and a
+render I looked at and described approvingly. The difference between the two is
+one `grep`.

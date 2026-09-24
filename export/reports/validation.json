@@ -1,5 +1,5 @@
 {
-  "passed": 119,
+  "passed": 118,
   "total": 119,
   "results": [
     {
@@ -701,20 +701,20 @@
     {
       "check": "every [DERIVED] = N comment tells the truth",
       "class": "PARAM",
-      "ok": true,
-      "detail": "52 claims checked against the value they name"
+      "ok": false,
+      "detail": "STALE: case_bolt_n says 13, is 7.000"
     },
     {
       "check": "no parameter is undef in the renderer",
       "class": "PARAM",
       "ok": true,
-      "detail": "388 scalars echoed out of OpenSCAD; none undef"
+      "detail": "382 scalars echoed out of OpenSCAD; none undef"
     },
     {
       "check": "both readers agree on every parameter",
       "class": "PARAM",
       "ok": true,
-      "detail": "388 shared scalars, both readers agree"
+      "detail": "382 shared scalars, both readers agree"
     }
   ]
 }
