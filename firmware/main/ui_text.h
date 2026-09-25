@@ -138,13 +138,17 @@
     "x%15 plays 15% of the time.\n" \
     "[xx] two in one step.\n" \
     "[0,2,4] all at once - chord.\n" \
-    "<3 5> one each bar.\n" \
+    "<3 5> one each time round.\n" \
     "x.x. /2 half speed, *2 double.\n" \
     "\n" \
     "The names are lines in the\n" \
     "boot doc. Make another:\n" \
     ">conga = note 63\n" \
     ">conga x..x..x.\n" \
+    "A part is a lane too: how\n" \
+    "hard, and which octave -\n" \
+    ">bass:vel 9...3...\n" \
+    ">bass:oct <2 3>...\n" \
     "\n" \
     "Edit any line, run it again\n" \
     "- it changes live. Run it\n" \

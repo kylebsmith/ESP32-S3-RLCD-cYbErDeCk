@@ -201,7 +201,7 @@ then go.*
 `0` is the quietest hit rather than silence — a rest is `.`, and a digit is always
 an event. `x` is the lane's own level, 100. Measured on the deck: `>kick 9...5...`
 sent 127 and 71. On a voice the digit stays the degree; a voice's per-step velocity
-will be a parameter lane, the way a circle's position is. The picture half — `flip 0`,
+is a part, `>bass:vel 9...3...` (§3.11), the way a circle's position is. The picture half — `flip 0`,
 `spin 1`, `fold` — is untouched here and still open.
 
 **8. The seventeen sound names are data; the sixteen picture names are code.**
@@ -250,8 +250,37 @@ line or to a step, with an unwritten shadowing rule between them. An axis and a 
 is a parameter lane, which would delete four letters from the hit alphabet and three
 pieces of machinery.
 
+**Decided 2026-09-25 — the proposal is refused, and the fault under it fixed.** A
+way as a parameter lane has to be spelled somehow. As a digit it breaks the one
+rule this document fought hardest for — *a digit is always how much* (§3.7) — and
+as letters in a special kind of lane it moves the four letters rather than deleting
+them. `>move d...u...` is the legible form of "down, then up", and legibility on a
+held screen is what this device is for. The shadowing rule is stated now rather than
+unwritten: a step's own way wins over the one in front of the line.
+
+What the complaint actually caught was a hole in §3.2. The four letters were valid
+steps on every lane, and only `move`, `warp`, `ramp` and `turn` read them — so
+`>kick x..u` played a hit on a character the performer had not meant as one. A way
+on anything that does not turn is refused now, with the character boxed. On the
+deck: `>kick x..u` and `>disc u 4` refused, `>move d...u...` accepted.
+
 **11. Degrees stop at 9.** About an octave and a half, no octave verb, no accidental
 outside the scale, no reverse. All first-hour reaches.
+
+**Decided 2026-09-25 — the octave is a part, not a verb.** `>bass:oct <2 3>...`
+is a lane whose events are the bass's octave, exactly as `>disc:x` is a lane whose
+events are the circle's position — so it alternates, nests, takes odds and can be
+routed, and it cost no verb. With it came `:vel`, the per-step level §3.7 promised a
+voice: `>bass:vel 9...3...`. Parts fire before notes on the same tick, so which line
+was typed first cannot change the first note, and dropping a part gives back the
+name's own octave and the default level. On the deck: `>bass 0...` with
+`>bass:oct <2 4>...` played D2 then D4, bar by bar; `:vel` alternated 127 and 42.
+Accidentals and reverse are still open.
+
+One trap, recorded because it caught the author: a lane's bar is its own length, so
+a lone `<2 4>` is a *one-step* lane and changes every sixteenth. Under a four-step
+bass it was sampled on even steps only and read 2 every time. `<2 4>...` is the
+bar-long one.
 
 **12. The instance rule was not scoped, and `cc` printed a name it refused.**
 Both were bugs rather than design, and both are fixed — §4.

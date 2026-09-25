@@ -88,6 +88,11 @@
  * compile loops over the same pattern walk, two mute mechanisms, two budgets
  * and two listings. Every bug in that area was found twice, or found in one
  * half and left standing in the other for days. */
+/* The parts of a sound lane (seq_lane_t.param on SEQ_BIND_NOTE). */
+#define SEQ_PART_NONE 0
+#define SEQ_PART_VEL  1      /* how hard: 'x' is 100, a digit as on a drum     */
+#define SEQ_PART_OCT  2      /* which octave, 0-8: 'x' is the name's own       */
+
 typedef enum {
     SEQ_BIND_NOTE = 0,   /* a MIDI note: drums and the melodic voices */
     SEQ_BIND_CC,         /* a controller number: digits are values    */
@@ -156,13 +161,17 @@ typedef struct {
     /* ---- the binding, and what only some bindings need ---- */
     seq_bind_t bind;
     uint8_t  prim;          /* SEQ_BIND_VIZ: which drawing primitive           */
-    /* WHICH PART OF IT. Zero means the primitive itself - how much of it to draw.
-     * Anything else is a parameter of that primitive, and the value goes there
-     * instead: '>disc[x] 0..9..' is a lane whose events are positions.
+    /* WHICH PART OF IT. Zero means the lane itself. On a picture anything else
+     * is a parameter of the primitive and the value goes there instead -
+     * '>disc:x 0..9..' is a lane whose events are positions - and seq does not
+     * know what it means, exactly as it does not know what a primitive is.
      *
-     * seq does not know what a parameter means, exactly as it does not know what
-     * a primitive is. It carries a number and hands it over. */
+     * On a SOUND lane a part is SEQ_PART_VEL or SEQ_PART_OCT, and that one seq
+     * does act on: '>bass:vel 9..3' sets the level of the lane called 'bass' and
+     * '>bass:oct <2 3>' its octave, each until the next event. A parameter is a
+     * lane, for sound as it already was for pictures. */
     uint8_t  param;
+    int8_t   oct0;          /* the octave the NAME defines, which 'x' restores */
     char     dir;           /* 'u','d','l','r' - a direction written in front  */
 
     /* ---- routing: a lane may read another lane's output ---- */
@@ -245,7 +254,7 @@ typedef struct {
     uint16_t   gate_ms;     /* NOTE                             */
     uint8_t    cc;          /* CC                               */
     uint8_t    prim;        /* VIZ                              */
-    uint8_t    param;       /* VIZ: 0, or a part of the picture */
+    uint8_t    param;       /* 0, a part of the picture, or SEQ_PART_* */
 } seq_binding_t;
 
 esp_err_t seq_lane_bind(const char *name, const seq_binding_t *b);

@@ -32,7 +32,7 @@ a documentation one.
   [0,4,7]         a chord: every member at once
   <a b>           ALTERNATES: a different member each bar
   /2  *2          this lane's own rate, at the end of the line
-  u d l r         which way, in front of the pattern or as a step
+  u d l r         which way - move warp ramp turn only; a step's own wins
 ```
 
 A step is one character and what is attached to it; the playhead lights all of
@@ -70,8 +70,9 @@ up to eight letters and cannot be a verb or a picture.
 **Sixteen lanes at once**, any mix. `route` connects any two.
 
 **An address picks one.** `disc:2` is a second circle, `disc:x` a circle's position,
-`disc:2:x` the second one's — `x` and `y` are a picture's parts. `>route disc:2 kick`
-routes them apart. (`disc2` and `disc[x]` were the old spellings; the deck tells you
+`disc:2:x` the second one's — `x` and `y` are a picture's parts; `vel` is a sound's
+level and `oct` a voice's octave: `>bass:oct <2 3>...`. A part is a lane like any
+other. `>route disc:2 kick` routes them apart. (`disc2` and `disc[x]` were the old spellings; the deck tells you
 the new one.)
 
 ### A shape is a field through a threshold

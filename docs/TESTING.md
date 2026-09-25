@@ -302,6 +302,22 @@ playing to note 35 — the next hit is 35. The last forgets the name and silence
 lane. `>help` lists every name there is. `>bpm = note 3` and `>disc = note 3` are
 refused: a name cannot be a command or a picture.
 
+```
+>send mon on
+>bass 0...
+>bass:oct <2 4>...
+>bass:vel 9...3...
+>play
+```
+
+The bass alternates D2 and D4 bar by bar, at 127 then 42. `>bass:oct` alone drops
+the part and the bass goes back to octave 2. A lone `<2 4>` would change every
+sixteenth — a lane's bar is its own length — and under a four-step bass it reads 2
+every time.
+
+`>kick x..u` is refused and the `u` boxed: only `move`, `warp`, `ramp` and `turn`
+have a way.
+
 `x` and `y` are the only parts for now — deliberately short, or it becomes a flag
 grammar. 0 is the left or top edge, 9 the right or bottom, and the shape's centre
 goes there.

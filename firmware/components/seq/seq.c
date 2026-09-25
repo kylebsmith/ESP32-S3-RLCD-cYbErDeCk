@@ -446,11 +446,50 @@ static uint32_t gate_us(const seq_lane_t *l, uint8_t hold)
     return us > 60000000u ? 60000000u : (uint32_t)us;
 }
 
+/* The lane a part belongs to: 'bass:vel' -> 'bass', 'bass:2:oct' -> 'bass:2'.
+ * Looked up by name when the part fires rather than cached, because a lane can
+ * be dropped and written again between two events and a cached slot would then
+ * be somebody else's. Sixteen short compares, and only on a part's events. */
+static seq_lane_t *parent_of(const seq_lane_t *part)
+{
+    const char *colon = strrchr(part->name, ':');
+    if (colon == NULL) {
+        return NULL;
+    }
+    const size_t n = (size_t)(colon - part->name);
+    for (int i = 0; i < SEQ_MAX_LANES; i++) {
+        seq_lane_t *l = &s_lanes[i];
+        if (l->used && l != part && strncmp(l->name, part->name, n) == 0 &&
+            l->name[n] == '\0') {
+            return l;
+        }
+    }
+    return NULL;
+}
+
 /* ONE EVENT, to wherever the lane is bound. `routed` means the source's value
  * decides how much, which is what routing has always meant. */
 static void fire_event(seq_lane_t *l, const seq_ev_t *e, bool routed,
                        uint32_t tick)
 {
+    /* A PART OF A SOUND. It plays nothing; it sets how hard, or which octave,
+     * the lane it belongs to plays from here on. It fires before the notes of
+     * the same tick (fire_lanes), so '>bass:vel 9...' and '>bass 0...' agree on
+     * the first step whichever was typed first. */
+    if (l->bind == SEQ_BIND_NOTE && l->param != SEQ_PART_NONE) {
+        int amt = routed ? (int)l->trig_val
+                         : (e->val == SEQ_VAL_X ? -1 : (int)e->val);
+        seq_lane_t *p = parent_of(l);
+        if (p != NULL) {
+            if (l->param == SEQ_PART_VEL) {
+                p->vel = (uint8_t)((amt < 0) ? 100 : vel_of(p, (uint8_t)amt));
+            } else if (l->param == SEQ_PART_OCT) {
+                p->octave = (int8_t)((amt < 0) ? p->oct0 : (amt > 8 ? 8 : amt));
+            }
+        }
+        published(l, (uint8_t)((amt < 0 ? 9 : amt) * 127 / 9));
+        return;
+    }
     /* A DRAWING LANE. The value is an amount 0-9 and the destination is a
      * primitive; nothing about MIDI applies. Marked rather than drawn,
      * because generating a frame is a pass over the whole picture and this
@@ -507,10 +546,18 @@ static void fire_lanes(uint32_t tick)
 {
     s_emitting = NULL;
     const int sw = swing_ticks();
+    /* PARTS FIRST, THEN LANES. A part sets something a lane then plays with, so
+     * on a tick where both fire, the part has to go first or the first note
+     * would take the old value - and which went first would depend on which
+     * line was typed first. Two passes over sixteen lanes; nothing else moves. */
+    for (int pass = 0; pass < 2; pass++)
     for (int i = 0; i < SEQ_MAX_LANES; i++) {
         /* NOT const: a routed lane clears its own trigger here. */
         seq_lane_t *l = &s_lanes[i];
         if (!l->used || l->muted || l->slots == 0 || l->nev == 0) {
+            continue;
+        }
+        if ((pass == 0) != (l->param != 0)) {
             continue;
         }
         if (l->route[0] != '\0') {
@@ -857,6 +904,16 @@ esp_err_t seq_forget(const char *name)
     l->slots = 0;
     l->route[0] = '\0';
     l->trig = false;
+    /* A PART THAT GOES TAKES ITS SETTING WITH IT. Dropping '>bass:oct' and
+     * leaving the bass two octaves up would be a change nobody can see the
+     * cause of any more; the name's own octave and the default level return. */
+    if (l->bind == SEQ_BIND_NOTE && l->param != SEQ_PART_NONE) {
+        seq_lane_t *p = parent_of(l);
+        if (p != NULL) {
+            if (l->param == SEQ_PART_VEL) { p->vel = 100; }
+            if (l->param == SEQ_PART_OCT) { p->octave = p->oct0; }
+        }
+    }
     l->used = false;
     return ESP_OK;
 }
@@ -1026,7 +1083,8 @@ esp_err_t seq_lane_bind(const char *name, const seq_binding_t *b)
     l->gate_ms = b->gate_ms ? b->gate_ms : 40;
     l->cc      = b->cc & 0x7F;
     l->prim    = (b->bind == SEQ_BIND_VIZ) ? b->prim : 0;
-    l->param   = (b->bind == SEQ_BIND_VIZ) ? b->param : 0;
+    l->param   = (b->bind == SEQ_BIND_CC) ? 0 : b->param;
+    l->oct0    = b->octave;
     return ESP_OK;
 }
 

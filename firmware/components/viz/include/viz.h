@@ -117,6 +117,11 @@ int         viz_prim_count(void);
 const char *viz_prim_name(int i);
 int         viz_prim_index(const char *name);   /* -1 if there is no such one */
 
+/* Does this primitive read a way - u d l r? move, warp, ramp and turn do; the
+ * rest ignore it, so a way written on one of them is refused rather than
+ * silently doing nothing (docs/MANIFESTO.md §3.10). */
+bool        viz_prim_turns(int prim);
+
 /* A lane bound to `prim` fired. CALLED FROM THE CLOCK CALLBACK, so this only
  * records - generating a frame is a pass over the whole picture and doing that
  * between two ticks is what docs/OS.md forbids. */

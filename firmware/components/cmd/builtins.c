@@ -575,9 +575,24 @@ static bool binding_of(const lane_name_t *ln, seq_binding_t *b, char *why,
         }
         return true;
     }
+    /* A SOUND'S PARTS: how hard, and - on a voice - which octave. The same
+     * sentence as a circle's position, pointed at a sound: '>bass:vel 9..3' and
+     * '>bass:oct <2 3>' are lanes like any other (docs/MANIFESTO.md §3.7,
+     * §3.11). A controller has none; its digit already is its value. */
     if (ln->part[0] != '\0') {
-        snprintf(why, wn, "%s has no part :%s", ln->base, ln->part);
-        return false;
+        if (b->bind == SEQ_BIND_NOTE && strcmp(ln->part, "vel") == 0) {
+            b->param = SEQ_PART_VEL;
+        } else if (b->bind == SEQ_BIND_NOTE && b->melodic &&
+                   strcmp(ln->part, "oct") == 0) {
+            b->param = SEQ_PART_OCT;
+        } else if (b->bind == SEQ_BIND_NOTE) {
+            snprintf(why, wn, b->melodic ? "a voice has :vel and :oct"
+                                         : "a drum has :vel");
+            return false;
+        } else {
+            snprintf(why, wn, "%s has no parts", ln->base);
+            return false;
+        }
     }
     return true;
 }
@@ -687,6 +702,31 @@ cmd_status_t cmd_lane(cmd_ctx_t *ctx, const char *word, size_t n)
         seq_mute(name, true);
         snprintf(ctx->msg, sizeof ctx->msg, "%s silent", name);
         return CMD_DONE;
+    }
+    /* A WAY WHERE NOTHING TURNS IS REFUSED (docs/MANIFESTO.md §3.10). 'u d l r'
+     * are steps for move, warp, ramp and turn; on a drum, a controller or a
+     * circle they did nothing, so '>kick x..u' played a hit where the performer
+     * had typed something else - exactly the silent kind of typo §3.2 closed. */
+    {
+        static seq_comp_t c;
+        const bool turns = (b.bind == SEQ_BIND_VIZ && b.param == VIZ_PARAM_NONE &&
+                            viz_prim_turns(b.prim));
+        if (!turns && seq_pattern_compile(pat, &c) == SEQ_PAT_OK) {
+            int at = -1;
+            if (c.dir != 0) {
+                const char *q = pat;
+                while (*q == ' ') { q++; }
+                at = (int)(q - pat);
+            }
+            for (int i = 0; i < c.n && at < 0; i++) {
+                if (c.leaf[i].dir != 0) { at = c.leaf[i].at; }
+            }
+            if (at >= 0) {
+                ctx->err_at = at;
+                cmd_out(ctx, "u d l r: move warp ramp turn");
+                return CMD_ERROR;
+            }
+        }
     }
     if (seq_lane_bind(name, &b) != ESP_OK) {
         return lane_refused(ctx, ESP_ERR_NO_MEM);

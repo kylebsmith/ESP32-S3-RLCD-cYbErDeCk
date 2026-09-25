@@ -857,6 +857,16 @@ int viz_prim_index(const char *name)
     return gen_index(name);
 }
 
+bool viz_prim_turns(int prim)
+{
+    if (prim < 0 || prim >= NGEN) {
+        return false;
+    }
+    const char *n = s_names[prim];
+    return strcmp(n, "move") == 0 || strcmp(n, "warp") == 0 ||
+           strcmp(n, "ramp") == 0 || strcmp(n, "turn") == 0;
+}
+
 int viz_param_index(const char *name)
 {
     if (name == NULL) { return VIZ_PARAM_NONE; }
