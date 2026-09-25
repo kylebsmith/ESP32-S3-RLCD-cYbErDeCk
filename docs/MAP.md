@@ -737,3 +737,49 @@ follows nothing, and within a rank the table still decides — which keeps the p
 `tools/test_viz.c` checks, that a document of unrouted lanes draws the same whatever
 order its lines were typed in. Order became something a performer can state and could
 not state before, and nothing that worked before behaves differently.
+
+### 9.7 Finite repetition — `!4`, and what an ending is for `[FACT]` — done
+
+**A lane that plays n times and then stops** ([NEXT.md](NEXT.md) §4). The spelling
+was the owner's to choose, 2026-09-25, from four with real collisions: `!4`, because
+`!` already means *repeat* to anyone arriving from Tidal or Strudel and only the scope
+differs — the whole lane, over time, rather than one step squeezed into its space.
+`@4` read as "at" and is Strudel's note length, which `_` now is here; a bare `4`
+would change what `>bass 0... 4` means, since patterns may be spaced; `#4` is a
+comment. A Strudel-style `x!3` inside a pattern is refused and told where `!` goes.
+
+**What a count counts** is passes of the lane's own length. Typed mid-song it waits
+for its own downbeat, so the first pass is a whole one and "four times" is four; at
+`>play` every lane's downbeat is tick 0. With `/2` a pass is twice as long, and with
+`<a b>` the alternation restarts with the count.
+
+**What happens at the end was designed with the count**, because an ending is only
+worth having if it can start something:
+
+- A lane on its own goes quiet and says `done` in `>lanes`. Running its line again
+  restarts it — it is silent, so the toggle brings it back — and `>play` re-arms
+  every finished lane, so a stopped arrangement plays from the top.
+- It is a **source** from then on: `name:end`. `>route crash intro:end` is a crash on
+  the downbeat after the intro.
+- **A routed lane with a count is a cue.** Its source *starts* it, and it plays its
+  own pattern for its count — where a routed lane with no count is a sidechain and
+  plays one step per event. So `>route verse intro:end` with `>verse x.x.x.x. !8`
+  sequences two sections with no new verb, and `>route fill snare` with
+  `>fill [xx]x !1` is a fill after every snare. The count is the whole difference.
+
+Measured on the deck: `>intro x.x. !2` played two passes and read `done`; on its last
+downbeat a verse cued from `intro:end` and a crash routed from it both went out on the
+same timestamp as the kick; the verse played its two passes and went back to `waits`.
+Typed 1.1 s into a bar, `>intro [xx]... !1` waited for its own downbeat.
+
+**To make that same timestamp possible, lanes now fire in route order.** A routed lane
+hears its source when the source fires, so the source must fire first; the table used
+to decide, and a sidechain typed before its source heard it one tick — 5 ms — late,
+by the structure of the code (not measured on the old firmware). Ranks are route
+hops, recomputed on every edit, never per tick; on the deck a rim routed from a kick
+and typed before it sounded on the kick's own timestamp.
+
+**Open, and recorded rather than guessed at:** a *loop* of sections — verse after
+chorus after verse — needs a lane with two sources, and a lane has one. The
+arrangement that exists today is linear, with the last section looping by having no
+count.

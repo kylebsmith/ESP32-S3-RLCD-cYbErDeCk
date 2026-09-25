@@ -1623,7 +1623,19 @@ static cmd_status_t c_route(cmd_ctx_t *ctx)
      * set, the primitive stops drawing because nothing ever triggers it, and
      * nothing anywhere says why. Typing it is still allowed - the lane may be
      * written on the next line - but it says so. */
-    if (from[0] != '\0' && seq_lane_find(from, -1) == NULL) {
+    /* 'intro:end' is the moment the lane called intro finishes; the lane to
+     * look for is intro, and it only ever finishes if it has a count. */
+    if (from[0] != '\0' && strcmp(src.part, "end") == 0) {
+        char base[SEQ_NAME_MAX];
+        snprintf(base, sizeof base, "%.*s", (int)(strlen(from) - 4), from);
+        const seq_lane_t *sl = seq_lane_find(base, -1);
+        if (sl == NULL) {
+            cmd_out(ctx, "no lane '%s' yet - it will", base);
+            cmd_out(ctx, "stay silent until there is one");
+        } else if (sl->count == 0) {
+            cmd_out(ctx, "%s never ends - give it !n", base);
+        }
+    } else if (from[0] != '\0' && seq_lane_find(from, -1) == NULL) {
         cmd_out(ctx, "no lane '%s' yet - it will", from);
         cmd_out(ctx, "stay silent until there is one");
     }
@@ -1924,12 +1936,27 @@ static cmd_status_t c_lanes(cmd_ctx_t *ctx)
          * goes - '>disc' draws and '>kick' sounds, and both are lanes - so the
          * listing has to say. '<- name' means this lane follows that one and
          * ignores its own steps. */
-        if (l[i].route[0] != '\0') {
-            cmd_out(ctx, "%c%-5s <- %s", l[i].muted ? '-' : ' ',
-                    l[i].name, l[i].route);
+        /* A COUNT SAYS WHERE IT IS - "2/4", "waits", "done" - because a counted
+         * lane that is silent may be waiting, finished, or muted, and those are
+         * three different things to do about it. A cue shows its pattern AND its
+         * source, since both decide what it plays. */
+        char at[16] = "";
+        const int pass = seq_lane_pass(&l[i]);
+        if (pass >= 0) {
+            snprintf(at, sizeof at, " %d/%u", pass + 1, (unsigned)l[i].count);
+        } else if (pass == SEQ_PASS_WAITS) {
+            snprintf(at, sizeof at, " waits");
+        } else if (pass == SEQ_PASS_DONE) {
+            snprintf(at, sizeof at, " done");
+        }
+        const char mute = (l[i].muted && !l[i].done) ? '-' : ' ';
+        if (l[i].route[0] != '\0' && l[i].count == 0) {
+            cmd_out(ctx, "%c%-5s <- %s", mute, l[i].name, l[i].route);
+        } else if (l[i].route[0] != '\0') {
+            cmd_out(ctx, "%c%-5s %s <- %s%s", mute, l[i].name, l[i].text,
+                    l[i].route, at);
         } else {
-            cmd_out(ctx, "%c%-5s %s", l[i].muted ? '-' : ' ', l[i].name,
-                    l[i].text);
+            cmd_out(ctx, "%c%-5s %s%s", mute, l[i].name, l[i].text, at);
         }
     }
     /* THIRTY COLUMNS. This was "%d bpm  swing %d  key %s  clock %s", which

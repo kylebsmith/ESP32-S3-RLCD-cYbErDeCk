@@ -56,6 +56,7 @@ typo that plays is the one they cannot hear.
   [0,4,7]         a chord: every member at once
   <a b>           alternates: a different member each bar
   /2  *2          this lane's own rate, at the end of the line
+  !4              four passes, then stop; name:end is when it did
   u d l r         which way — in front of the pattern, or as a step
   name:2          a second lane on the same binding
   name:x          a part of that lane, not the lane itself

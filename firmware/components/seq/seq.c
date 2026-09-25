@@ -542,25 +542,55 @@ static void fire_event(seq_lane_t *l, const seq_ev_t *e, bool routed,
     schedule_off(l->chan, note, gate_us(l, e->hold));
 }
 
+/* A COUNTED LANE HAS FINISHED: say so to anything routed from 'name:end'.
+ *
+ * This is what makes a count worth having (docs/NEXT.md §4): a lane that ends
+ * is a SOURCE, so '>route crash intro:end' is a crash on the last beat of the
+ * intro, and '>route verse intro:end' - with the verse counted - starts the
+ * verse, which is a sequence of sections without a single new verb. */
+static void publish_end(seq_lane_t *src)
+{
+    const size_t n = strlen(src->name);
+    for (int j = 0; j < SEQ_MAX_LANES; j++) {
+        seq_lane_t *d = &s_lanes[j];
+        if (d->used && strncmp(d->route, src->name, n) == 0 &&
+            strcmp(d->route + n, ":end") == 0) {
+            d->trig = true;
+            d->trig_val = 9;
+        }
+    }
+}
+
+static uint8_t s_maxrank;
+
 static void fire_lanes(uint32_t tick)
 {
     s_emitting = NULL;
     const int sw = swing_ticks();
-    /* PARTS FIRST, THEN LANES. A part sets something a lane then plays with, so
-     * on a tick where both fire, the part has to go first or the first note
-     * would take the old value - and which went first would depend on which
-     * line was typed first. Two passes over sixteen lanes; nothing else moves. */
-    for (int pass = 0; pass < 2; pass++)
+    /* IN ROUTE ORDER, AND PARTS FIRST.
+     *
+     * A routed lane hears its source when the source fires, so the source has to
+     * go first or the routed lane hears it a tick late - 5 ms, a flam on a
+     * crash routed from a kick - and whether it was late depended on which line
+     * had been typed first. Ranks are route hops (rerank()), lowest first.
+     *
+     * Within a rank, a PART goes before a lane: a part sets something a lane
+     * then plays with, so on a tick where both fire the part must go first or
+     * the first note takes the old value. With no routes this is two passes over
+     * sixteen lanes, as it was. */
+    const int passes = ((int)s_maxrank + 1) * 2;
+    for (int pass = 0; pass < passes; pass++)
     for (int i = 0; i < SEQ_MAX_LANES; i++) {
         /* NOT const: a routed lane clears its own trigger here. */
         seq_lane_t *l = &s_lanes[i];
         if (!l->used || l->muted || l->slots == 0 || l->nev == 0) {
             continue;
         }
-        if ((pass == 0) != (l->param != 0)) {
+        if (pass != (int)l->rank * 2 + (l->param != 0 ? 0 : 1)) {
             continue;
         }
-        if (l->route[0] != '\0') {
+        const bool routed = (l->route[0] != '\0');
+        if (routed && l->count == 0) {
             /* ROUTED: the source decides both when and how much, and this
              * lane's own steps are not consulted. A routed lane that also had
              * to agree with its own pattern fired only where the two happened
@@ -580,6 +610,49 @@ static void fire_lanes(uint32_t tick)
         if (!seq_pattern_slot_at(tick, l->slots, l->div, l->rnum, l->rden, sw,
                                  &s, &cy)) {
             continue;
+        }
+        if (l->count != 0) {
+            /* A COUNT. Its passes are its own: numbered from the slot it began
+             * on, so an alternation restarts with the section and pass one is a
+             * whole pass. */
+            const uint32_t g = cy * l->slots + (uint32_t)s;
+            if (routed) {
+                /* A CUE: a counted lane that is routed is STARTED by its source -
+                 * every time - and plays its own pattern for its count. The count
+                 * is what tells a cue from a sidechain. */
+                if (l->trig) {
+                    l->trig = false;
+                    l->idle = false;
+                    l->origin = g;
+                }
+            } else if (l->idle) {
+                /* Typed mid-song, it waits for its own downbeat, so the first
+                 * pass is a whole one and "four times" is four. */
+                if (s != 0) {
+                    continue;
+                }
+                l->idle = false;
+                l->origin = g;
+            }
+            if (l->idle) {
+                continue;
+            }
+            const uint32_t local = g - l->origin;
+            cy = local / l->slots;
+            s = (int)(local % l->slots);
+            if (cy >= l->count) {
+                /* FINISHED, on the downbeat its next pass would have taken. A
+                 * cue goes back to waiting for its source; a lane on its own
+                 * goes quiet and says so in '>lanes'. Either way it is a source
+                 * now: 'name:end'. */
+                l->idle = true;
+                if (!routed) {
+                    l->done = true;
+                    l->muted = true;
+                }
+                publish_end(l);
+                continue;
+            }
         }
         s_emitting = l->name;
         /* ONE ROLL PER SLOT. Everything that starts together shares it, so a
@@ -617,7 +690,7 @@ static void fire_lanes(uint32_t tick)
 static struct {
     seq_ev_t ev[SEQ_MAX_EVENTS];
     uint8_t  first[SEQ_MAX_STEPS + 1];
-    uint8_t  nev, slots, div, steps, rnum, rden;
+    uint8_t  nev, slots, div, steps, rnum, rden, count;
 } s_stage;
 static volatile int s_stage_for = -1;    /* the lane waiting for it, or -1 */
 
@@ -636,6 +709,11 @@ static void stage_apply(void)
     l->steps = s_stage.steps;
     l->rnum  = s_stage.rnum;
     l->rden  = s_stage.rden;
+    /* A lane written again starts its count again: it waits for its downbeat,
+     * or for its source, and is no longer finished. */
+    l->count = s_stage.count;
+    l->idle  = true;
+    l->done  = false;
     l->slots = s_stage.slots;
     __sync_synchronize();
     s_stage_for = -1;
@@ -886,6 +964,43 @@ static seq_lane_t *find(const char *name, bool create)
     return NULL;
 }
 
+/* ROUTE RANKS: how many hops each lane is from one that follows nothing - the
+ * route's source, with a trailing ':end' meaning the lane it names. Recomputed
+ * whenever a route or a lane comes or goes, which is an edit, never a tick. A
+ * chain that loops back on itself is bounded by the lane count rather than
+ * followed for ever. */
+static void rerank(void)
+{
+    uint8_t maxr = 0;
+    for (int i = 0; i < SEQ_MAX_LANES; i++) {
+        seq_lane_t *l = &s_lanes[i];
+        if (!l->used) {
+            continue;
+        }
+        int hops = 0;
+        const char *up = l->route;
+        while (up[0] != '\0' && hops <= SEQ_MAX_LANES) {
+            char src[SEQ_NAME_MAX];
+            snprintf(src, sizeof src, "%s", up);
+            const size_t n = strlen(src);
+            if (n > 4 && strcmp(src + n - 4, ":end") == 0) {
+                src[n - 4] = '\0';
+            }
+            const seq_lane_t *s = lane_find(src, -1);
+            if (s == NULL) {
+                break;
+            }
+            hops++;
+            up = s->route;
+        }
+        l->rank = (uint8_t)hops;
+        if (l->rank > maxr) {
+            maxr = l->rank;
+        }
+    }
+    s_maxrank = maxr;
+}
+
 esp_err_t seq_forget(const char *name)
 {
     seq_lane_t *l = find(name, false);
@@ -915,6 +1030,7 @@ esp_err_t seq_forget(const char *name)
         }
     }
     l->used = false;
+    rerank();
     return ESP_OK;
 }
 
@@ -926,6 +1042,7 @@ void seq_forget_all(void)
         s_lanes[i].trig = false;
         s_lanes[i].used = false;
     }
+    rerank();
 }
 
 /* Hand a compiled pattern to the clock and wait until it has taken it. The
@@ -976,6 +1093,7 @@ static void stage(int lane, const seq_comp_t *c)
     s_stage.steps = (uint8_t)c->steps;
     s_stage.rnum  = (uint8_t)c->rnum;
     s_stage.rden  = (uint8_t)c->rden;
+    s_stage.count = (uint8_t)c->count;
     __sync_synchronize();
     s_stage_for = lane;
     stage_wait();
@@ -1018,20 +1136,13 @@ esp_err_t seq_lane(const char *name, const char *steps)
         hits += (s_comp.leaf[i].kind == SEQ_LEAF_HIT);
     }
     const bool fresh = (l->slots == 0 && l->route[0] == '\0');
-    if (err != SEQ_PAT_OK || hits > SEQ_MAX_EVENTS || s_comp.count != 0) {
+    if (err != SEQ_PAT_OK || hits > SEQ_MAX_EVENTS) {
         if (err != SEQ_PAT_OK) {
             seq_pattern_error_text(&s_comp, steps, s_err, sizeof s_err);
             s_err_at = s_comp.err_at;
-        } else if (hits > SEQ_MAX_EVENTS) {
+        } else {
             snprintf(s_err, sizeof s_err, "%d notes: %d fit a lane", hits,
                      SEQ_MAX_EVENTS);
-            s_err_at = -1;
-        } else {
-            /* '!n' parses - the owner chose the spelling - and what a lane does
-             * when it has finished is docs/NEXT.md §4, designed together with
-             * the ending. Until then it is refused rather than ignored: a lane
-             * that plays for ever when told four times is a lie. */
-            snprintf(s_err, sizeof s_err, "!n is not built yet");
             s_err_at = -1;
         }
         /* A lane the binding call created a moment ago for this very line has
@@ -1055,6 +1166,7 @@ esp_err_t seq_lane(const char *name, const char *steps)
      * hashed all of it, so '>ramp u 4' could never be silenced by running it
      * again. */
     l->src = seq_pattern_hash(steps);
+    rerank();
     return ESP_OK;
 }
 
@@ -1064,7 +1176,41 @@ bool seq_lane_now(const seq_lane_t *l, int *slot, uint32_t *cycle)
         return false;
     }
     seq_pattern_slot_now(s_tick, l->slots, l->div, l->rnum, l->rden, slot, cycle);
+    if (l->count != 0) {
+        /* A COUNTED LANE'S OWN PASSES, and no mark at all while it waits or
+         * after it has finished - a playhead on a lane that is not sounding is
+         * the one lie the playhead exists not to tell. */
+        if (l->idle || l->done) {
+            return false;
+        }
+        const uint32_t g = *cycle * l->slots + (uint32_t)*slot;
+        const uint32_t local = g - l->origin;
+        *slot  = (int)(local % l->slots);
+        *cycle = local / l->slots;
+        if (*cycle >= l->count) {
+            return false;
+        }
+    }
     return true;
+}
+
+int seq_lane_pass(const seq_lane_t *l)
+{
+    if (l == NULL || l->count == 0) {
+        return SEQ_PASS_NONE;
+    }
+    if (l->done) {
+        return SEQ_PASS_DONE;
+    }
+    if (l->idle || !s_running) {
+        return SEQ_PASS_WAITS;
+    }
+    int slot = 0;
+    uint32_t cy = 0;
+    seq_pattern_slot_now(s_tick, l->slots, l->div, l->rnum, l->rden, &slot, &cy);
+    const uint32_t local = cy * l->slots + (uint32_t)slot - l->origin;
+    const uint32_t pass = local / l->slots;
+    return (pass >= l->count) ? SEQ_PASS_DONE : (int)pass;
 }
 
 
@@ -1104,6 +1250,10 @@ esp_err_t seq_route(const char *name, const char *src)
     }
     snprintf(l->route, sizeof l->route, "%s", src ? src : "");
     l->trig = false;    /* no stale trigger from whatever it used to follow */
+    /* A counted lane that is now routed is a cue, and waits for its source; one
+     * that is unrouted waits for its own downbeat. Either way, not mid-pass. */
+    l->idle = true;
+    rerank();
 
     /* A ROUTE IS A PATTERN. Making a lane live should not need a pattern
      * written first - and a routed lane ignores the one you write, so writing
@@ -1191,6 +1341,22 @@ uint32_t seq_position(void) { return s_pos; }
 
 void seq_play(void)
 {
+    /* PLAY IS FROM THE TOP, counts included. Every counted lane waits again -
+     * a lane on its own for tick 0, which is everybody's downbeat, and a cue
+     * for its source - and one that finished and went quiet is back, so a
+     * stopped arrangement plays from its first section. A lane the performer
+     * muted by hand stays muted: `done` is only ever set by finishing. */
+    for (int i = 0; i < SEQ_MAX_LANES; i++) {
+        seq_lane_t *l = &s_lanes[i];
+        if (l->used && l->count != 0) {
+            l->idle = true;
+            l->trig = false;
+            if (l->done) {
+                l->done = false;
+                l->muted = false;
+            }
+        }
+    }
     s_pos  = 0;
     s_tick = 0;
     s_grid_t0 = 0;               /* anchored on the first tick */

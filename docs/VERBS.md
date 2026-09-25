@@ -32,6 +32,7 @@ a documentation one.
   [0,4,7]         a chord: every member at once
   <a b>           ALTERNATES: a different member each bar
   /2  *2          this lane's own rate, at the end of the line
+  !4              four passes, then it stops - and 'name:end' fires
   u d l r         which way - move warp ramp turn only; a step's own wins
 ```
 
@@ -68,6 +69,12 @@ kick that is already playing; `>conga =` forgets the name and its lanes. A name 
 up to eight letters and cannot be a verb or a picture.
 
 **Sixteen lanes at once**, any mix. `route` connects any two.
+
+**A count ends a lane, and an end starts another.** `>intro x.x.x.x. !2` plays two
+passes and stops — typed mid-song it waits for its own downbeat. `>route crash
+intro:end` is a crash as it ends; `>route verse intro:end` with `>verse ... !8` *starts*
+the verse there: a routed lane with a count is a **cue**, one without is a sidechain.
+`>play` starts the arrangement from the top.
 
 **An address picks one.** `disc:2` is a second circle, `disc:x` a circle's position,
 `disc:2:x` the second one's — `x` and `y` are a picture's parts; `vel` is a sound's

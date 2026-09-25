@@ -140,6 +140,13 @@
     "[0,2,4] all at once - chord.\n" \
     "<3 5> one each time round.\n" \
     "x.x. /2 half speed, *2 double.\n" \
+    "!2 at the end: twice, then\n" \
+    "it stops - and a lane that\n" \
+    "stops can start another:\n" \
+    ">tom x.x.x.x. !2\n" \
+    ">snare ..x. !4\n" \
+    ">route snare tom:end\n" \
+    ">route crash tom:end\n" \
     "\n" \
     "The names are lines in the\n" \
     "boot doc. Make another:\n" \

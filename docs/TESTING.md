@@ -318,6 +318,25 @@ every time.
 `>kick x..u` is refused and the `u` boxed: only `move`, `warp`, `ramp` and `turn`
 have a way.
 
+## 11c. Counts, ends and cues
+
+```
+>send mon on
+>kick x...
+>intro = note 60
+>verse = note 62
+>intro x.x. !2
+>verse 9... !2
+>route verse intro:end
+>route crash intro:end
+>play
+```
+
+The intro plays two passes — four hits — and `>lanes` then reads `done`. On the next
+kick the verse starts and the crash hits, all three on one timestamp; the verse plays
+its two passes and reads `waits`. `>stop` then `>play` plays the intro again from the
+top. Typed while playing, a counted line waits for its own downbeat.
+
 `x` and `y` are the only parts for now — deliberately short, or it becomes a flag
 grammar. 0 is the left or top edge, 9 the right or bottom, and the shape's centre
 goes there.

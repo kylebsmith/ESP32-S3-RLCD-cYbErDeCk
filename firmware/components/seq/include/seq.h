@@ -183,6 +183,17 @@ typedef struct {
     uint8_t  last_val;      /* what this lane last played, 0-9                 */
     volatile bool    trig;  /* the source fired; set in the clock callback      */
     volatile uint8_t trig_val;
+    /* HOW MANY ROUTE HOPS from a lane that follows nothing. The clock fires
+     * lower ranks first, so a routed lane hears its source on the same tick
+     * whatever order the lines were typed in. */
+    uint8_t  rank;
+
+    /* ---- a count: play n passes, then stop (docs/NEXT.md §4) ---- */
+    uint8_t  count;         /* '!n', 0 = for ever                              */
+    bool     idle;          /* counted, and not started: waits for its own
+                             * downbeat, or - routed - for its source           */
+    bool     done;          /* finished; muted by that, and '>play' re-arms it */
+    uint32_t origin;        /* the global slot its first pass began on         */
 } seq_lane_t;
 
 esp_err_t seq_init(void);
@@ -215,6 +226,15 @@ const char *seq_lane_error(int *at);
  * playhead. The lane's own clock, not the global sixteenth: a '/2' lane moves at
  * half speed and a nested one at its subdivision. Returns false when stopped. */
 bool seq_lane_now(const seq_lane_t *l, int *slot, uint32_t *cycle);
+
+/* WHERE A COUNTED LANE IS: its pass, 0-based, while it plays; SEQ_PASS_WAITS
+ * before it starts; SEQ_PASS_DONE when it has finished. -3 for a lane with no
+ * count. For '>lanes', which says so rather than leaving a silent lane to be
+ * guessed at. */
+#define SEQ_PASS_WAITS (-1)
+#define SEQ_PASS_DONE  (-2)
+#define SEQ_PASS_NONE  (-3)
+int seq_lane_pass(const seq_lane_t *l);
 
 /* The key. One word: a root, optionally '#' or 'b', then a mode -
  * "dmin", "c", "f#mix", "apent", "ebblues", "chrom".
