@@ -40,6 +40,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "textgrid.h"
+#include "ask.h"
 
 int64_t editor_now_ms(void);
 static void line_at(size_t from, char *out, size_t max);
@@ -188,8 +189,22 @@ esp_err_t editor_set_density(int level)
     return ESP_OK;
 }
 
+/* A SECRET BEING TYPED (ask.h). While one is open every key goes to it and
+ * none reaches the document. */
+static ask_t s_ask;
+static cmd_secret_fn s_ask_fn;
+
+static bool editor_ask(const char *question, cmd_secret_fn fn)
+{
+    ask_start(&s_ask, question);
+    s_ask_fn = fn;
+    editor_invalidate();
+    return true;
+}
+
 esp_err_t editor_init(void)
 {
+    cmd_set_asker(editor_ask);
     return editor_set_density(0);
 }
 
@@ -285,7 +300,9 @@ static void status_bar(void)
     char wide[96];
     char s[STATUS_MAX + 1];
 
-    if (s_msg[0] != '\0' && editor_now_ms() < s_msg_until) {
+    if (s_ask.active) {
+        ask_render(&s_ask, wide, sizeof wide);
+    } else if (s_msg[0] != '\0' && editor_now_ms() < s_msg_until) {
         snprintf(wide, sizeof wide, "%s", s_msg);
     } else if (editor_now_ms() < s_msg2_until && doc_current_is_transient()) {
         snprintf(wide, sizeof wide, "%s", UI_OUT_BACK);
@@ -953,6 +970,71 @@ static void cycle_buffer(int dir)
     s_msg_until = editor_now_ms() + 1500;
 }
 
+/* Cut the line under the cursor - the whole line, not the display line -
+ * from column `col` to its end. */
+static void cut_line_from(int col)
+{
+    const size_t len = doc_len();
+    size_t s = doc_cursor();
+    if (s > len) {
+        s = len;
+    }
+    while (s > 0 && doc_at(s - 1) != '\n') {
+        s--;
+    }
+    size_t e = s;
+    while (e < len && doc_at(e) != '\n') {
+        e++;
+    }
+    const size_t from = s + (size_t)col;
+    if (from >= e) {
+        return;
+    }
+    doc_move_to(e);
+    for (size_t i = e; i > from; i--) {
+        doc_backspace();
+    }
+}
+
+/* Move the view to '+out' at `from`, where a command's lines begin. False
+ * when there is no '+out' or the view is already there. */
+static bool show_output(size_t from, const char *msg)
+{
+    const int out = doc_buf_find("+out");
+    const int here = doc_buf_current();
+    if (out < 0 || out == here || doc_buf_select(out) != ESP_OK) {
+        return false;
+    }
+    s_prev_buf = here;
+    doc_move_to(from);
+    s_top_offset = (int)from;
+    s_goal_col = -1;
+    /* SAY HOW TO GET BACK, AND SAY IT LAST.
+     *
+     * The command's own result is shown first, then the way out, so
+     * the owner reads the answer and then learns the exit. The owner
+     * ran a command, was moved here, and "had no idea how to get
+     * back" - so they ran another command, which piled onto the same
+     * page. Ctrl-O was always the answer and nothing ever said so.
+     *
+     * Longer than a normal message because it is teaching, not
+     * reporting, and it only appears when the view actually moved. */
+    snprintf(s_msg, sizeof s_msg, "%s", msg[0] ? msg : "output");
+    s_msg_until = editor_now_ms() + 2200;
+    s_msg2_until = editor_now_ms() + 5200;
+    editor_invalidate();
+    tg_invalidate();
+    return true;
+}
+
+void editor_show_output(size_t from, const char *msg)
+{
+    if (!show_output(from, msg)) {
+        editor_message(msg);
+        editor_invalidate();
+    }
+}
+
 static void run_current_line(void)
 {
     char line[128];
@@ -977,6 +1059,11 @@ static void run_current_line(void)
 
     char msg[96] = "";
     cmd_run_line(line, CMD_BY_HANDS, msg, sizeof msg);
+    /* A PASSWORD TYPED ON THE LINE, the old way, is cut before anything can
+     * save it: the command refused it and said where it starts. */
+    if (cmd_last_secret_col() >= 0) {
+        cut_line_from(cmd_last_secret_col());
+    }
     const int lines = cmd_last_output_lines();
     {
         /* Only when the view stays here: a result long enough to move to
@@ -994,31 +1081,8 @@ static void run_current_line(void)
     /* A result of more than one line shows itself. Reporting "10 commands" at
      * the bottom of the screen and leaving the actual answer somewhere the
      * owner has to know to look for is not minimalism, it is hiding. */
-    if (lines > 1) {
-        const int out = doc_buf_find("+out");
-        const int here = doc_buf_current();
-        if (out >= 0 && out != here && doc_buf_select(out) == ESP_OK) {
-            s_prev_buf = here;
-            doc_move_to(out_was);
-            s_top_offset = (int)out_was;
-            s_goal_col = -1;
-            /* SAY HOW TO GET BACK, AND SAY IT LAST.
-             *
-             * The command's own result is shown first, then the way out, so
-             * the owner reads the answer and then learns the exit. The owner
-             * ran a command, was moved here, and "had no idea how to get
-             * back" - so they ran another command, which piled onto the same
-             * page. Ctrl-O was always the answer and nothing ever said so.
-             *
-             * Longer than a normal message because it is teaching, not
-             * reporting, and it only appears when the view actually moved. */
-            snprintf(s_msg, sizeof s_msg, "%s", msg[0] ? msg : "output");
-            s_msg_until = editor_now_ms() + 2200;
-            s_msg2_until = editor_now_ms() + 5200;
-            editor_invalidate();
-            tg_invalidate();
-            return;
-        }
+    if (lines > 1 && show_output(out_was, msg)) {
+        return;
     }
     snprintf(s_msg, sizeof s_msg, "%s", msg[0] ? msg : "ok");
     s_msg_until = editor_now_ms() + 4000;
@@ -1031,6 +1095,26 @@ void editor_handle(const kbd_event_t *ev)
     /* One wrap per event. Everything below reads the table; nothing below
      * rebuilds it. */
     wrap(text_cols_now());
+
+    /* A SECRET BEING TYPED TAKES EVERY KEY - ask.h. Enter hands it to the
+     * command that asked, Esc takes it back, and either way it is wiped. */
+    if (s_ask.active) {
+        const int r = ask_feed(&s_ask, ev);
+        if (r != ASK_KEEP) {
+            const cmd_secret_fn fn = s_ask_fn;
+            s_ask_fn = NULL;
+            char msg[64] = "";
+            if (r == ASK_SUBMIT && fn != NULL) {
+                fn(s_ask.buf, msg, sizeof msg);
+            }
+            ask_end(&s_ask);
+            snprintf(s_msg, sizeof s_msg, "%s", r != ASK_SUBMIT
+                     ? "stopped - nothing sent" : msg[0] ? msg : "ok");
+            s_msg_until = editor_now_ms() + 4000;
+        }
+        editor_invalidate();
+        return;
+    }
 
     /* Any motion that is not vertical, and any edit, drops the goal column. */
     switch (ev->type) {

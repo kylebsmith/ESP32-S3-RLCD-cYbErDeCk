@@ -35,6 +35,19 @@ static int s_err_col = -1;
 
 int cmd_last_error_col(void) { return s_err_col; }
 
+static int s_secret_col = -1;
+
+int cmd_last_secret_col(void) { return s_secret_col; }
+
+static cmd_asker_t s_asker;
+
+void cmd_set_asker(cmd_asker_t fn) { s_asker = fn; }
+
+bool cmd_ask_secret(const char *question, cmd_secret_fn fn)
+{
+    return s_asker != NULL && fn != NULL && s_asker(question, fn);
+}
+
 static const cmd_t *s_table;
 static int          s_count;
 
@@ -194,10 +207,12 @@ static void old_spelling(cmd_ctx_t *ctx, const char *w, size_t n)
 cmd_status_t cmd_run_line(const char *line, cmd_caller_t caller,
                           char *msg_out, size_t msg_max)
 {
-    cmd_ctx_t ctx = { .arg = "", .caller = caller, .err_at = -1 };
+    cmd_ctx_t ctx = { .arg = "", .caller = caller, .err_at = -1,
+                      .secret_at = -1 };
     ctx.msg[0] = '\0';
     s_out_lines = 0;
     s_err_col = -1;
+    s_secret_col = -1;
     const char *const line0 = line;
 
     /* The sigil. A command line is marked, so a document can hold prose and
@@ -251,6 +266,9 @@ cmd_status_t cmd_run_line(const char *line, cmd_caller_t caller,
                 /* ctx.arg may have been advanced past a first word, but it
                  * still points into this line, so the column is exact. */
                 s_err_col = (int)(ctx.arg - line0) + ctx.err_at;
+            }
+            if (ctx.secret_at >= 0) {
+                s_secret_col = (int)(ctx.arg - line0) + ctx.secret_at;
             }
             if (msg_out != NULL) {
                 snprintf(msg_out, msg_max, "%s", ctx.msg);

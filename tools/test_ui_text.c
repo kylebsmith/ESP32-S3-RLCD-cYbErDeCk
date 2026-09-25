@@ -19,6 +19,7 @@
 #include "ui_text.h"
 #include "seq_pattern.h"
 #include "lane_name.h"
+#include "secret_line.h"
 
 #include <stdlib.h>
 
@@ -162,6 +163,20 @@ static int check_line(const char *what, int ln, const char *line)
     while (w[wl] != '\0' && w[wl] != ' ' && w[wl] != '=') { wl++; }
     const char *rest = w + wl;
     while (*rest == ' ') { rest++; }
+    /* NO PASSWORD ON A LINE. "guide 2" taught '>wifi <ssid> <pass>' and
+     * '>host deck 12345678': a password typed into a document, which is
+     * journalled, mirrored to the card and copied to the owner's DGX. Both take
+     * one word now and ask for the password (firmware/main/ask.h), so a line
+     * that gives them a second word is teaching the old habit. */
+    if (wl == 4 && (strncmp(w, "wifi", 4) == 0 || strncmp(w, "host", 4) == 0)) {
+        char word[40];
+        size_t n = 0;
+        if (first_word_rest(rest, word, sizeof word, &n) >= 0) {
+            printf("[FAIL] %s line %d puts a password on a line: %s\n",
+                   what, ln, line);
+            fails++;
+        }
+    }
     if (verb(w, wl) != NULL) {
         return 0;
     }

@@ -18,6 +18,7 @@
 #include "blemidi.h"
 #include "seq_pattern.h"
 #include "lane_name.h"
+#include "secret_line.h"
 
 #include "esp_system.h"
 #include "esp_timer.h"
@@ -1696,58 +1697,181 @@ static cmd_status_t c_frame(cmd_ctx_t *ctx)
     return CMD_DONE;
 }
 
+/* '>ssh user@host <command>'. THE PASSWORD IS ASKED FOR, NEVER READ FROM THE
+ * LINE: the line is a document line, and ground rule 6 keeps secrets out of
+ * documents. What the command needs to remember until the answer comes is kept
+ * here; the answer itself goes straight to ssh_start and is wiped. */
+static struct {
+    char user[33], host[64], cmd[128];
+    int  port;
+} s_ssh;
+
+static void ssh_answer(const char *secret, char *msg, size_t max)
+{
+    /* THE OLD HABIT, CAUGHT. The syntax was '>ssh me@host hunter2 ls'; typed
+     * now, the old password would be sent to the host as part of the command,
+     * and it is already in the document. So if the answer appears in the
+     * command, nothing is sent at all. */
+    if (secret[0] != '\0' && strstr(s_ssh.cmd, secret) != NULL) {
+        snprintf(msg, max, "that password is on the line");
+        return;
+    }
+    const esp_err_t e = ssh_start(s_ssh.user, s_ssh.host, s_ssh.port, secret,
+                                  s_ssh.cmd);
+    snprintf(msg, max, "%s", e == ESP_OK ? "ssh: connecting" :
+                             e == ESP_ERR_INVALID_STATE ? "one ssh at a time" :
+                                                          "ssh could not start");
+}
+
+/* user@host[:port] into s_ssh. False when it is not that shape. */
+static bool ssh_address(const char *who)
+{
+    const char *at = strchr(who, '@');
+    if (at == NULL || at == who || at[1] == '\0') {
+        return false;
+    }
+    snprintf(s_ssh.user, sizeof s_ssh.user, "%.*s", (int)(at - who), who);
+    snprintf(s_ssh.host, sizeof s_ssh.host, "%s", at + 1);
+    s_ssh.port = 22;
+    char *colon = strchr(s_ssh.host, ':');
+    if (colon != NULL) {
+        *colon = '\0';
+        long pn;
+        if (!whole_number(colon + 1, 1, 65535, &pn)) {
+            return false;
+        }
+        s_ssh.port = (int)pn;
+    }
+    return true;
+}
+
 static cmd_status_t c_ssh(cmd_ctx_t *ctx)
 {
     if (ctx->arg[0] == '\0') {
-        cmd_out(ctx, "ssh user@host pass <command>");
-        cmd_out(ctx, "the reply lands in +ssh.");
-        cmd_out(ctx, "needs wifi. host key is shown,");
-        cmd_out(ctx, "not verified - see the buffer.");
-        snprintf(ctx->msg, sizeof ctx->msg, "ssh user@host pass ls");
+        cmd_out(ctx, "ssh user@host <command>");
+        cmd_out(ctx, "asks for the password: it");
+        cmd_out(ctx, "never goes on the line.");
+        cmd_out(ctx, "the reply lands in +out.");
+        cmd_out(ctx, "a host's key is kept the");
+        cmd_out(ctx, "first time, and a changed");
+        cmd_out(ctx, "key is refused before any");
+        cmd_out(ctx, "password is sent. if you");
+        cmd_out(ctx, "changed it: ssh forget <host>");
+        snprintf(ctx->msg, sizeof ctx->msg, "ssh user@host ls");
         return CMD_DONE;
     }
+
+    char word[80];
+    size_t wl = 0;
+    const int rest = first_word_rest(ctx->arg, word, sizeof word, &wl);
+    if (strcmp(word, "forget") == 0) {
+        char host[64];
+        size_t hl = 0;
+        if (rest < 0 ||
+            first_word_rest(ctx->arg + rest, host, sizeof host, &hl) >= 0 ||
+            hl == 0 || hl >= sizeof host) {
+            snprintf(ctx->msg, sizeof ctx->msg, "ssh forget <host>");
+            return CMD_ERROR;
+        }
+        int port = 22;
+        char *colon = strchr(host, ':');
+        if (colon != NULL) {
+            *colon = '\0';
+            long pn;
+            if (!whole_number(colon + 1, 1, 65535, &pn)) {
+                snprintf(ctx->msg, sizeof ctx->msg, "a port is 1-65535");
+                return CMD_ERROR;
+            }
+            port = (int)pn;
+        }
+        const esp_err_t e = ssh_forget(host, port);
+        snprintf(ctx->msg, sizeof ctx->msg, "%s %.20s",
+                 e == ESP_OK ? "key forgotten:" : "no key kept for", host);
+        return CMD_DONE;
+    }
+
     if (!net_up()) {
-        cmd_out(ctx, "no network. try: wifi <ssid> <pass>");
+        cmd_out(ctx, "no network. try: wifi <ssid>");
         snprintf(ctx->msg, sizeof ctx->msg, "ssh needs wifi");
         return CMD_ERROR;
     }
-
-    /* user@host, then the password, then everything else is the command. */
-    char who[64] = {0}, pass[64] = {0};
-    const char *p = ctx->arg;
-    size_t i = 0;
-    while (*p == ' ') { p++; }
-    while (*p && *p != ' ' && i < sizeof who - 1)  { who[i++] = *p++; }
-    who[i] = '\0';
-    while (*p == ' ') { p++; }
-    i = 0;
-    while (*p && *p != ' ' && i < sizeof pass - 1) { pass[i++] = *p++; }
-    pass[i] = '\0';
-    while (*p == ' ') { p++; }
-    if (*p == '\0') {
-        cmd_out(ctx, "ssh user@host pass <command>");
+    if (ssh_busy()) {
+        snprintf(ctx->msg, sizeof ctx->msg, "one ssh at a time");
         return CMD_ERROR;
     }
-
-    char *at = strchr(who, '@');
-    if (at == NULL) {
-        cmd_out(ctx, "needs user@host");
+    if (rest < 0 || wl >= sizeof word || !ssh_address(word)) {
+        snprintf(ctx->msg, sizeof ctx->msg, "ssh user@host <command>");
         return CMD_ERROR;
     }
-    *at = '\0';
-    const char *user = who;
-    char *host = at + 1;
-    int port = 22;
-    char *colon = strchr(host, ':');
-    if (colon != NULL) { *colon = '\0'; port = atoi(colon + 1); }
+    const char *cmd = ctx->arg + rest;
+    while (*cmd == ' ') {
+        cmd++;
+    }
+    snprintf(s_ssh.cmd, sizeof s_ssh.cmd, "%s", cmd);
 
-    const esp_err_t e = ssh_run(user, host, port, pass, p);
-    char st[40];
-    ssh_status(st, sizeof st);
-    snprintf(ctx->msg, sizeof ctx->msg, "%s", st);
-    /* The reply is already in '+ssh'; returning DONE with more than one output
-     * line is what moves the view there. */
-    return (e == ESP_OK) ? CMD_DONE : CMD_ERROR;
+    char q[40];
+    snprintf(q, sizeof q, "%.24s password", s_ssh.host);
+    if (!cmd_ask_secret(q, ssh_answer)) {
+        snprintf(ctx->msg, sizeof ctx->msg, "nothing here can ask");
+        return CMD_ERROR;
+    }
+    snprintf(ctx->msg, sizeof ctx->msg, "type it, Enter. Esc stops");
+    return CMD_PENDING;
+}
+
+/* '>wifi <ssid>' and '>host <ssid>'. ONE WORD, AND THE PASSWORD IS ASKED FOR.
+ * Anything after the name is what used to be the password, so it is treated as
+ * one: refused, and cut from the line before autosave can keep it (secret_at).
+ * The answer goes to the radio, which keeps it in NVS - never a document. */
+static char s_net_ssid[33];
+
+static void wifi_answer(const char *secret, char *msg, size_t max)
+{
+    if (net_join(s_net_ssid, secret) != ESP_OK) {
+        snprintf(msg, max, "could not start the radio");
+        return;
+    }
+    snprintf(msg, max, "joining %.20s", s_net_ssid);
+}
+
+static void host_answer(const char *secret, char *msg, size_t max)
+{
+    if (net_host(s_net_ssid, secret) != ESP_OK) {
+        snprintf(msg, max, "could not start the radio");
+        return;
+    }
+    /* net_host hosts OPEN below eight characters; say so here too. */
+    snprintf(msg, max, strlen(secret) >= 8 ? "hosting %.12s 192.168.4.1"
+                                           : "hosting %.12s OPEN", s_net_ssid);
+}
+
+/* The one word, or a refusal. Returns false with ctx->msg set. */
+static bool net_name(cmd_ctx_t *ctx, const char *usage)
+{
+    size_t n = 0;
+    const int rest = first_word_rest(ctx->arg, s_net_ssid, sizeof s_net_ssid, &n);
+    if (rest >= 0) {
+        ctx->secret_at = rest;
+        snprintf(ctx->msg, sizeof ctx->msg, "no passwords on a line - cut");
+        return false;
+    }
+    if (n == 0 || n >= sizeof s_net_ssid) {
+        snprintf(ctx->msg, sizeof ctx->msg, "%s", usage);
+        return false;
+    }
+    return true;
+}
+
+static cmd_status_t ask_for(cmd_ctx_t *ctx, cmd_secret_fn fn)
+{
+    char q[40];
+    snprintf(q, sizeof q, "%.24s password", s_net_ssid);
+    if (!cmd_ask_secret(q, fn)) {
+        snprintf(ctx->msg, sizeof ctx->msg, "nothing here can ask");
+        return CMD_ERROR;
+    }
+    snprintf(ctx->msg, sizeof ctx->msg, "type it, Enter. Esc stops");
+    return CMD_PENDING;
 }
 
 static cmd_status_t c_wifi(cmd_ctx_t *ctx)
@@ -1761,7 +1885,8 @@ static cmd_status_t c_wifi(cmd_ctx_t *ctx)
         if (kn[0] != '\0') {
             cmd_out(ctx, "remembered: %.17s", kn);
         }
-        cmd_out(ctx, "wifi <ssid> <password>");
+        cmd_out(ctx, "wifi <ssid> - then it asks");
+        cmd_out(ctx, "for the password.");
         cmd_out(ctx, "wifi off | wifi forget");
         snprintf(ctx->msg, sizeof ctx->msg, "%s", st);
         return CMD_DONE;
@@ -1776,34 +1901,26 @@ static cmd_status_t c_wifi(cmd_ctx_t *ctx)
         snprintf(ctx->msg, sizeof ctx->msg, "wifi off");
         return CMD_DONE;
     }
-    char ssid[33], pass[65];
-    two_words(ctx->arg, ssid, sizeof ssid, pass, sizeof pass);
-    if (net_join(ssid, pass) != ESP_OK) {
-        cmd_out(ctx, "could not start the radio");
+    if (!net_name(ctx, "wifi <ssid>")) {
         return CMD_ERROR;
     }
-    snprintf(ctx->msg, sizeof ctx->msg, "joining %.20s", ssid);
-    return CMD_DONE;
+    return ask_for(ctx, wifi_answer);
 }
 
 static cmd_status_t c_host(cmd_ctx_t *ctx)
 {
     if (ctx->arg[0] == '\0') {
-        cmd_out(ctx, "host <ssid> <password>");
-        cmd_out(ctx, "the deck becomes the network.");
-        cmd_out(ctx, "password needs 8+ chars or");
-        cmd_out(ctx, "it hosts open, and says so.");
-        snprintf(ctx->msg, sizeof ctx->msg, "host <ssid> <password>");
+        cmd_out(ctx, "host <ssid> - then it asks");
+        cmd_out(ctx, "for a password. under 8");
+        cmd_out(ctx, "chars, or none, and it hosts");
+        cmd_out(ctx, "open, and says so.");
+        snprintf(ctx->msg, sizeof ctx->msg, "host <ssid>");
         return CMD_DONE;
     }
-    char ssid[33], pass[65];
-    two_words(ctx->arg, ssid, sizeof ssid, pass, sizeof pass);
-    if (net_host(ssid, pass) != ESP_OK) {
-        cmd_out(ctx, "could not start the radio");
+    if (!net_name(ctx, "host <ssid>")) {
         return CMD_ERROR;
     }
-    snprintf(ctx->msg, sizeof ctx->msg, "hosting %.14s 192.168.4.1", ssid);
-    return CMD_DONE;
+    return ask_for(ctx, host_answer);
 }
 
 static cmd_status_t c_osc(cmd_ctx_t *ctx)
@@ -2068,12 +2185,12 @@ static const cmd_t s_builtins[] = {
     { "swing", c_swing, CMD_CAP_EDIT,  "50 straight, 67 triplet" },
     { "sync",  c_sync,  CMD_CAP_EDIT,  "on | off | lead | follow | alone" },
     { "send",  c_send,  CMD_CAP_SYSTEM,"where events go; send mon on" },
-    { "wifi",  c_wifi,  CMD_CAP_NET,   "wifi <ssid> <pass> | off" },
+    { "wifi",  c_wifi,  CMD_CAP_NET,   "wifi <ssid> | off - asks the pass" },
     { "battery", c_battery, CMD_CAP_READ, "find the sense pin" },
     { "kbd",   c_kbd,   CMD_CAP_SYSTEM,"what is typing | kbd forget" },
-    { "host",  c_host,  CMD_CAP_NET,   "host <ssid> <pass> - be the net" },
+    { "host",  c_host,  CMD_CAP_NET,   "host <ssid> - be the net" },
     { "osc",   c_osc,   CMD_CAP_NET,   "osc <ip> <port> - /deck/<lane>" },
-    { "ssh",   c_ssh,   CMD_CAP_NET,   "ssh user@host pass <command>" },
+    { "ssh",   c_ssh,   CMD_CAP_NET,   "ssh user@host <command>" },
     { "frame", c_frame, CMD_CAP_NET,   "send the frame over osc" },
     { "split", c_split, CMD_CAP_EDIT,  "split on | off | <rows>" },
     { "route", c_route, CMD_CAP_EDIT,  "route disc kick" },

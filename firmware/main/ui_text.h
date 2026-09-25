@@ -110,8 +110,12 @@
  *
  * "guide 2" is the grammar of docs/MANIFESTO.md §3.6: a digit is how much, '_'
  * is a tie, ',' makes a chord, and X ',' '?' and '-' are gone. A guide from
- * before it teaches lines that are now refused. */
-#define GUIDE_MARK "guide 2"
+ * before it teaches lines that are now refused.
+ *
+ * "guide 3": a password is asked for and never typed on a line (ask.h), so the
+ * '>wifi <ssid> <pass>' and '>host deck 12345678' that "guide 2" taught are
+ * refused - and cut - now. */
+#define GUIDE_MARK "guide 3"
 
 #define GUIDE_TEXT \
     "Ctrl+Enter runs a line.\n" \
@@ -180,8 +184,11 @@
     ">send\n" \
     "one cable to a DAW:\n" \
     ">usb on\n" \
-    ">wifi <ssid> <pass>\n" \
-    ">host deck 12345678\n" \
+    "a network. it asks for the\n" \
+    "password - a password never\n" \
+    "goes on a line:\n" \
+    ">wifi <ssid>\n" \
+    ">host deck\n" \
     ">osc 192.168.4.2 9000\n" \
     "\n" \
     "PICTURES - same document,\n" \
@@ -208,7 +215,7 @@
     "the commands:\n" \
     ">list\n" \
     ">help\n" \
-    "guide 2\n"
+    "guide 3\n"
 
 #ifndef UI_TEXT_NO_ASSERTS
 _Static_assert(sizeof(UI_NOT_A_COMMAND) - 1 <= UI_NARROW_COLS, "status message is cut");

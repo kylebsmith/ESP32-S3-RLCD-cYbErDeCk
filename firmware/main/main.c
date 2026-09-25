@@ -20,6 +20,7 @@
 #include "ensemble.h"
 #include "vitals.h"
 #include "view.h"
+#include "ssh.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -868,6 +869,21 @@ void app_main(void)
             prof_t = esp_timer_get_time();
             view_frame();
             prof_view += esp_timer_get_time() - prof_t;
+        }
+
+        /* An ssh session runs in a task of its own (ssh.c); what it says is
+         * moved into '+out' here, in the task that owns the documents. */
+        {
+            size_t from = 0;
+            const int sv = ssh_service(&from);
+            if (sv != SSH_QUIET) {
+                need_draw = true;
+            }
+            if (sv == SSH_FINISHED) {
+                char st[40];
+                ssh_status(st, sizeof st);
+                editor_show_output(from, st);
+            }
         }
 
         if (need_draw) {

@@ -103,6 +103,23 @@ jobs:
              firmware/components/textgrid/font6x12.c
           /tmp/test_textgrid
 
+      # Ground rule 6: nothing secret ever enters a document, and a command
+      # line is a document line. '>wifi', '>host' and '>ssh' took their
+      # password as a word of the line. Now a command asks, and ask.h takes the
+      # answer: this holds it to showing only stars, handing over exactly what
+      # was typed and wiping it - and checks the parse that finds and cuts an
+      # old-style password, and that host key fingerprints print exactly as
+      # ssh-keygen prints them. (The guide check in the UI text step fails on
+      # the guide that taught '>wifi <ssid> <pass>'.)
+      - name: Check that secrets are asked for, not typed on a line
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror -I firmware/main \
+             -I firmware/components/kbd/include \
+             -I firmware/components/cmd/include \
+             -I firmware/components/ssh/include -I tools/hostshim \
+             -o /tmp/test_ask tools/test_ask.c
+          /tmp/test_ask
+
       # The SD mirror wrote every buffer to one file, so switching documents
       # overwrote the previous document's backup - and a '+out' command
       # transcript was mirrored as though it were a document. Each case in

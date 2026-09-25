@@ -18,7 +18,7 @@ idf_component_register(SRCS "ssh.c" ${LS2_SRCS}
                        INCLUDE_DIRS "include" "${LS2}/include"
                        PRIV_INCLUDE_DIRS "${LS2}/src" "priv"
                        REQUIRES mbedtls lwip esp_timer
-                       PRIV_REQUIRES docstore)
+                       PRIV_REQUIRES docstore nvs_flash)
 
 target_compile_definitions(${COMPONENT_LIB} PRIVATE
     LIBSSH2_MBEDTLS=1

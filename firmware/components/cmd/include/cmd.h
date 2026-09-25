@@ -76,6 +76,12 @@ struct cmd_ctx {
      * editor can mark that character in the document instead of leaving the
      * performer to count columns against a message. */
     int          err_at;
+    /* WHERE A SECRET STARTS, as an offset into `arg`, or -1. Set by a command
+     * that found a password on its own line - which no command takes any more
+     * (firmware/main/ask.h). The editor deletes the line from there to its end
+     * at once, so what was typed there reaches no journal, card or backup that
+     * had not already caught it. */
+    int          secret_at;
 };
 
 /* Run one line. Returns CMD_ERROR for an unknown name or a refused
@@ -111,6 +117,21 @@ const cmd_t *cmd_recognise(const char *line, int *word_at, int *word_len);
 const cmd_t *cmd_table(int *count);
 
 /* Register the built-in commands. Called once at start-up. */
+/* The column, in the line last run, from which it held a secret; -1 if none. */
+int cmd_last_secret_col(void);
+
+/* ASKING FOR A SECRET. Ground rule 6: nothing secret ever enters a document -
+ * and a command line is a document line, journalled, mirrored to the card and
+ * copied to the owner's DGX. So a command that needs a password never reads it
+ * from its line. It asks here and returns; whoever holds the keyboard shows the
+ * question, takes the next line typed as stars, and calls `fn` with it - in the
+ * task commands run in - then wipes it (firmware/main/ask.h). `fn` writes its
+ * result, one line, into msg. False when there is nobody to ask. */
+typedef void (*cmd_secret_fn)(const char *secret, char *msg, size_t max);
+typedef bool (*cmd_asker_t)(const char *question, cmd_secret_fn fn);
+void cmd_set_asker(cmd_asker_t fn);
+bool cmd_ask_secret(const char *question, cmd_secret_fn fn);
+
 void cmd_init(void);
 
 /* LANES AND NAMES ARE NOT ROWS OF THE TABLE (docs/MANIFESTO.md §3.8). A lane's
