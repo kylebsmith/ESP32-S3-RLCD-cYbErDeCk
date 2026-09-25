@@ -784,6 +784,15 @@ by the structure of the code (not measured on the old firmware). Ranks are route
 hops, recomputed on every edit, never per tick; on the deck a rim routed from a kick
 and typed before it sounded on the kick's own timestamp.
 
+**A routed lane plays at its source's level, on every binding.** The source decides
+*how much* as well as *when*: the trigger carries its whole value, 0-127, and a
+controller sends it as it is, a note plays at it, a picture and a part scale it to
+their nine steps. Before 2026-09-25 that was true only of pictures. On the deck, with
+`>kick 9...3...`, `>route cut kick` sent no controller message in a bar of kicks —
+a controller read its own first step, which a routed lane fills with `x`, meaning
+hold — and `>route rim kick` hit at 100 while the kick went 127 and 42. After, the
+cut followed the kick and the rim hit at the kick's velocity.
+
 **Open, and recorded rather than guessed at:** a *loop* of sections — verse after
 chorus after verse — needs a lane with two sources, and a lane has one. The
 arrangement that exists today is linear, with the last section looping by having no
