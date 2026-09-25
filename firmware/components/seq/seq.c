@@ -407,7 +407,10 @@ static void published(seq_lane_t *src, uint8_t value)
         seq_lane_t *d = &s_lanes[j];
         if (d->route[0] != '\0' && strcmp(d->route, src->name) == 0) {
             d->trig = true;
-            d->trig_val = src->last_val;
+            /* THE WHOLE VALUE, 0-127, not the 0-9 it rounds to: a controller
+             * routed from a kick carries the kick's velocity to the wire as it
+             * was, and only a picture needs the nine steps. */
+            d->trig_val = value;
         }
     }
     if (s_on_play != NULL) {
@@ -477,7 +480,7 @@ static void fire_event(seq_lane_t *l, const seq_ev_t *e, bool routed,
      * the same tick (fire_lanes), so '>bass:vel 9...' and '>bass 0...' agree on
      * the first step whichever was typed first. */
     if (l->bind == SEQ_BIND_NOTE && l->param != SEQ_PART_NONE) {
-        int amt = routed ? (int)l->trig_val
+        int amt = routed ? ((int)l->trig_val * 9 + 63) / 127
                          : (e->val == SEQ_VAL_X ? -1 : (int)e->val);
         seq_lane_t *p = parent_of(l);
         if (p != NULL) {
@@ -496,7 +499,7 @@ static void fire_event(seq_lane_t *l, const seq_ev_t *e, bool routed,
      * is an esp_timer callback - docs/OS.md forbids acting here. The main
      * loop replays the marks in primitive order. */
     if (l->bind == SEQ_BIND_VIZ) {
-        int amt = routed ? (int)l->trig_val
+        int amt = routed ? ((int)l->trig_val * 9 + 63) / 127
                          : (e->val == SEQ_VAL_X ? 9 : (int)e->val);
         if (amt < 0) { amt = 0; }
         if (amt > 9) { amt = 9; }
@@ -517,11 +520,17 @@ static void fire_event(seq_lane_t *l, const seq_ev_t *e, bool routed,
     if (l->ctrl) {
         /* A step with no digit HOLDS: nothing is sent. A controller that
          * snaps to zero between steps is a stutter, not a sweep, and holding
-         * is also one fewer message on the wire. */
-        if (e->val == SEQ_VAL_X) {
+         * is also one fewer message on the wire.
+         *
+         * ROUTED, THE SOURCE SAYS HOW MUCH. This read the lane's own first step
+         * whether routed or not, and a routed lane's own step is 'x' - a hold -
+         * so '>route cut kick' sent nothing at all: measured on the deck, no
+         * controller message in a bar of kicks. */
+        if (!routed && e->val == SEQ_VAL_X) {
             return;
         }
-        const uint8_t v = (uint8_t)((e->val * 127) / 9);
+        const uint8_t v = routed ? (uint8_t)(l->trig_val & 0x7F)
+                                 : (uint8_t)((e->val * 127) / 9);
         emit((uint8_t)(0xB0 | (l->chan & 0x0F)), l->cc, v);
         published(l, v);
         return;
@@ -534,7 +543,11 @@ static void fire_event(seq_lane_t *l, const seq_ev_t *e, bool routed,
     const uint8_t note = l->melodic
         ? degree_note(e->val == SEQ_VAL_X ? 0 : e->val, l->octave)
         : l->note;
-    int vel = l->melodic ? l->vel : vel_of(l, e->val);
+    /* Routed, the source's level is the velocity - "fires on the kick, at its
+     * velocity" - where this used the lane's own, so a rim routed from a kick
+     * that alternated 127 and 42 hit at 100 every time (measured). */
+    int vel = routed ? (int)l->trig_val
+                     : (l->melodic ? l->vel : vel_of(l, e->val));
     if (vel < 1)   { vel = 1; }
     if (vel > 127) { vel = 127; }
     emit((uint8_t)(0x90 | (l->chan & 0x0F)), note, (uint8_t)vel);
@@ -556,7 +569,7 @@ static void publish_end(seq_lane_t *src)
         if (d->used && strncmp(d->route, src->name, n) == 0 &&
             strcmp(d->route + n, ":end") == 0) {
             d->trig = true;
-            d->trig_val = 9;
+            d->trig_val = 127;
         }
     }
 }

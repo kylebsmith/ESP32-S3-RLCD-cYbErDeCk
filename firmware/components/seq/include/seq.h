@@ -182,7 +182,7 @@ typedef struct {
     char     route[SEQ_NAME_MAX];  /* driven by this lane, or empty            */
     uint8_t  last_val;      /* what this lane last played, 0-9                 */
     volatile bool    trig;  /* the source fired; set in the clock callback      */
-    volatile uint8_t trig_val;
+    volatile uint8_t trig_val;   /* the source's level, 0-127: what a routed lane plays at */
     /* HOW MANY ROUTE HOPS from a lane that follows nothing. The clock fires
      * lower ranks first, so a routed lane hears its source on the same tick
      * whatever order the lines were typed in. */
