@@ -15,6 +15,7 @@ static const char *TAG = "seq";
 static seq_tick_hook_t s_on_tick;
 static seq_play_hook_t s_on_play;
 static seq_draw_hook_t s_on_draw;
+static seq_param_hook_t s_on_param;
 
 static seq_lane_t s_lanes[SEQ_MAX_LANES];
 static int        s_bpm = 120;
@@ -110,6 +111,7 @@ void seq_stats(seq_stat_t *c, seq_stat_t *x)
 }
 
 void seq_set_draw_hook(seq_draw_hook_t fn) { s_on_draw = fn; }
+void seq_set_param_hook(seq_param_hook_t fn) { s_on_param = fn; }
 
 void seq_set_hooks(seq_tick_hook_t t, seq_play_hook_t p)
 {
@@ -498,7 +500,14 @@ static void fire_lanes(uint32_t tick)
             const char ch = l->chr[s];
             const char dir = (ch == 'u' || ch == 'd' || ch == 'l' || ch == 'r')
                              ? ch : l->dir;
-            if (s_on_draw != NULL) {
+            /* A PARAMETER LANE CARRIES A VALUE, NOT A SHAPE. It does not draw;
+             * it says where the shape will. Same events, same clock, same
+             * grammar - a different part of the destination. */
+            if (l->param != 0) {
+                if (s_on_param != NULL) {
+                    s_on_param((int)l->prim, (int)l->param, amt);
+                }
+            } else if (s_on_draw != NULL) {
                 s_on_draw((int)l->prim, amt, dir, tick);
             }
             published(l, (uint8_t)(amt * 127 / 9));
@@ -862,7 +871,7 @@ esp_err_t seq_lane(const char *name, const char *steps)
     return ESP_OK;
 }
 
-esp_err_t seq_lane_viz(const char *name, int prim)
+esp_err_t seq_lane_viz(const char *name, int prim, int param)
 {
     seq_lane_t *l = find(name, true);
     if (l == NULL) {
@@ -870,6 +879,7 @@ esp_err_t seq_lane_viz(const char *name, int prim)
     }
     l->bind    = SEQ_BIND_VIZ;
     l->prim    = (uint8_t)prim;
+    l->param   = (uint8_t)param;
     l->melodic = false;
     l->ctrl    = false;
     return ESP_OK;

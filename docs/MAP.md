@@ -486,7 +486,7 @@ plainly, on a device whose whole premise is that the text *is* the score. `(3,8)
 is a rhythm you cannot see. That is a real objection and it is why this is second
 rather than first.
 
-### 9.3 Addressable parameters — `route disc.x bass` `[OPEN]` **the answer to x,y**
+### 9.3 Addressable parameters — `disc[x]` `[FACT]` — done
 
 The visuals have no positioning: every source draws centred or full-frame, and
 the only movement is `move`, which translates the whole frame.
@@ -517,9 +517,27 @@ lane's *inputs* — and it costs no new verb, no new pattern syntax, and no new
 concept. `x,y` positioning falls out of it, and so does everything else anybody
 will ask for next.
 
-Open decision: `.` as the separator, and which parameters each binding exposes.
-Keep that list short and per-binding, or it becomes the flag grammar
-[COMMANDS.md](COMMANDS.md) exists to refuse.
+**Done, and it went further than routing.** The separator is `[]`, not `.`, because
+the bracket is already the referential mark in this language and `.` is a rest — a
+separator that means "nothing happens" everywhere else is a bad separator.
+
+And the realisation that made it better than planned: **a parameter is a lane.**
+`>disc[x] 0..3..6..9..` is not just a route target, it is a lane with a pattern —
+so position alternates, nests, takes odds and a rate, and can be routed, all
+because it was never a special case. Verified on hardware:
+
+```
+ disc      4
+ disc[x]   <- bass        routed
+ disc[y]   27             from <2 7>
+ disc2[x]  9...0...       the second instance, its own path
+```
+
+`x` and `y` are the only parts, deliberately. A short list per binding, or it
+becomes the flag grammar [COMMANDS.md](COMMANDS.md) exists to refuse.
+
+`>box[z]` is refused with "no part called that" rather than ignored, because a
+part that silently does nothing is a lane that silently does nothing.
 
 ### 9.3b More primitives, and two refusals `[FACT]`
 

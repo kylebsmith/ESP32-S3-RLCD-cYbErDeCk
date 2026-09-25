@@ -433,6 +433,7 @@ void app_main(void)
      * is, so a drawing lane hands viz an index and an amount and the main loop
      * turns that into a picture. */
     seq_set_draw_hook(viz_mark);
+    seq_set_param_hook(viz_mark_param);
     /* CHECKED, NOT ASSUMED. Every one of these used to throw its return value
      * away, and when the table filled up the fifth transport vanished with no
      * message anywhere - see SEQ_MAX_DESTS. A destination that fails to

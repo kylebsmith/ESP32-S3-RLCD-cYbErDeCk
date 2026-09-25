@@ -1241,12 +1241,52 @@ static cmd_status_t c_battery(cmd_ctx_t *ctx)
  * This does the same two things a drum lane does - bind, then compile - because
  * there is one lane table and a drawing lane differs from a kick only in where
  * its events go. */
+/* SPLIT A LANE NAME INTO ITS BINDING AND ITS PART.
+ *
+ * 'disc' -> disc, no part.  'disc2' -> disc, no part.  'disc[x]' -> disc, x.
+ * 'disc2[y]' -> disc, y.
+ *
+ * One function because two callers need it - c_prim to compile a lane and c_route
+ * to bind one that does not exist yet - and writing it twice is how '<>' ended up
+ * understood in one half of seq_pattern.h and not the other. Returns the primitive
+ * index or -1, and sets *param to a VIZ_PARAM_* value or NONE.
+ *
+ * Returns -2 when the name has a part this primitive does not have, which is a
+ * different error from "no such primitive" and deserves a different message. */
+static int prim_and_param(const char *name, int *param)
+{
+    char base[SEQ_NAME_MAX];
+    char part[8] = {0};
+    const size_t n = strlen(name);
+    snprintf(base, sizeof base, "%s", name);
+    if (n > 2 && name[n - 1] == ']') {
+        size_t k = n - 1;
+        while (k > 0 && name[k] != '[') { k--; }
+        if (k > 0) {
+            snprintf(part, sizeof part, "%.*s", (int)(n - 1 - k - 1),
+                     name + k + 1);
+            snprintf(base, sizeof base, "%.*s", (int)k, name);
+        }
+    }
+    *param = viz_param_index(part);
+    if (part[0] != '\0' && *param == VIZ_PARAM_NONE) {
+        return -2;
+    }
+    return viz_prim_index(base);
+}
+
 static cmd_status_t c_prim(cmd_ctx_t *ctx)
 {
     const char *name = ctx->name;
     const char *pat  = ctx->arg;
 
-    const int prim = viz_prim_index(name);
+    int param = VIZ_PARAM_NONE;
+    const int prim = prim_and_param(name, &param);
+    if (prim == -2) {
+        cmd_out(ctx, "no part called that");
+        cmd_out(ctx, "x and y - e.g. disc[x]");
+        return CMD_ERROR;
+    }
     if (prim < 0) {
         cmd_out(ctx, "no primitive '%.12s'", name);
         cmd_out(ctx, "noise disc box star ramp grid");
@@ -1268,7 +1308,7 @@ static cmd_status_t c_prim(cmd_ctx_t *ctx)
         snprintf(ctx->msg, sizeof ctx->msg, "%s silent", name);
         return CMD_DONE;
     }
-    seq_lane_viz(name, prim);
+    seq_lane_viz(name, prim, param);
     if (seq_lane(name, pat) != ESP_OK) {
         cmd_out(ctx, "%d lanes is all there is.", SEQ_MAX_LANES);
         cmd_out(ctx, "free one: type its name alone");
@@ -1349,9 +1389,10 @@ static cmd_status_t c_route(cmd_ctx_t *ctx)
      * moved. Binding here is the command layer's job, because this is the only
      * layer that knows a primitive from a drum. */
     if (seq_lane_find(gen, -1) == NULL) {
-        const int prim = viz_prim_index(gen);
+        int rparam = VIZ_PARAM_NONE;
+        const int prim = prim_and_param(gen, &rparam);
         if (prim >= 0) {
-            seq_lane_viz(gen, prim);
+            seq_lane_viz(gen, prim, rparam);
         }
     }
     const esp_err_t re = seq_route(gen, src);

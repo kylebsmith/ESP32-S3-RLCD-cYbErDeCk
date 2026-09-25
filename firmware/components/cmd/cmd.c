@@ -100,6 +100,17 @@ void cmd_out(cmd_ctx_t *ctx, const char *fmt, ...)
 static size_t base_len(const char *name, size_t n)
 {
     size_t b = n;
+    /* A TRAILING '[part]' SELECTS A PARAMETER. '>disc[x] 0..9..' is a lane whose
+     * events are the circle's position, and the command table only needs to know
+     * that it is a circle. The bracket is the referential mark everywhere else in
+     * this language, which is why it is the one here too.
+     *
+     * Stripped before the digit, so 'disc2[x]' is the x of the second circle. */
+    if (b > 2 && name[b - 1] == ']') {
+        size_t k = b - 1;
+        while (k > 0 && name[k] != '[') { k--; }
+        if (k > 0) { b = k; }
+    }
     while (b > 1 && name[b - 1] >= '0' && name[b - 1] <= '9') {
         b--;
     }

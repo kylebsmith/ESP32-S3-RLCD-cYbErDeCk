@@ -122,6 +122,13 @@ typedef struct {
     /* ---- the binding, and what only some bindings need ---- */
     seq_bind_t bind;
     uint8_t  prim;          /* SEQ_BIND_VIZ: which drawing primitive           */
+    /* WHICH PART OF IT. Zero means the primitive itself - how much of it to draw.
+     * Anything else is a parameter of that primitive, and the value goes there
+     * instead: '>disc[x] 0..9..' is a lane whose events are positions.
+     *
+     * seq does not know what a parameter means, exactly as it does not know what
+     * a primitive is. It carries a number and hands it over. */
+    uint8_t  param;
     char     chr[SEQ_MAX_STEPS]; /* the step's own character, verbatim         */
     char     dir;           /* 'u','d','l','r' - a direction written in front  */
 
@@ -192,7 +199,7 @@ esp_err_t seq_lane_ctrl(const char *name, int cc, int chan);
 
 /* Bind a lane to a drawing primitive. `prim` is an index into viz's own table;
  * seq does not know what a primitive is, only that it has a number. */
-esp_err_t seq_lane_viz(const char *name, int prim);
+esp_err_t seq_lane_viz(const char *name, int prim, int param);
 
 /* ROUTING, FOR ANY PAIR OF LANES.
  *
@@ -393,6 +400,11 @@ void seq_set_hooks(seq_tick_hook_t on_tick, seq_play_hook_t on_play);
  * seq_lane_viz; seq never learns what it means. */
 typedef void (*seq_draw_hook_t)(int prim, int amt, char dir, uint32_t tick);
 void seq_set_draw_hook(seq_draw_hook_t fn);
+
+/* A lane bound to a PARAMETER of a primitive fired. Same contract as the draw
+ * hook: called from the clock callback, so it may only record. */
+typedef void (*seq_param_hook_t)(int prim, int param, int amt);
+void seq_set_param_hook(seq_param_hook_t fn);
 
 /* Events dropped because the transport could not keep up. A late note is
  * worse than a lost one, so the clock never blocks - but the count must be

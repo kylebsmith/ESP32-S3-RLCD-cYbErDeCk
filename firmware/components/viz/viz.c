@@ -71,6 +71,28 @@ typedef struct {
 #define MARK_MAX 16
 static mark_t  s_mark[MARK_MAX];
 static volatile uint8_t s_nmark;
+
+/* WHERE EACH PRIMITIVE DRAWS. -1 means centred, which is what everything did
+ * before positions existed and is what a primitive with no '[x]' lane still does.
+ * In cells, not amounts, so the draw functions read a coordinate rather than
+ * re-deriving one. */
+typedef struct {
+    volatile int8_t x, y;        /* -1 = centre */
+} place_t;
+/* -1 in every slot at startup: a primitive with no '[x]' lane is centred, which is
+ * what everything did before positions existed. Zero would be a real column. */
+static place_t s_place[NGEN] = {
+    [0 ... NGEN - 1] = { .x = -1, .y = -1 },
+};
+
+/* Pending parameter marks, applied before anything draws. Separate from the draw
+ * marks because a position has to be in place BEFORE the shape that uses it -
+ * within one frame the order of the two lanes in the table must not matter. */
+typedef struct {
+    volatile uint8_t prim, param, amt;
+} pmark_t;
+static pmark_t s_pmark[MARK_MAX];
+static volatile uint8_t s_npmark;
 static volatile uint32_t s_mark_tick;
 static volatile bool     s_pending;
 
@@ -215,6 +237,8 @@ const char *viz_row(int y)
 void viz_forget_all(void)
 {
     s_nmark = 0;
+    s_npmark = 0;
+    for (int i = 0; i < NGEN; i++) { s_place[i].x = -1; s_place[i].y = -1; }
     s_pending = false;
     s_live = false;
     memset(s_prev, TONE_0, sizeof s_prev);
@@ -252,6 +276,23 @@ static void clear_frame(void)
  * already in the grammar for the drums, so movement borrows it rather than
  * inventing a parameter - which is why none of these needs a direction word or
  * a second bracket field. */
+
+/* WHERE THIS PRIMITIVE DRAWS, or the centre when no '[x]' lane has said. The
+ * index is passed in rather than looked up because a draw function does not know
+ * its own slot - the dispatch table does. */
+static int s_drawing;                /* the primitive currently drawing */
+
+static int place_x(void)
+{
+    const int8_t v = s_place[s_drawing].x;
+    return (v < 0) ? (s_w / 2) : (int)v;
+}
+
+static int place_y(void)
+{
+    const int8_t v = s_place[s_drawing].y;
+    return (v < 0) ? (s_h / 2) : (int)v;
+}
 
 /* A direction letter as a delta. Defaults to down, because that is the one
  * every ASCII animation needs first. */
@@ -382,7 +423,7 @@ static void draw_noise(int amt, char dir, uint32_t step)
  * routing does. Through warp it is a box; through fold, a flower. */
 static void draw_disc(int amt, char dir, uint32_t step)
 {
-    const int cx = s_w / 2, cy = s_h / 2;
+    const int cx = place_x(), cy = place_y();
     /* THE SHORT AXIS BOUNDS THE RADIUS, or it is not a circle.
      *
      * This scaled off the width alone, and the pane is a wide letterbox - 58 by
@@ -635,8 +676,8 @@ static void draw_box(int amt, char dir, uint32_t step)
      * one. Two off the half-width leaves room for both edges at every amount. */
     const int hw = 1 + amt * (s_w / 2 - 2) / 9;
     const int hh = amt * (s_h / 2 - 1) / 9;
-    const int x0 = s_w / 2 - hw, x1 = s_w / 2 + hw;
-    const int y0 = s_h / 2 - hh, y1 = s_h / 2 + hh;
+    const int x0 = place_x() - hw, x1 = place_x() + hw;
+    const int y0 = place_y() - hh, y1 = place_y() + hh;
     const char c = (char)(TONE_0 + TONE_TOP);
     for (int x = (x0 < 0 ? 0 : x0); x <= x1 && x < s_w; x++) {
         if (y0 >= 0)  { s_fb[y0][x] = c; }
@@ -656,7 +697,7 @@ static void draw_box(int amt, char dir, uint32_t step)
 static void draw_star(int amt, char dir, uint32_t step)
 {
     const int spokes = 3 + (amt < 0 ? 9 : amt);      /* 3..12 */
-    const int cx = s_w / 2, cy = s_h / 2;
+    const int cx = place_x(), cy = place_y();
     const int reach = (s_w / 2 < s_h ? s_w / 2 : s_h);
     const char c = (char)(TONE_0 + TONE_TOP);
     for (int k = 0; k < spokes; k++) {
@@ -708,6 +749,26 @@ int viz_prim_index(const char *name)
     return gen_index(name);
 }
 
+int viz_param_index(const char *name)
+{
+    if (name == NULL) { return VIZ_PARAM_NONE; }
+    if (strcmp(name, "x") == 0) { return VIZ_PARAM_X; }
+    if (strcmp(name, "y") == 0) { return VIZ_PARAM_Y; }
+    return VIZ_PARAM_NONE;
+}
+
+void viz_mark_param(int prim, int param, int amt)
+{
+    if (prim < 0 || prim >= NGEN || param == VIZ_PARAM_NONE) { return; }
+    const uint8_t n = s_npmark;
+    if (n >= MARK_MAX) { return; }
+    s_pmark[n].prim  = (uint8_t)prim;
+    s_pmark[n].param = (uint8_t)param;
+    s_pmark[n].amt   = (uint8_t)(amt < 0 ? 0 : (amt > 9 ? 9 : amt));
+    s_npmark = (uint8_t)(n + 1);
+    s_pending = true;
+}
+
 void viz_mark(int prim, int amt, char dir, uint32_t tick)
 {
     if (prim < 0 || prim >= NGEN) {
@@ -749,12 +810,29 @@ bool viz_service(void)
      * repeat what is there. Replaying in the order the lanes happened to fire
      * would make the same three lines mean something different depending on
      * which order they were typed in. */
+    /* POSITIONS FIRST. A '>disc[x]' lane and a '>disc' lane are two lanes in one
+     * table, and which comes first there is whichever the player typed first -
+     * so the position is applied before anything draws, and the typing order
+     * cannot change the picture. */
+    const int np = (int)s_npmark;
+    s_npmark = 0;
+    for (int i = 0; i < np; i++) {
+        const int prim = s_pmark[i].prim;
+        const int amt  = s_pmark[i].amt;
+        if (s_pmark[i].param == VIZ_PARAM_X) {
+            s_place[prim].x = (int8_t)(amt * (s_w - 1) / 9);
+        } else {
+            s_place[prim].y = (int8_t)(amt * (s_h - 1) / 9);
+        }
+    }
+
     const int nm = (int)s_nmark;
     s_nmark = 0;
     bool drew = false;
     for (int prim = 0; prim < NGEN; prim++) {
         for (int m = 0; m < nm; m++) {
             if (s_mark[m].prim != (uint8_t)prim) { continue; }
+            s_drawing = prim;
             s_draw[prim]((int)s_mark[m].amt, s_mark[m].dir, tick);
             drew = true;
         }
