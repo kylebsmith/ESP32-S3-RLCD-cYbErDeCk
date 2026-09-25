@@ -4,6 +4,9 @@
 if this page and the firmware disagree, the firmware is right and this page is
 stale. [MAP.md](MAP.md) §0 has the snippet that counts them.*
 
+*For what is wrong with this language and what should replace it, see
+[MANIFESTO.md](MANIFESTO.md) — two adversarial reviews, unimplemented on purpose.*
+
 A performer cannot search. That is the entire reason this page has to fit on one:
 if it does not, the language is too big, and that is a design failure rather than
 a documentation one.
@@ -39,20 +42,18 @@ it.
 The whole point: **a drum and a circle are the same sentence.** A lane compiles
 text into *when* and *how much*; its name says *where*.
 
-| sound | | | pictures — sources | | pictures — operators | |
+| sound | | | pictures — **fields** | | pictures — **operators** | |
 |---|---|---|---|---|---|---|
-| `kick` | drum, note 36 | | `noise` | sparkle field | `echo` | keep last frame — trails |
-| `snare` | drum | | `disc` | filled circle | `move` | shift, wrapping |
-| | | | `box` | rectangle outline | `spin` | quarter turns |
-| | | | `star` | spokes from centre | | |
-| `hat` | drum | | `ramp` | dithered gradient | `warp` | bend lines on an axis |
-| `ohat` | drum | | `grid` | a lattice | `shake` | tear lines sideways |
-| `clap` | drum | | | | `grow` | dilate — marks bloom |
-| `tom` | drum | | | | `thin` | erode — edges eat inward |
-| `rim` | drum | | | | `flip` | invert the frame |
-| `crash` | drum | | | | `tile` | repeat, 1–4 copies |
-| `bass` | voice, low | | | | `fold` | mirror, 1–3 folds |
-| `lead` | voice | | | | | |
+| `kick` | drum, note 36 | | `disc` | round — distance from a point | `mask` | keep what is this bright — a **level** |
+| `snare` | drum | | `box` | square — the corners disc lacks | `edge` | keep where it changes — a **contour** |
+| `hat` | drum | | `turn` | the **angle** around the point | `echo` | keep the last frame — trails |
+| `ohat` | drum | | `ramp` | linear, along an axis | `move` | shift, wrapping |
+| `clap` | drum | | `grid` | periodic — a lattice | `spin` | quarter turns |
+| `tom` | drum | | `noise` | no geometry — the entropy | `warp` | bend lines on an axis |
+| `rim` | drum | | | | `grow` | dilate — marks bloom |
+| `crash` | drum | | | | `thin` | erode — edges eat inward |
+| `bass` | voice, low | | | | `flip` | invert the frame |
+| `lead` | voice | | | | `fold` | mirror, 1–3 folds |
 | `pad` | voice, long | | | | | |
 | `arp` | voice, short high | | | | | |
 | `cut` | CC 74, filter | | | | | |
@@ -65,7 +66,35 @@ text into *when* and *how much*; its name says *where*.
 
 **A trailing digit makes another one.** `disc2`, `disc3`, `kick2` — a different
 name is a different lane on the same binding, so you can route them apart:
-`>route disc2 kick2`. Nothing in the table changes; it is a naming rule.
+`>route disc2 kick2`. It is a naming rule, and it applies **to lanes only**: a
+trailing digit on anything else is not a command, so `>bpm140` is refused rather
+than quietly reporting the tempo it did not set.
+
+### A shape is a field through a threshold
+
+The picture half of this language has **six fields and ten operators**, and none of
+the six is a shape. A field answers *how far is this cell from the thing* in its own
+geometry; `mask` and `edge` cut a shape out of the answer. That is why there is no
+`ring` and no `star`:
+
+```
+>disc 8            a filled circle
+>disc 8  >edge 1   a RING - the outline, and nothing inside
+>disc 8  >mask 9   a smaller, harder circle - the level resizes it
+>box 6   >edge 1   a rectangle outline
+>turn 9  >edge 1   spokes
+>turn 2  >spin 1   a RADAR SWEEP, and with echo one that trails
+>ramp d  >edge 9   a contour map
+```
+
+`star` used to be a verb. Its amount was a count of spokes — the only amount in
+this language that was not a magnitude — and nothing composed with it. `turn` is the
+angle as a field, so the amount means *how much of the circle*, and spin turns it.
+
+**`route` states the draw order.** A routed lane draws *after* the lane it follows,
+so `>route thin disc` then `>route grow thin` is despeckle and reversing the two is
+close-the-gaps. Both were unreachable when the table decided. A document with no
+routes draws in table order, whatever order the lines were typed.
 
 ---
 

@@ -27,7 +27,7 @@ almost anything is useful — it is:
 
 If neither, it is refused, however good it is.
 
-**Sixty-five verbs `[FACT]`**, counted from the command table itself:
+**Sixty-nine verbs `[FACT]`**, counted from the command table itself:
 
 ```
     python3 - <<'EOF'
@@ -41,6 +41,13 @@ That command is here because the number was wrong twice. Earlier revisions of
 this document said sixty-three, from a grep that also matched the `{ "kick", 36 }`
 note-lookup tables — data rows, not verbs. A document whose job is to refuse
 features on the strength of a count has to be able to show its arithmetic.
+
+**And it went stale a third time, which the snippet did not prevent.** `box`,
+`star`, `spin` and `cc` were added, the snippet was not re-run, and three sections
+of this document went on saying sixty-five while the firmware said sixty-nine — a
+review found it, not the author. A snippet only helps a document that is run against
+it, so §0, §2 and §8.5 all take their number from the same place now: sixty-nine.
+The primitive rework in §9.5 traded three names for three and did not change it.
 
 ---
 
@@ -78,7 +85,7 @@ wrong. Teach the *binding* about the output.
 
 ## 2. The surface, as it stands `[FACT]`
 
-Sixty-five names, grouped by what they actually touch:
+Sixty-nine names, grouped by what they actually touch:
 
 ### Lanes that make sound — 17 names, one behaviour
 ```
@@ -91,12 +98,14 @@ All seventeen call the same two functions: `seq_lane_note`/`seq_lane_melodic`/
 `seq_lane_ctrl` to set the binding, then `seq_lane()` to compile the pattern.
 The names are *presets*, not features.
 
-### Lanes that make pictures — 13 names, one behaviour
+### Lanes that make pictures — 16 names, one behaviour
 ```
-echo move warp shake         operators: they bend what is there
-noise disc ramp grid         sources: they put ink down
-grow thin flip tile fold
+disc box turn ramp grid noise    FIELDS: distance from a thing, as a tone
+mask edge                        THRESHOLDS: a level through a field, a contour of it
+echo move spin warp              memory and motion
+grow thin flip fold              shaping
 ```
+Not shapes — see §9.5 for why that distinction is the whole of the third design.
 Peers of the drums. Each is a name bound to a primitive exactly as `kick` is a
 name bound to note 36, and they go through the same `seq_lane()` as everything
 else. There is no `viz` keyword.
@@ -388,9 +397,11 @@ argue against later:
    at compile time.
 3. **One shared clock mechanism** that covers both a second deck and a laptop.
 4. **MIDI in and out on a wire**, so the deck needs no computer at all.
-5. **Sixty-five verbs down, not up**, and counted with the snippet in §0 rather
-   than by eye. The collapse spent twelve of them buying one lane system; nothing
-   else may spend any without deleting its own.
+5. **Sixty-nine verbs down, not up**, and counted with the snippet in §0 rather
+   than by eye — *by running it*, which is the part that failed. The collapse spent
+   twelve of them buying one lane system; nothing else may spend any without deleting
+   its own. §9.5 is the first change to honour that literally: `turn`, `mask` and
+   `edge` in, `star`, `shake` and `tile` out, same number either side.
 6. **Every verb in one printed page**, because a performer cannot search.
 7. **No verb that exists only to work around another verb.**
 
@@ -571,3 +582,79 @@ not have?*
   banks is teaching it about one specific output. §1's corollary.
 - **Anything with a menu.**
 
+
+### 9.5 The sources were shapes, and should have been fields `[JUDGEMENT]`
+
+Two adversarial reviews — [MANIFESTO.md](MANIFESTO.md) §2 — were given the docs and
+the firmware and told to find what was wrong. They reached the same two conclusions
+separately, and the owner had already reached one of them unaided: *"star? wtf is
+that? we should be going more fundamental to allow for more expressive
+possibilities."*
+
+**The complaint, stated precisely.** `star`'s amount was a **count of spokes**, three
+to twelve. Every other amount in this language is a magnitude — that is what "a digit
+is always how much" means — so `star` was the one place the rule did not hold. And it
+composed with nothing: `grow` made it a blob, `thin` erased a one-cell spoke, `spin`
+on a four-spoke star is the identity. It was not a primitive. It was one picture with
+a verb in front of it.
+
+It was not uniquely guilty. `disc`, `box`, `star`, `grid` and `ramp` were all *shapes*,
+and a shape bakes its own hard edge in, so the only figure a source could ever draw is
+the one its author chose. §9.3b's own table gives the game away: each of the three
+additions is justified by *the picture it makes* rather than by an operation.
+
+**What replaced it.** A source is a **field** — it answers "how far is this cell from
+the thing", in its own geometry, as a tone. A *shape* is then a field plus a
+threshold, and the threshold is what was missing:
+
+| | |
+|---|---|
+| `disc` | euclidean distance — round |
+| `box` | chebyshev distance — square, the corners disc cannot have |
+| `turn` | the **angle** around the point: amount is how much of the circle |
+| `ramp` | distance along one axis |
+| `grid` | distance to the nearest lattice line |
+| `noise` | no geometry at all — the entropy, irreducible |
+| `mask` | keep what is at least this bright — a **level** through the field |
+| `edge` | keep where the field changes fast — a **contour** of it |
+
+Now reachable, five of the six for the first time: a ring (`disc` `edge`), a
+rectangle outline (`box` `edge`), spokes (`turn` `edge`), a hard-edged wedge (`turn`
+`mask`), a contour map (`ramp` `edge`), and a **rotating radar sweep** with a fading
+tail (`turn` `spin` `echo`) — which is the one that says the trade was worth making,
+because the old set could not turn anything continuously at all.
+
+**Three in, three out.** `star` (above), `shake` (`warp` with a random displacement
+instead of a smooth one — the same idea stated twice, and reachable by routing `warp`
+from `noise`) and `tile` (repetition of the frame, where `fold` mirrors it and `grid`
+now supplies periodicity as a field). Sixteen names before, sixteen after, criterion 5
+honoured for the first time.
+
+**§9.3b refused `edge`, and that refusal was wrong on a fact.** It said `edge` is
+"`grow` composed with `thin`". It is not. `grow ∘ thin` is a morphological *close* — it
+fills gaps and leaves a solid shape solid. A boundary is `inked − eroded`, a
+**difference**, and there is no difference operator in this pipeline, so `edge` was
+never reachable by composition and the refusal rested on arithmetic nobody checked.
+
+That matters for the other half of the same paragraph, which said refusing `edge` and
+refusing `a!3` had to be the same decision. They are not the same decision, because
+they turn on different facts: `[xxx]` genuinely *is* `a!3`, so that refusal stands.
+`grow thin` was never `edge`. A synonym and a wrongly-assumed synonym are not alike,
+and the way to tell them apart is to compute the composition rather than describe it.
+
+### 9.6 The draw order was a ceiling `[JUDGEMENT]`
+
+Both reviews, independently, said the same thing about it: sixteen primitives in a
+frozen chain is not composition, it is a mixer with sixteen mute buttons. The table in
+`viz.c` decided the order, so `thin` then `grow` — which despeckles — and `grow` then
+`thin` — which closes gaps — were one table entry apart and only ever one of them was
+reachable. §9.4 refuses layers on the grounds that "a pipeline with thirteen operators
+already composes", and that premise was false while the order was fixed.
+
+The mechanism was already in the language. `route` states a relationship between two
+lanes, so a **routed lane now draws after the lane it follows**: `>route thin disc`
+then `>route grow thin`. A lane's rank is how many route hops it is from a lane that
+follows nothing, and within a rank the table still decides — which keeps the promise
+`tools/test_viz.c` checks, that a document of unrouted lanes draws the same whatever
+order its lines were typed in. Order became something a performer can state and could
+not state before, and nothing that worked before behaves differently.

@@ -7,33 +7,46 @@
  * coding is the same Ctrl+Enter on the same line in the same document as the
  * music, and the two can sit four lines apart driving each other.
  *
- * EIGHT PRIMITIVES, AND A NEW ONE HAS TO EARN IT. Complexity is meant to come
- * from primitives combining, the way a 3D model comes out of cubes and
- * spheres - so each one is deliberately dumb, and the interesting part is that
- * eight lanes drive them at once, at different rates, with probability, routed
- * from each other. The bar for adding one is that it brings an AXIS the others
- * do not have, which is what each of these lines names:
+ * SIX FIELDS, TEN OPERATORS, AND A NEW ONE HAS TO DELETE ITS OWN. Complexity is
+ * meant to come from primitives combining, the way a model comes out of solids - so
+ * each one is deliberately dumb, and the interesting part is that sixteen lanes drive
+ * them at once, at different rates, with probability, routed from each other.
  *
- *   noise   random glyphs, density from the step value      - a field
- *   bar     a column whose height is the step value         - scanning
- *   dot     a single glyph that walks with the step         - a point
- *   wave    a sine row whose amplitude is the step value    - a line
- *   ring    a ring out of the centre, radius from the value - radial
- *   rain    streaks that fall and thin behind their head    - it remembers
- *   box     a rectangle outline growing from the centre     - hard edges
- *   mirror  folds whatever the other lanes drew             - a MODIFIER
+ * A SOURCE IS A FIELD, NOT A SHAPE, and that is the whole of the current design. A
+ * field answers "how far is this cell from the thing" in its own geometry and lays
+ * the answer down as a tone; a shape is then a field through a THRESHOLD. Two earlier
+ * sets were bags of shapes - bar, dot, wave, ring, rain - and a bag of shapes is what
+ * a system looks like when nobody has decided what the operations are: a ninth shape
+ * buys one more picture and nothing else.
  *
- * The last one is the shape this is all supposed to have: it draws nothing of
- * its own, it rearranges the frame, and it runs last because the table order
- * in viz.c is the draw order.
+ *   disc   euclidean distance from the point      round
+ *   box    chebyshev distance from the point      square - corners disc cannot have
+ *   turn   the ANGLE around the point            amount is how much of the circle
+ *   ramp   distance along one axis                linear
+ *   grid   distance to the nearest lattice line   periodic
+ *   noise  no geometry at all                     the entropy, irreducible
+ *
+ *   mask   keep what is at least this bright      a LEVEL through the field
+ *   edge   keep where the field changes fast      a CONTOUR of it
+ *
+ * So a ring is 'disc edge', a rectangle outline is 'box edge', spokes are 'turn
+ * edge', and a rotating radar sweep with a fading tail is 'turn spin echo' - which
+ * the shape sets could not make at all. See docs/MAP.md section 9.5 for what 'star',
+ * 'shake' and 'tile' were traded for and why the earlier refusal of 'edge' was wrong.
+ *
+ * TABLE ORDER IS THE DEFAULT DRAW ORDER AND 'route' OVERRIDES IT. A routed lane draws
+ * after the lane it follows, so 'thin' then 'grow' despeckles and the reverse closes
+ * gaps - both expressible now, one of them for the first time. An unrouted document
+ * draws in table order whatever order its lines were typed, which tools/test_viz.c
+ * checks. See chain_ranks() in viz.c.
  *
  * ROUTING is the sidechain. '>route noise bass' means the noise lane takes its
  * intensity from whatever the bass lane last played instead of from its own
  * digits. One idea - a lane can read another lane's output - and it works
  * between any two lanes, which is why it is not called sidechaining: the same
- * mechanism sends a kick to a bar height or a filter sweep to a wave.
+ * mechanism sends a kick to a circle's radius or a filter sweep to a mask's level.
  *
- * FRAME BY FRAME. viz_tick() is called from the sequencer's step, so the
+ * FRAME BY FRAME. viz_mark() is called from the sequencer's step, so the
  * animation runs on the same clock as the music and every frame is a step. The
  * frame is a character buffer; the editor draws it in a split, and '>frame'
  * sends the same buffer over OSC to whatever is rendering it elsewhere.

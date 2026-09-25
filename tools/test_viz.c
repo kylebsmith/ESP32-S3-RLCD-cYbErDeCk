@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "seq.h"
 #include "viz.h"
 
 static int fails;
@@ -93,6 +94,38 @@ static void mark(const char *prim, int amt, char dir)
     viz_mark(viz_prim_index(prim), amt, dir, 0);
 }
 
+/* THE LANE TABLE, FAKED - which is not a compromise, it is the only way to test
+ * the thing it is here for.
+ *
+ * viz.c asks seq for the lanes so it can read their ROUTES and draw a routed lane
+ * after the lane it follows. This test links viz.c on its own, so it has to provide
+ * that table; and providing it means the route order can be stated exactly and the
+ * resulting picture checked, which is not possible on the device without two hands
+ * and a camera. */
+static seq_lane_t g_lanes[SEQ_MAX_LANES];
+static int        g_nlanes;
+
+const seq_lane_t *seq_lanes(int *count)
+{
+    if (count != NULL) { *count = g_nlanes; }
+    return g_lanes;
+}
+
+static void no_lanes(void) { g_nlanes = 0; }
+
+/* One drawing lane on `prim`, optionally following `follows`. */
+static void lane(const char *prim, const char *follows)
+{
+    if (g_nlanes >= SEQ_MAX_LANES) { return; }
+    seq_lane_t *l = &g_lanes[g_nlanes++];
+    memset(l, 0, sizeof *l);
+    snprintf(l->name, sizeof l->name, "%s", prim);
+    l->bind  = SEQ_BIND_VIZ;
+    l->prim  = (uint8_t)viz_prim_index(prim);
+    l->param = 0;
+    if (follows != NULL) { snprintf(l->route, sizeof l->route, "%s", follows); }
+}
+
 int main(void)
 {
     /* A stated size, not the default: every count below is a fraction of the
@@ -101,9 +134,10 @@ int main(void)
     snap();
 
     /* 1. THE NAMES IN THE HELP TEXT, and the table behind them. */
-    static const char *named[] = { "echo", "move", "spin", "warp", "shake",
-                                   "noise", "disc", "box", "star", "ramp", "grid",
-                                   "grow", "thin", "flip", "tile", "fold" };
+    static const char *named[] = { "echo", "move", "spin", "warp",
+                                   "noise", "disc", "box", "turn", "ramp", "grid",
+                                   "mask", "edge",
+                                   "grow", "thin", "flip", "fold" };
     const int N = (int)(sizeof named / sizeof *named);
     printf("-- every name the help offers resolves --\n");
     CHECK(viz_prim_count() == N, "%d primitives, %d names", viz_prim_count(), N);
@@ -133,7 +167,7 @@ int main(void)
     /* 2. THE SOURCES DRAW. A name that resolves and then puts nothing in the
      *    frame is the failure a lookup test cannot see. */
     printf("\n-- each source draws --\n");
-    static const char *sources[] = { "noise", "disc", "box", "star", "ramp",
+    static const char *sources[] = { "noise", "disc", "box", "turn", "ramp",
                                      "grid" };
     for (unsigned i = 0; i < sizeof sources / sizeof *sources; i++) {
         blank();
@@ -167,8 +201,8 @@ int main(void)
      *    is absent on purpose: inverting an empty frame FILLS it, which is
      *    correct, and it is the one operator that draws on nothing. */
     printf("\n-- operators alone leave the frame empty --\n");
-    static const char *ops[] = { "echo", "move", "spin", "warp", "shake",
-                                 "grow", "thin", "tile", "fold" };
+    static const char *ops[] = { "echo", "move", "spin", "warp",
+                                 "grow", "thin", "mask", "edge", "fold" };
     for (unsigned i = 0; i < sizeof ops / sizeof *ops; i++) {
         blank();
         mark(ops[i], 9, 'd');
@@ -270,16 +304,127 @@ int main(void)
     viz_size(32, 12);
     snap();
 
-    /* tile repeats: a thin column becomes several. */
-    printf("\n-- tile repeats the frame --\n");
+    /* 6b. THE FIELDS AND THE THRESHOLDS.
+     *
+     *     The set used to be shapes, and a shape is one picture: 'box' drew a
+     *     rectangle outline and could draw nothing else, 'star' drew spokes and its
+     *     amount was a COUNT rather than a magnitude. They are fields now, and the
+     *     claim being tested is the one that justified the change - that a field
+     *     through a threshold reaches shapes no name in the old set could.
+     *
+     *     Each of these fails on the old code by construction, because the names it
+     *     uses did not resolve there. */
+    printf("\n-- fields and thresholds --\n");
+    no_lanes();
+    CHECK(viz_prim_index("turn") >= 0, "turn resolves");
+    CHECK(viz_prim_index("mask") >= 0, "mask resolves");
+    CHECK(viz_prim_index("edge") >= 0, "edge resolves");
+    CHECK(viz_prim_index("star") < 0,  "star is gone");
+    CHECK(viz_prim_index("shake") < 0, "shake is gone");
+    CHECK(viz_prim_index("tile") < 0,  "tile is gone");
+
+    /* A RING, which is the headline: a filled disc traced by 'edge' has ink, and
+     * has NO ink at its own centre. The old set could not draw this at all - 'ring'
+     * was removed in the first collapse and nothing replaced it. */
     blank();
-    mark("ramp", 1, 'r');               /* a thin column at the left */
+    mark("disc", 8, 'd');
     viz_service(); snap();
-    const int one = frame_ink();
-    mark("ramp", 1, 'r');
-    mark("tile", 9, 'd');
+    const int solid = frame_ink();
+    CHECK(row_at(viz_rows() / 2)[viz_cols() / 2] != ' ', "the disc has a centre");
+
+    blank();
+    mark("disc", 8, 'd');
+    mark("edge", 1, 'd');
     viz_service(); snap();
-    CHECK(frame_ink() > one, "tile turned %d cells into %d", one, frame_ink());
+    const int ring = frame_ink();
+    CHECK(ring > 0, "disc through edge draws something (%d cells)", ring);
+    CHECK(ring < solid / 2, "and it is an outline: %d of %d cells", ring, solid);
+    CHECK(row_at(viz_rows() / 2)[viz_cols() / 2] == ' ',
+          "the middle is EMPTY - that is what makes it a ring");
+
+    /* A LEVEL. Masking a field keeps its core and drops its rim, so the same disc
+     * comes out smaller - which is how a mask lane resizes a shape whose own amount
+     * never changed. */
+    blank();
+    mark("disc", 9, 'd');
+    mark("mask", 9, 'd');
+    viz_service(); snap();
+    const int masked = frame_ink();
+    CHECK(masked > 0 && masked < solid,
+          "mask 9 kept %d cells of a %d-cell field", masked, solid);
+
+    /* THE ANGLE IS A MAGNITUDE, which is the whole complaint about 'star'. More
+     * sweep is more ink, and the sweep starts where the direction says. */
+    blank(); mark("turn", 2, 'u'); viz_service(); snap();
+    const int wedge = frame_ink();
+    blank(); mark("turn", 9, 'u'); viz_service(); snap();
+    const int full_sweep = frame_ink();
+    CHECK(wedge > 0, "turn 2 draws a wedge (%d cells)", wedge);
+    CHECK(full_sweep > wedge * 2, "turn 9 is much more than turn 2 (%d vs %d)",
+          full_sweep, wedge);
+
+    blank(); mark("turn", 2, 'u'); viz_service(); snap();
+    char up_row[VIZ_W + 2];
+    snprintf(up_row, sizeof up_row, "%s", row_at(1));
+    blank(); mark("turn", 2, 'd'); viz_service(); snap();
+    CHECK(strcmp(up_row, row_at(1)) != 0, "a sweep up and a sweep down differ");
+
+    /* 6c. ROUTE SETS DRAW ORDER, which was the ceiling on all of this.
+     *
+     *     thin-then-grow despeckles; grow-then-thin closes gaps. Both were one
+     *     table entry away and only one was reachable. The check: the same two marks
+     *     in the same frame, with the route reversed, must produce DIFFERENT
+     *     pictures. On the old code they could not, by construction - the table
+     *     decided - so this fails there whatever it is given. */
+    printf("\n-- route sets the draw order --\n");
+    blank();
+    no_lanes();
+    lane("noise", NULL);
+    lane("grow", "noise");              /* noise, then grow */
+    lane("thin", "grow");               /* then thin: a close */
+    mark("grid", 2, 'd'); mark("grow", 9, 'd'); mark("thin", 9, 'd');
+    viz_service(); snap();
+    char closed[VIZ_H][VIZ_W + 2];
+    for (int y = 0; y < viz_rows(); y++) {
+        snprintf(closed[y], sizeof closed[y], "%s", row_at(y));
+    }
+    const int closed_ink = frame_ink();
+
+    blank();
+    no_lanes();
+    lane("noise", NULL);
+    lane("thin", "noise");              /* noise, then thin */
+    lane("grow", "thin");               /* then grow: a despeckle */
+    mark("grid", 2, 'd'); mark("grow", 9, 'd'); mark("thin", 9, 'd');
+    viz_service(); snap();
+    const int opened_ink = frame_ink();
+
+    int rows_differ = 0;
+    for (int y = 0; y < viz_rows(); y++) {
+        if (strcmp(closed[y], row_at(y)) != 0) { rows_differ++; }
+    }
+    CHECK(rows_differ > 0,
+          "grow-then-thin and thin-then-grow differ (%d rows, %d vs %d cells)",
+          rows_differ, closed_ink, opened_ink);
+
+    /* AND AN UNROUTED DOCUMENT IS STILL ORDER-INDEPENDENT. Promise 3 at the top of
+     * this file, which the route ranking must not have cost: with no routes every
+     * lane is rank 0 and the table decides, exactly as before. */
+    no_lanes();
+    blank();
+    /* A DETERMINISTIC SOURCE, because this compares two cell COUNTS. 'noise' was
+     * used here first and the check failed on correct code: two runs of a random
+     * field are two different fields, so the counts differed for a reason that has
+     * nothing to do with order. */
+    mark("grid", 2, 'd'); mark("grow", 9, 'd'); mark("thin", 9, 'd');
+    viz_service(); snap();
+    const int a_order = frame_ink();
+    blank();
+    mark("thin", 9, 'd'); mark("grow", 9, 'd'); mark("grid", 2, 'd');
+    viz_service(); snap();
+    CHECK(frame_ink() == a_order,
+          "unrouted, marking order does not matter (%d == %d)",
+          a_order, frame_ink());
 
     /* 7. THE PANE. Two failures the owner saw, both invisible to a lookup test:
      *    a side-by-side split on a thirty-column grid left twelve columns for

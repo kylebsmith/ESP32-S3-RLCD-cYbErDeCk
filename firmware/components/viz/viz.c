@@ -9,37 +9,62 @@
 #define NGEN 16
 #define NAME_MAX 8
 
-/* THREE SOURCES AND FIVE OPERATORS, in a flat table like every other name in
- * this system.
+/* SIX FIELDS AND TEN OPERATORS, and the word FIELD is the whole of the third
+ * design and the reason there was a third.
  *
- * WHY THIS SHAPE. The first attempt was eight SOURCES - noise, bar, dot, wave,
- * ring, rain, box - which is a bag of shapes, and a bag of shapes is what a
- * system looks like when nobody decided what the operations are. Adding a
- * ninth shape adds one picture. What a node graph actually gives you is few
- * sources and a set of operators every source can be fed through, so the
- * vocabulary multiplies instead of accumulating: feedback, transform,
- * replicate, mirror, displace. Three sources through five operators is a far
- * larger space than eight sources, out of the same eight names.
+ * The first set was eight SHAPES - bar, dot, wave, ring, rain, box, mirror,
+ * noise - which is what a system looks like when nobody has decided what the
+ * operations are: a ninth shape buys one more picture and nothing else. The
+ * second set fixed half of that, few sources through many operators, but the
+ * sources stayed shapes, and the owner put a finger on exactly the right one:
+ * "star? wtf is that?" A star is not a primitive. It is one picture, its amount
+ * is a COUNT OF SPOKES where every other amount in this language is a magnitude,
+ * and nothing composes with it - grow makes it a blob, thin erases it, spin on a
+ * four-spoke star does nothing at all.
  *
- * Every shape that was lost is reachable as a combination. Rain is noise that
- * moves down and echoes. A bar is a ramp. A wave is a ramp that warps. A box
- * is a disc that warps. That is the trade being made on purpose.
+ * So the sources are not shapes now, they are FIELDS. Each one answers "how far
+ * is this cell from the thing" in its own geometry, and lays that answer down as
+ * a tone:
  *
- * TABLE ORDER IS DRAW ORDER, and the order is a pipeline:
+ *   disc   round distance from the point      euclidean
+ *   box    square distance from the point     chebyshev - the corners disc cannot
+ *   turn   the ANGLE around the point         the axis star was reaching for
+ *   ramp   distance along one direction       linear
+ *   grid   distance to the nearest lattice    periodic
+ *   noise  no geometry at all                 the entropy, irreducible
  *
- *   history   echo   lays the last frame back down, one ink step dimmer
- *   motion    move   shifts what is there, so the history streaks and the
- *             warp   sources land fresh - which is what makes a trail
- *   sources   noise  disc  ramp
- *   repeat    tile   fold
+ * A shape is then a field plus a THRESHOLD, and the threshold is what was missing:
  *
- * So '>viz echo 9' plus '>viz move d' plus '>viz noise 2' is falling rain with
- * a dissolving tail, and none of those three lines knows about the others. */
+ *   mask   keep only what is at least this bright    - a LEVEL through the field
+ *   edge   keep only where the field changes fast    - a CONTOUR of it
+ *
+ * Those two are why this set is smaller and does more. A ring is disc + mask. A
+ * rectangle outline is box + edge. Spokes are turn + edge. A radar sweep is turn
+ * under spin, which the old set could not make at all, and a contour map is ramp
+ * + edge, which it could not either. Every one of those used to need its own
+ * name, or was simply unreachable.
+ *
+ * WHAT IT COST, because a set that only grows is a set nobody pruned. Out: star
+ * (a count, not a magnitude, and compositionally a dead end), shake (warp with a
+ * random displacement instead of a smooth one - reachable by routing warp from
+ * noise, which is the same idea stated once instead of twice) and tile (repetition
+ * of the frame, where fold already mirrors it and grid now supplies periodicity as
+ * a field). Three out, three in, sixteen names either way.
+ *
+ * TABLE ORDER IS THE DEFAULT DRAW ORDER; 'route' OVERRIDES IT. The table below is
+ * a sensible pipeline - memory, motion, fields, shaping - and a document whose
+ * lanes are unrouted draws in it regardless of the order the lines were typed,
+ * which is a promise tools/test_viz.c checks. But a fixed order is also a ceiling:
+ * thin-then-grow despeckles and grow-then-thin closes gaps, and only one of the
+ * two was ever reachable. So a routed lane draws AFTER the lane it follows. The
+ * order becomes something the document states - '>route thin disc' - rather than
+ * something the table decided years earlier. See order_marks(). */
 static const char *s_names[NGEN] = {
-    "echo", "move", "spin", "warp", "shake",   /* history, then motion */
-    "noise", "disc", "box", "star", "ramp", "grid",  /* the sources    */
-    "grow", "thin", "flip",                    /* shaping             */
-    "tile", "fold",                            /* repetition          */
+    "echo", "move", "spin", "warp",            /* memory, then motion  */
+    "noise", "disc", "box", "turn", "ramp", "grid",   /* the FIELDS     */
+    "mask", "edge",                            /* the THRESHOLDS       */
+    "grow", "thin", "flip",                    /* shaping              */
+    "fold",                                    /* repetition           */
 };
 
 /* WHAT THE CLOCK LEFT FOR THE MAIN LOOP.
@@ -308,6 +333,63 @@ static void delta_of(char c, int *dx, int *dy)
 
 /* ---- history ---------------------------------------------------------- */
 
+/* ---- the field helpers -------------------------------------------------- */
+/* Integer only: there is no floating point in the draw path and there is not going
+ * to be, because the whole frame is redrawn every step. */
+
+/* An integer square root, so a distance field can carry a DISTANCE rather than a
+ * distance squared - the tone ramp has to be even in distance or the falloff
+ * bunches up against the rim. */
+static int isqrt_i(int v)
+{
+    if (v <= 0) { return 0; }
+    int r = 0, b = 1 << 14;
+    while (b > v) { b >>= 2; }
+    while (b != 0) {
+        if (v >= r + b) { v -= r + b; r = (r >> 1) + b; }
+        else            { r >>= 1; }
+        b >>= 2;
+    }
+    return r;
+}
+
+/* THE ANGLE, WITHOUT TRIGONOMETRY. 1024 units to the full turn, clockwise from
+ * straight up. This is the "diamond angle": inside each quadrant it interpolates
+ * along the perimeter of a square rather than a circle, so it is not the true angle
+ * but it is strictly MONOTONIC in it - and monotonic is the entire requirement here,
+ * because every use is a comparison. On a twelve-row picture the difference from a
+ * real atan2 is not resolvable, and this costs one divide. */
+static int turn_of(int dx, int dy)
+{
+    const int adx = dx < 0 ? -dx : dx;
+    const int ady = dy < 0 ? -dy : dy;
+    const int sum = adx + ady;
+    if (sum == 0) { return 0; }
+    if (dy <  0 && dx >= 0) { return   0 + 256 * adx / sum; }   /* up    -> right */
+    if (dx >  0 && dy >= 0) { return 256 + 256 * ady / sum; }   /* right -> down  */
+    if (dy >  0 && dx <= 0) { return 512 + 256 * adx / sum; }   /* down  -> left  */
+    return                          768 + 256 * ady / sum;      /* left  -> up    */
+}
+
+/* A FIELD LAID DOWN AS TONES: solid out to two thirds of the reach, then falling to
+ * the faintest tone at the rim.
+ *
+ * Why not a straight gradient from the centre: a field that is grey everywhere is a
+ * field nobody wants to look at, and what was asked for was full black squares and
+ * sparkles, not a wash. Solid in the middle keeps the punch; the outer third is what
+ * 'mask' slices and 'edge' traces, which is what makes a field better than a flat
+ * fill rather than merely softer. */
+static void ink_field(int d, int reach, int y, int x)
+{
+    if (reach < 1 || d > reach) { return; }
+    const int hard = reach * 2 / 3;
+    if (d <= hard) { s_fb[y][x] = SOLID; return; }
+    const int span = reach - hard;
+    int lv = TONE_TOP - ((d - hard) * (TONE_TOP - 1)) / (span < 1 ? 1 : span);
+    if (lv < 1) { lv = 1; }
+    s_fb[y][x] = (char)(TONE_0 + lv);
+}
+
 /* echo: FEEDBACK. Lay the previous frame back down, every cell one or more
  * steps dimmer on the ink ramp.
  *
@@ -418,9 +500,13 @@ static void draw_noise(int amt, char dir, uint32_t step)
     }
 }
 
-/* disc: a filled circle from the centre, radius from the amount. Route this
- * from a kick and the frame breathes on the beat, which is the clearest thing
- * routing does. Through warp it is a box; through fold, a flower. */
+/* disc: THE ROUND FIELD - euclidean distance from the point, as a tone.
+ *
+ * The one the owner kept ("diss is fine"), and the only change is that it is now a
+ * field rather than a fill: solid out to two thirds of the radius, falling to the
+ * faintest tone at the rim. Alone it looks the same as it did. Through 'mask' it is
+ * a disc at any size; through 'edge' it is a ring, which used to be its own name
+ * and then was unreachable for a while. */
 static void draw_disc(int amt, char dir, uint32_t step)
 {
     const int cx = place_x(), cy = place_y();
@@ -434,35 +520,16 @@ static void draw_disc(int amt, char dir, uint32_t step)
      * s_h/2. */
     const int lim = (s_w / 2 < s_h) ? (s_w / 2) : s_h;
     const int r  = amt * lim / 9;
-    /* A SMALL DISC IS ONE GLYPH. At radius nothing there is a drawn circle to
-     * use - 147 - which reads as a circle where a single '@' read as a blob.
-     * This is what the tiles are for: the shape at the size it is wanted. */
     /* A SMALL DISC IS ONE DRAWN GLYPH. At a radius of a cell or less there is
      * nothing to rasterise, and 147 is a circle somebody drew - which reads as
      * a circle where a single solid block read as a blob. This is what having
      * our own shapes buys: the shape at the size it is wanted. */
     if (r <= 1) { s_fb[cy][cx] = (char)147; return; }
     for (int y = 0; y < s_h; y++) {
-        /* A CELL IS TWICE AS TALL AS IT IS WIDE on both faces - 12x24 and
-         * 6x12 - so a circle that is round in CELLS is a squashed ellipse on
-         * the glass. Counting vertical distance double makes it round to the
-         * eye, which is the only measure that matters here. */
         const int dy = 2 * (y - cy);
         for (int x = 0; x < s_w; x++) {
             const int dx = x - cx;
-            const int d2 = dx * dx + dy * dy;
-            if (d2 > r * r) { continue; }
-            /* SOLID INSIDE, A LIGHTER TONE ON THE EDGE.
-             *
-             * The arc glyphs were tried here and are wrong for this: an arc's
-             * curvature is one cell, so it only matches a circle about two
-             * cells across. On a bigger one every boundary cell got a tight
-             * curve the circle does not have, and the result was a double
-             * contour rather than an edge. A step down the tone ramp softens
-             * the staircase without claiming a curve that is not there - which
-             * is what an edge tone is for on a panel with one ink. */
-            if (d2 <= (r - 1) * (r - 1)) { s_fb[y][x] = SOLID; continue; }
-            s_fb[y][x] = (char)(TONE_0 + TONE_TOP - 2);
+            ink_field(isqrt_i(dx * dx + dy * dy), r, y, x);
         }
     }
 }
@@ -502,21 +569,6 @@ static void draw_ramp(int amt, char dir, uint32_t step)
 
 /* ---- repetition ------------------------------------------------------- */
 
-/* tile: REPLICATE. Take the leftmost slice of the frame and repeat it across.
- * Instant density from a small source, which is what a replicator is for. */
-static void draw_tile(int amt, char dir, uint32_t step)
-{
-    const int n = 1 + (amt < 0 ? 9 : amt) / 3;   /* 1..4 copies */
-    if (n < 2) { return; }
-    const int seg = s_w / n;
-    if (seg < 1) { return; }
-    for (int y = 0; y < s_h; y++) {
-        for (int x = seg; x < s_w; x++) {
-            s_fb[y][x] = s_fb[y][x % seg];
-        }
-    }
-}
-
 /* fold: MIRROR, one to three times. Left onto right, then top onto bottom,
  * then the left half again - a kaleidoscope out of one line of pattern.
  * It draws nothing of its own, which is the point. */
@@ -534,22 +586,6 @@ static void draw_fold(int amt, char dir, uint32_t step)
             for (int y = 0; y < s_h / 2; y++) {
                 memcpy(s_fb[s_h - 1 - y], s_fb[y], (size_t)s_w);
             }
-        }
-    }
-}
-
-/* shake: DISPLACE AT RANDOM, a row at a time. Where warp bends along a smooth
- * curve, this tears - the difference between water and a bad signal, and the
- * two read as completely different material over the same source. */
-static void draw_shake(int amt, char dir, uint32_t step)
-{
-    if (amt <= 0) { return; }
-    char tmp[VIZ_H][VIZ_W + 1];
-    for (int y = 0; y < s_h; y++) { memcpy(tmp[y], s_fb[y], (size_t)s_w + 1); }
-    for (int y = 0; y < s_h; y++) {
-        const int sh = (int)(rng() % (uint32_t)(2 * amt + 1)) - amt;
-        for (int x = 0; x < s_w; x++) {
-            s_fb[y][x] = tmp[y][((x - sh) % s_w + s_w) % s_w];
         }
     }
 }
@@ -662,62 +698,140 @@ static void draw_spin(int amt, char dir, uint32_t step)
     }
 }
 
-/* box: a RECTANGLE OUTLINE from the centre, size from the amount.
+/* box: THE SQUARE FIELD - chebyshev distance from the point, as a tone.
  *
- * Hard corners, where disc is round and grid is a lattice. It was in the first
- * set, folded away during the collapse on the grounds that a disc through warp is
- * nearly a box - and that was wrong: a warped disc has no corners, and a corner
- * is the thing a box is for. */
+ * The corners disc cannot have. It was an OUTLINE, which is one picture; as a field
+ * it is the outline through 'edge', a filled square on its own, a smaller square
+ * through 'mask', and the thing that puts a right angle into anything it is masked
+ * against. The old version also had an arithmetic bug worth remembering - the right
+ * edge fell off the frame at full size, a rectangle with three sides - and a field
+ * cannot have that bug, because it never draws an edge in the first place.
+ *
+ * Distance is the LARGER of the two axes, which is what makes it square where disc
+ * takes the root of their sum and comes out round. One line apart; two geometries. */
 static void draw_box(int amt, char dir, uint32_t step)
 {
-    /* THE FULL-SIZE BOX HAS TO FIT. At 1 + amt*(w/2 - 1)/9 the half-width is w/2
-     * exactly, so x1 == s_w and the right edge falls off the frame - a rectangle
-     * with three sides, which looks like a drawing bug rather than an arithmetic
-     * one. Two off the half-width leaves room for both edges at every amount. */
-    const int hw = 1 + amt * (s_w / 2 - 2) / 9;
-    const int hh = amt * (s_h / 2 - 1) / 9;
-    const int x0 = place_x() - hw, x1 = place_x() + hw;
-    const int y0 = place_y() - hh, y1 = place_y() + hh;
-    const char c = (char)(TONE_0 + TONE_TOP);
-    for (int x = (x0 < 0 ? 0 : x0); x <= x1 && x < s_w; x++) {
-        if (y0 >= 0)  { s_fb[y0][x] = c; }
-        if (y1 < s_h) { s_fb[y1][x] = c; }
-    }
-    for (int y = (y0 < 0 ? 0 : y0); y <= y1 && y < s_h; y++) {
-        if (x0 >= 0)  { s_fb[y][x0] = c; }
-        if (x1 < s_w) { s_fb[y][x1] = c; }
+    const int cx = place_x(), cy = place_y();
+    const int lim = (s_w / 2 < s_h) ? (s_w / 2) : s_h;
+    const int r = amt * lim / 9;
+    if (r < 1) { s_fb[cy][cx] = SOLID; return; }
+    for (int y = 0; y < s_h; y++) {
+        const int ady = 2 * (y - cy) < 0 ? -2 * (y - cy) : 2 * (y - cy);
+        for (int x = 0; x < s_w; x++) {
+            const int adx = (x - cx) < 0 ? -(x - cx) : (x - cx);
+            ink_field(adx > ady ? adx : ady, r, y, x);
+        }
     }
 }
 
-/* star: SPOKES from the centre, count from the amount.
+/* turn: THE ANGLE AROUND THE POINT, swept from the given direction.
  *
- * Radial LINES, where disc is a radial area and grid is orthogonal lines. Nothing
- * else draws anything at an angle, which is the axis it brings - and through spin
- * it turns, which is the pair of primitives this set was missing. */
-static void draw_star(int amt, char dir, uint32_t step)
+ * This is what 'star' was reaching for and could not hold. Star's amount was a COUNT
+ * OF SPOKES, three to twelve - the only amount in the language that was not a
+ * magnitude - and it composed with nothing: grow made it a blob, thin erased it, spin
+ * on a four-spoke star did nothing at all. An angle field is a magnitude. The amount
+ * is how much of the circle the sweep covers, solid at its leading edge and fading
+ * behind it, which is exactly what 'ramp' does along a straight line.
+ *
+ * What that buys, none of which the old set could make:
+ *   turn 2  under spin           a radar sweep - and with echo, one with a tail
+ *   turn 9  through edge         spokes, at whatever count the contour finds
+ *   turn 3  through mask         a hard-edged wedge
+ *   turn    masked against disc  a pie slice */
+static void draw_turn(int amt, char dir, uint32_t step)
 {
-    const int spokes = 3 + (amt < 0 ? 9 : amt);      /* 3..12 */
+    if (amt <= 0) { return; }
     const int cx = place_x(), cy = place_y();
-    const int reach = (s_w / 2 < s_h ? s_w / 2 : s_h);
-    const char c = (char)(TONE_0 + TONE_TOP);
-    for (int k = 0; k < spokes; k++) {
-        /* A sine and cosine without either: walk the perimeter of a diamond and
-         * draw to each vertex. Even spacing in perimeter is not even in angle,
-         * which on a twelve-row picture nobody can tell apart from even in angle.
-         */
-        const int per = 4 * reach;
-        int t = k * per / spokes;
-        int ex, ey;
-        if (t < reach)          { ex =  reach - t;       ey = -t; }
-        else if (t < 2 * reach) { ex = -(t - reach);     ey = -(2 * reach - t); }
-        else if (t < 3 * reach) { ex = -(3 * reach - t); ey =  t - 2 * reach; }
-        else                    { ex =  t - 3 * reach;   ey =  4 * reach - t; }
-        /* Vertical distance counts double, so halve it to keep the star round. */
-        const int steps = reach;
-        for (int i = 0; i <= steps; i++) {
-            const int x = cx + ex * i / steps;
-            const int y = cy + (ey / 2) * i / steps;
-            if (x >= 0 && x < s_w && y >= 0 && y < s_h) { s_fb[y][x] = c; }
+    const int start = (dir == 'r') ? 256 : (dir == 'd') ? 512
+                    : (dir == 'l') ? 768 : 0;
+    int sweep = amt * 1024 / 9;
+    if (sweep < 1) { sweep = 1; }
+    for (int y = 0; y < s_h; y++) {
+        /* Vertical distance counts double, as everywhere else here: a cell is twice
+         * as tall as it is wide, so an angle measured in cells is not the angle the
+         * eye sees. */
+        const int dy = 2 * (y - cy);
+        for (int x = 0; x < s_w; x++) {
+            const int dx = x - cx;
+            if (dx == 0 && dy == 0) { s_fb[y][x] = SOLID; continue; }
+            const int rel = (turn_of(dx, dy) - start + 1024) & 1023;
+            if (rel >= sweep) { continue; }
+            int lv = TONE_TOP - (rel * TONE_TOP) / sweep;
+            if (lv < 1) { lv = 1; }
+            s_fb[y][x] = (char)(TONE_0 + lv);
+        }
+    }
+}
+
+/* mask: A LEVEL THROUGH WHATEVER IS THERE. Keep the cells at least this bright and
+ * clear the rest.
+ *
+ * The operator every field was missing, and the reason fields are worth having at
+ * all. A source used to bake its own hard edge in, so the only shape it could make
+ * was the one its author chose. With a level, the same disc is a disc at any size
+ * the mask picks, a ramp becomes a hard bar wherever the level crosses it, and a
+ * noise field becomes sparse specks instead of grey mush - and the level is a lane,
+ * so it moves. */
+static void draw_mask(int amt, char dir, uint32_t step)
+{
+    /* THE AMOUNT IS A DIGIT; THE RAMP HAS NINE STEPS. Nine tones means tone 8 is
+     * solid, so a level taken straight from the digit asked for "at least 9" and
+     * kept nothing at all - 'mask 9' cleared the frame. Map the digit onto the ramp
+     * instead: 1 keeps anything inked, 9 keeps only solid. */
+    const int d = amt < 1 ? 1 : (amt > 9 ? 9 : amt);
+    const int keep = 1 + (d - 1) * (TONE_TOP - 1) / 8;
+    for (int y = 0; y < s_h; y++) {
+        for (int x = 0; x < s_w; x++) {
+            if (tone_of(s_fb[y][x]) < keep) { s_fb[y][x] = (char)TONE_0; }
+        }
+    }
+}
+
+/* edge: A CONTOUR OF WHATEVER IS THERE. Keep a cell only where the tone beside it
+ * drops off sharply.
+ *
+ * The other half of the threshold idea, and the one that makes the shapes that used
+ * to need their own names. A rectangle outline is 'box edge' - which is all 'box'
+ * ever was, so box could become a field and lose nothing. A ring is 'disc edge'.
+ * Spokes are 'turn edge'. A contour map is 'ramp edge', which nothing in the old set
+ * could draw at all.
+ *
+ * The amount is how steep a drop counts: 9 finds every tone step and gives dense
+ * contours, 1 finds only ink against nothing and gives one crisp outline. More is
+ * more, which is what a digit means everywhere else in this language. */
+static void draw_edge(int amt, char dir, uint32_t step)
+{
+    /* HOW STEEP A DROP COUNTS, and it has to fit in the ramp: at 10 - amt the
+     * gentlest setting asked for a fall of nine tones where the ramp only has eight,
+     * so 'edge 1' found nothing anywhere. 9 - amt spans the ramp exactly. */
+    int drop = 9 - (amt < 1 ? 1 : (amt > 9 ? 9 : amt));
+    if (drop < 1) { drop = 1; }
+    char tmp[VIZ_H][VIZ_W + 1];
+    for (int y = 0; y < s_h; y++) { memcpy(tmp[y], s_fb[y], (size_t)s_w + 1); }
+    for (int y = 0; y < s_h; y++) {
+        for (int x = 0; x < s_w; x++) {
+            const int t = tone_of(tmp[y][x]);
+            if (t <= 0) { s_fb[y][x] = (char)TONE_0; continue; }
+            int lo = t;
+            if (x > 0)       { const int n = tone_of(tmp[y][x - 1]); if (n < lo) { lo = n; } }
+            if (x < s_w - 1) { const int n = tone_of(tmp[y][x + 1]); if (n < lo) { lo = n; } }
+            if (y > 0)       { const int n = tone_of(tmp[y - 1][x]); if (n < lo) { lo = n; } }
+            if (y < s_h - 1) { const int n = tone_of(tmp[y + 1][x]); if (n < lo) { lo = n; } }
+            /* OFF THE FRAME COUNTS AS EMPTY, so a fill reaching the border still gets
+             * an outline along it rather than vanishing there. */
+            if (x == 0 || y == 0 || x == s_w - 1 || y == s_h - 1) { lo = 0; }
+            /* INK AGAINST NOTHING IS ALWAYS AN EDGE, whatever the amount.
+             *
+             * Without this there is no crisp outline at any setting, because a field
+             * fades to its faintest tone at the rim: the outermost inked cell differs
+             * from the emptiness beyond it by one step, exactly like every internal
+             * step, so a threshold that keeps the outline keeps the whole rim with it
+             * and a disc through edge came out as a thick band rather than a ring.
+             * The boundary of the inked region is a different KIND of edge and is
+             * treated as one; the amount then decides how much of the interior joins
+             * it. So 1 is one outline and 9 is a contour map. */
+            const bool against_nothing = (lo == 0 && t > 0);
+            s_fb[y][x] = (against_nothing || t - lo >= drop) ? SOLID : (char)TONE_0;
         }
     }
 }
@@ -726,10 +840,11 @@ static void draw_star(int amt, char dir, uint32_t step)
  * types and the code that runs cannot drift apart. */
 typedef void (*draw_fn)(int amt, char dir, uint32_t step);
 static const draw_fn s_draw[NGEN] = {
-    draw_echo,  draw_move, draw_spin, draw_warp, draw_shake,
-    draw_noise, draw_disc, draw_box,  draw_star, draw_ramp, draw_grid,
+    draw_echo,  draw_move, draw_spin, draw_warp,
+    draw_noise, draw_disc, draw_box,  draw_turn, draw_ramp, draw_grid,
+    draw_mask,  draw_edge,
     draw_grow,  draw_thin, draw_flip,
-    draw_tile,  draw_fold,
+    draw_fold,
 };
 
 /* What the clock leaves for the main loop: a step number and a flag. Written in
@@ -790,6 +905,54 @@ void viz_mark(int prim, int amt, char dir, uint32_t tick)
     s_pending = true;
 }
 
+/* WHERE 'route' BECAME THE PIPELINE.
+ *
+ * The draw order used to be the order of the table above, full stop, and that was a
+ * ceiling on the whole visual half of this instrument. thin-then-grow despeckles a
+ * noisy frame; grow-then-thin closes the gaps in a broken line. They are different
+ * pictures and only one of them was ever reachable, because the table put grow
+ * before thin and nothing a performer could type changed it. Sixteen primitives in a
+ * frozen chain is not composition - it is a mixer with sixteen mute buttons.
+ *
+ * 'route' already states order in the document: '>route thin disc' says the erosion
+ * follows the circle. So a lane's RANK is how many route hops it is from a lane that
+ * follows nothing, and a frame draws rank 0 first, then rank 1, and so on. Inside a
+ * rank the table order still decides, which keeps the promise tools/test_viz.c
+ * checks - a document of unrouted lanes draws the same whatever order the lines were
+ * typed in. Order is now something a performer can state and could not state before,
+ * and nothing that worked before behaves differently.
+ *
+ * Cycles cannot happen - seq_route refuses a self-route and the chain is walked at
+ * most SEQ_MAX_LANES times - but the walk is bounded anyway, because a draw loop that
+ * can spin is worse than a wrong order. */
+static void chain_ranks(int *rank)
+{
+    for (int i = 0; i < NGEN; i++) { rank[i] = 0; }
+    int n = 0;
+    const seq_lane_t *lanes = seq_lanes(&n);
+    if (lanes == NULL) { return; }
+    for (int i = 0; i < n; i++) {
+        if (lanes[i].bind != SEQ_BIND_VIZ || lanes[i].param != 0) { continue; }
+        const int prim = lanes[i].prim;
+        if (prim < 0 || prim >= NGEN) { continue; }
+        /* Walk up this lane's route chain, counting hops. */
+        int hops = 0;
+        const char *up = lanes[i].route;
+        while (up != NULL && up[0] != '\0' && hops < n + 1) {
+            int next = -1;
+            for (int j = 0; j < n; j++) {
+                if (strcmp(lanes[j].name, up) == 0) { next = j; break; }
+            }
+            if (next < 0) { break; }            /* follows a lane that is gone */
+            hops++;
+            up = lanes[next].route;
+        }
+        /* An instance deeper in a chain pulls its primitive down with it: two lanes
+         * on one primitive draw together, and the later position is the safe one. */
+        if (hops > rank[prim]) { rank[prim] = hops; }
+    }
+}
+
 bool viz_service(void)
 {
     if (!s_pending) {
@@ -829,12 +992,20 @@ bool viz_service(void)
     const int nm = (int)s_nmark;
     s_nmark = 0;
     bool drew = false;
-    for (int prim = 0; prim < NGEN; prim++) {
-        for (int m = 0; m < nm; m++) {
-            if (s_mark[m].prim != (uint8_t)prim) { continue; }
-            s_drawing = prim;
-            s_draw[prim]((int)s_mark[m].amt, s_mark[m].dir, tick);
-            drew = true;
+    /* HOW FAR DOWN A ROUTE CHAIN EACH PRIMITIVE SITS, and then the table order
+     * within a rank. See order_marks: this is where 'route' became the thing that
+     * states the pipeline. */
+    int rank[NGEN];
+    chain_ranks(rank);
+    for (int r = 0; r <= NGEN; r++) {
+        for (int prim = 0; prim < NGEN; prim++) {
+            if (rank[prim] != r) { continue; }
+            for (int m = 0; m < nm; m++) {
+                if (s_mark[m].prim != (uint8_t)prim) { continue; }
+                s_drawing = prim;
+                s_draw[prim]((int)s_mark[m].amt, s_mark[m].dir, tick);
+                drew = true;
+            }
         }
     }
     s_live = drew || s_live;
