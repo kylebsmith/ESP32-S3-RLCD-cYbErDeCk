@@ -101,8 +101,8 @@ int main(void)
     snap();
 
     /* 1. THE NAMES IN THE HELP TEXT, and the table behind them. */
-    static const char *named[] = { "echo", "move", "warp", "shake",
-                                   "noise", "disc", "ramp", "grid",
+    static const char *named[] = { "echo", "move", "spin", "warp", "shake",
+                                   "noise", "disc", "box", "star", "ramp", "grid",
                                    "grow", "thin", "flip", "tile", "fold" };
     const int N = (int)(sizeof named / sizeof *named);
     printf("-- every name the help offers resolves --\n");
@@ -111,6 +111,15 @@ int main(void)
         CHECK(viz_prim_index(named[i]) >= 0, "%s", named[i]);
     }
     CHECK(viz_prim_index("sparkle") < 0, "an unknown name is refused");
+
+    /* A TRAILING DIGIT IS AN INSTANCE. 'disc2' is a second circle, not a second
+     * primitive, so it resolves to the same index - and two instances must not
+     * collapse into one mark, which is what a per-primitive mark table did. */
+    CHECK(viz_prim_index("disc2") == viz_prim_index("disc"),
+          "disc2 is an instance of disc");
+    CHECK(viz_prim_index("echo9") == viz_prim_index("echo"),
+          "echo9 is an instance of echo");
+    CHECK(viz_prim_index("2") < 0, "a bare number is not a primitive");
 
     /* The index a name resolves to must be the slot that name occupies, or the
      * two tables have slipped and every primitive draws its neighbour. */
@@ -124,7 +133,8 @@ int main(void)
     /* 2. THE SOURCES DRAW. A name that resolves and then puts nothing in the
      *    frame is the failure a lookup test cannot see. */
     printf("\n-- each source draws --\n");
-    static const char *sources[] = { "noise", "disc", "ramp", "grid" };
+    static const char *sources[] = { "noise", "disc", "box", "star", "ramp",
+                                     "grid" };
     for (unsigned i = 0; i < sizeof sources / sizeof *sources; i++) {
         blank();
         mark(sources[i], 9, 'd');
@@ -157,7 +167,7 @@ int main(void)
      *    is absent on purpose: inverting an empty frame FILLS it, which is
      *    correct, and it is the one operator that draws on nothing. */
     printf("\n-- operators alone leave the frame empty --\n");
-    static const char *ops[] = { "echo", "move", "warp", "shake",
+    static const char *ops[] = { "echo", "move", "spin", "warp", "shake",
                                  "grow", "thin", "tile", "fold" };
     for (unsigned i = 0; i < sizeof ops / sizeof *ops; i++) {
         blank();

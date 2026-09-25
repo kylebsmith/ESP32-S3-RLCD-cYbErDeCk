@@ -1249,8 +1249,8 @@ static cmd_status_t c_prim(cmd_ctx_t *ctx)
     const int prim = viz_prim_index(name);
     if (prim < 0) {
         cmd_out(ctx, "no primitive '%.12s'", name);
-        cmd_out(ctx, "noise disc ramp grid");
-        cmd_out(ctx, "echo move warp shake");
+        cmd_out(ctx, "noise disc box star ramp grid");
+        cmd_out(ctx, "echo move spin warp shake");
         cmd_out(ctx, "grow thin flip tile fold");
         return CMD_ERROR;
     }
@@ -1802,10 +1802,13 @@ static const cmd_t s_builtins[] = {
      * because documents already use it, and marked for deletion at freeze. */
     { "echo",   c_prim,  CMD_CAP_EDIT,  "keep the last frame - trails" },
     { "move",   c_prim,  CMD_CAP_EDIT,  "shift it, wrapping" },
+    { "spin",   c_prim,  CMD_CAP_EDIT,  "quarter turns - nothing else rotates" },
     { "warp",   c_prim,  CMD_CAP_EDIT,  "bend lines along an axis" },
     { "shake",  c_prim,  CMD_CAP_EDIT,  "tear lines sideways" },
     { "noise",  c_prim,  CMD_CAP_EDIT,  "a field of sparkles" },
     { "disc",   c_prim,  CMD_CAP_EDIT,  "a filled circle" },
+    { "box",    c_prim,  CMD_CAP_EDIT,  "a rectangle outline - hard corners" },
+    { "star",   c_prim,  CMD_CAP_EDIT,  "spokes from the centre" },
     { "ramp",   c_prim,  CMD_CAP_EDIT,  "a dithered gradient" },
     { "grid",   c_prim,  CMD_CAP_EDIT,  "a lattice" },
     { "grow",   c_prim,  CMD_CAP_EDIT,  "dilate: marks bloom" },

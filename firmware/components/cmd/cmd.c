@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "docstore.h"
+#include "seq.h"
 #include "esp_log.h"
 
 static const char *TAG = "cmd";
@@ -79,6 +80,32 @@ void cmd_out(cmd_ctx_t *ctx, const char *fmt, ...)
     }
 }
 
+/* A TRAILING DIGIT MAKES ANOTHER ONE.
+ *
+ * '>disc2 x...' is a second circle. '>kick2' is a second kick. The name is the
+ * lane, so a name that differs is a lane that differs - and the only thing the
+ * command table needs to know is which BINDING it is, which is the name with the
+ * digit taken off.
+ *
+ * Done here rather than with a table row per instance because the alternative is
+ * 'disc1' through 'disc9' for thirteen primitives and seventeen sounds: a hundred
+ * and thirty rows to say something a single rule says. docs/MAP.md refuses names
+ * that delete nothing, and this one buys instances of everything for free.
+ *
+ * It is a suffix and not a separate argument so that the LANE keeps its own name.
+ * '>route grow disc2' has to be able to say which circle, and 'disc 2' could not.
+ *
+ * Returns the length of the base name, which is the whole name when there is no
+ * digit, and never strips a name that is all digits. */
+static size_t base_len(const char *name, size_t n)
+{
+    size_t b = n;
+    while (b > 1 && name[b - 1] >= '0' && name[b - 1] <= '9') {
+        b--;
+    }
+    return b;
+}
+
 const cmd_t *cmd_recognise(const char *line, int *word_at, int *word_len)
 {
     if (line == NULL) {
@@ -103,12 +130,19 @@ const cmd_t *cmd_recognise(const char *line, int *word_at, int *word_len)
     if (n == 0) {
         return NULL;
     }
-    for (int i = 0; i < s_count; i++) {
-        if (strlen(s_table[i].name) == n &&
-            strncmp(s_table[i].name, start, n) == 0) {
-            if (word_at != NULL)  { *word_at = (int)(start - line); }
-            if (word_len != NULL) { *word_len = (int)n; }
-            return &s_table[i];
+    const size_t b = base_len(start, n);
+    for (int pass = 0; pass < 2; pass++) {
+        const size_t want = (pass == 0) ? n : b;
+        if (pass == 1 && b == n) { break; }
+        for (int i = 0; i < s_count; i++) {
+            if (strlen(s_table[i].name) == want &&
+                strncmp(s_table[i].name, start, want) == 0) {
+                /* The MARK covers the whole name, digit included, so the editor
+                 * underlines '>disc2' and not just '>disc'. */
+                if (word_at != NULL)  { *word_at = (int)(start - line); }
+                if (word_len != NULL) { *word_len = (int)n; }
+                return &s_table[i];
+            }
         }
     }
     return NULL;
@@ -155,22 +189,32 @@ cmd_status_t cmd_run_line(const char *line, cmd_caller_t caller,
     }
     ctx.arg = arg;
 
-    for (int i = 0; i < s_count; i++) {
-        if (strlen(s_table[i].name) == namelen &&
-            strncmp(s_table[i].name, line, namelen) == 0) {
+    const size_t baselen = base_len(line, namelen);
+    for (int pass = 0; pass < 2; pass++) {
+      const size_t want = (pass == 0) ? namelen : baselen;
+      if (pass == 1 && baselen == namelen) { break; }
+      for (int i = 0; i < s_count; i++) {
+        if (strlen(s_table[i].name) == want &&
+            strncmp(s_table[i].name, line, want) == 0) {
 
             if ((s_table[i].caps & ~caller_caps(caller)) != 0) {
                 cmd_out(&ctx, "%s: not permitted here", s_table[i].name);
                 if (msg_out != NULL) { snprintf(msg_out, msg_max, "%s", ctx.msg); }
                 return CMD_ERROR;
             }
-            ctx.name = s_table[i].name;
+            /* THE LANE'S NAME IS WHAT WAS TYPED, digit and all - that is the
+             * whole point of the instance. The table entry only decided which
+             * binding to use. */
+            static char typed[SEQ_NAME_MAX];
+            snprintf(typed, sizeof typed, "%.*s", (int)namelen, line);
+            ctx.name = typed;
             const cmd_status_t st = s_table[i].fn(&ctx);
             if (msg_out != NULL) {
                 snprintf(msg_out, msg_max, "%s", ctx.msg);
             }
             return st;
         }
+      }
     }
 
     /* Unknown names must say so rather than failing silently - a guide file

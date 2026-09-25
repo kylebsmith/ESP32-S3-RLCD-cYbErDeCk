@@ -6,7 +6,7 @@
 #include "seq.h"
 #include "seq_pattern.h"
 
-#define NGEN 13
+#define NGEN 16
 #define NAME_MAX 8
 
 /* THREE SOURCES AND FIVE OPERATORS, in a flat table like every other name in
@@ -36,10 +36,10 @@
  * So '>viz echo 9' plus '>viz move d' plus '>viz noise 2' is falling rain with
  * a dissolving tail, and none of those three lines knows about the others. */
 static const char *s_names[NGEN] = {
-    "echo", "move", "warp", "shake", /* history, then motion  */
-    "noise", "disc", "ramp", "grid", /* the sources           */
-    "grow", "thin", "flip",          /* shaping                */
-    "tile", "fold",                  /* repetition             */
+    "echo", "move", "spin", "warp", "shake",   /* history, then motion */
+    "noise", "disc", "box", "star", "ramp", "grid",  /* the sources    */
+    "grow", "thin", "flip",                    /* shaping             */
+    "tile", "fold",                            /* repetition          */
 };
 
 /* WHAT THE CLOCK LEFT FOR THE MAIN LOOP.
@@ -53,12 +53,24 @@ static const char *s_names[NGEN] = {
  * second mark before the frame is drawn overwrites the first, which is correct:
  * the picture is a monitor and the newest value is the only one worth showing. */
 typedef struct {
-    volatile bool    hit;
+    volatile uint8_t prim;
     volatile uint8_t amt;
     volatile char    dir;
 } mark_t;
 
-static mark_t  s_mark[NGEN];
+/* ONE SLOT PER LANE, NOT PER PRIMITIVE.
+ *
+ * It was one slot per primitive, which silently collapsed instances: '>disc' and
+ * '>disc2' both marked the same slot and the second overwrote the first, so two
+ * circles drew one. A mark belongs to the lane that made it.
+ *
+ * Replayed in PRIMITIVE order regardless of arrival order - see viz_service - so
+ * the pipeline still runs history, motion, sources, repetition whatever order the
+ * lanes were typed in. Instances of the same primitive keep their arrival order
+ * among themselves, which is the only order they could sensibly have. */
+#define MARK_MAX 16
+static mark_t  s_mark[MARK_MAX];
+static volatile uint8_t s_nmark;
 static volatile uint32_t s_mark_tick;
 static volatile bool     s_pending;
 
@@ -136,6 +148,18 @@ static int gen_index(const char *g)
     for (int i = 0; i < NGEN; i++) {
         if (strcmp(s_names[i], g) == 0) { return i; }
     }
+    /* A TRAILING DIGIT IS AN INSTANCE, NOT A DIFFERENT PRIMITIVE. 'disc2' draws a
+     * circle; what differs is the lane, not the shape. Same rule as cmd.c's
+     * dispatch, and it has to agree with it or '>disc2' would find a command and
+     * then fail to find a primitive. */
+    size_t n = strlen(g);
+    while (n > 1 && g[n - 1] >= '0' && g[n - 1] <= '9') { n--; }
+    if (n == strlen(g)) { return -1; }
+    for (int i = 0; i < NGEN; i++) {
+        if (strlen(s_names[i]) == n && strncmp(s_names[i], g, n) == 0) {
+            return i;
+        }
+    }
     return -1;
 }
 
@@ -190,9 +214,7 @@ const char *viz_row(int y)
 
 void viz_forget_all(void)
 {
-    for (int i = 0; i < NGEN; i++) {
-        s_mark[i].hit = false;
-    }
+    s_nmark = 0;
     s_pending = false;
     s_live = false;
     memset(s_prev, TONE_0, sizeof s_prev);
@@ -562,12 +584,109 @@ static void draw_flip(int amt, char dir, uint32_t step)
     }
 }
 
+/* spin: ROTATE. Quarter turns, and the amount says how many.
+ *
+ * Nothing else rotated. move translates, fold mirrors, warp displaces along an
+ * axis - all of them leave orientation alone, so a shape could never turn. That
+ * is the axis this brings, and it is why it earns a name where 'edge' and 'dots'
+ * below did not.
+ *
+ * Quarter turns only, deliberately. An arbitrary angle needs interpolation, and
+ * on a grid of characters where a cell is twice as tall as it is wide there is no
+ * interpolation that does not smear - a 30-degree rotation of ASCII is mush. A
+ * quarter turn is exact: it is a transpose and a flip, every cell lands on a cell.
+ */
+static void draw_spin(int amt, char dir, uint32_t step)
+{
+    const int turns = (amt < 0 ? 1 : amt) / 3;      /* 0..3 quarter turns */
+    if (turns == 0) { return; }
+    char tmp[VIZ_H][VIZ_W + 1];
+    for (int y = 0; y < s_h; y++) { memcpy(tmp[y], s_fb[y], (size_t)s_w + 1); }
+    /* THE FRAME IS NOT SQUARE, so a quarter turn cannot be a straight transpose:
+     * a 58x10 picture rotated into a 58x10 window has to be scaled back into it.
+     * Sampling the source at the transposed position does that in one pass and
+     * costs nothing a bigger buffer would have bought. */
+    for (int y = 0; y < s_h; y++) {
+        for (int x = 0; x < s_w; x++) {
+            int sx, sy;
+            switch (turns) {
+            case 1:  sx = y * s_w / s_h;             sy = (s_h - 1) - x * s_h / s_w; break;
+            case 2:  sx = (s_w - 1) - x;             sy = (s_h - 1) - y;             break;
+            default: sx = (s_w - 1) - y * s_w / s_h; sy = x * s_h / s_w;             break;
+            }
+            if (sx < 0) { sx = 0; } if (sx >= s_w) { sx = s_w - 1; }
+            if (sy < 0) { sy = 0; } if (sy >= s_h) { sy = s_h - 1; }
+            s_fb[y][x] = tmp[sy][sx];
+        }
+    }
+}
+
+/* box: a RECTANGLE OUTLINE from the centre, size from the amount.
+ *
+ * Hard corners, where disc is round and grid is a lattice. It was in the first
+ * set, folded away during the collapse on the grounds that a disc through warp is
+ * nearly a box - and that was wrong: a warped disc has no corners, and a corner
+ * is the thing a box is for. */
+static void draw_box(int amt, char dir, uint32_t step)
+{
+    /* THE FULL-SIZE BOX HAS TO FIT. At 1 + amt*(w/2 - 1)/9 the half-width is w/2
+     * exactly, so x1 == s_w and the right edge falls off the frame - a rectangle
+     * with three sides, which looks like a drawing bug rather than an arithmetic
+     * one. Two off the half-width leaves room for both edges at every amount. */
+    const int hw = 1 + amt * (s_w / 2 - 2) / 9;
+    const int hh = amt * (s_h / 2 - 1) / 9;
+    const int x0 = s_w / 2 - hw, x1 = s_w / 2 + hw;
+    const int y0 = s_h / 2 - hh, y1 = s_h / 2 + hh;
+    const char c = (char)(TONE_0 + TONE_TOP);
+    for (int x = (x0 < 0 ? 0 : x0); x <= x1 && x < s_w; x++) {
+        if (y0 >= 0)  { s_fb[y0][x] = c; }
+        if (y1 < s_h) { s_fb[y1][x] = c; }
+    }
+    for (int y = (y0 < 0 ? 0 : y0); y <= y1 && y < s_h; y++) {
+        if (x0 >= 0)  { s_fb[y][x0] = c; }
+        if (x1 < s_w) { s_fb[y][x1] = c; }
+    }
+}
+
+/* star: SPOKES from the centre, count from the amount.
+ *
+ * Radial LINES, where disc is a radial area and grid is orthogonal lines. Nothing
+ * else draws anything at an angle, which is the axis it brings - and through spin
+ * it turns, which is the pair of primitives this set was missing. */
+static void draw_star(int amt, char dir, uint32_t step)
+{
+    const int spokes = 3 + (amt < 0 ? 9 : amt);      /* 3..12 */
+    const int cx = s_w / 2, cy = s_h / 2;
+    const int reach = (s_w / 2 < s_h ? s_w / 2 : s_h);
+    const char c = (char)(TONE_0 + TONE_TOP);
+    for (int k = 0; k < spokes; k++) {
+        /* A sine and cosine without either: walk the perimeter of a diamond and
+         * draw to each vertex. Even spacing in perimeter is not even in angle,
+         * which on a twelve-row picture nobody can tell apart from even in angle.
+         */
+        const int per = 4 * reach;
+        int t = k * per / spokes;
+        int ex, ey;
+        if (t < reach)          { ex =  reach - t;       ey = -t; }
+        else if (t < 2 * reach) { ex = -(t - reach);     ey = -(2 * reach - t); }
+        else if (t < 3 * reach) { ex = -(3 * reach - t); ey =  t - 2 * reach; }
+        else                    { ex =  t - 3 * reach;   ey =  4 * reach - t; }
+        /* Vertical distance counts double, so halve it to keep the star round. */
+        const int steps = reach;
+        for (int i = 0; i <= steps; i++) {
+            const int x = cx + ex * i / steps;
+            const int y = cy + (ey / 2) * i / steps;
+            if (x >= 0 && x < s_w && y >= 0 && y < s_h) { s_fb[y][x] = c; }
+        }
+    }
+}
+
 /* One row per primitive, in the same order as s_names - so the name the owner
  * types and the code that runs cannot drift apart. */
 typedef void (*draw_fn)(int amt, char dir, uint32_t step);
 static const draw_fn s_draw[NGEN] = {
-    draw_echo,  draw_move, draw_warp, draw_shake,
-    draw_noise, draw_disc, draw_ramp, draw_grid,
+    draw_echo,  draw_move, draw_spin, draw_warp, draw_shake,
+    draw_noise, draw_disc, draw_box,  draw_star, draw_ramp, draw_grid,
     draw_grow,  draw_thin, draw_flip,
     draw_tile,  draw_fold,
 };
@@ -598,9 +717,14 @@ void viz_mark(int prim, int amt, char dir, uint32_t tick)
      * pass over the whole picture for every primitive that fired, and doing
      * that between two ticks is the coupling docs/OS.md exists to forbid - it
      * has had to be undone in four other places in this firmware. */
-    s_mark[prim].hit = true;
-    s_mark[prim].amt = (uint8_t)(amt < 0 ? 0 : (amt > 9 ? 9 : amt));
-    s_mark[prim].dir = dir;
+    const uint8_t n = s_nmark;
+    if (n >= MARK_MAX) {
+        return;                     /* more lanes than marks: cannot happen */
+    }
+    s_mark[n].prim = (uint8_t)prim;
+    s_mark[n].amt  = (uint8_t)(amt < 0 ? 0 : (amt > 9 ? 9 : amt));
+    s_mark[n].dir  = dir;
+    s_nmark = (uint8_t)(n + 1);
     s_mark_tick = tick;
     s_pending = true;
 }
@@ -625,14 +749,15 @@ bool viz_service(void)
      * repeat what is there. Replaying in the order the lanes happened to fire
      * would make the same three lines mean something different depending on
      * which order they were typed in. */
+    const int nm = (int)s_nmark;
+    s_nmark = 0;
     bool drew = false;
-    for (int i = 0; i < NGEN; i++) {
-        if (!s_mark[i].hit) {
-            continue;
+    for (int prim = 0; prim < NGEN; prim++) {
+        for (int m = 0; m < nm; m++) {
+            if (s_mark[m].prim != (uint8_t)prim) { continue; }
+            s_draw[prim]((int)s_mark[m].amt, s_mark[m].dir, tick);
+            drew = true;
         }
-        s_mark[i].hit = false;
-        s_draw[i]((int)s_mark[i].amt, s_mark[i].dir, tick);
-        drew = true;
     }
     s_live = drew || s_live;
     return true;

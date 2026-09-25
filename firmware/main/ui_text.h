@@ -117,9 +117,13 @@
     "PICTURES - same document,\n" \
     "same clock. each one is a\n" \
     "lane, exactly like a drum.\n" \
-    "draws: noise disc ramp grid\n" \
-    "bends: echo move warp shake\n" \
-    "  grow thin flip tile fold\n" \
+    "draws: noise disc box star\n" \
+    "  ramp grid\n" \
+    "bends: echo move spin warp\n" \
+    "  shake grow thin flip\n" \
+    "  tile fold\n" \
+    "disc2 disc3 for more of one.\n" \
+    "<a b> alternates each bar.\n" \
     ">echo 8    then add:\n" \
     ">noise 2.4.2.4.\n" \
     ">move d    trails fall\n" \

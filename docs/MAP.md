@@ -521,6 +521,25 @@ Open decision: `.` as the separator, and which parameters each binding exposes.
 Keep that list short and per-binding, or it becomes the flag grammar
 [COMMANDS.md](COMMANDS.md) exists to refuse.
 
+### 9.3b More primitives, and two refusals `[FACT]`
+
+Three added, each held to the bar in `viz.h` — *does it bring an axis the others do
+not have?*
+
+| | axis nothing else had |
+|---|---|
+| `spin` | **rotation.** `move` translates, `fold` mirrors, `warp` displaces — all leave orientation alone, so a shape could never turn. Quarter turns only: an arbitrary angle needs interpolation, and on a grid where a cell is twice as tall as it is wide there is no interpolation that does not smear. A quarter turn is exact. |
+| `box` | **hard corners.** It was in the first set and folded away during the collapse on the grounds that a disc through `warp` is nearly a box. That was wrong — a warped disc has no corners, and a corner is what a box is for. |
+| `star` | **angular rays.** `disc` is a radial area and `grid` is orthogonal lines; nothing drew anything at an angle. Through `spin` it turns, which is the pair this set was missing. |
+
+**Two were refused**, and the reasons matter more than the additions:
+
+- **`dots`** — an ordered dot field. `ramp` is already an ordered dither and `grid`
+  at a high amount is already a regular field. It does not clear the bar.
+- **`edge`** — keep only the boundary. That is `grow` composed with `thin`, and
+  §9.4 refuses `a!3` on exactly that ground. Refusing this one and accepting
+  `a!3`'s refusal has to be the same decision or neither means anything.
+
 ### 9.4 Refused
 
 - **Combinator syntax** (`every`, `jux`, `off`, `superimpose`). Functions, not

@@ -1,6 +1,6 @@
 # Every verb, on one page
 
-*The whole language. Sixty-six names, generated from the command table itself —
+*The whole language. Sixty-nine names, generated from the command table itself —
 if this page and the firmware disagree, the firmware is right and this page is
 stale. [MAP.md](MAP.md) §0 has the snippet that counts them.*
 
@@ -22,7 +22,8 @@ a documentation one.
   .  rest         -  rest         _  rest
   0-9             a scale degree, a controller value, or an amount
   x%15            fifteen per cent chance on that step
-  [xx]            a group: subdivides the step it occupies, any depth
+  [xx]            a group: SUBDIVIDES the step it occupies, any depth
+  <a b>           ALTERNATES: a different member each bar
   /2  *2          this lane's own rate, at the end of the line
   u d l r         which way, in front of the pattern or as a step
 ```
@@ -33,7 +34,7 @@ it.
 
 ---
 
-## Lanes — 30 names, one behaviour
+## Lanes — 33 names, one behaviour
 
 The whole point: **a drum and a circle are the same sentence.** A lane compiles
 text into *when* and *how much*; its name says *where*.
@@ -42,6 +43,8 @@ text into *when* and *how much*; its name says *where*.
 |---|---|---|---|---|---|---|
 | `kick` | drum, note 36 | | `noise` | sparkle field | `echo` | keep last frame — trails |
 | `snare` | drum | | `disc` | filled circle | `move` | shift, wrapping |
+| | | | `box` | rectangle outline | `spin` | quarter turns |
+| | | | `star` | spokes from centre | | |
 | `hat` | drum | | `ramp` | dithered gradient | `warp` | bend lines on an axis |
 | `ohat` | drum | | `grid` | a lattice | `shake` | tear lines sideways |
 | `clap` | drum | | | | `grow` | dilate — marks bloom |
@@ -59,6 +62,10 @@ text into *when* and *how much*; its name says *where*.
 | `cc` | any controller | `cc 74 0..9..` | | | | |
 
 **Sixteen lanes at once**, any mix. `route` connects any two.
+
+**A trailing digit makes another one.** `disc2`, `disc3`, `kick2` — a different
+name is a different lane on the same binding, so you can route them apart:
+`>route disc2 kick2`. Nothing in the table changes; it is a naming rule.
 
 ---
 
@@ -133,5 +140,7 @@ text into *when* and *how much*; its name says *where*.
    fire *on* the kick. It chains: `kick → disc → grow`.
 4. **Rate is per lane.** `/2` on one line is half-time for that line only — which
    is why polyrhythm needs no feature.
+   And **`[]` subdivides, `<>` alternates.** They compose in either order:
+   `[x<x .>]` is a doubled step whose second half comes and goes.
 5. **`din` is the one that needs no computer.** Everything else makes the deck a
    device, a peripheral or a client, and all three need a host.
