@@ -261,36 +261,47 @@ and a drawing lane is neither.
 
 ---
 
-## 5. Nesting `[OPEN]` — one decision, not yet made
+## 5. Nesting `[FACT]` — done
 
-Patterns do not nest, and the language has nowhere to put a group. The
-established answer in this lineage is that **a bracket subdivides the step it
-occupies**:
+**A bracket subdivides the step it occupies, to any depth.** One rule, recursive,
+and it is how a bar is already read on paper:
 
 ```
-    x..[xx]        four steps; the last is two half-steps
-    x.[x[xx]].     nesting, to any depth, with no new rule
+    x..[xx]          four steps; the last is two half-steps
+    [xxx]...         a triplet in the first step of four
+    [xx][xxx]        two against three, in one bar, from one line
+    x.[x[xx]].       the second of a pair splits again
 ```
 
-One rule, recursive, and it is how a human already reads a bar. The obstacle is
-that `[]` is taken: `?[15]` sets a step's probability.
+**Probability moved to `%`.** `x%15` is a fifteen-per-cent chance on that step;
+`?` alone is still a half. The bracket is the only punctuation a player already
+reads as grouping, and a group — a step that *contains* steps — has a better
+claim on it than a parameter *of* a step. Recommendation (1) from the previous
+version of this section, taken.
 
-Three ways out, all breaking, all cheap *now* and expensive after freeze:
+**It is a compile-time transform, and that is the important part.** The clock
+reads a flat bitmask at a uniform rate and knows nothing else
+([SUBSTRATE.md](SUBSTRATE.md): the realtime core never parses text), so nesting
+is resolved in `seq_pattern_walk()` by **flattening the tree onto that same
+grid**. `x..[xx]` becomes eight slots at half the step length with hits at 0, 6
+and 7. There is no second code path for a nested lane and nothing new that can
+be late — the sequencer is byte-for-byte as unaware of nesting as it was of
+`/2`.
 
-1. **Move probability off the bracket.** `x%15` or `x?15`. Frees `[]` for
-   grouping, which is the higher-value use. Breaks saved documents that use
-   `?[n]`.
-2. **Disambiguate by content.** A bracket of digits is a parameter; a bracket of
-   pattern characters is a group. Zero migration, but it is a rule with an
-   exception in it, and those are the rules that get explained wrong.
-3. **A different grouping delimiter.** `(xx)` or `<xx>`. No migration, one more
-   piece of punctuation to learn.
+Each top-level step is given `div` slots, where `div` is the least common
+multiple of what its members need, so every leaf lands exactly on a slot
+boundary. `[xx][xxx]` needs 6 per step and 12 in total.
 
-**Recommendation: (1).** A probability is a *parameter of a step*; a group is a
-*step containing steps*. Those are different enough to deserve different marks,
-and the bracket should belong to the structural one. Decide before freeze.
+**What does not fit is refused, not truncated** — `[xxxxx][xxxx][xxx]` would need
+180 slots. A flat pattern is still *clamped* at 32, and the difference is not a
+compromise: truncating a flat line loses the tail and nothing else, one
+character one step, while a nested bar's subdivision is a property of the whole
+bar, so dropping the end changes the meaning of everything before it.
 
----
+The walk also collapsed the last duplicated traversal in the system. `seq_lane()`
+used to walk the characters itself and the editor walked them backwards to place
+the playhead; both call `seq_pattern_walk()` now, so they cannot disagree about
+which characters are steps.
 
 ## 6. Two decks `[OPEN]`
 
@@ -358,7 +369,8 @@ argue against later:
 
 1. ~~**One lane table.**~~ Done. `viz` survives as an alias to be deleted at
    freeze — that deletion is the remaining half of this criterion.
-2. **Nesting decided and implemented.** §5, one syntax, no exceptions.
+2. ~~**Nesting decided and implemented.**~~ Done. One rule, recursive, resolved
+   at compile time.
 3. **One shared clock mechanism** that covers both a second deck and a laptop.
 4. **MIDI in and out on a wire**, so the deck needs no computer at all.
 5. **Sixty-three verbs down, not up.** §3.1 and §4 remove at least two.

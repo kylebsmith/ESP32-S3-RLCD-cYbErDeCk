@@ -129,30 +129,108 @@ int main(void)
         }
     }
 
-    /* 9. A BRACKET IS A PARAMETER, NOT A STEP.
+    /* 9. A PER-CENT SIGN IS A PARAMETER, NOT A STEP.
      *
-     * '?[15]' is one step with a parameter. If the bracket counted as steps,
-     * the pattern would be four longer than it looks and the playhead would
-     * drift off the character that is sounding - the exact failure the
-     * step/offset bijection exists to prevent. */
-    eqi("bracket is not a step",  seq_pattern_steps("x?[15]x.", MAX_STEPS), 4);
-    eqi("step after a bracket",   seq_pattern_offset("x?[15]x.", 2, MAX_STEPS), 6);
-    eqi("the step it attaches to", seq_pattern_offset("x?[15]x.", 1, MAX_STEPS), 1);
-    eqi("parameter value",        seq_pattern_param("[15]"), 15);
-    eqi("parameter length",       seq_pattern_param_len("[15]"), 4);
-    eqi("unterminated is not one", seq_pattern_param_len("[15"), 0);
-    eqi("non-numeric is not one",  seq_pattern_param("[a]"), -1);
-    /* No step may land inside a bracket. */
+     * 'x%15' is one step with a parameter. It moved off the bracket because the
+     * bracket is the only punctuation a player already reads as GROUPING, and a
+     * group had the better claim on it - see docs/MAP.md. If the parameter
+     * counted as steps the pattern would be three longer than it looks and the
+     * playhead would drift off the character that is sounding. */
+    eqi("a parameter is not a step", seq_pattern_steps("x%15x.", MAX_STEPS), 3);
+    eqi("step after a parameter",    seq_pattern_offset("x%15x.", 1, MAX_STEPS), 4);
+    eqi("the step it attaches to",   seq_pattern_offset("x%15x.", 0, MAX_STEPS), 0);
+    eqi("parameter value",           seq_pattern_param("%15"), 15);
+    eqi("parameter length",          seq_pattern_param_len("%15"), 3);
+    eqi("a bare per-cent is not one", seq_pattern_param_len("%"), 0);
+    eqi("a per-cent then a letter",   seq_pattern_param_len("%a"), 0);
+    eqi("zero is a real value",      seq_pattern_param("%0"), 0);
+    /* No step may land inside a parameter. */
     {
-        const char *b = "x?[15]x.";
+        const char *b = "x%15x.";
         const int n = seq_pattern_steps(b, MAX_STEPS);
         for (int i = 0; i < n; i++) {
             const int off = seq_pattern_offset(b, i, MAX_STEPS);
-            if (off < 0 || b[off] == '[' || b[off] == ']' ||
-                (b[off] >= '0' && b[off] <= '9' && off > 0 && b[off-1] == '[')) {
+            if (off < 0 || b[off] == '%' ||
+                (b[off] >= '0' && b[off] <= '9' && off > 0 &&
+                 (b[off-1] == '%' || (b[off-1] >= '0' && b[off-1] <= '9')))) {
                 printf("[FAIL] step %d landed inside a parameter\n", i);
                 fails++;
             }
+        }
+    }
+
+    /* 9b. NESTING. A bracket subdivides the step it occupies, to any depth, and
+     * it is resolved HERE - flattened onto the same uniform grid the clock
+     * already reads, so the sequencer never learns about it and there is no
+     * second code path that could be late.
+     *
+     * Each case states the flattened form, because that is the thing that has
+     * to be right: 'x..[xx]' is eight slots at half the step length with hits
+     * at 0, 6 and 7 - not four steps one of which is special. */
+    {
+        struct { const char *pat; int n; int div; const char *flat; } nest[] = {
+            /* unchanged when nothing nests */
+            { "x...x...x...x...", 16, 1, "x...x...x...x..." },
+            /* the last step becomes two half-steps */
+            { "x..[xx]",           8, 2, "x.....xx" },
+            /* a triplet in the first step of four */
+            { "[xxx]...",         12, 3, "xxx........." },
+            /* two against three, in one bar, from one line */
+            { "[xx][xxx]",        12, 6, "x..x..x.x.x." },
+            /* depth: the second of a pair splits again */
+            { "x.[x[xx]].",       16, 4, "x.......x.xx...." },
+        };
+        for (unsigned i = 0; i < sizeof nest / sizeof nest[0]; i++) {
+            seq_walk_t w;
+            const int n = seq_pattern_walk(nest[i].pat, &w);
+            char got[40];
+            int k = 0;
+            for (; k < n && k < 32; k++) {
+                got[k] = (w.at[k] < 0) ? '.' : nest[i].pat[w.at[k]];
+            }
+            got[k] = '\0';
+            if (n != nest[i].n || w.div != nest[i].div ||
+                strcmp(got, nest[i].flat) != 0) {
+                printf("[FAIL] %-18s n=%d/%d div=%d/%d\n         got  %s\n"
+                       "         want %s\n",
+                       nest[i].pat, n, nest[i].n, w.div, nest[i].div,
+                       got, nest[i].flat);
+                fails++;
+            } else {
+                printf("[ ok ] %-18s -> %s  (%d slots, div %d)\n",
+                       nest[i].pat, got, n, w.div);
+            }
+        }
+
+        /* A NESTED PATTERN THAT CANNOT FIT IS REFUSED, not truncated: the
+         * subdivision is a property of the whole bar, so dropping the tail
+         * changes the meaning of everything before it. */
+        seq_walk_t w;
+        eqi("an impossible subdivision is refused",
+            seq_pattern_walk("[xxxxx][xxxx][xxx]", &w), -1);
+
+        /* A FLAT pattern is still CLAMPED, because truncating it loses the tail
+         * and nothing else - one character, one step, exactly as written. */
+        eqi("a long flat pattern clamps",
+            seq_pattern_steps("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                              MAX_STEPS), MAX_STEPS);
+
+        /* And the playhead still lands on a character for every slot that has
+         * one, through nesting - which is the whole reason this file exists. */
+        {
+            const char *b = "x.[x[xx]].";
+            const int n = seq_pattern_steps(b, MAX_STEPS);
+            int marks = 0;
+            for (int i = 0; i < n; i++) {
+                const int off = seq_pattern_offset(b, i, MAX_STEPS);
+                if (off < 0) { continue; }
+                marks++;
+                if (b[off] == '[' || b[off] == ']') {
+                    printf("[FAIL] slot %d landed on a bracket\n", i);
+                    fails++;
+                }
+            }
+            eqi("every mark in a nested pattern is reachable", marks, 6);
         }
     }
 

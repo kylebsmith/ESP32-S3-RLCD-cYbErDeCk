@@ -34,8 +34,8 @@ silent. Again — it comes back.
 ## 4. Probability
 
 ```
->hat ?[3]?[3]?[3]?[3]
->hat ?[97]?[97]?[97]?[97]
+>hat ?%3?%3?%3?%3
+>hat ?%97?%97?%97?%97
 ```
 
 Near-silence, then near-constant. `>lanes` prints an `odds` line showing the
@@ -175,6 +175,23 @@ blocks, a diamond, a disc, a ring, diagonals, and four quadrant arcs that tile
 fade — `@ # * : : . .` and gone, eight stages — where six punctuation marks
 jumped straight from `:` to nothing. `>frame` still sends plain ASCII over OSC,
 since the tiles mean nothing to a receiver.
+
+**Patterns nest.** A bracket subdivides the step it occupies, to any depth:
+
+```
+>kick x..[xx]          the last step becomes two half-steps
+>hat  [xxx]...         a triplet in the first step of four
+>hat  [xx][xxx]        two against three, in one bar, from one line
+>kick x.[x[xx]].       the second of a pair splits again
+```
+
+Probability is `%` now: `x%15` is a fifteen-per-cent chance on that step, `?`
+alone is still a half, and they combine as `?%15`. The bracket was spent on the
+parameter before; a group had the better claim on it.
+
+Nesting is resolved when the line compiles, so a nested lane costs the clock
+nothing. What cannot fit is refused rather than shortened — a nested bar's
+subdivision is a property of the whole bar.
 
 **A digit is always how much: 0 none, 9 full.** In every primitive. A `u`, `d`,
 `l` or `r` is which way, either in front of the pattern (`>viz ramp u 4.6.9.6.`)

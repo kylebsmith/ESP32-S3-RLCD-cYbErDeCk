@@ -1593,8 +1593,8 @@ static cmd_status_t c_lanes(cmd_ctx_t *ctx)
         } else {
             cmd_out(ctx, "%c%-5s %s", l[i].muted ? '-' : ' ', l[i].name, bar);
         }
-        /* Show the odds the brackets set. The bar can only render '?', so a
-         * listing without this cannot confirm that a '?[15]' was read at all -
+        /* Show the odds the '%' set. The bar can only render '?', so a
+         * listing without this cannot confirm that a '?%15' was read at all -
          * which is precisely the uncertainty that had the owner unable to tell
          * whether probability was working. */
         {

@@ -768,47 +768,67 @@ esp_err_t seq_lane(const char *name, const char *steps)
     }
 
     int rnum = 1, rden = 1;
-    const int plen = seq_pattern_rate(steps, &rnum, &rden);
+    (void)seq_pattern_rate(steps, &rnum, &rden);
+
+    /* ONE WALK, AND IT FLATTENS THE NESTING.
+     *
+     * seq_pattern_walk resolves '[xx]' into slots on the same uniform grid the
+     * clock already reads, so a nested pattern and a flat one compile to the
+     * same shape and there is no second code path that could be late. The walk
+     * hands back, per slot, the offset of the character that starts there - or
+     * -1 where a longer step is still sounding.
+     *
+     * This loop used to walk the characters itself, which is why the editor had
+     * to walk them too, backwards, and why the two could disagree about which
+     * characters were steps. Now both call the same function. */
+    seq_walk_t w;
+    const int slots = seq_pattern_walk(steps, &w);
+    if (slots < 0) {
+        /* REFUSED, NOT TRUNCATED. A pattern whose flattened form needs more
+         * than 32 slots - '[xxxxx][xxxx][xxx]' needs 180 - would otherwise
+         * compile to a silently shortened bar, which is a bug that sounds like
+         * a composition choice. */
+        return ESP_ERR_INVALID_SIZE;
+    }
+
     uint32_t mask = 0, accent = 0, ghost = 0, chance = 0;
     char chr[SEQ_MAX_STEPS];
+    uint8_t deg[SEQ_MAX_STEPS];
+    uint8_t prob[SEQ_MAX_STEPS];
     memset(chr, 0, sizeof chr);
-    uint8_t  deg[SEQ_MAX_STEPS];
-    uint8_t  prob[SEQ_MAX_STEPS];
     memset(deg, 0xFF, sizeof deg);
-    memset(prob, 255, sizeof prob);   /* 255 = no bracket on this step */
-    int n = 0;
-    const char *stop = steps + plen;
-    for (const char *p = steps; p < stop && *p != '\0' && n < SEQ_MAX_STEPS; p++) {
-        /* A bracket is a parameter on the step just placed, not a step. */
-        const int plen = seq_pattern_param_len(p);
-        if (plen > 0) {
-            const int v = seq_pattern_param(p);
-            if (v >= 0 && v <= 100 && n > 0) {
-                /* 0 means NEVER. It used to be clamped to 1%, which made
-                 * '?[0]' a step that fires once every few minutes - the one
-                 * value whose meaning is obvious was the one value that lied.
-                 * 255 is the sentinel for "no parameter"; 0 is a real zero. */
-                prob[n - 1] = (uint8_t)v;
-                chance |= (1u << (n - 1));   /* a per-cent implies maybe */
-            }
-            p += plen - 1;
+    memset(prob, 255, sizeof prob);   /* 255 = no parameter on this slot */
+
+    int n = slots;
+    if (n > SEQ_MAX_STEPS) { n = SEQ_MAX_STEPS; }
+    for (int i = 0; i < n; i++) {
+        const int off = w.at[i];
+        if (off < 0) {
+            continue;                 /* nothing starts here */
+        }
+        const char ch = steps[off];
+        /* Anything that is not a rest is a hit. Nobody should have to remember
+         * whether the hit character is x, o or *. */
+        if (ch == '.' || ch == '-' || ch == '_') {
             continue;
         }
-        if (seq_pattern_is_spacing(*p)) {
-            continue;    /* spacing for the eye - seq_pattern.h owns this rule */
+        mask |= (1u << i);
+        chr[i] = ch;
+        if (ch == 'X') { accent |= (1u << i); }
+        if (ch == ',') { ghost  |= (1u << i); }
+        if (ch == '?') { chance |= (1u << i); }
+        if (ch >= '0' && ch <= '9') { deg[i] = (uint8_t)(ch - '0'); }
+
+        /* '%NN' is a parameter on this step, and it implies maybe. 0 means
+         * NEVER: it used to be clamped to 1%, which made the one value whose
+         * meaning is obvious the one value that lied. */
+        const int v = seq_pattern_param(steps + off + 1);
+        if (v >= 0 && v <= 100) {
+            prob[i] = (uint8_t)v;
+            chance |= (1u << i);
         }
-        /* Anything that is not a rest is a hit. Nobody should have to
-         * remember whether the hit character is x, o or *. */
-        if (*p != '.' && *p != '-' && *p != '_') {
-            mask |= (1u << n);
-            if (*p == 'X') { accent |= (1u << n); }
-            if (*p == ',') { ghost  |= (1u << n); }
-            if (*p == '?') { chance |= (1u << n); }
-            if (*p >= '0' && *p <= '9') { deg[n] = (uint8_t)(*p - '0'); }
-            chr[n] = *p;             /* verbatim: some bindings read the mark */
-        }
-        n++;
     }
+
     if (n == 0) {
         l->used = false;             /* an empty pattern removes the lane */
         return ESP_OK;
@@ -826,7 +846,11 @@ esp_err_t seq_lane(const char *name, const char *steps)
     {
         /* Ticks per step for this lane. Clamped so a nonsense rate cannot
          * make a lane fire every tick or never at all. */
+        /* DIVIDED BY THE SUBDIVISION, which is the whole of nesting as far as
+         * the clock is concerned: 'x..[xx]' is eight slots at half the step
+         * length, not four steps one of which is special. */
         long t = (long)SEQ_TICKS_PER_STEP * rden / (rnum > 0 ? rnum : 1);
+        t /= (w.div > 0 ? w.div : 1);
         if (t < 1)     { t = 1; }
         if (t > 32767) { t = 32767; }
         l->tps = (uint16_t)t;
