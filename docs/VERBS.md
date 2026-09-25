@@ -7,7 +7,7 @@ verbs: they are yours, defined in the boot document.*
 
 *For what was wrong with this language and what replaced it, see
 [MANIFESTO.md](MANIFESTO.md) — two adversarial reviews, and which of their
-proposals have been decided.*
+proposals have been decided. Coming from Strudel: [STRUDEL.md](STRUDEL.md).*
 
 A performer cannot search. That is the entire reason this page has to fit on one:
 if it does not, the language is too big, and that is a design failure rather than

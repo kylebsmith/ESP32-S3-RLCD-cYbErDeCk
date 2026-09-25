@@ -481,6 +481,11 @@ losing move and an uninteresting one.
 So: anything expressible as a **mark in a pattern** is fair game. Anything needing
 a **function applied to a pattern** is refused.
 
+*Measured 2026-09-25* ([STRUDEL.md](STRUDEL.md)): of the 216 distinct patterns in
+Strudel's own example tunes, 145 are notation this deck has, and the deck plays all
+145 in Strudel's rhythm exactly, checked note by note against Strudel itself. The
+largest things it does not have are Euclid (§9.2) and a note spread over passes.
+
 ### 9.1 Per-cycle alternation — `<a b>` `[FACT]` — done
 
 A step that takes a different value each bar:
