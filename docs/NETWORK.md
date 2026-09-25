@@ -288,27 +288,73 @@ exchanges**. A tempo is a decision somebody made; a phase is a measurement.
 | round trip, no gate | +384 µs | 2491 µs | 2031 µs | 6 of 8 |
 | round trip + hard RTT gate | +36 µs | 227 µs | **184 µs** | 10 of 10 |
 | round trip + graduated trust, across two tempo changes | +334 µs | 3446 µs | 2322 µs | 8 of 14 |
+| **+ true send time, median of the best six, snap on tempo** | **+1 µs** | **130 µs** | **86 µs** | **22 of 22** |
+| the same, second run | −37 µs | 643 µs | 547 µs | 21 of 22 |
 
-The fourth row is the best result seen and the fifth is the honest one: the hard
-gate measured beautifully in a quiet moment and then **starved**. The floor is the
-fastest exchange ever seen, so one lucky probe sets a standard nothing else meets,
-almost every window is discarded, and the clock coasts and drifts between the rare
-accepted ones — which turned a 184 µs worst case into 2400 µs. Graduated trust
-(half gain for a clean window, an eighth for a middling one, discard only a
-hopeless one) never starves and is what ships.
+Rows four and five are the story of a wrong turn: the hard gate measured beautifully
+in a quiet moment and then **starved**. The floor is the fastest exchange ever seen,
+so one lucky probe sets a standard nothing else meets, almost every window is
+discarded, and the clock coasts and drifts between the rare accepted ones — which
+turned a 184 µs worst case into 2400 µs. Graduated trust never starves, and shipped,
+and was still wrong by twenty times.
 
-**So: typically a few hundred microseconds, with occasional excursions to about
-2 ms.** A pulse at 124 bpm is 5040 µs, so the worst case is under half a pulse and
-the typical case is a few per cent of one. Well below the ~10 ms at which a
-rhythmic difference is heard.
+**Rows six and seven are what ships**, and three changes got there. In descending order
+of what each was worth:
+
+1. **The probe's departure is measured, not assumed.** `esp_now_send` only *queues* a
+   frame; what follows — the WiFi task waking, CSMA backoff waiting for a quiet channel,
+   the transmit — was landing inside the measured round trip, entirely on the outbound
+   leg, while halving the total spread it across both. A one-sided delay in a sum that
+   gets halved puts half of itself straight into the answer. The ESP-NOW **send
+   callback** fires when the frame has actually been transmitted and acknowledged, so
+   the packet now carries an opaque tag and the follower reads the real departure out of
+   that callback. This is where the milliseconds were.
+2. **Six samples instead of one.** Keeping the single fastest exchange is right in
+   principle and throws away a window of twenty-four to keep one draw, whose offset
+   still carries the full jitter of the one receive timestamp behind it. Keep the best
+   six by round trip and correct toward their **median**: six lightly-queued exchanges
+   are six near-independent measurements of the same offset, and a median cannot be
+   dragged by an outlier that slipped past the filter. Their **disagreement** then
+   replaces the RTT floor as the gate, which is strictly better — the floor judges this
+   window by a memory of the luckiest packet ever seen, whereas six probes agreeing
+   within 300 µs is corroboration about *now* and needs no history to interpret.
+3. **A tempo change is a step, so take it in one.** With the above in place, every
+   steady-state window landed inside 73 µs and the only readings over 300 µs in a whole
+   run were the first one after the leader changed tempo. That is not the radio:
+   `seq_bpm` re-anchors the grid so the current pulse keeps its place in absolute time,
+   which is right, but the two decks re-anchor at the two different moments they each
+   heard about the change, and the difference modulo the new pulse is the error.
+   Converging on a step in halves takes several windows, so the follower now notices the
+   tempo moved, discards the window in progress — half of it was measured against a grid
+   that no longer exists — and applies the next corroborated window whole.
+
+One more fix was found along the way and was not about accuracy at all: folding the
+error into ±half a pulse used a `while` loop after subtracting `(their tick − our tick)
+× period`. That term is an exact multiple of the pulse, so it vanished under the fold
+and never affected the answer — but two decks that started playing minutes apart differ
+by a hundred thousand ticks, so the loop it fed ran a hundred thousand times **inside a
+radio callback**. One modulo is the same answer in constant time.
+
+**So: 43 of 44 samples inside 500 µs across two runs, typically inside 40 µs, worst
+547 µs.** A pulse at 124 bpm is 5040 µs, so the typical case is under one per cent of a
+pulse and the single worst excursion is about a tenth of one. Two orders of magnitude
+below the ~10 ms at which a rhythmic difference is heard.
 
 ### Where the remaining variance comes from `[OPEN]`
 
-The receive timestamp is taken in the ESP-NOW callback, which runs on the WiFi
+The receive timestamp is still taken in the ESP-NOW callback, which runs on the WiFi
 task, so it carries that task's scheduling jitter. **ESP-NOW exposes no hardware
-receive timestamp**, so this is close to the floor for this transport rather than a
-bug to be fixed. Getting to tens of microseconds would need timestamping at the
-radio, which means a different transport — or the wire.
+receive timestamp.** What changed is that this is no longer the largest term — the
+transmit side was, and it was removable. The remaining jitter is absorbed rather than
+chased: taking the median of six lightly-queued exchanges is the JackTrip lesson
+applied to a clock instead of to audio, and it is why the outliers stopped reaching the
+grid.
+
+The one sample in forty-four that exceeded 500 µs came from a window whose six best
+probes disagreed by 861 µs — a genuinely congested moment, correctly identified as one
+and correctly given an eighth of the gain. Tightening further means either refusing
+more windows, which is the mistake already made once, or timestamping at the radio,
+which means a different transport — or the wire.
 
 Two things that came out of measuring rather than reasoning, both fixed:
 

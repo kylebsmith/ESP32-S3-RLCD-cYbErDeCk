@@ -59,3 +59,16 @@ void ensemble_service(void);
  * that the clock is wrong. */
 int64_t  ensemble_floor_rtt(void);
 uint32_t ensemble_skipped(void);
+
+/* HOW FAR THE LAST WINDOW'S BEST PROBES DISAGREED, in microseconds, and the number
+ * to watch if the phase is wandering. It is the estimator's own opinion of itself:
+ * six lightly-queued exchanges that put the offset within 300 us of one another
+ * corroborate each other, and the correction is trusted at half gain. A wide spread
+ * with a low floor means the radio is fine and the receive timestamps are being
+ * delayed; a wide spread with a high floor means the air is busy. */
+int32_t  ensemble_spread(void);
+
+/* Where the exchanges went. `noair` counts replies discarded because the probe they
+ * answer has no recorded departure - if that tracks `replies`, the send callback is
+ * the problem and not the air. */
+void     ensemble_counts(uint32_t *replies, uint32_t *noair, uint32_t *windows);
