@@ -194,3 +194,8 @@ has evidence for. The evidence is the point of the next fortnight.
 **The one to do first** when that fortnight is over is §3.6 — decide whether a step
 may be more than one character. Nine of the eleven other entries are downstream of
 that answer, and it is currently answered both ways.
+
+[NEXT.md](NEXT.md) is the development brief that acts on this document: the same items in
+dependency order, plus the requirements that arrived after it was written — finite
+repetition, wireless encoder satellites, the RP2040 visualization node, and why a Strudel
+conformance corpus is worth building where a Strudel compiler is not.
