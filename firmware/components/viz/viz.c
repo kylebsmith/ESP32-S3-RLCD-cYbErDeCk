@@ -931,17 +931,26 @@ static void chain_ranks(int *rank)
     int n = 0;
     const seq_lane_t *lanes = seq_lanes(&n);
     if (lanes == NULL) { return; }
-    for (int i = 0; i < n; i++) {
+    /* THE WHOLE TABLE, TESTING `used`. `n` is how many lanes are in use, not an
+     * index bound: forgetting a lane empties its slot in place, so after one '>disc'
+     * the table has a hole and a loop to `n` stopped short of the last lane - which
+     * then drew at rank 0, first, and a close became a despeckle. seq.c's own
+     * lane_find() carries the same warning; this loop had not read it. */
+    for (int i = 0; i < SEQ_MAX_LANES; i++) {
+        if (!lanes[i].used) { continue; }
         if (lanes[i].bind != SEQ_BIND_VIZ || lanes[i].param != 0) { continue; }
         const int prim = lanes[i].prim;
         if (prim < 0 || prim >= NGEN) { continue; }
         /* Walk up this lane's route chain, counting hops. */
         int hops = 0;
         const char *up = lanes[i].route;
-        while (up != NULL && up[0] != '\0' && hops < n + 1) {
+        while (up != NULL && up[0] != '\0' && hops < SEQ_MAX_LANES + 1) {
             int next = -1;
-            for (int j = 0; j < n; j++) {
-                if (strcmp(lanes[j].name, up) == 0) { next = j; break; }
+            for (int j = 0; j < SEQ_MAX_LANES; j++) {
+                if (lanes[j].used && strcmp(lanes[j].name, up) == 0) {
+                    next = j;
+                    break;
+                }
             }
             if (next < 0) { break; }            /* follows a lane that is gone */
             hops++;
