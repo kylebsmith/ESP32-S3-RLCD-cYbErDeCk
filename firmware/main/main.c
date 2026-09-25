@@ -172,6 +172,14 @@ static void dest_mon(const char *lane, uint8_t status, uint8_t d1, uint8_t d2,
     }
 }
 
+/* THE DESTINATIONS THIS FIRMWARE REGISTERS. Counted here so the table cannot
+ * be outgrown silently again: ble, mon, din, osc are unconditional and usb is
+ * added when USB MIDI comes up. If a transport is added without room for it,
+ * this fails the build instead of failing a performance. */
+#define DECK_DESTS 5
+_Static_assert(DECK_DESTS <= SEQ_MAX_DESTS,
+               "more destinations than seq can hold - raise SEQ_MAX_DESTS");
+
 static uint32_t s_boot_loops;
 static bool     s_crashed_last_boot;
 
@@ -418,6 +426,12 @@ void app_main(void)
      * is, so a drawing lane hands viz an index and an amount and the main loop
      * turns that into a picture. */
     seq_set_draw_hook(viz_mark);
+    /* CHECKED, NOT ASSUMED. Every one of these used to throw its return value
+     * away, and when the table filled up the fifth transport vanished with no
+     * message anywhere - see SEQ_MAX_DESTS. A destination that fails to
+     * register is a transport the owner will spend an evening debugging with a
+     * cable and a DAW, so it says so here, loudly, on the one surface that
+     * still works when the console does not. */
     seq_dest_add("ble", dest_ble, blemidi_flush, "BLE MIDI (off by default)");
     seq_dest_add("mon", dest_mon, NULL, "echo notes to console");
     /* DIN/TRS MIDI. Registered always, so '>send' lists it and the owner can
@@ -538,7 +552,14 @@ void app_main(void)
      * must NOT also be started - the console moves to the CDC interface and
      * reaches the editor through the same key mapper. */
     if (usbdev_boot()) {
-        seq_dest_add("usb", dest_usb, usbdev_midi_flush, "USB MIDI (native)");
+        if (seq_dest_add("usb", dest_usb, usbdev_midi_flush,
+                         "USB MIDI (native)") != ESP_OK) {
+            /* The deck is in USB MIDI mode with a host attached and cannot
+             * route to it. Silence here is the worst outcome: everything looks
+             * connected. */
+            ESP_LOGE(TAG, "FAULT: no room for the usb destination");
+            editor_message("usb sink did not register");
+        }
         seq_dest_enable("usb", true);
     } else {
         serialkbd_init();            /* the cable is a keyboard too */

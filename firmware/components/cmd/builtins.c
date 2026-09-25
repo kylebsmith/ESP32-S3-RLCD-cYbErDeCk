@@ -26,6 +26,7 @@
 #include "battery.h"
 #include "net.h"
 #include "ssh.h"
+#include "kbd.h"
 #include "viz.h"
 #include "dinmidi.h"
 #include "usbdev.h"
@@ -210,6 +211,62 @@ static cmd_status_t c_din(cmd_ctx_t *ctx)
     }
     seq_dest_enable("din", true);
     snprintf(ctx->msg, sizeof ctx->msg, "din on GPIO%d", gpio);
+    return CMD_DONE;
+}
+
+/* '>kbd' - what is typing, and how to change it.
+ *
+ * WHY THIS IS A VERB. docs/MAP.md refuses names that delete nothing, and this
+ * one earns its place by deleting a GESTURE: dropping a keyboard bond was
+ * reachable only by holding KEY for two seconds - undiscoverable, silent,
+ * all-or-nothing, and on a board whose switch identities are still an open item
+ * in docs/ASSEMBLY.md, a hold the owner could not reliably perform. The project
+ * has one rule about buttons and it is that the owner should never be asked to
+ * hold one.
+ *
+ * It also answers a question nothing else could: a deck with no keyboard and a
+ * deck with a bonded keyboard out of range look identical, and the difference
+ * decides whether you go and fetch the keyboard or pair a new one.
+ *
+ * The hold stays, because it is the way in when there is no keyboard to type
+ * with - which is exactly the case a new deck is in. */
+static cmd_status_t c_kbd(cmd_ctx_t *ctx)
+{
+    if (strcmp(ctx->arg, "forget") == 0) {
+        kbd_forget_all();
+        cmd_out(ctx, "bonds dropped, scanning again.");
+        cmd_out(ctx, "put the keyboard in pairing");
+        cmd_out(ctx, "mode now. any HID keyboard");
+        cmd_out(ctx, "works - full size included.");
+        snprintf(ctx->msg, sizeof ctx->msg, "forgotten - pair one now");
+        return CMD_DONE;
+    }
+    if (ctx->arg[0] != '\0') {
+        cmd_out(ctx, "kbd          what is typing");
+        cmd_out(ctx, "kbd forget   pair a different one");
+        return CMD_ERROR;
+    }
+
+    const int bonds = kbd_bond_count();
+    cmd_out(ctx, "%s", kbd_connected() ? "a keyboard is connected"
+                                       : "no keyboard connected");
+    cmd_out(ctx, "state: %.20s", kbd_state_name());
+    if (bonds < 0) {
+        cmd_out(ctx, "bonds: the store did not say");
+    } else {
+        cmd_out(ctx, "bonds: %d remembered", bonds);
+    }
+    /* THE TWO CASES THAT LOOK THE SAME. Saying which one this is, is most of
+     * the value of the command. */
+    if (!kbd_connected()) {
+        cmd_out(ctx, bonds > 0 ? "it is paired but not in range"
+                               : "nothing has ever paired here");
+        cmd_out(ctx, "the cable is a keyboard too");
+        cmd_out(ctx, "kbd forget to pair another");
+    }
+    snprintf(ctx->msg, sizeof ctx->msg, "%s, %d bond%s",
+             kbd_connected() ? "connected" : "not connected",
+             bonds < 0 ? 0 : bonds, bonds == 1 ? "" : "s");
     return CMD_DONE;
 }
 
@@ -1678,6 +1735,7 @@ static const cmd_t s_builtins[] = {
     { "send",  c_send,  CMD_CAP_SYSTEM,"where events go; send mon on" },
     { "wifi",  c_wifi,  CMD_CAP_NET,   "wifi <ssid> <pass> | off" },
     { "battery", c_battery, CMD_CAP_READ, "find the sense pin" },
+    { "kbd",   c_kbd,   CMD_CAP_SYSTEM,"what is typing | kbd forget" },
     { "host",  c_host,  CMD_CAP_NET,   "host <ssid> <pass> - be the net" },
     { "osc",   c_osc,   CMD_CAP_NET,   "osc <ip> <port> - /deck/<lane>" },
     { "ssh",   c_ssh,   CMD_CAP_NET,   "ssh user@host pass <command>" },

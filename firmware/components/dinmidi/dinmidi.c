@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "driver/uart.h"
+#include "midi_len.h"
 #include "esp_log.h"
 
 static const char *TAG = "din";
@@ -89,22 +90,6 @@ void dinmidi_stop(void)
     s_pin = -1;
 }
 
-/* How many bytes a status byte carries after itself. */
-static int datalen(uint8_t status)
-{
-    switch (status & 0xF0) {
-    case 0xC0:                  /* program change   */
-    case 0xD0: return 1;        /* channel pressure */
-    case 0xF0:
-        /* System realtime - clock, start, stop, continue - is the status byte
-         * alone. Getting this wrong would push two junk bytes down the wire 48
-         * times a second and the receiver would lose sync on everything else,
-         * which is the failure that looks like "MIDI does not work". */
-        return 0;
-    default:   return 2;
-    }
-}
-
 void dinmidi_send(const char *lane, uint8_t status, uint8_t d1, uint8_t d2,
                   uint32_t when_us)
 {
@@ -113,10 +98,18 @@ void dinmidi_send(const char *lane, uint8_t status, uint8_t d1, uint8_t d2,
     if (!s_up) {
         return;
     }
+    /* 0xF9 IS NOT MIDI. It is the deck's own step marker, undefined in the
+     * spec, and it is how a destination that cares about the bar learns where
+     * the bar is. Putting it on a wire that real hardware listens to would send
+     * an undefined realtime byte to a parser with no reason to expect one - the
+     * USB and BLE sinks both drop it, and this one has to agree. */
+    if (midi_is_internal(status)) {
+        return;
+    }
     uint8_t b[3];
     int n = 0;
     b[n++] = status;
-    const int extra = datalen(status);
+    const int extra = midi_datalen(status);
     if (extra >= 1) { b[n++] = (uint8_t)(d1 & 0x7F); }
     if (extra >= 2) { b[n++] = (uint8_t)(d2 & 0x7F); }
 

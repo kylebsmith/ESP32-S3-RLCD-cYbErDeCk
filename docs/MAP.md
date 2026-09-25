@@ -397,3 +397,124 @@ argue against later:
 When those are true the language stops. Outputs may still be added after that —
 that is what a binding is for, and adding one is not a language change. But the
 *text* is finished, and the device is an artifact.
+
+---
+
+## 9. Proposals, judged `[JUDGEMENT]`
+
+Candidate additions, measured against §0: *does this delete something, or collapse
+two things into one?* Ordered by emergence per character, which is the only
+exchange rate that matters on a thumb keyboard.
+
+### 9.0 What this device is not, so the comparison is honest
+
+| | its core idea | why the deck does not chase it |
+|---|---|---|
+| **PD / Max** | the program is a graph you draw | no mouse, one screen, and the graph *is* the interface. A text deck imitating a patcher gets the costs and none of the payoff. |
+| **SuperCollider** | a language plus a DSP server | the deck makes no sound at all and never will — the synth voice is a separate box. SC's domain is orthogonal, not competing. |
+| **TidalCycles / Strudel** | a pattern is a *function of time*, composed with combinators | **this is the real relative**, and the line to hold is notation versus functions. See below. |
+
+**The line: take Tidal's NOTATION, refuse Tidal's COMBINATORS.**
+
+`[xx]`, `*2`, `?` and per-step odds are already here and they are notation — marks
+inside a pattern, resolved at compile time onto a flat grid. `every 4 (fast 2) $
+jux rev $ ...` is function composition, and adopting it means adopting a language:
+parser, evaluator, error reporting, and a document that is code rather than a
+score. That is Tidal's job and Tidal is better at it than this will ever be.
+Strudel exists and runs in a browser; competing with it on a 1-bit screen is a
+losing move and an uninteresting one.
+
+So: anything expressible as a **mark in a pattern** is fair game. Anything needing
+a **function applied to a pattern** is refused.
+
+### 9.1 Per-cycle alternation — `<a b>` `[OPEN]` **strongest candidate**
+
+A step that takes a different value each bar:
+
+```
+    >bass 0...<3 5>...        the third step is 3 this bar, 5 the next
+    >disc <9 3>               breathes big, small, big, small
+    >kick x...<x .>...        a hit that is there every other bar
+```
+
+**Why it is first.** Everything the deck does now repeats exactly. This is the
+single cheapest source of *variation over time* — the thing that separates a
+pattern from a loop — and it is pure notation, one more bracket type. Tidal's
+`<>` is exactly this and it is the most-used piece of its mini-notation for good
+reason.
+
+Cost: a per-slot list of alternatives, indexed by the bar counter. Around 128
+bytes a lane. It does **not** flatten by expansion — two bars of sixteen is
+already the whole 32-slot budget — so the value is chosen at fire time from the
+tick the lane already has.
+
+Deletes nothing, and that is the one mark against it. It earns its place by being
+the difference between a sequencer and something that develops.
+
+### 9.2 Euclidean rhythm — `x(3,8)` `[OPEN]`
+
+Three hits spread as evenly as possible over eight steps.
+
+```
+    >kick x(3,8)       the tresillo
+    >hat  x(7,16)
+    >rim  x(5,8)
+```
+
+**Why it is second.** It generates most of the world's rhythms from four
+characters, it is a *mask generator* so it fits the flat grid exactly, and the
+algorithm is twenty lines. Enormous ratio.
+
+The argument against: `x..x..x.` is eight characters and says the same thing more
+plainly, on a device whose whole premise is that the text *is* the score. `(3,8)`
+is a rhythm you cannot see. That is a real objection and it is why this is second
+rather than first.
+
+### 9.3 Addressable parameters — `route disc.x bass` `[OPEN]` **the answer to x,y**
+
+The visuals have no positioning: every source draws centred or full-frame, and
+the only movement is `move`, which translates the whole frame.
+
+The wrong fixes, and why:
+
+- **`disc 5,3`** — two numbers in a step. Breaks one-character-per-step, which is
+  what keeps the playhead on the character that is sounding.
+- **A `>at 3,7` verb** — pairs lanes by convention. Fragile, and a new verb that
+  deletes nothing.
+- **More primitives with position baked in** — `discleft`, `discright`. This is how
+  a vocabulary rots.
+
+**The right fix generalises the thing that already works.** A lane has
+*parameters*, and `route` can target one:
+
+```
+    >route disc.x bass         the bass note moves the circle horizontally
+    >route disc.y lead         the lead moves it vertically
+    >route disc.r kick         and the kick still sets its radius
+    >route hat.vel cut         a filter sweep drives hi-hat velocity
+```
+
+Why this is the right shape: it is the **binding collapse applied to
+parameters.** §4 made a lane's destination addressable and that one change bought
+routing across every pair, one budget, one listing. This does the same to a
+lane's *inputs* — and it costs no new verb, no new pattern syntax, and no new
+concept. `x,y` positioning falls out of it, and so does everything else anybody
+will ask for next.
+
+Open decision: `.` as the separator, and which parameters each binding exposes.
+Keep that list short and per-binding, or it becomes the flag grammar
+[COMMANDS.md](COMMANDS.md) exists to refuse.
+
+### 9.4 Refused
+
+- **Combinator syntax** (`every`, `jux`, `off`, `superimpose`). Functions, not
+  notation. §9.0.
+- **`a!3`** — repeat a step. `[xxx]` already says it.
+- **A second visual pane, or layers with z-order.** A pipeline with thirteen
+  operators already composes; layers would be a second compositional model beside
+  the one that works.
+- **Sample or preset selection** (`kick:3`). The deck does not make sound; what a
+  note means is the receiver's business, and teaching the language about sample
+  banks is teaching it about one specific output. §1's corollary.
+- **Anything with a menu.**
+

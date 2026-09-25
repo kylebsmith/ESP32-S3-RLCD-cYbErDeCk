@@ -675,6 +675,17 @@ static bool adv_is_keyboard(const struct ble_hs_adv_fields *f)
 
 /* A keyboard we have already bonded with may advertise without the HID UUID,
  * so a known peer is worth connecting to on its address alone. */
+int kbd_bond_count(void)
+{
+    ble_addr_t peers[CONFIG_BT_NIMBLE_MAX_BONDS];
+    int count = 0;
+    if (ble_store_util_bonded_peers(peers, &count,
+                                    CONFIG_BT_NIMBLE_MAX_BONDS) != 0) {
+        return -1;                  /* the store did not answer */
+    }
+    return count;
+}
+
 static bool addr_is_bonded(const ble_addr_t *addr)
 {
     ble_addr_t peers[CONFIG_BT_NIMBLE_MAX_BONDS];

@@ -83,8 +83,20 @@ bool kbd_connected(void);
  * invisible modifier state is a bug generator. */
 uint8_t kbd_mods(void);
 
-/* The pairing-recovery gesture: drop every bond and rescan. */
+/* The pairing-recovery gesture: drop every bond and rescan.
+ *
+ * REACHABLE BY TYPING, NOT ONLY BY HOLDING A BUTTON. This was bound solely to a
+ * two-second hold on KEY - undiscoverable, silent, all-or-nothing, and on a
+ * board whose switch identities are still an OPEN ITEM in docs/ASSEMBLY.md it
+ * was a gesture the owner could not reliably perform. '>kbd forget' is the same
+ * action with a name. The hold stays as the way in when there is no keyboard to
+ * type it with, which is the one case that matters. */
 void kbd_forget_all(void);
+
+/* How many keyboards are bonded. Zero means nothing has ever paired, which is
+ * a different problem from a keyboard that is bonded and out of range - and
+ * telling those two apart without this is guesswork. */
+int kbd_bond_count(void);
 
 /* Push an event from another source. The USB serial console uses this, which
  * makes the deck usable over the cable when no keyboard is paired - and makes

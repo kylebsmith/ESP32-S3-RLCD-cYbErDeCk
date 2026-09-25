@@ -148,3 +148,87 @@ assessment on 2026-09-20, against ESP-IDF v5.5.4 (`dfe53e20`),
 xtensa-esp32s3-elf-gcc 14.2.0, libssh2 1.11.2_DEV, wolfSSH master, wolfSSL
 v5.9.1-stable and OpenSSH 9.9p2. Raspberry Pi OS sshd defaults were read from
 the Debian trixie `sshd_config(5)` for OpenSSH 1:10.0p1.
+
+---
+
+## Shared time: two decks, and Ableton `[OPEN]`
+
+Three problems that look like one and are not. Separating them is most of the
+work, because the cheapest answer to two of them already exists.
+
+### What already works, today, with no new code `[FACT]`
+
+**Ableton follows the deck over MIDI clock.** The deck sends Song Position Pointer
+zero, then Start, then a timing clock every 24 PPQN, and Stop on stop. Live's
+External Sync accepts exactly that. Measured dispatch: **sd 3 µs, spread 79 µs,
+zero ticks late in five thousand** — good enough that the earlier complaint about
+Live's tempo follower hunting was a jitter problem that has since been fixed, not
+a protocol problem.
+
+Two real bugs were found auditing this and both are fixed:
+
+- **Song Position Pointer went out as a bare status byte on DIN.** `0xF2` carries
+  two data bytes; the length table returned 0 for everything from `0xF0` up, which
+  is right for System Realtime and wrong for System Common. A receiver counts data
+  bytes, so it would have waited, swallowed the next status byte, and desynchronised
+  on the one message that *begins* a synchronised performance — with no error
+  anywhere. `tools/test_midi_wire.c` now pins every status length.
+- **The `usb` destination silently failed to register.** `SEQ_MAX_DESTS` was 4,
+  `din` took the fourth slot, and `seq_dest_add()`'s error was discarded at every
+  call site. The deck came up in USB MIDI mode with a host attached, the heartbeat
+  reporting `act1 dev1 midi1`, `>usb` reporting "usb is on, host attached", and
+  nothing to route to. Everything said yes and nothing played. There is a
+  `_Static_assert` on the count now, so the next transport either fits or fails
+  the build.
+
+So the honest status of "can I sync Ableton": **yes, as the clock master, over USB
+or DIN.** What MIDI clock cannot do is let *Live* change the tempo, or communicate
+bar phase beyond SPP. That is what Link is for.
+
+### Deck to deck `[OPEN]`
+
+Two performers, two surfaces, different outputs, one time. Ranked:
+
+1. **A wire.** One deck's `din` out to the other's MIDI in. Jitter-free in the way
+   DIN always is, and needs no network. Blocked only by the deck having no MIDI
+   **input** — that needs an optocoupler, and it is the smallest missing piece in
+   this whole document.
+2. **A UDP beat packet over SoftAP.** One deck hosts, the other joins; both already
+   possible. Reuses the OSC path. Accuracy is whatever WiFi gives, which is worse
+   than a wire and probably fine at a sixteenth.
+3. **Link**, which solves this and Ableton together.
+
+**Order matters: a shared clock without a shared surface is a duet; a shared
+surface without a shared clock is a networked text editor.** Do the clock first.
+
+### Ableton Link, honestly `[OPEN]`
+
+What it is: UDP multicast on `224.76.78.75:20808` for peer discovery, unicast
+ping/pong to estimate each peer's clock offset, and a shared timeline of tempo,
+beat origin and time origin, plus start/stop state. Any peer may change the tempo;
+there is no master.
+
+Three things have to be decided before a line is written, and two of them are not
+engineering:
+
+1. **Licence.** Link is dual-licensed: **GPLv2+, or a commercial licence from
+   Ableton.** Taking the GPL means this firmware becomes GPL. That is a decision
+   about the project, not about the clock, and it is the first gate.
+2. **C++ and a socket shim.** The reference implementation is C++11 and expects
+   asio. ESP-IDF can build C++ and has lwIP, so it is a port rather than a
+   rewrite — but it is a port, and this firmware is C throughout.
+3. **The measurement path is the hard part.** Tempo sync is easy; *phase* sync
+   needs the offset estimation to be right, and getting it subtly wrong gives two
+   decks that agree on tempo and drift on the bar — which is worse than no sync at
+   all, because it looks like it is working.
+
+**Recommendation.** Do (1) and (2) of *deck to deck* first — the MIDI input, then
+the UDP beat packet — because they are small, testable with hardware in hand, and
+the UDP work is the same socket and the same timeline model Link needs. Then decide
+the licence question deliberately. A half-ported Link that agrees on tempo and
+drifts on phase is the worst available outcome, and it is the one that arrives by
+starting with Link.
+
+**Not implemented. Not stubbed.** There is no Link code in this repo and nothing
+here should be read as saying otherwise.
+

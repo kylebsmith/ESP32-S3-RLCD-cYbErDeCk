@@ -183,6 +183,16 @@ jobs:
              -o /tmp/test_keymap_agree tools/test_keymap_agree.c
           /tmp/test_keymap_agree
 
+      # What goes on the wire. A message one byte short desynchronises the
+      # receiver's parser and nothing reports it - the drum machine just stops
+      # responding. Not observable from the device, so it is checked here.
+      - name: Check the MIDI wire format
+        run: |
+          gcc -std=c11 -Wall -Wextra -O1 \
+             -I firmware/components/seq/include \
+             -o /tmp/test_midi_wire tools/test_midi_wire.c
+          /tmp/test_midi_wire
+
       # The visual primitives, compiled from the shipping source. Catches a
       # name in the help text with no primitive behind it, a table row that
       # slipped out of order, mirror running before the generators it folds,

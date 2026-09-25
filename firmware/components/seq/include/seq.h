@@ -278,7 +278,19 @@ const seq_lane_t *seq_lanes(int *count);
 typedef void (*seq_sink_t)(const char *lane, uint8_t status, uint8_t d1,
                            uint8_t d2, uint32_t when_us);
 
-#define SEQ_MAX_DESTS 4
+/* EIGHT, AND THE COUNT IS CHECKED AT COMPILE TIME.
+ *
+ * This was four, which was exactly the number of destinations that existed -
+ * and then a fifth was added. seq_dest_add() returned an error, every call site
+ * ignored it, and the deck came up in USB MIDI mode with a host attached, the
+ * heartbeat reporting 'act1 dev1 midi1', '>usb' reporting "usb is on, host
+ * attached", and NO 'usb' destination to route anything to. Everything said
+ * yes and nothing played.
+ *
+ * The number is not the real fix. The real fix is that adding a destination can
+ * no longer fail quietly: main.c now asserts what it registered, so the next
+ * transport either fits or refuses to build. */
+#define SEQ_MAX_DESTS 8
 
 /* Register a destination. `name` is what the player types. Registering does
  * not enable it: a destination that switched itself on at boot would be a
