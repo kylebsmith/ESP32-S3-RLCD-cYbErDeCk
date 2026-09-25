@@ -259,7 +259,29 @@ multiple of 12 and cell width has to be even, so no legible middle size exists
 view taking a third, so pattern lines stop wrapping. `>split 12` or
 `>split 20` sets the view width directly.
 
-## 16. It recovers
+## 16. MIDI with no computer
+
+```
+>din 17
+>kick x...x...x...x...
+>bpm 124
+>play
+>din
+```
+
+`>din` reports bytes actually written — `din GPIO17, 80 bytes sent / the wire is
+busy` means real MIDI left the pin. That is the only transport that needs no host
+at all, so it is the one that drives an SP404, a eurorack MIDI-to-trigger module,
+or anything else with a MIDI IN.
+
+**It needs a resistor loop before you trust it** — a MIDI output is a current
+loop, not a logic level. See [HARDWARE.md](HARDWARE.md). `>din off` stops it.
+
+The other transports all need something else to be the host: `>usb on` makes the
+deck a USB MIDI *device* (so: a computer or tablet), `>send ble on` needs a BLE
+MIDI host, `>osc <ip> <port>` needs something listening on the network.
+
+## 17. It recovers
 
 If it crashes it now reboots in about two seconds and the screen says
 `crashed Nx - unplug to clear`. That counter clears on a real power cycle:

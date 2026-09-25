@@ -27,6 +27,7 @@
 #include "net.h"
 #include "ssh.h"
 #include "viz.h"
+#include "dinmidi.h"
 #include "usbdev.h"
 #include "usbmux.h"
 
@@ -133,6 +134,82 @@ static cmd_status_t c_run(cmd_ctx_t *ctx)
         return CMD_ERROR;
     }
     snprintf(ctx->msg, sizeof ctx->msg, "%d line%s ran", ran, ran == 1 ? "" : "s");
+    return CMD_DONE;
+}
+
+/* '>din <gpio>' - MIDI on a wire.
+ *
+ * THIS IS THE ONE THAT NEEDS NO COMPUTER. Every other transport makes the deck
+ * a USB device, a BLE peripheral or a network client, so all of them need
+ * something else to be the host - and an SP404, a Mutant Brain, a MIDI
+ * interface and every other box in a studio is a USB device too, or has no USB
+ * at all. Two devices cannot talk. DIN MIDI is one wire and has been the same
+ * wire since 1983, so this is what lets the deck drive hardware directly.
+ *
+ * THE PIN IS THE OWNER'S TO DECLARE. Guessing one on this board has already
+ * cost an afternoon - the battery sense line - and the reason has not changed:
+ * a pin is a fact about a physical object and only the owner can see it.
+ *
+ * The wiring is in dinmidi.h and it is not optional: a MIDI output is a current
+ * loop, not a logic level. */
+static cmd_status_t c_din(cmd_ctx_t *ctx)
+{
+    if (strcmp(ctx->arg, "off") == 0) {
+        dinmidi_stop();
+        seq_dest_enable("din", false);
+        snprintf(ctx->msg, sizeof ctx->msg, "din off");
+        return CMD_DONE;
+    }
+    if (ctx->arg[0] == '\0') {
+        if (!dinmidi_running()) {
+            cmd_out(ctx, "din <gpio>  MIDI out, no host");
+            cmd_out(ctx, "drives an SP404, a eurorack");
+            cmd_out(ctx, "brain, any MIDI IN at all.");
+            cmd_out(ctx, "needs a resistor loop - see");
+            cmd_out(ctx, "docs/HARDWARE.md before you");
+            cmd_out(ctx, "trust it. e.g. >din 17");
+            snprintf(ctx->msg, sizeof ctx->msg, "din <gpio>");
+            return CMD_DONE;
+        }
+        /* BYTES, NOT A BOOLEAN. "din on GPIO17" is true of a deck with nothing
+         * attached and of one driving a drum machine, and those are the two
+         * cases the owner needs to tell apart without a scope. */
+        const uint32_t n = dinmidi_bytes();
+        cmd_out(ctx, "din GPIO%d, %u bytes sent", dinmidi_pin(), (unsigned)n);
+        cmd_out(ctx, n ? "the wire is busy" : "nothing sent since last asked");
+        snprintf(ctx->msg, sizeof ctx->msg, "din GPIO%d %uB",
+                 dinmidi_pin(), (unsigned)n);
+        return CMD_DONE;
+    }
+
+    const int gpio = atoi(ctx->arg);
+    if (gpio <= 0 || gpio > 48) {
+        cmd_out(ctx, "a GPIO number, 1-48");
+        return CMD_ERROR;
+    }
+    /* THE PINS THIS BOARD HAS ALREADY SPOKEN FOR. Taking one of these would
+     * kill the panel or the button and look like a MIDI fault. */
+    static const struct { int pin; const char *what; } taken[] = {
+        { 11, "panel SCK" }, { 12, "panel MOSI" }, { 5, "panel DC" },
+        { 40, "panel CS" },  { 41, "panel RST" },  { 18, "the KEY button" },
+    };
+    for (size_t i = 0; i < sizeof taken / sizeof taken[0]; i++) {
+        if (taken[i].pin == gpio) {
+            cmd_out(ctx, "GPIO%d is %s", gpio, taken[i].what);
+            return CMD_ERROR;
+        }
+    }
+    /* SAY WHICH ERROR. "GPIO17 refused" was true of a pin the chip cannot use
+     * and of a driver call that failed for a reason having nothing to do with
+     * the pin - and it was the second one. A refusal that does not name its
+     * cause sends the owner to rewire hardware that was never wrong. */
+    const esp_err_t de = dinmidi_start(gpio);
+    if (de != ESP_OK) {
+        cmd_out(ctx, "GPIO%d refused: %s", gpio, esp_err_to_name(de));
+        return CMD_ERROR;
+    }
+    seq_dest_enable("din", true);
+    snprintf(ctx->msg, sizeof ctx->msg, "din on GPIO%d", gpio);
     return CMD_DONE;
 }
 
@@ -1593,6 +1670,7 @@ static const cmd_t s_builtins[] = {
     { "split", c_split, CMD_CAP_EDIT,  "split on | off | <rows>" },
     { "route", c_route, CMD_CAP_EDIT,  "route disc kick" },
     { "usb",   c_usb,   CMD_CAP_SYSTEM,"usb on | off - MIDI over the cable" },
+    { "din",   c_din,   CMD_CAP_SYSTEM,"din <gpio> - MIDI with no host" },
     { "flash", c_flash, CMD_CAP_SYSTEM,"flash now - reboot to ROM loader" },
     { "dump",  c_dump,  CMD_CAP_READ,  "print a document to the console" },
     { "play",  c_play,  CMD_CAP_EDIT,  "start the clock" },

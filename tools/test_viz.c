@@ -421,6 +421,20 @@ int main(void)
         CHECK(found_mute, "noise reports it is muted");
     }
 
+    /* A ROUTE IS A PATTERN. '>route disc kick' alone used to do nothing: the
+     * lane was not live, so you had to write a pattern first - which the route
+     * then ignored, because a routed lane follows its source. */
+    printf("\n-- routing a lane makes it live, with no pattern written --\n");
+    clear_all_lanes();
+    CHECK(!viz_active(), "nothing running");
+    viz_route("disc", "kick");
+    CHECK(viz_active(), "the route alone made disc live");
+    viz_tick(0); viz_service(); snap();
+    CHECK(frame_ink() == 0, "still silent until the kick plays");
+    viz_lane_played("kick", 110);
+    viz_tick(24); viz_service(); snap();
+    CHECK(frame_ink() > 0, "and the kick draws it, no pattern needed");
+
     printf("\n-- the preview pane --\n");
     viz_split(true);
 

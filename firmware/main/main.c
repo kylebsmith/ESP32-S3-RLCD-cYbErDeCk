@@ -16,6 +16,7 @@
 #include "soc/rtc_cntl_reg.h"
 #include "esp_system.h"
 #include "esp_task_wdt.h"
+#include "dinmidi.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -414,6 +415,10 @@ void app_main(void)
     seq_set_hooks(viz_tick, viz_lane_played);
     seq_dest_add("ble", dest_ble, blemidi_flush, "BLE MIDI (off by default)");
     seq_dest_add("mon", dest_mon, NULL, "echo notes to console");
+    /* DIN/TRS MIDI. Registered always, so '>send' lists it and the owner can
+     * see the option exists; it emits nothing until '>din <gpio>' says which
+     * pin, because a pin is a fact about a physical object. */
+    seq_dest_add("din", dinmidi_send, NULL, "DIN/TRS MIDI - set >din <gpio>");
     /* OSC is registered always and enabled by '>osc <ip> <port>'. It is the
      * visual half of the same lane grammar: one pattern, and whether it is a
      * drum or a frame trigger is the destination's business. */
@@ -430,7 +435,24 @@ void app_main(void)
     if (doc_init() != ESP_OK) {
         ESP_LOGE(TAG, "docstore init FAILED");
     }
-    if (selftest_run()) {
+    /* THE JOURNAL SELF-TEST IS OFF ON A REAL DEVICE, and that is the default
+     * rather than a safety margin.
+     *
+     * selftest_run() proves the journal survives a corrupted record and a wiped
+     * partition, which it can only do by corrupting a record and wiping the
+     * partition. It runs across three reboots and erases the journal on the way.
+     * It armed itself on any device with an EMPTY journal - which is exactly
+     * what a brand new deck is. So flashing a second board produced a deck that
+     * refused input, ate its first document and printed FAIL, and every reason
+     * the owner had to read that as a broken board was a good one. A first boot
+     * has to be an instrument.
+     *
+     * Flip this to 1 to bench a board, reset it three times, read the log, and
+     * flip it back. A compile-time switch rather than a command because
+     * docs/MAP.md refuses verbs that delete nothing, and a destructive test
+     * should not sit one keystroke from a performance. */
+#define DECK_JOURNAL_SELFTEST 0
+    if (DECK_JOURNAL_SELFTEST && selftest_run()) {
         ESP_LOGW(TAG, "a self-test stage ran; reset to advance it");
     }
     sdmirror_init();                 /* a missing card is not fatal */

@@ -349,6 +349,35 @@ esp_err_t viz_route(const char *gen, const char *src)
     /* A route that has not fired yet must not be holding a stale trigger from
      * whatever it used to follow. */
     s_l[gi].trig = false;
+
+    /* A ROUTE IS A PATTERN. Making one live should not require writing a
+     * pattern first.
+     *
+     * A lane needs compiled steps to be live, so '>route disc kick' on its own
+     * did nothing at all: you had to write '>viz disc x...x...x...x...' first,
+     * and then the pattern you wrote was ignored, because a routed lane follows
+     * its source instead of its own steps. Writing a pattern that is guaranteed
+     * to be discarded, in order to enable a lane that does not use it, is the
+     * kind of step that only makes sense to whoever wrote the code.
+     *
+     * So routing a lane makes it live. One step, full amount, which the source
+     * then overrides on every hit - it exists only so the lane is something
+     * rather than nothing. Unrouting leaves it live with that step, which is
+     * the honest outcome: you asked for this primitive, and now it is yours to
+     * pattern or to remove with '>viz <name>'. */
+    if (s_l[gi].src[0] != '\0' && !s_l[gi].used) {
+        s_l[gi].steps = 1;
+        s_l[gi].mask  = 1u;
+        s_l[gi].chance = 0;
+        memset(s_l[gi].val, 255, sizeof s_l[gi].val);
+        memset(s_l[gi].prob, 255, sizeof s_l[gi].prob);
+        memset(s_l[gi].chr, 0, sizeof s_l[gi].chr);
+        s_l[gi].dir = 'd';
+        s_l[gi].tps = SEQ_TICKS_PER_STEP;
+        s_l[gi].hash = 0;
+        s_l[gi].muted = false;
+        s_l[gi].used = true;
+    }
     return ESP_OK;
 }
 

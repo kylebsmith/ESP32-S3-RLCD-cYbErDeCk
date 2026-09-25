@@ -343,3 +343,63 @@ keyboard-first writing device.
    today. **Do not assume either answer.**
 4. **Schematic net names** have not been fully cross-read against the pin map above;
    the pin map rests on vendor example code, which is strong but secondary.
+
+## MIDI on a wire `[OPEN]`
+
+The firmware is done and measured: `>din 17` starts a UART at 31250 baud 8N1 and
+`>din` reports bytes actually written — **80 bytes from a four-step kick pattern,
+verified on the bench.** What is not done is the electrical side, and it cannot
+be done in firmware, because **a MIDI output is a current loop, not a logic
+level.** A GPIO wired straight to a jack will drive some receivers and not
+others, and the ones it fails on will look like a firmware fault.
+
+The 1983 circuit, from 5 V logic:
+
+```
+    +5V ----[220R]---- DIN pin 4
+    UART TX ---[220R]---- DIN pin 5
+    GND ----------------- DIN pin 2   (shield, often left open at the source)
+```
+
+From **3.3 V** logic the resistors change, because the receiver's optocoupler
+wants ~5 mA:
+
+```
+    3V3 ----[33R]----- pin 4
+    TX  ----[10R]----- pin 5
+```
+
+Better, and what to do if the receiver is fussy: buffer TX up to 5 V first (a
+74HCT family gate, or any 3.3→5 V level shifter) and then use the original 220R
+pair. The optocoupler in the receiver is the thing being driven, and it was
+specified against 5 V.
+
+**TRS instead of DIN.** Type A is the standard that won — MIDI 1.0 ratified it,
+and it is what an SP404 MkII and most modern gear use:
+
+```
+    tip    = DIN pin 5   (the data line)
+    ring   = DIN pin 4   (the +V side of the loop)
+    sleeve = DIN pin 2   (ground)
+```
+
+Type B swaps tip and ring. If a device does not respond, that is the first thing
+to try, and it cannot damage anything.
+
+**The pin is the owner's to declare.** `>din 17` — the same rule as the battery
+sense line, for the same reason: a pin is a fact about a physical object, and
+the only party who can see the object is the owner. GPIO 5, 11, 12, 18, 40 and
+41 are refused by name, because they are the panel and the KEY button and taking
+one would look like a MIDI fault.
+
+**What this unlocks, and it is the point.** Every other transport makes the deck
+a USB device, a BLE peripheral or a network client — all of which need something
+else to be the host. An SP404, a class-compliant MIDI interface and most desktop
+gear are USB *devices* too, and two devices cannot talk; a Mutant Brain has no
+USB at all. Before this, every path from the deck to hardware ran through a
+computer. This is the one that does not.
+
+**Still missing:** MIDI *in*. That needs an optocoupler (6N138 or similar) on the
+receive side and is a separate build. Until then the deck is a clock source and
+never a clock follower on the wire.
+
