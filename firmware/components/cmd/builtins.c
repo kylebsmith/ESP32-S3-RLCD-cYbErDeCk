@@ -29,6 +29,8 @@
 #include "kbd.h"
 #include "viz.h"
 #include "dinmidi.h"
+#include "esp_rom_sys.h"
+#include "vitals.h"
 #include "usbdev.h"
 #include "usbmux.h"
 
@@ -767,6 +769,36 @@ static cmd_status_t c_sync(cmd_ctx_t *ctx)
  * it goes. */
 static cmd_status_t flash_now(cmd_ctx_t *ctx);
 
+/* REBOOT WITHOUT RUNNING SHUTDOWN HANDLERS, and this is not belt-and-braces -
+ * esp_restart() does not come back from USB MIDI mode.
+ *
+ * Observed three times and finally caught with the console open: '>usb off' runs,
+ * doc_save_all_dirty() works through every buffer, the SD mirror completes - and
+ * then nothing. No announce, no reset. The deck stops inside the restart, with the
+ * USB device still enumerated because the PHY was never handed back, and with
+ * every task gone except TinyUSB's own. That is the hang docs/OS.md describes, and
+ * every occurrence of it followed a deliberate restart from USB MIDI mode. A deck
+ * left alone in that mode ran five minutes with the clock exact.
+ *
+ * esp_restart() runs registered shutdown handlers first. usbdev registers one, and
+ * TinyUSB installs its own teardown; a deadlock in there never completes, and
+ * because it happens with the scheduler still up, the task watchdog's own
+ * reporting path is gone too - which is why nothing ever rescued it.
+ *
+ * So: reset the chip and skip the handlers. Nothing is lost by doing so. Every
+ * document is already saved above, and the one thing the handler does - handing
+ * the PHY back to USB-Serial-JTAG - is done unconditionally at boot in main.c
+ * before anything else can want it. The orderly path was buying a teardown this
+ * device does not need and cannot survive.
+ *
+ * Same reasoning as CONFIG_ESP_SYSTEM_PANIC_SILENT_REBOOT: a restart that cannot
+ * complete is a restart that never happens. */
+static void deck_reboot(void)
+{
+    esp_rom_software_reset_system();
+    for (;;) { }                     /* not reached */
+}
+
 static cmd_status_t c_flash(cmd_ctx_t *ctx)
 {
     /* CONFIRMATION, because the cost of a mistake here is the whole session.
@@ -798,6 +830,9 @@ static cmd_status_t flash_now(cmd_ctx_t *ctx)
      * rebooted having written nothing while claiming otherwise. */
     doc_save_all_dirty();
     seq_stop();
+    /* Close the vitals record, so the next boot knows this restart was chosen
+     * rather than suffered - see vitals.h. */
+    vitals_goodbye(usbdev_wanted(), false, seq_position());
     cmd_out(ctx, "download mode. flash now:");
     cmd_out(ctx, "  idf.py -p PORT flash");
     cmd_out(ctx, "no button, no paperclip. the deck STAYS in");
@@ -1022,6 +1057,18 @@ static cmd_status_t c_jitter(cmd_ctx_t *ctx)
     cmd_out(ctx, "sd/spread are MICROseconds.");
     cmd_out(ctx, "t+ is when, not how long.");
     cmd_out(ctx, "first 8 ticks after play skipped");
+    /* THE PREVIOUS RUN'S LAST WORDS. Reported here rather than under a new verb,
+     * because docs/MAP.md refuses names that delete nothing and this is a
+     * diagnostic - which is what '>jitter' already is. It is how the hang in
+     * docs/OS.md gets caught: the console dies with the deck, so the evidence has
+     * to arrive on the next boot instead. */
+    {
+        const char *v[VITALS_LINES];
+        const int n = vitals_report(v);
+        for (int i = 0; i < n; i++) {
+            cmd_out(ctx, "%s", v[i]);
+        }
+    }
     const uint32_t lost = seq_dropped();
     if (lost > 0) {
         cmd_out(ctx, "%u events dropped", (unsigned)lost);
@@ -1045,6 +1092,12 @@ static cmd_status_t c_usb(cmd_ctx_t *ctx)
 {
     const bool on  = (strcmp(ctx->arg, "on") == 0);
     const bool off = (strcmp(ctx->arg, "off") == 0);
+    /* THE MODE THIS RUN WAS IN, captured before it is changed. The vitals record
+     * is written further down, after usbdev_want() has already flipped the flag,
+     * so reading it there recorded the mode the deck was going TO - and a record
+     * of a hang that names the wrong mode sends the next investigation to the
+     * wrong place. */
+    const bool was_usb = usbdev_wanted();
 
     if (!on && !off) {
         cmd_out(ctx, "usb is %s%s", usbdev_wanted() ? "on" : "off",
@@ -1075,6 +1128,9 @@ static cmd_status_t c_usb(cmd_ctx_t *ctx)
 
     doc_save_all_dirty();
     seq_stop();
+    /* Close the vitals record, so the next boot knows this restart was chosen
+     * rather than suffered - see vitals.h. */
+    vitals_goodbye(was_usb, false, seq_position());
     /* Say REBOOTING. This command deliberately restarts the deck, which cuts
      * the console off mid-sentence - and the owner reported '>usb on' as a
      * crash, because that is exactly what a deliberate reboot looks like from
@@ -1082,7 +1138,7 @@ static cmd_status_t c_usb(cmd_ctx_t *ctx)
     cmd_announce(on ? "USB MIDI - rebooting now"
                     : "serial console - rebooting now");
     vTaskDelay(pdMS_TO_TICKS(600));
-    esp_restart();
+    deck_reboot();
     return CMD_DONE;                 /* not reached */
 }
 

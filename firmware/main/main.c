@@ -17,6 +17,7 @@
 #include "esp_system.h"
 #include "esp_task_wdt.h"
 #include "dinmidi.h"
+#include "vitals.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -392,6 +393,12 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(err);
 
+    /* WHAT THE LAST RUN WAS DOING WHEN IT STOPPED. Read as soon as NVS is up and
+     * before anything can overwrite it, and logged loudly, because the console
+     * that would otherwise have reported the failure is one of the things that
+     * dies in the hang this exists to catch - docs/OS.md. */
+    vitals_begin();
+
     if (st7305_init() != ESP_OK) {
         ESP_LOGE(TAG, "display init FAILED - stopping");
         return;
@@ -732,6 +739,12 @@ void app_main(void)
          * A frame that arrives while this loop is busy replaces the one
          * waiting rather than queueing behind it, so the picture can drop a
          * frame but can never lag the music. */
+        /* One increment and one comparison on almost every pass; a flash write
+         * once a minute and ONLY while USB MIDI is active, which is the only
+         * place the hang has ever been seen. A deck in serial mode pays nothing
+         * at all. */
+        vitals_loop(usbdev_wanted(), seq_running(), seq_position());
+
         if (viz_service()) {
             need_draw = true;
         }

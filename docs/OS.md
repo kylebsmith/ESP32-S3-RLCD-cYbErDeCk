@@ -547,68 +547,88 @@ No vendor file is redistributed by this repository. See
 
 ---
 
-## The deck hangs in USB MIDI mode `[OPEN]`
+## esp_restart() does not come back from USB MIDI mode `[FACT]` — fixed
 
-**Reproduced three times in one session. Not root-caused. This is the reason
-`>usb on` should not go to a user test unsupervised.**
+**Caught, root-caused and fixed.** Recorded at length because it cost most of a
+session and because three earlier explanations were wrong.
 
-### What happens
+### The symptom
 
-Enter USB MIDI mode, work over the composite device's CDC console for a few
-minutes, and everything on the deck stops. The USB device stays enumerated - the
-port is still there, macOS still lists `cyberdeck` as a MIDI input - and nothing
-responds.
+Everything on the deck stops. The USB device stays enumerated - the port is still
+there, macOS still lists `cyberdeck` as a MIDI input - and nothing responds: no
+console output, no reaction to typing, and no MIDI. Only a PWR hold recovers it.
+Never seen in serial mode.
 
-### What is established `[FACT]`
+### What it actually was
 
-- The CDC console is dead **both ways**: no output, and typed commands do nothing.
-- **MIDI is dead too.** Measured with mido: zero clocks, zero notes, zero
-  anything over eight seconds while the deck was playing a moment before. So this
-  is not a console problem - the sequencer and the transport task are gone.
-- TinyUSB's own task survives, which is why the device stays enumerated. That
-  task is on core 1 at priority 5.
-- **The task watchdog does not reboot it.** It is armed on the editor loop with a
-  ten-second timeout and `CONFIG_ESP_TASK_WDT_PANIC=y`, and
-  `CONFIG_ESP_SYSTEM_PANIC_SILENT_REBOOT=y` exists so a panic cannot stall trying
-  to print. Neither fires.
-- Only a power cycle recovers it. Unplugging is not enough on battery - the RTC
-  domain stays up, so it takes a PWR hold.
-- It has never been observed in serial mode, over many hours.
+**`>usb off` runs to completion and then the restart never happens.** Caught with
+the console open, the last thing the deck says is its own document saving:
 
-### What has been ruled out `[FACT]`
+```
+    buffer 0 '(scratch)' selected
+    sdmirror: mirrored 7 bytes to /sdcard/scratch.txt
+    buffer 1 'guide' selected
+    buffer 2 'boot' selected
+    buffer 3 '+out' selected
+    (nothing, ever)
+```
 
-- **A blocking write to the CDC.** `tusb_write()` in `vfs_tinyusb.c` calls
-  `tinyusb_cdcacm_write_queue_char()` and `break`s when the buffer is full; the
-  flush is non-blocking. Nothing in the log path waits on a host.
-- **The DTR/RTS console gate.** `esp_tinyusb` keeps the CDC silent until
-  `dtr && rts`, so a closed port mutes it - but toggling both lines low and back
-  high, which re-fires the line-state callback, produced nothing. And it would not
-  explain MIDI stopping.
-- **A hung editor loop alone.** MIDI dying means the esp_timer task on core 1 and
-  the transport task are dead too, which is more than the editor.
+No "rebooting now" announce, no reset. It dies *inside* `esp_restart()`.
 
-### What it is most likely to be `[OPEN]`
+`esp_restart()` runs registered shutdown handlers first. `usbdev` registers one,
+and TinyUSB has its own teardown. A deadlock in there never completes - and
+because it happens with the scheduler still up, the task watchdog's own reporting
+path is gone with everything else, which is why nothing ever rescued it. TinyUSB's
+own task survives, which is exactly why the device stays enumerated.
 
-Everything dies except one TinyUSB task, and the watchdog that should catch it
-does not run. That points at something below the scheduler rather than at any one
-task: a panic whose handler cannot complete, an interrupt watchdog, or memory
-corruption that takes the timer and the WDT with it. The USB MIDI path is the only
-code that differs between the working case and the failing one, and
-`CFG_TUD_MIDI_TX_EPSIZE` was already forced to 4 there to make a note flush at
-all - that area is worth suspicion.
+### The fix
 
-### The diagnostic that is missing
+`esp_rom_software_reset_system()` instead of `esp_restart()` for `>usb on` and
+`>usb off`: reset the chip, skip the handlers. **Nothing is lost.** Every document
+is saved before that point, and the one thing the handler does - handing the PHY
+back to USB-Serial-JTAG - is done unconditionally at boot in `main.c` before
+anything can want it. The orderly path was buying a teardown this device does not
+need and cannot survive. Same reasoning as
+`CONFIG_ESP_SYSTEM_PANIC_SILENT_REBOOT`: a restart that cannot complete is a
+restart that never happens.
 
-The console dying is exactly what makes this undiagnosable, so the evidence has to
-go somewhere that does not depend on it - and RTC memory is no good either,
-because the recovery is a power cycle and that clears it. **A small record in NVS**
-- loop iterations, uptime, reset reason, USB mode, written once a minute - would
-turn a silent hang into a fact on the next boot. That is the next thing to build
-here, before another attempt at a fix.
+**Verified:** `>usb on` into MIDI mode, then `>usb off` - the composite device
+disappears and the familiar serial port comes back. That round trip had never
+worked.
 
-### Until then
+### Three explanations that were wrong, and why they looked right
 
-Ship user tests in serial mode, or in USB MIDI mode with the owner told that a
-PWR hold is the recovery. Do not put `>usb on` in a boot document on a deck that
-is going out of the room.
+1. **"A blocking write to the CDC."** Ruled out by reading `tusb_write()`: it
+   `break`s when the buffer is full and the flush does not wait.
+2. **"The DTR/RTS console gate."** `esp_tinyusb` keeps the CDC silent until
+   `dtr && rts`, so a closed port does mute it - but toggling both lines low and
+   back high, which re-fires the line-state callback, produced nothing. It also
+   would not explain MIDI stopping.
+3. **"CDC console traffic under load."** This one was *almost* right and is worth
+   keeping as a lesson. A deck left alone in USB MIDI mode ran five minutes with
+   the clock exact - 18,601 messages, 62.0/s, no drift - while every board I had
+   driven hard over the console had died. The correlation was real and the causation
+   was backwards: heavy console use was not the trigger, it was that heavy console
+   use is how I ended up typing `>usb off`.
 
+### What made it findable
+
+Two things, and neither was cleverness:
+
+- **Writing the evidence to flash.** `vitals.c` records uptime, loop count, heap
+  and mode once a minute while USB MIDI is active, and a *deliberate* restart
+  closes the record with a goodbye. A record that was never closed is a run that
+  never chose to stop. The board that died had written exactly one record, at
+  60 s, with the loop running at a healthy 185/s - so it was fine and then stopped
+  abruptly, which ruled out slow degradation before any theory was proposed.
+- **Watching a board that nobody touched.** The five-minute clean run is what
+  turned "USB MIDI is unreliable" into "something I am doing kills it".
+
+### Still open `[OPEN]`
+
+`>flash now` from USB MIDI mode has the same deadlock and is **not** fixed. It
+cannot use the same escape: it sets `FORCE_DOWNLOAD_BOOT` in the RTC domain and
+needs a CPU-only reset to preserve it, where
+`esp_rom_software_reset_system()` is a system reset that would clear it. From
+serial mode it works. The route out of USB MIDI mode is `>usb off`, which now
+works, followed by `>flash now`.

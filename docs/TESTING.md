@@ -308,10 +308,15 @@ or anything else with a MIDI IN.
 **It needs a resistor loop before you trust it** — a MIDI output is a current
 loop, not a logic level. See [HARDWARE.md](HARDWARE.md). `>din off` stops it.
 
-**Known bug: the deck hangs in USB MIDI mode**, reproduced three times, not
-root-caused — see [OS.md](OS.md). Everything stops while USB stays enumerated, and
-only a PWR hold recovers it. `din` and serial mode are unaffected. Do not put
-`>usb on` in a boot document on a deck going out of the room.
+**Fixed: the deck used to hang leaving USB MIDI mode.** `esp_restart()` never
+completed from that mode — it runs shutdown handlers and TinyUSB's teardown
+deadlocks — so `>usb off` saved every document and then stopped dead, and only a
+PWR hold recovered it. It reboots without the handlers now, and the `>usb on` →
+`>usb off` round trip works. See [OS.md](OS.md).
+
+Still open: **`>flash now` from USB MIDI mode** has the same deadlock and cannot
+use the same fix, because it needs a CPU-only reset to preserve
+`FORCE_DOWNLOAD_BOOT`. Do `>usb off` first, then `>flash now`.
 
 Also worth knowing: **`>usb on` reboots, and the reboot loses the lanes, the
 tempo, `sync` and `play`** — the document survives but nothing is re-run. Put the
