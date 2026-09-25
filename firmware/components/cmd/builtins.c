@@ -29,6 +29,7 @@
 #include "kbd.h"
 #include "viz.h"
 #include "dinmidi.h"
+#include "ensemble.h"
 #include "esp_rom_sys.h"
 #include "vitals.h"
 #include "usbdev.h"
@@ -714,16 +715,79 @@ static cmd_status_t c_swing(cmd_ctx_t *ctx)
     return CMD_DONE;
 }
 
+/* '>sync' - SHARING TIME, in both directions it can be shared.
+ *
+ * One verb because it is one idea. 'on' and 'off' put MIDI clock on the wire for a
+ * DAW or a drum machine to follow; 'lead' and 'follow' share a clock with the
+ * other decks in the room. Both are this deck agreeing about time with something
+ * else, and docs/MAP.md refuses a second verb for the second half of an idea.
+ *
+ * The ensemble runs over ESP-NOW, which needs no router, no password and no
+ * association - so two decks play together by typing one word each, which is the
+ * only interaction rate a performance tolerates. See ensemble.h for why not mesh.
+ */
 static cmd_status_t c_sync(cmd_ctx_t *ctx)
 {
-    if (strcmp(ctx->arg, "on") == 0)       { seq_sync(true); }
-    else if (strcmp(ctx->arg, "off") == 0) { seq_sync(false); }
-    else if (ctx->arg[0] != '\0') {
-        cmd_out(ctx, "sync on | sync off");
+    const char *a = ctx->arg;
+
+    if (strcmp(a, "lead") == 0 || strcmp(a, "follow") == 0) {
+        const ensemble_role_t r = (a[0] == 'l') ? ENSEMBLE_LEAD : ENSEMBLE_FOLLOW;
+        if (ensemble_set(r) != ESP_OK) {
+            cmd_out(ctx, "the radio would not start");
+            return CMD_ERROR;
+        }
+        cmd_out(ctx, "%s the ensemble.", (r == ENSEMBLE_LEAD) ? "leading"
+                                                             : "following");
+        cmd_out(ctx, "no network needed - the decks");
+        cmd_out(ctx, "talk to each other directly.");
+        cmd_out(ctx, "one deck leads, the rest follow.");
+        snprintf(ctx->msg, sizeof ctx->msg, "sync %s", a);
+        return CMD_DONE;
+    }
+    if (strcmp(a, "alone") == 0) {
+        ensemble_set(ENSEMBLE_OFF);
+        snprintf(ctx->msg, sizeof ctx->msg, "sync alone");
+        return CMD_DONE;
+    }
+
+    if (a[0] == '\0') {
+        int peers = 0; int32_t err = 0; uint32_t heard = 0;
+        cmd_out(ctx, "midi clock out: %s", seq_get_sync() ? "on" : "off");
+        if (ensemble_state(&peers, &err, &heard)) {
+            cmd_out(ctx, "%s, %d other deck%s",
+                    ensemble_role() == ENSEMBLE_LEAD ? "leading" : "following",
+                    peers, peers == 1 ? "" : "s");
+            /* THE ERROR IS THE WHOLE POINT OF ASKING. "following" is true of a
+             * deck in phase and of one that has heard nothing for a minute, and
+             * those are the two a player needs to tell apart on stage. */
+            if (ensemble_role() == ENSEMBLE_FOLLOW) {
+                cmd_out(ctx, "off by %d us, %u packets",
+                        (int)err, (unsigned)heard);
+                /* The floor is what this link can do; the skip count is how often
+                 * the air was too busy to trust. Together they say whether a bad
+                 * error is the clock or the room. */
+                cmd_out(ctx, "best trip %d us, %u skipped",
+                        (int)ensemble_floor_rtt(), (unsigned)ensemble_skipped());
+            } else {
+                cmd_out(ctx, "%u packets since asked", (unsigned)heard);
+            }
+        } else {
+            cmd_out(ctx, "playing alone");
+        }
+        cmd_out(ctx, "sync on | off   midi clock");
+        cmd_out(ctx, "sync lead | follow | alone");
+        snprintf(ctx->msg, sizeof ctx->msg, "clock %s",
+                 seq_get_sync() ? "on" : "off");
+        return CMD_DONE;
+    }
+
+    const bool on = (strcmp(a, "on") == 0);
+    if (!on && strcmp(a, "off") != 0) {
+        cmd_out(ctx, "sync on | off | lead | follow | alone");
         return CMD_ERROR;
     }
-    snprintf(ctx->msg, sizeof ctx->msg, "midi clock %s",
-             seq_get_sync() ? "out" : "off");
+    seq_sync(on);
+    snprintf(ctx->msg, sizeof ctx->msg, "midi clock %s", on ? "on" : "off");
     return CMD_DONE;
 }
 
@@ -1828,7 +1892,7 @@ static const cmd_t s_builtins[] = {
     { "bpm",   c_bpm,   CMD_CAP_EDIT,  "tempo" },
     { "scale", c_scale, CMD_CAP_EDIT,  "dmin | c | f#mix | apent" },
     { "swing", c_swing, CMD_CAP_EDIT,  "50 straight, 67 triplet" },
-    { "sync",  c_sync,  CMD_CAP_EDIT,  "midi clock out on | off" },
+    { "sync",  c_sync,  CMD_CAP_EDIT,  "on | off | lead | follow | alone" },
     { "send",  c_send,  CMD_CAP_SYSTEM,"where events go; send mon on" },
     { "wifi",  c_wifi,  CMD_CAP_NET,   "wifi <ssid> <pass> | off" },
     { "battery", c_battery, CMD_CAP_READ, "find the sense pin" },

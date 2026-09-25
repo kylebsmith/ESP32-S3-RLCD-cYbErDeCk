@@ -322,7 +322,34 @@ multiple of 12 and cell width has to be even, so no legible middle size exists
 view taking a third, so pattern lines stop wrapping. `>split 12` or
 `>split 20` sets the view width directly.
 
-## 16. MIDI with no computer
+## 16. An ensemble
+
+Two decks, or ten. One leads, the rest follow:
+
+```
+   deck A          deck B
+   >sync lead      >sync follow
+   >play           >play
+```
+
+**No network, no password, no router** — the decks talk to each other directly over
+ESP-NOW. `>sync` on a follower reports how far off it is and how good the link is:
+
+```
+following, 1 other deck
+off by -39 us, 110 packets
+best trip 2459 us, 12 skipped
+```
+
+Typically a few hundred microseconds, occasionally up to about 2 ms — a pulse at
+124 bpm is 5040 µs. The leader's tempo is followed at once; `>bpm 96` on the leader
+and the followers change with it. `>sync alone` to play by yourself again.
+Outputs stay independent: deck A can drive a drum machine over `din` while deck B
+drives a projector over `osc`, from the same clock.
+
+See [NETWORK.md](NETWORK.md) for how it works and what it was measured at.
+
+## 17. MIDI with no computer
 
 ```
 >din 17
@@ -359,7 +386,7 @@ The other transports all need something else to be the host: `>usb on` makes the
 deck a USB MIDI *device* (so: a computer or tablet), `>send ble on` needs a BLE
 MIDI host, `>osc <ip> <port>` needs something listening on the network.
 
-## 17. It recovers
+## 18. It recovers
 
 If it crashes it now reboots in about two seconds and the screen says
 `crashed Nx - unplug to clear`. That counter clears on a real power cycle:

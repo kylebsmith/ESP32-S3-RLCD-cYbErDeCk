@@ -232,3 +232,102 @@ starting with Link.
 **Not implemented. Not stubbed.** There is no Link code in this repo and nothing
 here should be read as saying otherwise.
 
+---
+
+## The ensemble: many decks, one clock `[FACT]`
+
+Implemented and measured. `>sync lead` on one deck, `>sync follow` on the rest,
+`>sync alone` to leave. **No router, no password, no association** — which is the
+point: a deck that had to be told a password to play with the deck beside it is a
+deck nobody plays with.
+
+### Why ESP-NOW and not ESP-MESH
+
+ESP-MESH builds a routing tree and forwards hop by hop, so latency grows with
+depth and each deck's timing depends on where it happens to sit in the tree.
+ESP-NOW is connectionless: a packet goes out once and every deck in range hears it
+directly, and unicast replies need no association. For a room of people playing
+together that is the right shape, and it needs no infrastructure at all.
+
+### What JackTrip and Link actually do, and what was taken
+
+- **JackTrip** does not synchronise clocks. It streams audio over UDP into a
+  jitter buffer and absorbs variance with depth. The transferable idea is
+  "absorb the jitter, do not chase it" — which here is the slow correction loop.
+- **Ableton Link**, and NTP and PTP before it, does a **ping-pong and keeps the
+  exchange with the smallest round-trip time.** Minimum RTT means minimum queueing
+  in both directions, so that exchange's offset estimate is the one least
+  corrupted by delay.
+
+The distinction that cost a wrong turn: **the minimum is over round-trip time, not
+over the offset.** Taking the minimum *offset* is biased — with symmetric noise it
+systematically undershoots — and the measurements below show it happening.
+
+### The protocol
+
+```
+    leader  -> everyone   BEACON  tick, tempo, how late this send is
+    follower -> leader    PROBE   its own send time t1
+    leader  -> follower   REPLY   echoes t1, plus how long it held the probe
+```
+
+The follower knows the whole round trip **in its own clock** — no shared absolute
+time anywhere. Subtracting the leader's holding time (PTP calls it residence time)
+means the leader can answer from its main loop instead of from a radio callback,
+which is both safer and free.
+
+Tempo is followed **immediately**; phase is corrected **slowly and only from clean
+exchanges**. A tempo is a decision somebody made; a phase is a measurement.
+
+### Measured, on two decks on a bench
+
+| method | mean | spread | worst | under 500 µs |
+|---|---|---|---|---|
+| one-way broadcast | −248 µs | 3340 µs | 1765 µs | — |
+| minimum *offset* filter | — | — | biased −1 to −2 ms | — |
+| round trip, no gate | +384 µs | 2491 µs | 2031 µs | 6 of 8 |
+| round trip + hard RTT gate | +36 µs | 227 µs | **184 µs** | 10 of 10 |
+| round trip + graduated trust, across two tempo changes | +334 µs | 3446 µs | 2322 µs | 8 of 14 |
+
+The fourth row is the best result seen and the fifth is the honest one: the hard
+gate measured beautifully in a quiet moment and then **starved**. The floor is the
+fastest exchange ever seen, so one lucky probe sets a standard nothing else meets,
+almost every window is discarded, and the clock coasts and drifts between the rare
+accepted ones — which turned a 184 µs worst case into 2400 µs. Graduated trust
+(half gain for a clean window, an eighth for a middling one, discard only a
+hopeless one) never starves and is what ships.
+
+**So: typically a few hundred microseconds, with occasional excursions to about
+2 ms.** A pulse at 124 bpm is 5040 µs, so the worst case is under half a pulse and
+the typical case is a few per cent of one. Well below the ~10 ms at which a
+rhythmic difference is heard.
+
+### Where the remaining variance comes from `[OPEN]`
+
+The receive timestamp is taken in the ESP-NOW callback, which runs on the WiFi
+task, so it carries that task's scheduling jitter. **ESP-NOW exposes no hardware
+receive timestamp**, so this is close to the floor for this transport rather than a
+bug to be fixed. Getting to tens of microseconds would need timestamping at the
+radio, which means a different transport — or the wire.
+
+Two things that came out of measuring rather than reasoning, both fixed:
+
+- **A tempo change restarted the bar.** `seq_bpm()` set `s_tick = 0`, so `>bpm 140`
+  mid-performance jumped every lane back to step one. Audible, nothing asked for
+  it, and it was the single worst phase outlier in the ensemble because a follower
+  took a bar reset with every tempo it followed. The grid re-anchors now and the
+  position carries on.
+- **Delivery is not symmetric.** Leader-to-follower measured 86 per cent of
+  expected packets; follower-to-leader about 21, because the leading deck is
+  transmitting eight times a second and misses receives while it does. The peer
+  count flickered between none and one until the follower's probe rate went up and
+  the staleness window widened.
+
+### Ableton Link is still not implemented `[OPEN]`
+
+Nothing here is Link, and nothing is stubbed. What this does share is Link's
+*model* — a local timer corrected slowly from round-trip measurements — so if the
+licence question (GPLv2+ or commercial from Ableton) is ever settled, Link replaces
+the transport underneath `seq_timebase()` and `seq_nudge_by()` and nothing above
+them changes.
+

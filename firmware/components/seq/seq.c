@@ -631,6 +631,71 @@ static uint64_t period_us(void)
     return (uint64_t)(60000000.0 / (double)s_bpm / (double)SEQ_PPQN);
 }
 
+void seq_timebase(uint32_t *tick, int64_t *tick_due_us, int *bpm)
+{
+    if (tick != NULL)        { *tick = s_tick; }
+    if (bpm != NULL)         { *bpm  = s_bpm; }
+    if (tick_due_us != NULL) {
+        /* When the NEXT pulse is due on the ideal grid, not when the last one
+         * happened to fire. The grid is the thing the two decks are agreeing
+         * about; dispatch jitter is not. */
+        *tick_due_us = s_grid_t0 + (int64_t)s_tick * (int64_t)period_us();
+    }
+}
+
+/* THE TRIM, AND WHY IT IS NOT A JUMP.
+ *
+ * A follower that is a few milliseconds out could snap its tick counter and be
+ * exactly right immediately - and every lane would skip or repeat a step, which
+ * is the one thing a listener notices. Instead the ideal grid is slid by a
+ * fraction of the error each time a packet arrives, so the deck converges over a
+ * second or two and nothing is ever late or early by more than a fraction of a
+ * pulse.
+ *
+ * An eighth of the error per packet, at eight packets a second, closes ninety per
+ * cent of it in about two and a half seconds. Slower than that and a tempo change
+ * takes too long to follow; faster and ordinary radio jitter starts steering the
+ * clock. */
+int32_t seq_nudge(uint32_t tick, int64_t due_us, int bpm)
+{
+    if (!s_running || s_grid_t0 == 0) {
+        return 0;
+    }
+    if (bpm > 0 && bpm != s_bpm) {
+        /* Tempo is followed outright: it is a decision somebody made, not an
+         * error to converge on. seq_bpm re-anchors the grid, which is right -
+         * the phase correction below then re-aligns it. */
+        seq_bpm(bpm);
+    }
+    /* Where WE think that pulse was due, against where the ensemble says. */
+    const int64_t ours = s_grid_t0 + (int64_t)tick * (int64_t)period_us();
+    int64_t err = due_us - ours;
+
+    /* A whole-pulse disagreement is not a phase error, it is a different bar -
+     * which happens when a deck joins late. Fold the error into +/- half a pulse
+     * so the deck slides to the nearest pulse boundary rather than trying to
+     * travel a whole bar. */
+    const int64_t per = (int64_t)period_us();
+    if (per > 0) {
+        while (err >  per / 2) { err -= per; }
+        while (err < -per / 2) { err += per; }
+    }
+    s_grid_t0 += err / 8;
+    return (int32_t)err;
+}
+
+void seq_nudge_by(int32_t err_us, int bpm)
+{
+    if (!s_running || s_grid_t0 == 0) {
+        return;
+    }
+    if (bpm > 0 && bpm != s_bpm) {
+        seq_bpm(bpm);
+        return;              /* seq_bpm re-anchors; let the next one align it */
+    }
+    s_grid_t0 += err_us;
+}
+
 esp_err_t seq_init(void)
 {
     memset(s_lanes, 0, sizeof s_lanes);
@@ -996,10 +1061,27 @@ void seq_bpm(int bpm)
         esp_timer_stop(s_clock);
         esp_timer_start_periodic(s_clock, period_us());
     }
-    /* Re-anchor: the grid is a different grid now, and measuring the new
-     * clock against the old one would report a tempo change as jitter. */
-    s_grid_t0 = 0;
-    s_tick    = 0;
+    /* RE-ANCHOR THE GRID, BUT KEEP THE POSITION.
+     *
+     * The grid has to move: it is a different grid now, and measuring the new
+     * clock against the old one would report a tempo change as jitter. The BAR
+     * does not. Setting s_tick to zero threw the musical position away, so
+     * '>bpm 140' mid-performance restarted every lane at step one - audible, and
+     * nothing asked for it.
+     *
+     * It showed up through the ensemble: a follower that takes the leader's tempo
+     * also took a bar reset with it, which was the single worst phase outlier in
+     * the measurements - about 2 ms, right after every tempo change, where the
+     * steady state is under 600 us.
+     *
+     * Anchoring so that the CURRENT tick is due now preserves both: the bar
+     * carries on where it was and the statistic measures the new grid. */
+    if (s_running) {
+        s_grid_t0 = esp_timer_get_time() - (int64_t)s_tick * (int64_t)period_us();
+    } else {
+        s_grid_t0 = 0;
+        s_tick    = 0;
+    }
     seq_stats_reset();
 }
 

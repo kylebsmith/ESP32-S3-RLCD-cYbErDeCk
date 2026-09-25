@@ -17,6 +17,7 @@
 #include "esp_system.h"
 #include "esp_task_wdt.h"
 #include "dinmidi.h"
+#include "ensemble.h"
 #include "vitals.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -745,6 +746,9 @@ void app_main(void)
          * place the hang has ever been seen. A deck in serial mode pays nothing
          * at all. */
         vitals_loop(usbdev_wanted(), seq_running(), seq_position());
+        /* The ensemble broadcast, from the main loop and never the clock
+         * callback: a radio send is exactly what docs/OS.md keeps out of there. */
+        ensemble_service();
 
         if (viz_service()) {
             need_draw = true;

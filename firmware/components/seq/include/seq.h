@@ -264,6 +264,37 @@ bool seq_running(void);
  * every possible lane length introduces a phase jump when it rolls. */
 uint32_t seq_position(void);
 
+/* ---- sharing time with another deck ------------------------------------- *
+ *
+ * A SHARED CLOCK IS NOT A SHARED TICK. Sending every pulse over a radio would
+ * inherit the radio's jitter directly - several milliseconds, which is audible.
+ * So each deck runs its own timer and is told, a few times a second, where the
+ * ensemble thinks it should be; it then corrects SLOWLY by trimming its own
+ * period rather than jumping. A jump is a glitch; a trim is a drift nobody hears.
+ *
+ * This is the same model Ableton Link uses, which is deliberate: if Link is ever
+ * licensed and ported, it replaces the transport under these two functions and
+ * nothing above them changes.
+ */
+
+/* Where this deck is: the absolute pulse since play, and when that pulse was
+ * due, so a receiver can work out the offset without guessing the flight time. */
+void seq_timebase(uint32_t *tick, int64_t *tick_due_us, int *bpm);
+
+/* The ensemble says this deck should be at `tick` at `due_us`. Nudges the local
+ * clock toward it. Ignored when the clock is not running - a follower that is
+ * stopped stays stopped, because starting a deck is a decision the player makes.
+ *
+ * Returns the phase error in microseconds BEFORE the correction, which is what a
+ * player wants to see to know whether the ensemble is together. */
+int32_t seq_nudge(uint32_t tick, int64_t due_us, int bpm);
+
+/* Slide the grid by a known amount, and follow a tempo. Used when the caller has
+ * already measured the error itself and filtered it - which it must, because the
+ * raw per-packet error is biased late by transport delay and correcting on every
+ * sample steers the clock into that bias. */
+void seq_nudge_by(int32_t err_us, int bpm);
+
 const seq_lane_t *seq_lanes(int *count);
 
 /* WHERE EVENTS GO, AND WHY IT IS A TABLE.
