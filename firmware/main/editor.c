@@ -638,10 +638,10 @@ void editor_draw(void)
      * RENDERS but does not PUSH: the caller pushes once, with editor_present,
      * after the chrome is in the framebuffer too. */
     status_bar();
-    /* The CPU side has never been measured - only the bytes on the wire.
-     * Drawing a 12x24 cell is 288 pixel writes, each of which is a coordinate
-     * transform; that is the cost that competes with live coding, not the
-     * SPI. */
+    /* The CPU side, timed for the heartbeat. It was the budget: 86 us a
+     * 12x24 cell with the scheduler held, 94 by this wall clock, 34 ms for a
+     * full grid against a 4.75 ms push. The face is pre-turned now (textgrid.c)
+     * and a cell is 3.8 us - main.c's bench_render prints both at boot. */
     const int64_t t0 = esp_timer_get_time();
     { const uint32_t n = (uint32_t)tg_render(); s_cells += n; s_cells_total += n; }
     s_render_us += (uint32_t)(esp_timer_get_time() - t0);

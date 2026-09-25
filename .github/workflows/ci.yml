@@ -85,6 +85,24 @@ jobs:
              -o /tmp/test_st7305_addr tools/test_st7305_addr.c
           /tmp/test_st7305_addr
 
+      # The text grid draws a cell from glyphs pre-turned into the panel's
+      # byte order - 36 stores where the per-row path set 288 pixels. That is
+      # a claim about the byte layout in all four orientations, and when it is
+      # wrong the screen shows legible glyphs in the wrong places. This
+      # compiles textgrid.c itself and draws every glyph with every attribute,
+      # both faces, all orientations, both ways, onto the same junk, and
+      # demands the same bytes; then it breaks the turned face twice (a stale
+      # orientation, one wrong bit) and demands the comparison notice.
+      - name: Check the pre-turned text face
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror -Wno-unused-parameter \
+             -I firmware/components/textgrid/include \
+             -I firmware/components/st7305/include -I tools/hostshim \
+             -o /tmp/test_textgrid tools/test_textgrid.c \
+             firmware/components/textgrid/font12x24.c \
+             firmware/components/textgrid/font6x12.c
+          /tmp/test_textgrid
+
       # The SD mirror wrote every buffer to one file, so switching documents
       # overwrote the previous document's backup - and a '+out' command
       # transcript was mirrored as though it were a document. Each case in

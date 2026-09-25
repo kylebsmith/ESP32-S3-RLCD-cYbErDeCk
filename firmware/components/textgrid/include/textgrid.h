@@ -105,3 +105,9 @@ int tg_render(void);
 int tg_flush(size_t *bytes);
 
 void tg_invalidate(void);
+
+/* Draw cells from the face pre-turned into framebuffer bytes (the default), or
+ * by the per-row path. The two draw the same bytes - tools/test_textgrid.c -
+ * and the switch exists so the deck can time one against the other in the
+ * same boot. */
+void tg_set_turned(bool on);

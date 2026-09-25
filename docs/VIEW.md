@@ -76,6 +76,19 @@ transport in `firmware/main/view.c` changes.
 - Build: 86 KB of flash, 58 KB of RAM with the reader's buffers, before the two
   38 KB framebuffers. Uploaded with no button, by the core's 1200-baud reset.
 
+- **Sending a frame cost the deck's editor 31 ms**, measured by the loop profile in
+  the heartbeat: 2.57 seconds of every 10 with the view on, and the editor loop fell
+  from 199 turns a second to 142. Through stdio the console driver takes the frame a
+  character at a time and blocks whenever its 1 KB ring is full, which a 1,436-byte
+  frame always was. Now the frame goes to the driver in one call that never waits,
+  into a 4,000-byte ring: **0.5 ms a frame**, 192 turns a second, 0 frames dropped
+  in 234, and the node's refusal count did not move. If the ring has no room the frame is
+  **dropped whole, never torn**, and the heartbeat counts it (`sent`, `dropped`).
+  A frame can now land inside another task's log line; the relay keeps the text.
+- **Unverified:** the view in USB MIDI mode. There the console is on the CDC
+  interface, this driver is not installed, and the frame goes through stdio as it
+  always did - untested either way.
+
 **Unmeasured, and the brief asks for it measured:** whether the node can run from
 the deck's battery over USB-C, and what that costs the deck in runtime. It needs the
 deck powering the node, which needs the direct link.

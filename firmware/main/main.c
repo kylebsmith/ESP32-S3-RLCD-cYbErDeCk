@@ -116,6 +116,62 @@ static void orient_save(uint8_t v)
     }
 }
 
+/* WHAT A CELL COSTS TO DRAW, with nothing else running - both ways, in the
+ * same boot, so the before and the after are one board's numbers. The editor's
+ * heartbeat reports render time by the wall clock, which counts every
+ * preemption by the radio and the keyboard scan as drawing; this holds the
+ * scheduler. A full grid of mixed glyphs, a third of them inverted, drawn into
+ * the framebuffer (no panel push). */
+static void bench_render(void)
+{
+    const int cols = tg_cols(), rows = tg_rows();
+    for (int r = 0; r < rows; r++) {
+        for (int c = 0; c < cols; c++) {
+            tg_put(c, r, (char)(32 + (r * cols + c) % 124),
+                   ((c + r) % 3 == 0) ? TG_INVERSE : TG_NORMAL);
+        }
+    }
+    const int runs = 4;
+    int64_t per[2] = { 0, 0 }, first = 0;
+    int cells = 0;
+    for (int turned = 0; turned < 2; turned++) {
+        tg_set_turned(turned != 0);
+        vTaskSuspendAll();
+        /* The first turned frame turns every glyph it meets, once. */
+        int64_t t0 = esp_timer_get_time();
+        tg_invalidate();
+        cells = tg_render();
+        if (turned) {
+            first = esp_timer_get_time() - t0;
+        }
+        t0 = esp_timer_get_time();
+        for (int i = 0; i < runs; i++) {
+            tg_invalidate();
+            tg_render();
+        }
+        per[turned] = (esp_timer_get_time() - t0) * 1000 / (runs * cells);
+        xTaskResumeAll();
+    }
+    /* and what damage bookkeeping alone costs a cell, which the turned path
+     * still pays in full */
+    vTaskSuspendAll();
+    const int64_t t2 = esp_timer_get_time();
+    for (int i = 0; i < runs; i++) {
+        for (int r = 0; r < rows; r++) {
+            for (int c = 0; c < cols; c++) {
+                st7305_damage(20 + c * 12, 12 + r * 24, 12, 24);
+            }
+        }
+    }
+    const int64_t dmg = (esp_timer_get_time() - t2) * 1000 / (runs * cells);
+    xTaskResumeAll();
+    ESP_LOGI(TAG, "BENCH cell render: per-row %lld ns, turned %lld ns a cell "
+             "(%d cells, scheduler held)", per[0], per[1], cells);
+    ESP_LOGI(TAG, "BENCH   first turned frame %lld us, damage %lld ns a cell",
+             first, dmg);
+    tg_clear();
+}
+
 static void bench(void)
 {
     const int runs = 20;
@@ -461,6 +517,7 @@ void app_main(void)
 
     /* Show the card briefly so a boot is visibly a boot, then get out of the
      * way. If the text reads mirrored, KEY cycles the orientation. */
+    bench_render();
     testcard_draw(BUILD_ID);
     bench();
     vTaskDelay(pdMS_TO_TICKS(2500));
@@ -685,10 +742,18 @@ void app_main(void)
              wdt ? "armed on the editor loop"
                  : "UNAVAILABLE - hangs will be silent");
 
+    /* WHERE THE LOOP'S TIME GOES, by the wall clock, reported and zeroed with
+     * each heartbeat. docs/NEXT.md 9: no optimization without a number, and
+     * profile first - the render time alone once said the drawing was the
+     * budget, and was right, and after it was fixed nothing said what was. */
+    int64_t prof_viz = 0, prof_view = 0, prof_draw = 0, prof_push = 0;
+    uint32_t prof_loops = 0;
+
     while (1) {
         if (wdt) {
             esp_task_wdt_reset();
         }
+        prof_loops++;
 
         kbd_event_t ev;
         bool acted = false;
@@ -795,15 +860,24 @@ void app_main(void)
          * callback: a radio send is exactly what docs/OS.md keeps out of there. */
         ensemble_service();
 
-        if (viz_service()) {
+        int64_t prof_t = esp_timer_get_time();
+        const bool frame = viz_service();
+        prof_viz += esp_timer_get_time() - prof_t;
+        if (frame) {
             need_draw = true;
+            prof_t = esp_timer_get_time();
             view_frame();
+            prof_view += esp_timer_get_time() - prof_t;
         }
 
         if (need_draw) {
+            prof_t = esp_timer_get_time();
             editor_draw();
+            prof_draw += esp_timer_get_time() - prof_t;
             const uint32_t before = editor_cells_drawn();
+            prof_t = esp_timer_get_time();
             editor_present(&bytes);
+            prof_push += esp_timer_get_time() - prof_t;
             /* An exact invariant, not a threshold: if cells were rendered into
              * the framebuffer and nothing went out on the wire, the panel is
              * showing something other than the document. That is precisely
@@ -850,6 +924,15 @@ void app_main(void)
             char ust[48];
             usbdev_status(ust, sizeof ust);
             ESP_LOGI(TAG, "usb: %s", ust);
+            /* The 5 ms kbd_poll wait is the loop's idle time, and is in none
+             * of these. */
+            ESP_LOGI(TAG, "loop: %u/s; us in 10 s: pictures %lld, view %lld "
+                          "(%u sent, %u dropped), draw %lld, push %lld",
+                     (unsigned)(prof_loops / 10), prof_viz, prof_view,
+                     (unsigned)view_frames, (unsigned)view_dropped,
+                     prof_draw, prof_push);
+            prof_viz = prof_view = prof_draw = prof_push = 0;
+            prof_loops = 0;
         }
 
         /* Autosave: on newline, or once typing has paused. Never per

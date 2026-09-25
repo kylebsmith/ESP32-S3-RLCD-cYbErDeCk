@@ -58,7 +58,12 @@ def main():
                         except serial.SerialException as e:
                             print(f'-- view node lost: {e}', flush=True)
                             node = None
-                    continue
+                    # The deck writes a frame in one piece, straight to its USB
+                    # driver, so it can land inside another task's log line.
+                    # Keep that text.
+                    line = (line[:m.start()] + line[m.end():]).strip()
+                    if not line:
+                        continue
                 sys.stdout.write(line.decode('utf-8', 'replace') + '\n')
                 sys.stdout.flush()
         if node is not None:

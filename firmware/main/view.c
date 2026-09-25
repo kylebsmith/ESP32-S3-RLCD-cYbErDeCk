@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "driver/usb_serial_jtag.h"
 #include "seq.h"
 #include "view_wire.h"
 #include "viz.h"
@@ -35,6 +36,20 @@ void view_init(void)
     seq_dest_add("view", view_sink, NULL, "the picture to an HDMI node");
 }
 
+uint32_t view_frames, view_dropped;
+
+/* ONE WRITE, AND NEVER A WAIT.
+ *
+ * Through stdio the console driver takes a frame a character at a time - a
+ * mutex and a ring-buffer send for each of 1,436 bytes - and blocks whenever
+ * its ring is full. That was 31 ms of every frame on the editor's loop,
+ * measured: a quarter of its time with the view on, and the loop fell from 199
+ * turns a second to 142. So the frame goes to the driver whole, and if the
+ * ring has no room for all of it, it is not sent - the picture drops a frame
+ * rather than the editor dropping keystrokes, and a frame is never torn.
+ *
+ * In USB MIDI mode the console is on the CDC interface and this driver is not
+ * installed; there the frame goes through stdio, as it always did. */
 static void view_emit(const uint8_t *frame, size_t n)
 {
     /* Static, both: a whole frame in base64 is two kilobytes, which is not
@@ -45,13 +60,20 @@ static void view_emit(const uint8_t *frame, size_t n)
         return;
     }
     const int k = snprintf(line, sizeof line, "\x1b]view;%s\x07\n", b64);
-    if (k > 0 && k < (int)sizeof line) {
+    if (k <= 0 || k >= (int)sizeof line) {
+        return;
+    }
+    if (usb_serial_jtag_is_driver_installed()) {
+        if (usb_serial_jtag_write_bytes(line, (size_t)k, 0) != k) {
+            view_dropped++;
+            return;
+        }
+    } else {
         fwrite(line, 1, (size_t)k, stdout);
         fflush(stdout);
     }
+    view_frames++;
 }
-
-uint32_t view_frames;
 
 void view_frame(void)
 {
@@ -68,6 +90,5 @@ void view_frame(void)
     const size_t n = view_wire_pack(frame, sizeof frame, tick, w, h, cells);
     if (n > 0) {
         view_emit(frame, n);
-        view_frames++;
     }
 }
