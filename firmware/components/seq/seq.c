@@ -1010,17 +1010,23 @@ bool seq_lane_now(const seq_lane_t *l, int *slot, uint32_t *cycle)
     return true;
 }
 
-esp_err_t seq_lane_viz(const char *name, int prim, int param)
+
+esp_err_t seq_lane_bind(const char *name, const seq_binding_t *b)
 {
     seq_lane_t *l = find(name, true);
     if (l == NULL) {
         return ESP_ERR_NO_MEM;
     }
-    l->bind    = SEQ_BIND_VIZ;
-    l->prim    = (uint8_t)prim;
-    l->param   = (uint8_t)param;
-    l->melodic = false;
-    l->ctrl    = false;
+    l->bind    = b->bind;
+    l->melodic = (b->bind == SEQ_BIND_NOTE) && b->melodic;
+    l->ctrl    = (b->bind == SEQ_BIND_CC);
+    l->note    = b->note & 0x7F;
+    l->octave  = b->octave;
+    l->chan    = b->chan & 0x0F;
+    l->gate_ms = b->gate_ms ? b->gate_ms : 40;
+    l->cc      = b->cc & 0x7F;
+    l->prim    = (b->bind == SEQ_BIND_VIZ) ? b->prim : 0;
+    l->param   = (b->bind == SEQ_BIND_VIZ) ? b->param : 0;
     return ESP_OK;
 }
 
@@ -1057,32 +1063,7 @@ esp_err_t seq_route(const char *name, const char *src)
     return ESP_OK;
 }
 
-esp_err_t seq_lane_ctrl(const char *name, int cc, int chan)
-{
-    seq_lane_t *l = find(name, true);
-    if (l == NULL) {
-        return ESP_ERR_NO_MEM;
-    }
-    l->ctrl    = true;
-    l->melodic = false;
-    l->bind    = SEQ_BIND_CC;
-    if (cc >= 0 && cc < 128)   { l->cc = (uint8_t)cc; }
-    if (chan >= 0 && chan < 16) { l->chan = (uint8_t)chan; }
-    return ESP_OK;
-}
 
-esp_err_t seq_lane_melodic(const char *name, int octave, int chan, int gate_ms)
-{
-    seq_lane_t *l = find(name, true);
-    if (l == NULL) {
-        return ESP_ERR_NO_MEM;
-    }
-    l->melodic = true;
-    l->octave  = (int8_t)octave;
-    if (chan >= 0 && chan < 16) { l->chan = (uint8_t)chan; }
-    if (gate_ms > 0)            { l->gate_ms = (uint16_t)gate_ms; }
-    return ESP_OK;
-}
 
 void seq_swing(int percent)
 {
@@ -1102,16 +1083,6 @@ void seq_sync(bool on)
 }
 bool seq_get_sync(void) { return s_sync; }
 
-esp_err_t seq_lane_note(const char *name, int note, int chan)
-{
-    seq_lane_t *l = find(name, true);
-    if (l == NULL) {
-        return ESP_ERR_NO_MEM;
-    }
-    if (note >= 0 && note < 128) { l->note = (uint8_t)note; }
-    if (chan >= 0 && chan < 16)  { l->chan = (uint8_t)chan; }
-    return ESP_OK;
-}
 
 esp_err_t seq_mute(const char *name, bool mute)
 {

@@ -18,6 +18,7 @@
 #define UI_TEXT_NO_ASSERTS
 #include "ui_text.h"
 #include "seq_pattern.h"
+#include "lane_name.h"
 
 #include <stdlib.h>
 
@@ -58,27 +59,42 @@ static void guide_lines(void)
 /* THE GUIDE MUST TEACH LINES THAT RUN.
  *
  * The guide went on teaching 'star', 'shake' and 'tile' after all three had been
- * removed, and 'X' and ',' after the step grammar changed would have been next:
- * a tutorial whose lines are refused is worse than none, because the owner
- * trusts it. So every command line in it must name a verb the firmware has - read
- * from the command table itself, as docs/MAP.md counts verbs - and every lane
- * line's pattern must compile under the compiler that ships. */
-typedef struct { char name[16]; char fn[16]; int lane; } verb_t;
+ * removed, and was playing its own comments - '>echo 8    then add:' compiled
+ * nine more hits. A tutorial whose lines are refused is worse than none, because
+ * the owner trusts it. So every command line in it must be a verb the firmware
+ * has - read from the command table, as docs/MAP.md counts verbs - or a lane
+ * whose NAME exists and whose pattern compiles under the compiler that ships.
+ *
+ * Names are not verbs any more (docs/MANIFESTO.md §3.8): they are definitions in
+ * the boot document, or a picture's own name. So this reads the definitions out
+ * of BOOT_TEXT and the pictures out of viz.c, and a definition in the guide adds
+ * a name for the lines after it, exactly as running it would. */
+typedef struct { char name[16]; char fn[16]; } verb_t;
 static verb_t s_verbs[128];
 static int s_nverbs;
+static char s_names[96][LANE_BASE_MAX + 1];
+static int s_nnames;
+
+static char *slurp(const char *path, char *buf, size_t n)
+{
+    FILE *f = fopen(path, "r");
+    if (f == NULL) {
+        printf("[FAIL] cannot read %s (run from the repo root)\n", path);
+        fails++;
+        return NULL;
+    }
+    const size_t got = fread(buf, 1, n - 1, f);
+    fclose(f);
+    buf[got] = '\0';
+    return buf;
+}
 
 static void load_verbs(void)
 {
-    FILE *f = fopen("firmware/components/cmd/builtins.c", "r");
-    if (f == NULL) {
-        printf("[FAIL] cannot read the command table (run from the repo root)\n");
-        fails++;
+    static char src[200000];
+    if (slurp("firmware/components/cmd/builtins.c", src, sizeof src) == NULL) {
         return;
     }
-    static char src[200000];
-    const size_t n = fread(src, 1, sizeof src - 1, f);
-    fclose(f);
-    src[n] = '\0';
     const char *t = strstr(src, "static const cmd_t s_builtins[]");
     const char *end = t ? strstr(t, "};") : NULL;
     for (const char *p = t; p && p < end && s_nverbs < 128; ) {
@@ -86,113 +102,173 @@ static void load_verbs(void)
         if (q == NULL || q > end) { break; }
         verb_t *v = &s_verbs[s_nverbs];
         if (sscanf(q, "{ \"%15[a-z0-9]\", %15[a-z_]", v->name, v->fn) == 2) {
-            const char *eol = strchr(q, '\n');
-            v->lane = (eol && strstr(q, "CMD_CAP_LANE") && strstr(q, "CMD_CAP_LANE") < eol);
             s_nverbs++;
         }
         p = q + 3;
     }
 }
 
+static void add_name(const char *w, size_t n)
+{
+    if (s_nnames < 96 && n <= LANE_BASE_MAX) {
+        memcpy(s_names[s_nnames], w, n);
+        s_names[s_nnames][n] = '\0';
+        s_nnames++;
+    }
+}
+
+static int is_name(const char *w)
+{
+    for (int i = 0; i < s_nnames; i++) {
+        if (strcmp(s_names[i], w) == 0) { return 1; }
+    }
+    return 0;
+}
+
 static const verb_t *verb(const char *w, size_t n)
 {
-    /* exact, then the lane rules: a trailing '[part]', then trailing digits */
-    for (int pass = 0; pass < 2; pass++) {
-        size_t b = n;
-        if (pass == 1) {
-            if (b > 2 && w[b - 1] == ']') {
-                while (b > 0 && w[b - 1] != '[') { b--; }
-                if (b > 0) { b--; }
-            }
-            while (b > 1 && w[b - 1] >= '0' && w[b - 1] <= '9') { b--; }
-        }
-        for (int i = 0; i < s_nverbs; i++) {
-            if (strlen(s_verbs[i].name) == b && strncmp(s_verbs[i].name, w, b) == 0 &&
-                (pass == 0 || s_verbs[i].lane)) {
-                return &s_verbs[i];
-            }
+    for (int i = 0; i < s_nverbs; i++) {
+        if (strlen(s_verbs[i].name) == n && strncmp(s_verbs[i].name, w, n) == 0) {
+            return &s_verbs[i];
         }
     }
     return NULL;
 }
 
-static void guide_runs(void)
+static void load_pictures(void)
 {
-    load_verbs();
-    if (s_nverbs < 40) {
-        printf("[FAIL] read only %d verbs from the table\n", s_nverbs);
-        fails++;
+    static char src[120000];
+    if (slurp("firmware/components/viz/viz.c", src, sizeof src) == NULL) {
         return;
     }
+    const char *t = strstr(src, "static const char *s_names[NGEN] = {");
+    const char *end = t ? strstr(t, "};") : NULL;
+    for (const char *p = t ? strchr(t, '{') : NULL; p && p < end; ) {
+        const char *q = strchr(p, '"');
+        if (q == NULL || q > end) { break; }
+        const char *r = strchr(q + 1, '"');
+        add_name(q + 1, (size_t)(r - q - 1));
+        p = r + 1;
+    }
+}
+
+/* One command line, checked the way cmd_run_line would dispatch it. `what` names
+ * the text for the message. Returns 1 if it is a lane line that was compiled. */
+static int check_line(const char *what, int ln, const char *line)
+{
     static seq_comp_t c;
-    const char *g = GUIDE_TEXT;
-    int ln = 1, checked = 0;
-    while (*g != '\0') {
-        const char *nl = strchr(g, '\n');
-        const size_t n = nl ? (size_t)(nl - g) : strlen(g);
+    const char *w = line + 1;
+    size_t wl = 0;
+    while (w[wl] != '\0' && w[wl] != ' ' && w[wl] != '=') { wl++; }
+    const char *rest = w + wl;
+    while (*rest == ' ') { rest++; }
+    if (verb(w, wl) != NULL) {
+        return 0;
+    }
+    lane_name_t nm;
+    const int ne = lane_name_parse(w, wl, &nm);
+    if (*rest == '=') {
+        lane_def_t d;
+        lane_def_parse(rest + 1, &d);
+        if (ne != LN_OK || d.kind == LD_ERROR || d.kind == LD_REMOVE ||
+            (d.kind == LD_DRAW && !is_name(d.draw))) {
+            printf("[FAIL] %s line %d does not define a name: %s (%s)\n",
+                   what, ln, line, d.kind == LD_ERROR ? d.why : "bad name");
+            fails++;
+            return 0;
+        }
+        add_name(nm.base, strlen(nm.base));
+        return 0;
+    }
+    if (ne != LN_OK || !is_name(nm.base)) {
+        printf("[FAIL] %s line %d runs '%.*s', which is neither a verb nor a "
+               "name\n", what, ln, (int)wl, w);
+        fails++;
+        return 0;
+    }
+    if (*rest == '\0') {
+        return 0;
+    }
+    const int e = seq_pattern_compile(rest, &c);
+    if (e != SEQ_PAT_OK) {
+        char why[64];
+        seq_pattern_error_text(&c, rest, why, sizeof why);
+        printf("[FAIL] %s line %d is refused: %s (%s)\n", what, ln, line, why);
+        fails++;
+        return 0;
+    }
+    return 1;
+}
+
+/* Walk a text, checking every command line in it. Returns lane lines checked. */
+static int check_text(const char *what, const char *text)
+{
+    int ln = 1, lanes = 0;
+    while (*text != '\0') {
+        const char *nl = strchr(text, '\n');
+        const size_t n = nl ? (size_t)(nl - text) : strlen(text);
         char line[64];
-        snprintf(line, sizeof line, "%.*s", (int)n, g);
+        snprintf(line, sizeof line, "%.*s", (int)n, text);
         if (line[0] == '>' && strstr(line, "   ") != NULL) {
             /* The cheat-sheet style - '>sync on    MIDI clock out' - made the
              * comment part of the argument, so the line failed when it was run:
              * c_sync compared "on    MIDI clock out" with "on". A comment
              * goes on its own line. */
-            printf("[FAIL] guide line %d has a comment inside it: %s\n", ln, line);
+            printf("[FAIL] %s line %d has a comment inside it: %s\n", what, ln, line);
             fails++;
         }
         if (line[0] == '>') {
-            const char *w = line + 1;
-            size_t wl = strcspn(w, " ");
-            const verb_t *v = verb(w, wl);
-            if (v == NULL) {
-                printf("[FAIL] guide line %d runs '%.*s', which is not a verb\n",
-                       ln, (int)wl, w);
-                fails++;
-            } else if (v->lane) {
-                const char *arg = w + wl;
-                while (*arg == ' ') { arg++; }
-                if (strcmp(v->name, "cc") == 0) {       /* '>cc cut 0..9..' */
-                    arg += strcspn(arg, " ");
-                    while (*arg == ' ') { arg++; }
-                }
-                if (*arg != '\0') {
-                    const int e = seq_pattern_compile(arg, &c);
-                    if (e != SEQ_PAT_OK) {
-                        char why[64];
-                        seq_pattern_error_text(&c, arg, why, sizeof why);
-                        printf("[FAIL] guide line %d is refused: %s (%s)\n",
-                               ln, line, why);
-                        fails++;
-                    }
-                    checked++;
-                }
-            }
+            lanes += check_line(what, ln, line);
         }
         if (!nl) { break; }
-        g = nl + 1;
+        text = nl + 1;
         ln++;
     }
+    return lanes;
+}
+
+static void guide_runs(void)
+{
+    load_verbs();
+    load_pictures();
+    if (s_nverbs < 30 || s_nnames != 16) {
+        printf("[FAIL] read %d verbs and %d pictures - the parse is wrong\n",
+               s_nverbs, s_nnames);
+        fails++;
+        return;
+    }
+    /* The boot document runs first, and it is what defines the sound names. */
+    check_text("BOOT_TEXT", BOOT_TEXT);
+    if (!is_name("kick") || !is_name("bass") || !is_name("cut")) {
+        printf("[FAIL] the boot document does not define kick, bass and cut\n");
+        fails++;
+    }
+    if (strstr(BOOT_TEXT, BOOT_MARK) == NULL ||
+        strncmp(BOOT_NAMES, BOOT_MARK, sizeof BOOT_MARK - 1) != 0) {
+        printf("[FAIL] the names block must start with its mark '%s'\n", BOOT_MARK);
+        fails++;
+    }
+    const int checked = check_text("guide", GUIDE_TEXT);
     /* and every picture the firmware can draw is mentioned, so adding one
      * without teaching it fails here rather than going unnoticed */
     static const char guide[] = GUIDE_TEXT;
-    for (int i = 0; i < s_nverbs; i++) {
-        if (strcmp(s_verbs[i].fn, "c_prim") != 0) { continue; }
-        const char *hit = strstr(guide, s_verbs[i].name);
-        const size_t k = strlen(s_verbs[i].name);
+    for (int i = 0; i < 16; i++) {
+        const char *hit = strstr(guide, s_names[i]);
+        const size_t k = strlen(s_names[i]);
         int word = 0;
         while (hit != NULL) {
             const char before = (hit == guide) ? ' ' : hit[-1];
             const char after = hit[k];
             if ((before == ' ' || before == '\n' || before == '>') &&
-                (after == ' ' || after == '\n' || after == '.' || after == ',')) {
+                (after == ' ' || after == '\n' || after == '.' || after == ',' ||
+                 after == ':')) {
                 word = 1;
                 break;
             }
-            hit = strstr(hit + 1, s_verbs[i].name);
+            hit = strstr(hit + 1, s_names[i]);
         }
         if (!word) {
-            printf("[FAIL] the guide never mentions the primitive '%s'\n",
-                   s_verbs[i].name);
+            printf("[FAIL] the guide never mentions the picture '%s'\n", s_names[i]);
             fails++;
         }
     }

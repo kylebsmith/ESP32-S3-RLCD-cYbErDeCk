@@ -28,6 +28,7 @@
 #include "ui_text.h"
 #include "seq.h"
 #include "seq_pattern.h"
+#include "lane_name.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -371,7 +372,13 @@ static bool playhead_span(int line_off, const char *lbuf, int at, int len,
     if (!seq_running()) {
         return false;
     }
-    const seq_lane_t *l = seq_lane_find(lbuf + at, len);
+    /* The lane's name is its CANONICAL address - 'disc:1' is 'disc' - exactly as
+     * the lane command stored it, or the mark would miss a lane it is playing. */
+    lane_name_t ln;
+    if (lane_name_parse(lbuf + at, (size_t)len, &ln) != LN_OK) {
+        return false;
+    }
+    const seq_lane_t *l = seq_lane_find(ln.canon, -1);
     /* Exactly the clock's skip test. If it would not sound, it must not be
      * marked - that makes "the playhead is sweeping this line" and "this lane
      * is sounding" the same statement, which is what the toggle relies on. */

@@ -17,6 +17,7 @@
 #include "seq.h"
 #include "blemidi.h"
 #include "seq_pattern.h"
+#include "lane_name.h"
 
 #include "esp_system.h"
 #include "esp_timer.h"
@@ -35,6 +36,8 @@
 #include "usbdev.h"
 #include "usbmux.h"
 
+static void list_names(cmd_ctx_t *ctx);
+
 static cmd_status_t c_help(cmd_ctx_t *ctx)
 {
     int n = 0;
@@ -42,6 +45,9 @@ static cmd_status_t c_help(cmd_ctx_t *ctx)
     for (int i = 0; i < n; i++) {
         cmd_out(ctx, "%-8s %s", t[i].name, t[i].help);
     }
+    /* THE NAMES ARE NOT COMMANDS ANY MORE, so they get their own lines: the
+     * defined ones and the pictures, and how to make another. */
+    list_names(ctx);
     snprintf(ctx->msg, sizeof ctx->msg, "%d commands", n);
     return CMD_DONE;
 }
@@ -444,17 +450,137 @@ static cmd_status_t c_density(cmd_ctx_t *ctx)
     return CMD_DONE;
 }
 
-/* ------------------------------------------------------------------ music
+/* ------------------------------------------------------------------ names
  *
- * A drum IS a command. "kick x...x...x...x..." is twenty-two keystrokes for a
- * four-on-the-floor, and nothing has to be declared, named or wired up first.
- * That is the whole design brief for a thumb keyboard: the shortest path from
- * a musical idea to a sound, with no ceremony in between.
+ * A LANE IS A NAME AND A PATTERN, AND THE NAME IS DEFINED, NOT BUILT IN.
+ *
+ * "kick x...x...x...x..." is still twenty-two keystrokes for a four-on-the-floor
+ * with nothing declared first - the boot document declares it, at startup:
+ *
+ *     >kick = note 36
+ *     >bass = voice 2 ch 1 gate 180
+ *     >cut = cc 74
+ *
+ * The seventeen sound names used to be verbs with their numbers compiled in, so
+ * a player could add neither a conga nor a second controller without a
+ * firmware build, and could not move a kick to the note their drum machine
+ * wants. The picture names were verbs too, sixteen more. Now there is ONE lane
+ * command for all of them, a table of defined names, and the pictures by their
+ * own names - and thirty-three verbs are gone. docs/MANIFESTO.md §3.8; the
+ * grammar of the name and the definition is lane_name.h.
  */
-static const struct { const char *name; uint8_t note; } s_drums[] = {
-    { "kick",  36 }, { "snare", 38 }, { "hat",   42 }, { "ohat",  46 },
-    { "clap",  39 }, { "tom",   45 }, { "rim",   37 }, { "crash", 49 },
-};
+typedef struct {
+    char     name[LANE_BASE_MAX + 1];
+    uint8_t  kind;          /* LD_NOTE, LD_VOICE, LD_CC or LD_DRAW          */
+    uint8_t  num;           /* note, octave, controller, or picture index   */
+    uint8_t  chan;          /* 0-15                                         */
+    uint16_t gate;          /* ms                                           */
+} alias_t;
+
+/* THIRTY-TWO NAMES. Sixteen come in the boot document, which leaves room for a
+ * player's own twice over; a definition past that is refused with the number,
+ * not dropped. */
+#define ALIAS_MAX 32
+static alias_t s_alias[ALIAS_MAX];
+
+_Static_assert(LANE_NAME_MAX <= SEQ_NAME_MAX, "a lane's address fits its name");
+
+static alias_t *alias_find(const char *name)
+{
+    for (int i = 0; i < ALIAS_MAX; i++) {
+        if (s_alias[i].name[0] != '\0' && strcmp(s_alias[i].name, name) == 0) {
+            return &s_alias[i];
+        }
+    }
+    return NULL;
+}
+
+/* Is this word the exact name of a command? */
+static bool is_verb(const char *w)
+{
+    int n = 0;
+    const cmd_t *t = cmd_table(&n);
+    for (int i = 0; i < n; i++) {
+        if (strcmp(t[i].name, w) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool cmd_lane_known(const char *word, size_t n)
+{
+    char base[LANE_BASE_MAX + 1];
+    size_t k = 0;
+    while (k < n && word[k] != ':' && k < LANE_BASE_MAX) {
+        base[k] = word[k];
+        k++;
+    }
+    if (k < n && word[k] != ':') {
+        return false;                  /* longer than a name can be */
+    }
+    base[k] = '\0';
+    return alias_find(base) != NULL || viz_prim_index(base) >= 0;
+}
+
+/* WHAT A NAME IS BOUND TO: a defined name, or a picture by its own name, plus
+ * the part the address selects. False, with the reason, when it is neither -
+ * or when it names a part the binding does not have. */
+static bool binding_of(const lane_name_t *ln, seq_binding_t *b, char *why,
+                       size_t wn)
+{
+    memset(b, 0, sizeof *b);
+    const alias_t *a = alias_find(ln->base);
+    int prim = -1;
+    if (a != NULL) {
+        switch (a->kind) {
+        case LD_NOTE:
+            b->bind = SEQ_BIND_NOTE;
+            b->note = a->num;
+            b->chan = a->chan;
+            b->gate_ms = a->gate;
+            break;
+        case LD_VOICE:
+            b->bind = SEQ_BIND_NOTE;
+            b->melodic = true;
+            b->octave = (int8_t)a->num;
+            b->chan = a->chan;
+            b->gate_ms = a->gate;
+            break;
+        case LD_CC:
+            b->bind = SEQ_BIND_CC;
+            b->cc = a->num;
+            b->chan = a->chan;
+            break;
+        default:
+            prim = a->num;
+            break;
+        }
+    } else {
+        prim = viz_prim_index(ln->base);
+        if (prim < 0) {
+            snprintf(why, wn, "%s? try: help", ln->base);
+            return false;
+        }
+    }
+    if (prim >= 0) {
+        b->bind  = SEQ_BIND_VIZ;
+        b->prim  = (uint8_t)prim;
+        b->param = (uint8_t)viz_param_index(ln->part);
+        /* A part that does nothing is a lane that silently does nothing, so it
+         * is refused - the rule '>box[z]' was the one loud case of, before. */
+        if (ln->part[0] != '\0' && b->param == VIZ_PARAM_NONE) {
+            snprintf(why, wn, "no :%s - a picture has x, y", ln->part);
+            return false;
+        }
+        return true;
+    }
+    if (ln->part[0] != '\0') {
+        snprintf(why, wn, "%s has no part :%s", ln->base, ln->part);
+        return false;
+    }
+    return true;
+}
 
 /* RE-RUNNING A LINE YOU HAVE NOT TOUCHED SILENCES THE LANE.
  *
@@ -522,202 +648,197 @@ static cmd_status_t lane_refused(cmd_ctx_t *ctx, esp_err_t e)
     return CMD_ERROR;
 }
 
-static cmd_status_t c_drum(cmd_ctx_t *ctx)
+/* ONE COMMAND FOR EVERY LANE - a drum, a voice, a controller, a picture - because
+ * a lane is a lane and the name only says where it goes. `word` is the address
+ * as typed: 'kick', 'disc:2', 'disc:2:x'. */
+cmd_status_t cmd_lane(cmd_ctx_t *ctx, const char *word, size_t n)
 {
-    uint8_t note = 36;
-    for (size_t i = 0; i < sizeof s_drums / sizeof s_drums[0]; i++) {
-        if (strcmp(s_drums[i].name, ctx->name) == 0) {
-            note = s_drums[i].note;
-            break;
-        }
-    }
-    /* A BARE LANE NAME MEANS THE LANE IS GONE, not muted.
-     *
-     * Muting already has a word - '>mute kick' - and it leaves the slot
-     * allocated, which is how a session filled all eight lanes with names the
-     * document no longer mentioned and then refused a ninth. Re-running the
-     * same line still silences, because that is a performance gesture on a
-     * lane that is still part of the piece. */
-    if (ctx->arg[0] == '\0') {
-        const bool had = seq_forget(ctx->name) == ESP_OK;
-        snprintf(ctx->msg, sizeof ctx->msg, had ? "%s gone" : "no %s", ctx->name);
-        return CMD_DONE;
-    }
-    if (rerun_silences(ctx)) {
-        seq_mute(ctx->name, true);
-        snprintf(ctx->msg, sizeof ctx->msg, "%s silent", ctx->name);
-        return CMD_DONE;
-    }
-    seq_lane_note(ctx->name, note, 9);
-    const esp_err_t le = seq_lane(ctx->name, ctx->arg);
-    if (le != ESP_OK) {
-        return lane_refused(ctx, le);
-    }
-    seq_mute(ctx->name, false);
-    snprintf(ctx->msg, sizeof ctx->msg, "%s %s", ctx->name, ctx->arg);
-    return CMD_DONE;
-}
-
-/* The melodic lanes. Four names, because four is how many parts a person can
- * actually hold in their head while performing, and because each one carries
- * a default octave and gate that make it sound like what it is called before
- * anything is configured. A bass that arrives an octave too high is a bass
- * nobody uses. */
-static const struct {
-    const char *name; int8_t oct; uint8_t chan; uint16_t gate;
-} s_voices[] = {
-    { "bass", 2, 0, 180 },
-    { "lead", 4, 1, 120 },
-    { "pad",  3, 2, 420 },
-    { "arp",  5, 3,  90 },
-};
-
-static cmd_status_t c_voice(cmd_ctx_t *ctx)
-{
-    const int8_t *oct = NULL;
-    size_t v = 0;
-    for (; v < sizeof s_voices / sizeof s_voices[0]; v++) {
-        if (strcmp(s_voices[v].name, ctx->name) == 0) {
-            oct = &s_voices[v].oct;
-            break;
-        }
-    }
-    if (oct == NULL) {
+    lane_name_t ln;
+    char why[40];
+    const int e = lane_name_parse(word, n, &ln);
+    if (e != LN_OK) {
+        lane_name_error_text(e, why, sizeof why);
+        cmd_out(ctx, "%s", why);
         return CMD_ERROR;
     }
-    if (ctx->arg[0] == '\0') {            /* bare name forgets - see c_drum */
-        const bool had = seq_forget(ctx->name) == ESP_OK;
-        snprintf(ctx->msg, sizeof ctx->msg, had ? "%s gone" : "no %s", ctx->name);
-        return CMD_DONE;
+    seq_binding_t b;
+    if (!binding_of(&ln, &b, why, sizeof why)) {
+        cmd_out(ctx, "%s", why);
+        return CMD_ERROR;
     }
-    if (rerun_silences(ctx)) {
-        seq_mute(ctx->name, true);
-        snprintf(ctx->msg, sizeof ctx->msg, "%s silent", ctx->name);
-        return CMD_DONE;
-    }
-    seq_lane_melodic(ctx->name, s_voices[v].oct, s_voices[v].chan,
-                     s_voices[v].gate);
-    const esp_err_t le = seq_lane(ctx->name, ctx->arg);
-    if (le != ESP_OK) {
-        return lane_refused(ctx, le);
-    }
-    seq_mute(ctx->name, false);
-    snprintf(ctx->msg, sizeof ctx->msg, "%s %s in %s", ctx->name, ctx->arg,
-             seq_scale_name());
-    return CMD_DONE;
-}
-
-/* MODULATION IS A LANE, NOT A NEW CONCEPT.
- *
- * An LFO here is a pattern whose digits are values and whose destination is a
- * controller instead of a note. '>cut 0..4..8..4..' is a filter sweep, and it
- * is the same grammar, the same rests, the same probability marks and the same
- * playhead as a drum line. One idea covering drums, melody and modulation is
- * the difference between an instrument that feels designed and a pile of
- * features.
- *
- * Named, not numbered. '>cut' beats '>cc 74' for the same reason a synth's
- * front panel says CUTOFF: the number is an implementation detail of MIDI and
- * nobody is composing with it. These are the General MIDI / de-facto
- * assignments every DAW and synth already maps. */
-static const struct { const char *name; uint8_t cc; } s_ctrls[] = {
-    { "cut",  74 },   /* brightness / filter cutoff */
-    { "res",  71 },   /* resonance / timbre         */
-    { "mod",   1 },   /* modulation wheel           */
-    { "rev",  91 },   /* reverb send                */
-};
-
-/* ONE command, not four. '>cut', '>res', '>mod' and '>rev' were four names for
- * one idea, and one of them collided with the destinations command and was
- * silently unreachable. '>cc cut 0..9..' says exactly what it is, takes a NAME
- * or a NUMBER, and reaches every controller rather than the four somebody
- * happened to think of. The LANE is still named for the control, so the
- * playhead and '>lanes' read the same as any other line. */
-/* THE CONTROL LANES, AND A BUG THAT ATE THE LANE BUDGET.
- *
- * This runs under five names. '>cut', '>res', '>mod' and '>rev' each ARE a
- * controller, so the whole argument is the pattern. '>cc' is the escape hatch
- * for the other 124, so there the first word names the controller and the rest
- * is the pattern.
- *
- * It used to parse the first word as a controller name in every case, so
- * '>cut 0..3..6..9..6..3' resolved the CONTROLLER from "0..3..6..9..6..3" -
- * which begins with a digit, so atoi made it CC 0 - and then compiled an EMPTY
- * pattern into a lane named after the pattern. The filter never swept, the
- * listing showed a lane with no name anybody typed, and every attempt spent
- * one of the eight lane slots on garbage. Then the ninth real lane was refused
- * and the message blamed the ceiling.
- *
- * '>cc' was also never registered, so the help printed here offered a command
- * that did not exist. Both halves of that are fixed: the four names take a
- * pattern, and 'cc' is real. */
-static cmd_status_t c_ctrl(cmd_ctx_t *ctx)
-{
-    char what[16] = {0};
+    /* THE LANE'S NAME IS ITS CANONICAL ADDRESS - 'disc:1' is 'disc' - so two
+     * spellings of one lane are one lane. */
+    static char name[SEQ_NAME_MAX];
+    snprintf(name, sizeof name, "%s", ln.canon);
+    ctx->name = name;
     const char *pat = ctx->arg;
-    if (strcmp(ctx->name, "cc") == 0) {
-        size_t w = 0;
-        while (*pat != '\0' && *pat != ' ' && w < sizeof what - 1) {
-            what[w++] = *pat++;
-        }
-        while (*pat == ' ') { pat++; }
-    } else if (ctx->name[0] == 'c' && ctx->name[1] == 'c' &&
-               ctx->name[2] >= '0' && ctx->name[2] <= '9') {
-        /* A NAME THE LISTING PRINTS HAS TO BE A NAME THE LANGUAGE ACCEPTS.
-         *
-         * '>cc 74' names its lane 'cc74', because a controller with no friendly
-         * name still needs one that says which controller it is. '>lanes' then
-         * printed 'cc74' - and typing it back was refused with "no controller
-         * 'cc74'", because this function only knew the bare verb and the sixteen
-         * named controllers. The deck was showing a name it would not take. */
-        snprintf(what, sizeof what, "%s", ctx->name + 2);
-    } else {
-        snprintf(what, sizeof what, "%s", ctx->name);
-    }
-    if (what[0] == '\0') {
-        for (size_t i = 0; i < sizeof s_ctrls / sizeof s_ctrls[0]; i++) {
-            cmd_out(ctx, "cc %-5s %u", s_ctrls[i].name, (unsigned)s_ctrls[i].cc);
-        }
-        cmd_out(ctx, "cc <name|0-127> <pattern>");
-        snprintf(ctx->msg, sizeof ctx->msg, "cc cut 0..4..8..4..");
+
+    /* A BARE NAME MEANS THE LANE IS GONE, not muted. Muting has a word -
+     * '>mute kick' - and leaves the slot allocated, which is how a session once
+     * filled every lane with names the document no longer mentioned. Re-running
+     * the same line still silences, because that is a performance gesture on a
+     * lane that is still part of the piece. */
+    if (pat[0] == '\0') {
+        const bool had = seq_forget(name) == ESP_OK;
+        snprintf(ctx->msg, sizeof ctx->msg, had ? "%s gone" : "no %s", name);
         return CMD_DONE;
     }
-    int cc = -1;
-    for (size_t i = 0; i < sizeof s_ctrls / sizeof s_ctrls[0]; i++) {
-        if (strcmp(s_ctrls[i].name, what) == 0) { cc = s_ctrls[i].cc; break; }
-    }
-    if (cc < 0 && what[0] >= '0' && what[0] <= '9') { cc = atoi(what); }
-    if (cc < 0 || cc > 127) {
-        cmd_out(ctx, "no controller '%s'. try: cc", what);
-        return CMD_ERROR;
-    }
-    /* Name the lane after the CONTROLLER. '>cc 74' and '>cut' are the same
-     * thing, so they have to be the same lane - otherwise one piece holds two
-     * lanes fighting over one CC and the budget pays for both. */
-    for (size_t i = 0; i < sizeof s_ctrls / sizeof s_ctrls[0]; i++) {
-        if (s_ctrls[i].cc == (uint8_t)cc) {
-            snprintf(what, sizeof what, "%s", s_ctrls[i].name);
-            break;
-        }
-    }
-    if (what[0] >= '0' && what[0] <= '9') {
-        snprintf(what, sizeof what, "cc%d", cc);
-    }
-    ctx->name = what;
-    ctx->arg  = pat;
-    if (ctx->arg[0] == '\0') {            /* bare name forgets - see c_drum */
-        const bool had = seq_forget(ctx->name) == ESP_OK;
-        snprintf(ctx->msg, sizeof ctx->msg, had ? "%s gone" : "no %s", ctx->name);
+    if (rerun_silences(ctx)) {
+        seq_mute(name, true);
+        snprintf(ctx->msg, sizeof ctx->msg, "%s silent", name);
         return CMD_DONE;
     }
-    seq_lane_ctrl(ctx->name, cc, 0);
-    const esp_err_t le = seq_lane(ctx->name, ctx->arg);
+    if (seq_lane_bind(name, &b) != ESP_OK) {
+        return lane_refused(ctx, ESP_ERR_NO_MEM);
+    }
+    const esp_err_t le = seq_lane(name, pat);
     if (le != ESP_OK) {
         return lane_refused(ctx, le);
     }
-    seq_mute(ctx->name, false);
-    snprintf(ctx->msg, sizeof ctx->msg, "%s cc%u", ctx->name, (unsigned)cc);
+    seq_mute(name, false);
+    if (b.bind == SEQ_BIND_VIZ) {
+        viz_split(true);
+    }
+    if (b.melodic) {
+        snprintf(ctx->msg, sizeof ctx->msg, "%s %s in %s", name, pat,
+                 seq_scale_name());
+    } else {
+        snprintf(ctx->msg, sizeof ctx->msg, "%s %s", name, pat);
+    }
     return CMD_DONE;
+}
+
+/* Rebind every live lane of this name, so redefining a name changes what is
+ * already playing: '>kick = note 35' moves the running kick, which is the whole
+ * reason to redefine it mid-set. */
+static void rebind_lanes(const char *base)
+{
+    int n = 0;
+    const seq_lane_t *l = seq_lanes(&n);
+    for (int i = 0; i < SEQ_MAX_LANES; i++) {
+        if (!l[i].used) {
+            continue;
+        }
+        lane_name_t ln;
+        char why[40];
+        seq_binding_t b;
+        if (lane_name_parse(l[i].name, strlen(l[i].name), &ln) == LN_OK &&
+            strcmp(ln.base, base) == 0 && binding_of(&ln, &b, why, sizeof why)) {
+            seq_lane_bind(l[i].name, &b);
+        }
+    }
+}
+
+/* '>conga = note 63' - DEFINE A NAME. See lane_name.h for the grammar. */
+cmd_status_t cmd_define(cmd_ctx_t *ctx, const char *word, size_t n)
+{
+    lane_name_t ln;
+    char why[40];
+    const int e = lane_name_parse(word, n, &ln);
+    if (e != LN_OK) {
+        lane_name_error_text(e, why, sizeof why);
+        cmd_out(ctx, "%s", why);
+        return CMD_ERROR;
+    }
+    if (ln.inst != 1 || ln.part[0] != '\0') {
+        cmd_out(ctx, "define the plain name: %s", ln.base);
+        return CMD_ERROR;
+    }
+    /* A name may not shadow a command or a picture. Shadowing 'play' would make
+     * a line in some document mean something different from the page it came
+     * from; shadowing 'disc' would leave no way back to the circle. An alias to a
+     * picture is fine - '>circle = disc' - it is a second name, not a replacement. */
+    if (is_verb(ln.base)) {
+        cmd_out(ctx, "%s is a command", ln.base);
+        return CMD_ERROR;
+    }
+    if (viz_prim_index(ln.base) >= 0) {
+        cmd_out(ctx, "%s is a picture already", ln.base);
+        return CMD_ERROR;
+    }
+    const char *arg = ctx->arg;
+    if (*arg == '=') {
+        arg++;
+    }
+    lane_def_t d;
+    lane_def_parse(arg, &d);
+    if (d.kind == LD_ERROR) {
+        cmd_out(ctx, "%s", d.why);
+        return CMD_ERROR;
+    }
+    alias_t *a = alias_find(ln.base);
+    if (d.kind == LD_REMOVE) {
+        if (a == NULL) {
+            snprintf(ctx->msg, sizeof ctx->msg, "no name %s", ln.base);
+            return CMD_DONE;
+        }
+        /* A NAME THAT GOES TAKES ITS LANES WITH IT. Leaving them playing would
+         * leave lanes nothing can name - not to change, not to drop - which is a
+         * stuck note with extra steps. */
+        int n2 = 0;
+        const seq_lane_t *l = seq_lanes(&n2);
+        for (int i = 0; i < SEQ_MAX_LANES; i++) {
+            lane_name_t o;
+            if (l[i].used &&
+                lane_name_parse(l[i].name, strlen(l[i].name), &o) == LN_OK &&
+                strcmp(o.base, ln.base) == 0) {
+                seq_forget(l[i].name);
+            }
+        }
+        a->name[0] = '\0';
+        snprintf(ctx->msg, sizeof ctx->msg, "%s is not a name now", ln.base);
+        return CMD_DONE;
+    }
+    int prim = -1;
+    if (d.kind == LD_DRAW) {
+        prim = viz_prim_index(d.draw);
+        if (prim < 0) {
+            cmd_out(ctx, "no picture called %s", d.draw);
+            return CMD_ERROR;
+        }
+    }
+    if (a == NULL) {
+        for (int i = 0; i < ALIAS_MAX && a == NULL; i++) {
+            if (s_alias[i].name[0] == '\0') {
+                a = &s_alias[i];
+            }
+        }
+        if (a == NULL) {
+            cmd_out(ctx, "%d names is all there is", ALIAS_MAX);
+            return CMD_ERROR;
+        }
+    }
+    snprintf(a->name, sizeof a->name, "%s", ln.base);
+    a->kind = (uint8_t)d.kind;
+    a->num  = (uint8_t)(d.kind == LD_DRAW ? prim : d.num);
+    a->chan = (uint8_t)((d.chan > 0 ? d.chan : 1) - 1);
+    a->gate = (uint16_t)d.gate;
+    rebind_lanes(ln.base);
+    snprintf(ctx->msg, sizeof ctx->msg, "%s =%s", ln.base, arg);
+    return CMD_DONE;
+}
+
+/* Every name there is, for '>help': the defined ones, then the pictures. */
+static void list_names(cmd_ctx_t *ctx)
+{
+    char line[40] = "names:";
+    for (int pass = 0; pass < 2; pass++) {
+        const int count = (pass == 0) ? ALIAS_MAX : viz_prim_count();
+        for (int i = 0; i < count; i++) {
+            const char *w = (pass == 0) ? s_alias[i].name : viz_prim_name(i);
+            if (w == NULL || w[0] == '\0') {
+                continue;
+            }
+            if (strlen(line) + 1 + strlen(w) > 29) {
+                cmd_out(ctx, "%s", line);
+                snprintf(line, sizeof line, "      ");
+            }
+            strncat(line, " ", sizeof line - strlen(line) - 1);
+            strncat(line, w, sizeof line - strlen(line) - 1);
+        }
+    }
+    cmd_out(ctx, "%s", line);
+    cmd_out(ctx, "your own: >conga = note 63");
 }
 
 static cmd_status_t c_scale(cmd_ctx_t *ctx)
@@ -733,10 +854,33 @@ static cmd_status_t c_scale(cmd_ctx_t *ctx)
     return CMD_DONE;
 }
 
+/* A whole number in [lo, hi] and nothing after it, or false. The performance
+ * parameters used atoi(), which reads '>swing fast' as 0 and lets the clamp make
+ * it 50 - a change nobody asked for, reported back as though they had. */
+static bool whole_number(const char *s, long lo, long hi, long *out)
+{
+    char *end = NULL;
+    const long v = strtol(s, &end, 10);
+    if (end == s || end == NULL) {
+        return false;
+    }
+    while (*end == ' ' || *end == '\t') { end++; }
+    if (*end != '\0' || v < lo || v > hi) {
+        return false;
+    }
+    *out = v;
+    return true;
+}
+
 static cmd_status_t c_swing(cmd_ctx_t *ctx)
 {
     if (ctx->arg[0] != '\0') {
-        seq_swing(atoi(ctx->arg));
+        long v = 0;
+        if (!whole_number(ctx->arg, 50, 75, &v)) {
+            cmd_out(ctx, "swing is 50-75: 67 is triplet");
+            return CMD_ERROR;
+        }
+        seq_swing((int)v);
     }
     const int s = seq_get_swing();
     snprintf(ctx->msg, sizeof ctx->msg, "swing %d%s", s,
@@ -1332,96 +1476,6 @@ static cmd_status_t c_battery(cmd_ctx_t *ctx)
  * With no argument it sends the current document, so an ASCII drawing IS a
  * frame and editing it live IS visual coding - the same Ctrl+Enter, the same
  * buffer, no second environment. */
-/* A DRAWING LANE, WHICH IS JUST A LANE.
- *
- *     >disc 0..3..6..9..     exactly the shape of '>kick x...x...'
- *
- * There was a '>viz disc ...' spelling during the collapse, kept while saved
- * documents still used it. It is gone: one name, one way to write it. Two
- * spellings for one thing is the redundancy docs/MAP.md exists to refuse, and
- * an alias that survives to the freeze is an alias that survives for ever.
- *
- * This does the same two things a drum lane does - bind, then compile - because
- * there is one lane table and a drawing lane differs from a kick only in where
- * its events go. */
-/* SPLIT A LANE NAME INTO ITS BINDING AND ITS PART.
- *
- * 'disc' -> disc, no part.  'disc2' -> disc, no part.  'disc[x]' -> disc, x.
- * 'disc2[y]' -> disc, y.
- *
- * One function because two callers need it - c_prim to compile a lane and c_route
- * to bind one that does not exist yet - and writing it twice is how '<>' ended up
- * understood in one half of seq_pattern.h and not the other. Returns the primitive
- * index or -1, and sets *param to a VIZ_PARAM_* value or NONE.
- *
- * Returns -2 when the name has a part this primitive does not have, which is a
- * different error from "no such primitive" and deserves a different message. */
-static int prim_and_param(const char *name, int *param)
-{
-    char base[SEQ_NAME_MAX];
-    char part[8] = {0};
-    const size_t n = strlen(name);
-    snprintf(base, sizeof base, "%s", name);
-    if (n > 2 && name[n - 1] == ']') {
-        size_t k = n - 1;
-        while (k > 0 && name[k] != '[') { k--; }
-        if (k > 0) {
-            snprintf(part, sizeof part, "%.*s", (int)(n - 1 - k - 1),
-                     name + k + 1);
-            snprintf(base, sizeof base, "%.*s", (int)k, name);
-        }
-    }
-    *param = viz_param_index(part);
-    if (part[0] != '\0' && *param == VIZ_PARAM_NONE) {
-        return -2;
-    }
-    return viz_prim_index(base);
-}
-
-static cmd_status_t c_prim(cmd_ctx_t *ctx)
-{
-    const char *name = ctx->name;
-    const char *pat  = ctx->arg;
-
-    int param = VIZ_PARAM_NONE;
-    const int prim = prim_and_param(name, &param);
-    if (prim == -2) {
-        cmd_out(ctx, "no part called that");
-        cmd_out(ctx, "x and y - e.g. disc[x]");
-        return CMD_ERROR;
-    }
-    if (prim < 0) {
-        cmd_out(ctx, "no primitive '%.12s'", name);
-        cmd_out(ctx, "noise disc box turn ramp grid");
-        cmd_out(ctx, "mask edge echo move spin warp");
-        cmd_out(ctx, "grow thin flip fold");
-        return CMD_ERROR;
-    }
-
-    /* A bare name drops the lane, and a re-run of an unchanged line mutes it -
-     * both identical to a drum lane, because it IS a drum lane with a different
-     * destination. Neither behaviour is written here twice any more. */
-    if (pat[0] == '\0') {
-        const bool had = seq_forget(name) == ESP_OK;
-        snprintf(ctx->msg, sizeof ctx->msg, had ? "%s gone" : "no %s", name);
-        return CMD_DONE;
-    }
-    if (rerun_silences_named(name, pat)) {
-        seq_mute(name, true);
-        snprintf(ctx->msg, sizeof ctx->msg, "%s silent", name);
-        return CMD_DONE;
-    }
-    seq_lane_viz(name, prim, param);
-    const esp_err_t le = seq_lane(name, pat);
-    if (le != ESP_OK) {
-        return lane_refused(ctx, le);
-    }
-    seq_mute(name, false);
-    viz_split(true);
-    snprintf(ctx->msg, sizeof ctx->msg, "%s %.16s", name, pat);
-    return CMD_DONE;
-}
-
 static cmd_status_t c_split(cmd_ctx_t *ctx)
 {
     /* '>split 20' sets how many columns the visual gets and turns it on. The
@@ -1473,40 +1527,55 @@ static cmd_status_t c_split(cmd_ctx_t *ctx)
 static cmd_status_t c_route(cmd_ctx_t *ctx)
 {
     if (ctx->arg[0] == '\0') {
-        cmd_out(ctx, "route <primitive> <lane>");
+        cmd_out(ctx, "route <lane> <lane it follows>");
         cmd_out(ctx, "route disc kick");
         cmd_out(ctx, "route grow disc   viz drives viz");
+        cmd_out(ctx, "route disc:x bass a part follows");
         cmd_out(ctx, "route disc       unroutes");
         snprintf(ctx->msg, sizeof ctx->msg, "route disc kick");
         return CMD_DONE;
     }
-    char gen[16], src[16];
-    two_words(ctx->arg, gen, sizeof gen, src, sizeof src);
+    char gw[SEQ_NAME_MAX], sw[SEQ_NAME_MAX];
+    two_words(ctx->arg, gw, sizeof gw, sw, sizeof sw);
+    /* BOTH SIDES ARE ADDRESSES, taken to their canonical spelling, so 'disc:1'
+     * and 'disc' route the same lane - the name is the lane. */
+    lane_name_t g, src;
+    char why[40];
+    int e = lane_name_parse(gw, strlen(gw), &g);
+    if (e == LN_OK && sw[0] != '\0') {
+        e = lane_name_parse(sw, strlen(sw), &src);
+    }
+    if (e != LN_OK) {
+        lane_name_error_text(e, why, sizeof why);
+        cmd_out(ctx, "%s", why);
+        return CMD_ERROR;
+    }
+    const char *gen = g.canon;
+    const char *from = (sw[0] != '\0') ? src.canon : "";
     /* A ROUTE IS A PATTERN, AND THAT HAS TO SURVIVE THE COLLAPSE.
      *
      * seq_route works on a lane that exists, and seq deliberately does not know
-     * what a drawing primitive is - so '>route grow disc' failed on a fresh
-     * document with "no lane 'grow'", which is exactly the trap that was fixed
-     * in the visual half last week and came straight back when the lane table
-     * moved. Binding here is the command layer's job, because this is the only
-     * layer that knows a primitive from a drum. */
+     * what a name is bound to - so '>route grow disc' failed on a fresh
+     * document with "no lane 'grow'". Binding here is the command layer's job,
+     * because this is the only layer that knows a picture from a drum. */
     if (seq_lane_find(gen, -1) == NULL) {
-        int rparam = VIZ_PARAM_NONE;
-        const int prim = prim_and_param(gen, &rparam);
-        if (prim >= 0) {
-            seq_lane_viz(gen, prim, rparam);
+        seq_binding_t b;
+        if (!binding_of(&g, &b, why, sizeof why)) {
+            cmd_out(ctx, "%s", why);
+            return CMD_ERROR;
         }
+        seq_lane_bind(gen, &b);
     }
-    const esp_err_t re = seq_route(gen, src);
+    const esp_err_t re = seq_route(gen, from);
     if (re == ESP_ERR_INVALID_ARG) {
         cmd_out(ctx, "%s cannot follow itself", gen);
         return CMD_ERROR;
     }
     if (re != ESP_OK) {
-        /* ANY LANE, NOT JUST A PRIMITIVE. Routing used to live in the visual
+        /* ANY LANE, NOT JUST A PICTURE. Routing used to live in the visual
          * half only, so a kick could drive a circle and a circle could drive
          * nothing. One table means one mechanism for every pair. */
-        cmd_out(ctx, "no lane '%.12s' to drive", gen);
+        cmd_out(ctx, "no lane '%.18s' to drive", gen);
         cmd_out(ctx, "write it first, then route it");
         return CMD_ERROR;
     }
@@ -1514,15 +1583,12 @@ static cmd_status_t c_route(cmd_ctx_t *ctx)
      * set, the primitive stops drawing because nothing ever triggers it, and
      * nothing anywhere says why. Typing it is still allowed - the lane may be
      * written on the next line - but it says so. */
-    if (src[0] != '\0') {
-        const bool known = seq_lane_find(src, -1) != NULL;
-        if (!known) {
-            cmd_out(ctx, "no lane '%s' yet - it will", src);
-            cmd_out(ctx, "stay silent until there is one");
-        }
+    if (from[0] != '\0' && seq_lane_find(from, -1) == NULL) {
+        cmd_out(ctx, "no lane '%s' yet - it will", from);
+        cmd_out(ctx, "stay silent until there is one");
     }
-    snprintf(ctx->msg, sizeof ctx->msg, src[0] ? "%s <- %s" : "%s unrouted",
-             gen, src);
+    snprintf(ctx->msg, sizeof ctx->msg, from[0] ? "%s <- %s" : "%s unrouted",
+             gen, from);
     return CMD_DONE;
 }
 
@@ -1701,13 +1767,17 @@ static cmd_status_t c_osc(cmd_ctx_t *ctx)
     }
     char ip[24], port[8];
     two_words(ctx->arg, ip, sizeof ip, port, sizeof port);
-    const int pn = (port[0] != '\0') ? atoi(port) : 9000;
-    if (net_osc_target(ip, pn) != ESP_OK) {
+    long pn = 9000;
+    if (port[0] != '\0' && !whole_number(port, 1, 65535, &pn)) {
+        cmd_out(ctx, "a port is 1-65535");
+        return CMD_ERROR;
+    }
+    if (net_osc_target(ip, (int)pn) != ESP_OK) {
         cmd_out(ctx, "'%s' is not an address", ip);
         return CMD_ERROR;
     }
     seq_dest_enable("osc", pn > 0);
-    snprintf(ctx->msg, sizeof ctx->msg, "osc -> %.15s:%d", ip, pn);
+    snprintf(ctx->msg, sizeof ctx->msg, "osc -> %.15s:%ld", ip, pn);
     return CMD_DONE;
 }
 
@@ -1762,8 +1832,17 @@ static cmd_status_t c_send(cmd_ctx_t *ctx)
 
 static cmd_status_t c_bpm(cmd_ctx_t *ctx)
 {
+    /* A TEMPO OR NOTHING. This was atoi(), so '>bpm fast' - or a stray
+     * character, or a definition that reached here by mistake - was 0, clamped
+     * to 20: the set slowed to a crawl and the deck said "20 bpm" as though it
+     * had been asked to. */
     if (ctx->arg[0] != '\0') {
-        seq_bpm(atoi(ctx->arg));
+        long v = 0;
+        if (!whole_number(ctx->arg, 20, 300, &v)) {
+            cmd_out(ctx, "bpm is a number, 20-300");
+            return CMD_ERROR;
+        }
+        seq_bpm((int)v);
     }
     snprintf(ctx->msg, sizeof ctx->msg, "%d bpm", seq_get_bpm());
     return CMD_DONE;
@@ -1907,28 +1986,6 @@ static const cmd_t s_builtins[] = {
     { "osc",   c_osc,   CMD_CAP_NET,   "osc <ip> <port> - /deck/<lane>" },
     { "ssh",   c_ssh,   CMD_CAP_NET,   "ssh user@host pass <command>" },
     { "frame", c_frame, CMD_CAP_NET,   "send the frame over osc" },
-    /* THE DRAWING LANES, peers of the drums rather than arguments to a
-     * subsystem. Each is a name bound to a primitive, exactly as 'kick' is a
-     * name bound to note 36 - see docs/MAP.md. 'viz' is the old spelling, kept
-     * because documents already use it, and marked for deletion at freeze. */
-    /* THE FIELDS AND THE OPERATORS - see viz.c for why the sources are fields
-     * rather than shapes, and what 'star', 'shake' and 'tile' were traded for. */
-    { "echo",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "keep the last frame - trails" },
-    { "move",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "shift it, wrapping" },
-    { "spin",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "quarter turns - nothing else rotates" },
-    { "warp",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "bend lines along an axis" },
-    { "noise",  c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "a field of sparkles" },
-    { "disc",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "round field - distance from a point" },
-    { "box",    c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "square field - the corners disc lacks" },
-    { "turn",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "angle field - a sweep. spin it" },
-    { "ramp",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "linear field along an axis" },
-    { "grid",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "periodic field - a lattice" },
-    { "mask",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "keep what is this bright - a level" },
-    { "edge",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "keep where it changes - a contour" },
-    { "grow",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "dilate: marks bloom" },
-    { "thin",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "erode: edges eat inward" },
-    { "flip",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "invert the frame" },
-    { "fold",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "mirror it, 1-3 folds" },
     { "split", c_split, CMD_CAP_EDIT,  "split on | off | <rows>" },
     { "route", c_route, CMD_CAP_EDIT,  "route disc kick" },
     { "usb",   c_usb,   CMD_CAP_SYSTEM,"usb on | off - MIDI over the cable" },
@@ -1942,23 +1999,6 @@ static const cmd_t s_builtins[] = {
     { "panic", c_panic, CMD_CAP_EDIT,  "silence everything" },
     { "mute",  c_mute,  CMD_CAP_EDIT,  "mute hat bass | mute = all on" },
     { "solo",  c_mute,  CMD_CAP_EDIT,  "solo kick | solo = all on" },
-    { "kick",  c_drum,  CMD_CAP_EDIT|CMD_CAP_LANE,  "x...x...x...x..." },
-    { "snare", c_drum,  CMD_CAP_EDIT|CMD_CAP_LANE,  "....x.......x..." },
-    { "hat",   c_drum,  CMD_CAP_EDIT|CMD_CAP_LANE,  "x.x.x.x.x.x.x.x." },
-    { "ohat",  c_drum,  CMD_CAP_EDIT|CMD_CAP_LANE,  "open hat" },
-    { "clap",  c_drum,  CMD_CAP_EDIT|CMD_CAP_LANE,  "clap" },
-    { "tom",   c_drum,  CMD_CAP_EDIT|CMD_CAP_LANE,  "tom" },
-    { "rim",   c_drum,  CMD_CAP_EDIT|CMD_CAP_LANE,  "rim" },
-    { "crash", c_drum,  CMD_CAP_EDIT|CMD_CAP_LANE,  "crash" },
-    { "bass",  c_voice, CMD_CAP_EDIT|CMD_CAP_LANE,  "0..0..3..0..5..." },
-    { "lead",  c_voice, CMD_CAP_EDIT|CMD_CAP_LANE,  "degrees 0-9, 0 is the root" },
-    { "pad",   c_voice, CMD_CAP_EDIT|CMD_CAP_LANE,  "long notes" },
-    { "arp",   c_voice, CMD_CAP_EDIT|CMD_CAP_LANE,  "short notes, high" },
-    { "cc",    c_ctrl,  CMD_CAP_EDIT|CMD_CAP_LANE,  "cc <name|0-127> <pattern>" },
-    { "cut",   c_ctrl,  CMD_CAP_EDIT|CMD_CAP_LANE,  "filter: 0..4..8..4.." },
-    { "res",   c_ctrl,  CMD_CAP_EDIT|CMD_CAP_LANE,  "resonance, 0-9" },
-    { "mod",   c_ctrl,  CMD_CAP_EDIT|CMD_CAP_LANE,  "mod wheel, 0-9" },
-    { "rev",   c_ctrl,  CMD_CAP_EDIT|CMD_CAP_LANE,  "reverb send, 0-9" },
     { "help",  c_help,  CMD_CAP_READ,                   "list the commands" },
     { "list",  c_list,  CMD_CAP_READ,                   "list open buffers" },
     { "new",   c_new,   CMD_CAP_EDIT,                   "a fresh scratch buffer" },

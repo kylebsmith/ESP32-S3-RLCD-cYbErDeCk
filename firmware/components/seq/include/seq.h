@@ -49,7 +49,10 @@
  * That is eight bytes a lane more, and the realtime core reads them exactly as
  * before. */
 #define SEQ_MAX_STEPS 64
-#define SEQ_NAME_MAX  12
+/* TWENTY, because a name is an address now: 'crash:12:vel' is a base of up to
+ * eight letters, an instance and a part - lane_name.h's LANE_NAME_MAX, which
+ * builtins.c asserts fits. It was twelve when a name was a word and a digit. */
+#define SEQ_NAME_MAX  20
 
 /* The clock runs at 24 pulses per quarter note and a step is six of them.
  *
@@ -217,20 +220,35 @@ bool seq_lane_now(const seq_lane_t *l, int *slot, uint32_t *cycle);
 esp_err_t   seq_scale(const char *spec);
 const char *seq_scale_name(void);
 
-/* A melodic lane reads its pattern as scale degrees. Octave is in the usual
- * convention where middle C is C4 = 60. */
-esp_err_t seq_lane_melodic(const char *name, int octave, int chan,
-                           int gate_ms);
+/* WHERE A LANE GOES, all of it at once.
+ *
+ *   SEQ_BIND_NOTE, melodic false   a fixed pitch - a drum. `note`, `chan`.
+ *   SEQ_BIND_NOTE, melodic true    scale degrees. `octave` in the convention
+ *                                  where middle C is C4 = 60; `chan`, `gate_ms`.
+ *   SEQ_BIND_CC                    a controller: 0 is 0 and 9 is 127. `cc`.
+ *   SEQ_BIND_VIZ                   a picture. `prim` is an index into viz's own
+ *                                  table and `param` a part of it; seq never
+ *                                  learns what either means.
+ *
+ * ONE CALL, NOT FOUR. There were four - note, melodic, controller, picture -
+ * and each set only its own fields. That was harmless while a name's binding
+ * was compiled in and could never change; once a name is DEFINED
+ * (lane_name.h), '>kick = voice 2' turns a drum into a voice, and a lane that
+ * kept `melodic` from one binding and `ctrl` from another would play something
+ * nobody asked for. This sets every field the binding owns and clears the rest. */
+typedef struct {
+    seq_bind_t bind;
+    bool       melodic;
+    uint8_t    note;        /* NOTE, fixed pitch                */
+    int8_t     octave;      /* NOTE, melodic                    */
+    uint8_t    chan;        /* 0-15                             */
+    uint16_t   gate_ms;     /* NOTE                             */
+    uint8_t    cc;          /* CC                               */
+    uint8_t    prim;        /* VIZ                              */
+    uint8_t    param;       /* VIZ: 0, or a part of the picture */
+} seq_binding_t;
 
-/* Make a lane a CONTROLLER lane. Its pattern digits become CC values rather
- * than scale degrees: 0 is 0 and 9 is 127, so '0..4..8..4..' is a sweep up and
- * back. Same grammar as every other lane - same rests, same '?' probability,
- * same playhead - which is the point. */
-esp_err_t seq_lane_ctrl(const char *name, int cc, int chan);
-
-/* Bind a lane to a drawing primitive. `prim` is an index into viz's own table;
- * seq does not know what a primitive is, only that it has a number. */
-esp_err_t seq_lane_viz(const char *name, int prim, int param);
+esp_err_t seq_lane_bind(const char *name, const seq_binding_t *b);
 
 /* ROUTING, FOR ANY PAIR OF LANES.
  *
@@ -265,8 +283,6 @@ bool seq_get_sync(void);
  */
 const seq_lane_t *seq_lane_find(const char *name, int len);
 
-/* A lane's destination. Names are remembered from the drum table. */
-esp_err_t seq_lane_note(const char *name, int note, int chan);
 esp_err_t seq_mute(const char *name, bool mute);
 
 /* FORGET A LANE, WHICH IS NOT THE SAME AS MUTING ONE.

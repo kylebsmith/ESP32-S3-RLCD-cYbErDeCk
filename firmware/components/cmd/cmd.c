@@ -84,42 +84,39 @@ void cmd_out(cmd_ctx_t *ctx, const char *fmt, ...)
     }
 }
 
-/* A TRAILING DIGIT MAKES ANOTHER ONE.
+/* WHAT A LINE'S FIRST WORD IS: a command, a definition, or a lane.
  *
- * '>disc2 x...' is a second circle. '>kick2' is a second kick. The name is the
- * lane, so a name that differs is a lane that differs - and the only thing the
- * command table needs to know is which BINDING it is, which is the name with the
- * digit taken off.
+ * A command is an exact word in the table - no instance digits, no parts: the
+ * rule that let '>disc2' find 'disc' also let '>bpm140' find 'bpm' and quietly
+ * report the tempo it had not set, and it is gone with the digits. A definition
+ * is any name followed by '='. A lane is a defined name or a picture, with its
+ * address - 'disc:2:x' - which lane_name.h parses and builtins.c resolves.
  *
- * Done here rather than with a table row per instance because the alternative is
- * 'disc1' through 'disc9' for thirteen primitives and seventeen sounds: a hundred
- * and thirty rows to say something a single rule says. docs/MAP.md refuses names
- * that delete nothing, and this one buys instances of everything for free.
- *
- * It is a suffix and not a separate argument so that the LANE keeps its own name.
- * '>route grow disc2' has to be able to say which circle, and 'disc 2' could not.
- *
- * Returns the length of the base name, which is the whole name when there is no
- * digit, and never strips a name that is all digits. */
-static size_t base_len(const char *name, size_t n)
+ * The first word ends at a space or at '=', so '>conga=note 63' is a definition
+ * like '>conga = note 63'. */
+static const char *first_word(const char *p, size_t *n)
 {
-    size_t b = n;
-    /* A TRAILING '[part]' SELECTS A PARAMETER. '>disc[x] 0..9..' is a lane whose
-     * events are the circle's position, and the command table only needs to know
-     * that it is a circle. The bracket is the referential mark everywhere else in
-     * this language, which is why it is the one here too.
-     *
-     * Stripped before the digit, so 'disc2[x]' is the x of the second circle. */
-    if (b > 2 && name[b - 1] == ']') {
-        size_t k = b - 1;
-        while (k > 0 && name[k] != '[') { k--; }
-        if (k > 0) { b = k; }
+    const char *start = p;
+    while (*p != '\0' && *p != ' ' && *p != '\t' && *p != '=') {
+        p++;
     }
-    while (b > 1 && name[b - 1] >= '0' && name[b - 1] <= '9') {
-        b--;
-    }
-    return b;
+    *n = (size_t)(p - start);
+    return start;
 }
+
+/* After the first word: is this a definition? */
+static bool is_definition(const char *after)
+{
+    while (*after == ' ' || *after == '\t') {
+        after++;
+    }
+    return *after == '=';
+}
+
+/* The pseudo-entries the recogniser returns for things that are not rows of the
+ * table, so the editor can mark them the way it marks a command. */
+static const cmd_t s_lane_entry   = { "lane", NULL, CMD_CAP_EDIT, "a lane" };
+static const cmd_t s_define_entry = { "=",    NULL, CMD_CAP_EDIT, "a name" };
 
 const cmd_t *cmd_recognise(const char *line, int *word_at, int *word_len)
 {
@@ -137,34 +134,61 @@ const cmd_t *cmd_recognise(const char *line, int *word_at, int *word_len)
     while (*p == ' ' || *p == '\t') {
         p++;
     }
-    const char *start = p;
-    while (*p != '\0' && *p != ' ' && *p != '\t') {
-        p++;
-    }
-    const size_t n = (size_t)(p - start);
+    size_t n = 0;
+    const char *start = first_word(p, &n);
     if (n == 0) {
         return NULL;
     }
-    const size_t b = base_len(start, n);
-    for (int pass = 0; pass < 2; pass++) {
-        const size_t want = (pass == 0) ? n : b;
-        if (pass == 1 && b == n) { break; }
-        for (int i = 0; i < s_count; i++) {
-            /* The second pass is the instance rule, and it belongs to lanes only -
-             * see CMD_CAP_LANE. Without this, '>bpm140' resolves to 'bpm' with no
-             * argument and silently reports the tempo instead of setting it. */
-            if (pass == 1 && (s_table[i].caps & CMD_CAP_LANE) == 0) { continue; }
-            if (strlen(s_table[i].name) == want &&
-                strncmp(s_table[i].name, start, want) == 0) {
-                /* The MARK covers the whole name, digit included, so the editor
-                 * underlines '>disc2' and not just '>disc'. */
-                if (word_at != NULL)  { *word_at = (int)(start - line); }
-                if (word_len != NULL) { *word_len = (int)n; }
-                return &s_table[i];
-            }
+    const cmd_t *hit = NULL;
+    for (int i = 0; i < s_count && hit == NULL; i++) {
+        if (strlen(s_table[i].name) == n && strncmp(s_table[i].name, start, n) == 0) {
+            hit = &s_table[i];
         }
     }
-    return NULL;
+    if (hit == NULL && is_definition(start + n)) {
+        hit = &s_define_entry;
+    }
+    if (hit == NULL && cmd_lane_known(start, n)) {
+        hit = &s_lane_entry;
+    }
+    if (hit != NULL) {
+        /* The MARK covers the whole address, so the editor marks '>disc:2:x'
+         * and not just '>disc'. */
+        if (word_at != NULL)  { *word_at = (int)(start - line); }
+        if (word_len != NULL) { *word_len = (int)n; }
+    }
+    return hit;
+}
+
+/* AN OLD SPELLING GETS THE NEW ONE. Documents written before the address grammar
+ * say 'disc2' and 'disc[x]', and the boards on the owner's desk carry them. An
+ * unknown word that is one of those says what it is now, instead of "try: help". */
+static void old_spelling(cmd_ctx_t *ctx, const char *w, size_t n)
+{
+    size_t b = n;
+    const char *br = memchr(w, '[', n);
+    if (br != NULL) {
+        b = (size_t)(br - w);
+    } else {
+        while (b > 1 && w[b - 1] >= '0' && w[b - 1] <= '9') { b--; }
+    }
+    if (b < n && b > 0 && cmd_lane_known(w, b)) {
+        if (br != NULL) {
+            const char *close = memchr(br, ']', n - b);
+            const int pl = close ? (int)(close - br - 1) : (int)(n - b - 1);
+            cmd_out(ctx, "%.*s[%.*s] is %.*s:%.*s now", (int)b, w, pl, br + 1,
+                    (int)b, w, pl, br + 1);
+        } else {
+            cmd_out(ctx, "%.*s is %.*s:%.*s now", (int)n, w, (int)b, w,
+                    (int)(n - b), w + b);
+        }
+        return;
+    }
+    if (n >= 2 && w[0] == 'c' && w[1] == 'c') {
+        cmd_out(ctx, "cc is a kind now: >fx = cc 74");
+        return;
+    }
+    cmd_out(ctx, "%.*s? try: help", (int)n, w);
 }
 
 cmd_status_t cmd_run_line(const char *line, cmd_caller_t caller,
@@ -199,41 +223,33 @@ cmd_status_t cmd_run_line(const char *line, cmd_caller_t caller,
     }
 
     /* First word is the name; the remainder is one unparsed argument. */
-    const char *sp = line;
-    while (*sp != '\0' && *sp != ' ' && *sp != '\t') {
-        sp++;
-    }
-    const size_t namelen = (size_t)(sp - line);
-    const char *arg = sp;
+    size_t namelen = 0;
+    first_word(line, &namelen);
+    const char *arg = line + namelen;
     while (*arg == ' ' || *arg == '\t') {
         arg++;
     }
     ctx.arg = arg;
+    const uint32_t caps = caller_caps(caller);
+    /* '=' DECIDES FIRST. A definition of a command's name has to reach
+     * cmd_define() to be refused - found as a verb instead, '>bpm = note 3' ran
+     * bpm with "= note 3", atoi made it 0, and the tempo fell to 20 without a
+     * word. */
+    const bool def = (*arg == '=');
 
-    const size_t baselen = base_len(line, namelen);
-    for (int pass = 0; pass < 2; pass++) {
-      const size_t want = (pass == 0) ? namelen : baselen;
-      if (pass == 1 && baselen == namelen) { break; }
-      for (int i = 0; i < s_count; i++) {
-        if (strlen(s_table[i].name) == want &&
-            strncmp(s_table[i].name, line, want) == 0) {
-
-            if ((s_table[i].caps & ~caller_caps(caller)) != 0) {
+    for (int i = 0; i < s_count && !def; i++) {
+        if (strlen(s_table[i].name) == namelen &&
+            strncmp(s_table[i].name, line, namelen) == 0) {
+            if ((s_table[i].caps & ~caps) != 0) {
                 cmd_out(&ctx, "%s: not permitted here", s_table[i].name);
                 if (msg_out != NULL) { snprintf(msg_out, msg_max, "%s", ctx.msg); }
                 return CMD_ERROR;
             }
-            /* THE LANE'S NAME IS WHAT WAS TYPED, digit and all - that is the
-             * whole point of the instance. The table entry only decided which
-             * binding to use. */
-            static char typed[SEQ_NAME_MAX];
-            snprintf(typed, sizeof typed, "%.*s", (int)namelen, line);
-            ctx.name = typed;
+            ctx.name = s_table[i].name;
             const cmd_status_t st = s_table[i].fn(&ctx);
             if (ctx.err_at >= 0) {
-                /* ctx.arg may have been advanced past a first word - '>cc cut
-                 * ...' - but it still points into this line, so the column is
-                 * exact either way. */
+                /* ctx.arg may have been advanced past a first word, but it
+                 * still points into this line, so the column is exact. */
                 s_err_col = (int)(ctx.arg - line0) + ctx.err_at;
             }
             if (msg_out != NULL) {
@@ -241,12 +257,30 @@ cmd_status_t cmd_run_line(const char *line, cmd_caller_t caller,
             }
             return st;
         }
-      }
+    }
+
+    /* A DEFINITION OR A LANE. Both change what plays, so both need EDIT - the
+     * same authority the lane verbs had when they were verbs. */
+    cmd_status_t st = CMD_ERROR;
+    if (def || cmd_lane_known(line, namelen)) {
+        if ((CMD_CAP_EDIT & ~caps) != 0) {
+            cmd_out(&ctx, "%.*s: not permitted here", (int)namelen, line);
+        } else {
+            st = def ? cmd_define(&ctx, line, namelen)
+                     : cmd_lane(&ctx, line, namelen);
+            if (ctx.err_at >= 0) {
+                s_err_col = (int)(ctx.arg - line0) + ctx.err_at;
+            }
+        }
+        if (msg_out != NULL) {
+            snprintf(msg_out, msg_max, "%s", ctx.msg);
+        }
+        return st;
     }
 
     /* Unknown names must say so rather than failing silently - a guide file
      * with a typo in it is otherwise indistinguishable from one that worked. */
-    cmd_out(&ctx, "%.*s? try: help", (int)namelen, line);
+    old_spelling(&ctx, line, namelen);
     if (msg_out != NULL) {
         snprintf(msg_out, msg_max, "%s", ctx.msg);
     }

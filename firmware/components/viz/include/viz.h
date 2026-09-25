@@ -124,29 +124,31 @@ void viz_mark(int prim, int amt, char dir, uint32_t tick);
 
 /* WHERE A PRIMITIVE DRAWS, AS A LANE OF ITS OWN.
  *
- * '>disc[x] 0..9..' is a lane like any other - it has a pattern, it alternates,
+ * '>disc:x 0..9..' is a lane like any other - it has a pattern, it alternates,
  * it nests, it can be routed - and what it carries is the circle's position
  * across the frame rather than a note or an amount. That is the whole design:
  * positioning is not a feature bolted onto disc, it is the SAME sentence pointed
- * at a different part of it.
+ * at a different part of it. (It was 'disc[x]' until the address grammar gave a
+ * part one spelling - docs/MANIFESTO.md §3.3.)
  *
- * The alternatives were worse. 'disc 5,3' breaks one-character-per-step, which is
- * what keeps the playhead on the character that is sounding. An '>at 3,7' verb
- * pairs lanes by convention and adds a name that deletes nothing. And a
+ * The alternatives were worse. 'disc 5,3' would spend ',' - which means
+ * "at once", a chord - on coordinates. An '>at 3,7' verb pairs lanes by
+ * convention and adds a name that deletes nothing. And a
  * 'discleft'/'discright' family is how a vocabulary rots.
  *
  * VIZ_PARAM_X and _Y are the only two for now, deliberately: a short list per
  * binding, or this becomes the flag grammar docs/COMMANDS.md exists to refuse.
  *
  * 0 is the left or top edge and 9 is the right or bottom; the shape's CENTRE goes
- * there, so '>disc[x] 0..9..' sweeps it across. Set from the clock callback like
+ * there, so '>disc:x 0..9..' sweeps it across. Set from the clock callback like
  * any other mark, and applied before the frame is drawn. */
 #define VIZ_PARAM_NONE 0
 #define VIZ_PARAM_X    1
 #define VIZ_PARAM_Y    2
 
-/* Which parameter a name selects, or VIZ_PARAM_NONE. `name` is the text inside
- * the brackets: viz owns this list because viz owns what a primitive has. */
+/* Which parameter a name selects, or VIZ_PARAM_NONE. `name` is the part of the
+ * address after the ':' - 'x' in 'disc:x': viz owns this list because viz owns
+ * what a primitive has. */
 int viz_param_index(const char *name);
 
 void viz_mark_param(int prim, int param, int amt);

@@ -273,17 +273,34 @@ outright and takes its routing with it.
 `>route disc kick` makes the disc **fire on every kick**, at the size of that
 hit's velocity. Routing is *when* as well as *how much*: a routed lane ignores
 its own pattern and follows its source. Put `>echo 8` above it and the pulse
-gets a tail. **A part of a primitive is a lane too.** `disc[x]` is the circle's position
+gets a tail. **A part of a primitive is a lane too.** `disc:x` is the circle's position
 across the frame, and it is a lane like any other — it has a pattern, it
 alternates, it nests, and it can be routed:
 
 ```
 >disc      4                   a small circle
->disc[x]   0..3..6..9..        swept across
->disc[y]   <2 7>               and up and down, bar to bar
->route disc[x] bass            or driven by the bass note
->disc2[x]  9...0...            the second circle, its own path
+>disc:x    0..3..6..9..        swept across
+>disc:y    <2 7>               and up and down, bar to bar
+>route disc:x bass             or driven by the bass note
+>disc:2:x  9...0...            the second circle, its own path
 ```
+
+The old spellings — `disc[x]`, `disc2` — are answered with the new ones rather than
+played.
+
+## 11b. The names are yours
+
+```
+>conga = note 63
+>conga x..x..x.
+>kick = note 35
+>conga =
+```
+
+The first two play note 63 on channel 10. The third moves the kick that is already
+playing to note 35 — the next hit is 35. The last forgets the name and silences its
+lane. `>help` lists every name there is. `>bpm = note 3` and `>disc = note 3` are
+refused: a name cannot be a command or a picture.
 
 `x` and `y` are the only parts for now — deliberately short, or it becomes a flag
 grammar. 0 is the left or top edge, 9 the right or bottom, and the shape's centre

@@ -27,7 +27,7 @@ almost anything is useful — it is:
 
 If neither, it is refused, however good it is.
 
-**Sixty-nine verbs `[FACT]`**, counted from the command table itself:
+**Thirty-six verbs `[FACT]`**, counted from the command table itself:
 
 ```
     python3 - <<'EOF'
@@ -46,8 +46,14 @@ features on the strength of a count has to be able to show its arithmetic.
 `star`, `spin` and `cc` were added, the snippet was not re-run, and three sections
 of this document went on saying sixty-five while the firmware said sixty-nine — a
 review found it, not the author. A snippet only helps a document that is run against
-it, so §0, §2 and §8.5 all take their number from the same place now: sixty-nine.
-The primitive rework in §9.5 traded three names for three and did not change it.
+it, so §0, §2 and §8.5 all take their number from the same place now. The
+primitive rework in §9.5 traded three names for three and did not change it.
+
+**Sixty-nine became thirty-six on 2026-09-25, by the snippet, and none were added.**
+The thirty-three lane names stopped being verbs: a sound name is a line in the boot
+document — `>kick = note 36` — and a picture answers to its own name, so the one lane
+command serves all of them ([MANIFESTO.md](MANIFESTO.md) §3.8). That is criterion 5
+of §8 honoured by thirty-three, where [NEXT.md](NEXT.md) guessed thirty-one.
 
 ---
 
@@ -85,30 +91,36 @@ wrong. Teach the *binding* about the output.
 
 ## 2. The surface, as it stands `[FACT]`
 
-Sixty-nine names, grouped by what they actually touch:
+Thirty-six verbs, grouped by what they actually touch — and the names, which are not
+verbs.
 
-### Lanes that make sound — 17 names, one behaviour
-```
-kick snare hat ohat clap tom rim crash      bound to a drum note on ch 10
-bass lead pad arp                           bound to a note + octave + gate
-cut res mod rev                             bound to a CC number
-cc                                          bound to any CC number
-```
-All seventeen call the same two functions: `seq_lane_note`/`seq_lane_melodic`/
-`seq_lane_ctrl` to set the binding, then `seq_lane()` to compile the pattern.
-The names are *presets*, not features.
+### Lanes — no verbs, one command, and the names are yours
 
-### Lanes that make pictures — 16 names, one behaviour
+A line whose first word is a **name** is a lane. A name is defined, and the boot
+document defines these sixteen at startup:
+
+```
+kick snare hat ohat clap tom rim crash      >kick = note 36      a drum on ch 10
+bass lead pad arp                           >bass = voice 2 ...  degrees, octave, gate
+cut res mod rev                             >cut = cc 74         a controller
+```
+
+and the sixteen pictures answer to their own names:
+
 ```
 disc box turn ramp grid noise    FIELDS: distance from a thing, as a tone
 mask edge                        THRESHOLDS: a level through a field, a contour of it
 echo move spin warp              memory and motion
 grow thin flip fold              shaping
 ```
+
 Not shapes — see §9.5 for why that distinction is the whole of the third design.
-Peers of the drums. Each is a name bound to a primitive exactly as `kick` is a
-name bound to note 36, and they go through the same `seq_lane()` as everything
-else. There is no `viz` keyword.
+Every lane, sound or picture, goes through `cmd_lane()`: resolve the name to a
+binding, `seq_lane_bind()`, then `seq_lane()` to compile. A player adds a name with
+a line — `>conga = note 63` — and can move one: `>kick = note 35` retunes the kick
+that is already playing. An address picks a second one or a part of one: `disc:2`,
+`disc:x`, `disc:2:x` (§9.3). There is no `viz` keyword and no `cc` verb; a
+controller without a name gets one: `>fx = cc 20`.
 
 ### The clock — 6
 ```
@@ -134,10 +146,12 @@ lanes jitter dump density split frame
 help list new name open run save close guide prose
 ```
 
-### Escape hatches and the rest — 7
+### Escape hatches and the rest — 8
 ```
-panic flash battery mute solo route ssh
+panic flash battery kbd mute solo route ssh
 ```
+
+(`kbd` was in the table and missing from this list, which added up to thirty-five.)
 
 ---
 
@@ -424,11 +438,13 @@ argue against later:
    at compile time.
 3. **One shared clock mechanism** that covers both a second deck and a laptop.
 4. **MIDI in and out on a wire**, so the deck needs no computer at all.
-5. **Sixty-nine verbs down, not up**, and counted with the snippet in §0 rather
+5. **Thirty-six verbs down, not up**, and counted with the snippet in §0 rather
    than by eye — *by running it*, which is the part that failed. The collapse spent
    twelve of them buying one lane system; nothing else may spend any without deleting
-   its own. §9.5 is the first change to honour that literally: `turn`, `mask` and
-   `edge` in, `star`, `shake` and `tile` out, same number either side.
+   its own. §9.5 was the first change to honour that literally: `turn`, `mask` and
+   `edge` in, `star`, `shake` and `tile` out, same number either side. The names
+   becoming definitions (§2) was the second, and it went from sixty-nine to
+   thirty-six with nothing added.
 6. **Every verb in one printed page**, because a performer cannot search.
 7. **No verb that exists only to work around another verb.**
 
@@ -539,7 +555,7 @@ plainly, on a device whose whole premise is that the text *is* the score. `(3,8)
 is a rhythm you cannot see. That is a real objection and it is why this is second
 rather than first.
 
-### 9.3 Addressable parameters — `disc[x]` `[FACT]` — done
+### 9.3 Addressable parameters — `disc:x` `[FACT]` — done
 
 The visuals have no positioning: every source draws centred or full-frame, and
 the only movement is `move`, which translates the whole frame.
@@ -599,6 +615,19 @@ becomes the flag grammar [COMMANDS.md](COMMANDS.md) exists to refuse.
 
 `>box[z]` is refused with "no part called that" rather than ignored, because a
 part that silently does nothing is a lane that silently does nothing.
+
+**Respelled 2026-09-25: a part is `disc:x`, an instance is `disc:2`, and `[]` only
+groups** ([MANIFESTO.md](MANIFESTO.md) §3.3). The bracket was chosen here as "the
+referential mark", and that was the mistake: inside a pattern `[]` means *contains*,
+and a part is a property *of* the lane, not a lane inside it — the same argument that
+had already moved probability off the bracket. A trailing digit was a third notation
+for the same idea and reserved every name's last character. `:` is what
+[SUBSTRATE.md](SUBSTRATE.md) already uses for "a part of" (`lullaby.md:27`, `din:1`),
+it never meets the pattern grammar, and it is legal in an OSC address, where `[` and
+`]` are pattern characters. The objection to `.` above still stands; the objection
+to *every* separator did not. On the deck: `>disc[x] 0..9..` answers *disc[x] is
+disc:x now*, `>disc2 x...` answers *disc2 is disc:2 now*, and `>route disc:y kick`
+routes. The listing above now reads `disc:x`, `disc:y`, `disc:2:x`.
 
 ### 9.3b More primitives, and two refusals `[FACT]`
 

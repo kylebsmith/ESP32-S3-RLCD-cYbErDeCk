@@ -109,6 +109,17 @@ jobs:
              -o /tmp/test_seq_pattern tools/test_seq_pattern.c
           /tmp/test_seq_pattern
 
+      # A lane's address has one canonical spelling - 'disc:1' is 'disc' - because
+      # the lane table, the playhead and route all look a lane up by it, and a
+      # name's definition must refuse what it cannot mean rather than bind a name
+      # to the wrong note in every document that uses it.
+      - name: Check lane names and definitions
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror \
+             -I firmware/components/cmd/include \
+             -o /tmp/test_lane_name tools/test_lane_name.c
+          /tmp/test_lane_name
+
       # The status bar is 30 columns and clips with snprintf, so an over-long
       # message is truncated at the edge of the SENTENCE, not the screen -
       # "not a command - start the line with >" rendered as "not a command -
@@ -118,6 +129,7 @@ jobs:
         run: |
           cc -std=c11 -Wall -Wextra -Werror \
              -I firmware/main -I firmware/components/seq/include \
+             -I firmware/components/cmd/include \
              -o /tmp/test_ui_text tools/test_ui_text.c
           /tmp/test_ui_text
 

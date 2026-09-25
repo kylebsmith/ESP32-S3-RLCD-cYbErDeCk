@@ -1,8 +1,9 @@
 # Every verb, on one page
 
-*The whole language. Sixty-nine names, generated from the command table itself —
+*The whole language. Thirty-six verbs, counted from the command table itself —
 if this page and the firmware disagree, the firmware is right and this page is
-stale. [MAP.md](MAP.md) §0 has the snippet that counts them.*
+stale. [MAP.md](MAP.md) §0 has the snippet that counts them. The lane names are not
+verbs: they are yours, defined in the boot document.*
 
 *For what was wrong with this language and what replaced it, see
 [MANIFESTO.md](MANIFESTO.md) — two adversarial reviews, and which of their
@@ -18,7 +19,8 @@ a documentation one.
 
 ```
 >name pattern                 a LANE: when, how much, and where it goes
->name argument                everything else
+>name = note 36               what a NAME means - yours to change or add
+>verb argument                everything else
 ```
 
 ```
@@ -43,38 +45,34 @@ it.
 
 ---
 
-## Lanes — 33 names, one behaviour
+## Lanes — the names are yours
 
 The whole point: **a drum and a circle are the same sentence.** A lane compiles
-text into *when* and *how much*; its name says *where*.
+text into *when* and *how much*; its name says *where*. The boot document names
+sixteen sounds; the sixteen pictures answer to their own names.
 
-| sound | | | pictures — **fields** | | pictures — **operators** | |
-|---|---|---|---|---|---|---|
-| `kick` | drum, note 36 | | `disc` | round — distance from a point | `mask` | keep what is this bright — a **level** |
-| `snare` | drum | | `box` | square — the corners disc lacks | `edge` | keep where it changes — a **contour** |
-| `hat` | drum | | `turn` | the **angle** around the point | `echo` | keep the last frame — trails |
-| `ohat` | drum | | `ramp` | linear, along an axis | `move` | shift, wrapping |
-| `clap` | drum | | `grid` | periodic — a lattice | `spin` | quarter turns |
-| `tom` | drum | | `noise` | no geometry — the entropy | `warp` | bend lines on an axis |
-| `rim` | drum | | | | `grow` | dilate — marks bloom |
-| `crash` | drum | | | | `thin` | erode — edges eat inward |
-| `bass` | voice, low | | | | `flip` | invert the frame |
-| `lead` | voice | | | | `fold` | mirror, 1–3 folds |
-| `pad` | voice, long | | | | | |
-| `arp` | voice, short high | | | | | |
-| `cut` | CC 74, filter | | | | | |
-| `res` | CC 71 | | | | | |
-| `mod` | CC 1 | | | | | |
-| `rev` | CC 91 | | | | | |
-| `cc` | any controller | `cc 74 0..9..` | | | | |
+| sound — defined in the boot document | | pictures — **fields** | | pictures — **operators** | |
+|---|---|---|---|---|---|
+| `kick` `snare` `hat` `ohat` | `= note 36` … a drum on ch 10 | `disc` | round — distance from a point | `mask` | keep what is this bright — a **level** |
+| `clap` `tom` `rim` `crash` | drums | `box` | square — the corners disc lacks | `edge` | keep where it changes — a **contour** |
+| `bass` | `= voice 2 ch 1 gate 180` | `turn` | the **angle** around the point | `echo` | keep the last frame — trails |
+| `lead` `pad` `arp` | voices: degrees in the key | `ramp` | linear, along an axis | `move` | shift, wrapping |
+| `cut` | `= cc 74`, filter | `grid` | periodic — a lattice | `spin` | quarter turns |
+| `res` `mod` `rev` | CC 71, 1, 91 | `noise` | no geometry — the entropy | `warp` | bend lines on an axis |
+| | | | | `grow` `thin` | dilate, erode |
+| | | | | `flip` `fold` | invert; mirror 1–3 folds |
+
+**Your own, with a line:** `>conga = note 63`, `>fx = cc 20 ch 2`,
+`>strings = voice 3 ch 5 gate 600`, `>circle = disc`. `>kick = note 35` retunes the
+kick that is already playing; `>conga =` forgets the name and its lanes. A name is
+up to eight letters and cannot be a verb or a picture.
 
 **Sixteen lanes at once**, any mix. `route` connects any two.
 
-**A trailing digit makes another one.** `disc2`, `disc3`, `kick2` — a different
-name is a different lane on the same binding, so you can route them apart:
-`>route disc2 kick2`. It is a naming rule, and it applies **to lanes only**: a
-trailing digit on anything else is not a command, so `>bpm140` is refused rather
-than quietly reporting the tempo it did not set.
+**An address picks one.** `disc:2` is a second circle, `disc:x` a circle's position,
+`disc:2:x` the second one's — `x` and `y` are a picture's parts. `>route disc:2 kick`
+routes them apart. (`disc2` and `disc[x]` were the old spellings; the deck tells you
+the new one.)
 
 ### A shape is a field through a threshold
 

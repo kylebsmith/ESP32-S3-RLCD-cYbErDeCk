@@ -62,7 +62,38 @@
  * commands that change pairing, power or the USB mode. A settings file that
  * could put the deck into a state the owner then cannot type their way out of
  * would be the same trap this project has already fallen into twice. */
+/* THE NAMES OF THE LANES ARE LINES IN HERE (docs/MANIFESTO.md §3.8).
+ *
+ * They were verbs with their numbers compiled in - a player could not add a
+ * conga or move the kick to the note their drum machine wants. Now each is a
+ * definition, run at startup like every other line of this document, and a
+ * player edits them the way they edit anything else. The first line is also
+ * the mark: a boot document written before this had none, and gets this block
+ * put at its top so the names exist before any of its own lines run. */
+#define BOOT_MARK "THE NAMES ARE YOURS"
+#define BOOT_NAMES \
+    "THE NAMES ARE YOURS. Change a\n" \
+    "note, add a lane, rename one:\n" \
+    ">kick = note 36\n" \
+    ">snare = note 38\n" \
+    ">hat = note 42\n" \
+    ">ohat = note 46\n" \
+    ">clap = note 39\n" \
+    ">tom = note 45\n" \
+    ">rim = note 37\n" \
+    ">crash = note 49\n" \
+    ">bass = voice 2 ch 1 gate 180\n" \
+    ">lead = voice 4 ch 2 gate 120\n" \
+    ">pad = voice 3 ch 3 gate 420\n" \
+    ">arp = voice 5 ch 4 gate 90\n" \
+    ">cut = cc 74\n" \
+    ">res = cc 71\n" \
+    ">mod = cc 1\n" \
+    ">rev = cc 91\n" \
+    "\n"
+
 #define BOOT_TEXT \
+    BOOT_NAMES \
     "Runs at startup. Edit freely.\n" \
     ">bpm 124\n" \
     ">scale dmin\n" \
@@ -95,7 +126,7 @@
     ">hat x3x3x3x3x3x3x3x%50\n" \
     ">bass 0__.3_..5__.3...\n" \
     ">pad [0,2,4]___[3,5,7]___\n" \
-    ">cc cut 0..3..6..9..6.\n" \
+    ">cut 0..3..6..9..6.\n" \
     ">play\n" \
     "\n" \
     "x hits. . rests.\n" \
@@ -109,6 +140,11 @@
     "[0,2,4] all at once - chord.\n" \
     "<3 5> one each bar.\n" \
     "x.x. /2 half speed, *2 double.\n" \
+    "\n" \
+    "The names are lines in the\n" \
+    "boot doc. Make another:\n" \
+    ">conga = note 63\n" \
+    ">conga x..x..x.\n" \
     "\n" \
     "Edit any line, run it again\n" \
     "- it changes live. Run it\n" \
@@ -145,7 +181,7 @@
     "levels: mask edge\n" \
     "bends: echo move spin warp\n" \
     "  grow thin flip fold\n" \
-    "disc2 disc3 for more of one.\n" \
+    "disc:2 disc:3, more of one.\n" \
     ">echo 8\n" \
     "then add these:\n" \
     ">noise 2.4.2.4.\n" \

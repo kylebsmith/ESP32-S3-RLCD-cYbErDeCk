@@ -46,19 +46,6 @@ typedef enum {
 #define CMD_CAP_STORE   0x04u   /* writes flash or the card            */
 #define CMD_CAP_NET     0x08u   /* reaches off the device              */
 #define CMD_CAP_SYSTEM  0x10u   /* changes device state: pairing, power */
-/* A LANE, AND THEREFORE A NAME THAT MAY CARRY AN INSTANCE OR A PART.
- *
- * '>disc2' is a second circle and '>disc2[x]' is its position, which the recogniser
- * reaches by stripping a trailing '[part]' and then trailing digits. That stripping
- * used to apply to EVERY verb in the table, and the consequence was four silent
- * no-ops that looked correct on the glass: '>bpm140' matched 'bpm' with an empty
- * argument and cheerfully REPORTED the tempo instead of setting it, and '>din17',
- * '>swing58' and '>split8' did the same. A performer typing fast and missing one
- * space got a command that appeared to work.
- *
- * So the rule is scoped to the names it was invented for. Only a lane may wear an
- * instance digit; everything else must be spelled exactly. */
-#define CMD_CAP_LANE    0x20u   /* a lane: 'disc2', 'disc[x]' resolve here */
 
 /* Who is asking. The owner's hands may do anything; a guide line is still the
  * owner, one step removed; an agent is not the owner and is bounded here
@@ -125,6 +112,15 @@ const cmd_t *cmd_table(int *count);
 
 /* Register the built-in commands. Called once at start-up. */
 void cmd_init(void);
+
+/* LANES AND NAMES ARE NOT ROWS OF THE TABLE (docs/MANIFESTO.md §3.8). A lane's
+ * first word is an address - 'kick', 'disc:2:x' - whose name is DEFINED
+ * ('>kick = note 36') or is a picture's own. The dispatcher asks whether a word
+ * is one, and hands the line to the one lane command or to a definition. The
+ * grammar is lane_name.h. */
+bool         cmd_lane_known(const char *word, size_t n);
+cmd_status_t cmd_lane(cmd_ctx_t *ctx, const char *word, size_t n);
+cmd_status_t cmd_define(cmd_ctx_t *ctx, const char *word, size_t n);
 
 /* The app supplies this. A component cannot reach into main/editor.h, and
  * should not: '>flash' needs the panel to say what is about to happen before

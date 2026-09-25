@@ -224,6 +224,28 @@ static void run_boot_document(void)
         doc_buf_select(was);
         return;
     }
+    /* A BOOT DOCUMENT FROM BEFORE THE NAMES WERE LINES has no names in it, and
+     * without them '>kick' means nothing. So the names go in at the TOP - they
+     * must exist before any lane line below them runs - and everything the owner
+     * wrote stays exactly as it was, underneath. The mark is the first line of
+     * the block; a document that has it is left alone. */
+    {
+        const size_t mlen = sizeof BOOT_MARK - 1;
+        bool marked = false;
+        for (size_t i = 0; i + mlen <= doc_len() && !marked; i++) {
+            size_t j = 0;
+            while (j < mlen && doc_at(i + j) == BOOT_MARK[j]) { j++; }
+            marked = (j == mlen);
+        }
+        if (!marked) {
+            doc_move_to(0);
+            for (const char *q = BOOT_NAMES; *q != '\0'; q++) {
+                doc_insert(*q);
+            }
+            doc_save();
+            ESP_LOGW(TAG, "boot document: the lane names were added at its top");
+        }
+    }
     char line[128];
     size_t k = 0;
     const size_t n = doc_len();

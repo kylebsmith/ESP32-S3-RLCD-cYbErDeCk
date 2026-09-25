@@ -57,11 +57,13 @@ typo that plays is the one they cannot hear.
   <a b>           alternates: a different member each bar
   /2  *2          this lane's own rate, at the end of the line
   u d l r         which way — in front of the pattern, or as a step
-  name2           a second lane on the same binding
-  name[x]         a parameter of that lane, not the lane itself
+  name:2          a second lane on the same binding
+  name:x          a part of that lane, not the lane itself
+  >name = note 36 what a name means - the names are yours
 ```
 
-Sixty-nine verbs, all of them on [VERBS.md](VERBS.md).
+Thirty-six verbs, all of them on [VERBS.md](VERBS.md). The lane names are not
+among them: they are definitions, and the boot document holds sixteen.
 
 ---
 
@@ -142,9 +144,20 @@ every name for ever.
 is a rest was over-applied — the pattern parser never sees the name, so the two
 grammars are lexically disjoint.
 
+**Decided 2026-09-25 — done as proposed.** `disc:2` is the second circle, `disc:x`
+its position, `disc:2:x` the second one's; `disc:1` is `disc`, so one lane has one
+spelling. `[]` only groups. The old spellings are told their new ones rather than
+refused blankly — `>disc2` answers *disc2 is disc:2 now* — because the documents on
+the owner's boards use them. One thing nobody had noticed: `[` and `]` are pattern
+characters in an OSC address, so `disc[x]` had never been a valid `/deck/` path;
+`:` is.
+
 **4. `>disc 2` and `>disc2` are one space apart and one of them deletes a lane.**
 A small circle, or the destruction of the second circle.
 → *Falls out of 3.*
+
+**Decided with 3.** `>disc2` is not a name any more, so it cannot silently become
+one: it says what it is now, and deletes nothing.
 
 **5. Marks that are provably the same mark.** `?` is exactly `%50` — and `?%15` sets
 the same bits as `x%15`, teaching a distinction that does not exist. `.` `-` `_` are
@@ -199,6 +212,23 @@ system is extensible without a compiler.
 boot document as a region. Sixty-nine names become roughly thirty-eight, and
 expressive power rises, because the vocabulary becomes editable text.* This is the
 largest single change available and the one most likely to be right.
+
+**Decided 2026-09-25 — done, as lines rather than a region.** A name is defined by a
+line like any other: `>kick = note 36`, `>bass = voice 2 ch 1 gate 180`,
+`>cut = cc 74`, `>circle = disc`. The boot document ships sixteen of them, and a
+boot document written before this gets them added at its top, the owner's lines
+kept below. A *region* — a `:::table` fenced block — was the proposal, and it was
+not followed, for the reason the boot document itself gives: it is "a guide that
+happens to run by itself — no config format, no parser, no second syntax". A
+definition is a line; Ctrl+Enter on it takes effect at once; `>kick = note 35`
+retunes the kick that is playing (verified on the deck: 36, then 35 on the next
+hit). The picture names stay the primitives' own, since a primitive is code, and
+an alias to one is allowed.
+
+The count, by the snippet: **sixty-nine verbs became thirty-six**, with none added
+— the proposal guessed thirty-eight. And it was not a vocabulary cut: a player can
+now add a conga, point a spare controller at their synth (`>fx = cc 20`), and move
+the kick to the note their drum machine wants, none of which was possible.
 
 **9. `<>` has an invisible arithmetic cliff.** Alternation is flattened at compile
 time, which costs no runtime state and costs `lcm` slots instead: a sixteen-step lane

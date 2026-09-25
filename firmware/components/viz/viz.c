@@ -86,7 +86,7 @@ typedef struct {
 /* ONE SLOT PER LANE, NOT PER PRIMITIVE.
  *
  * It was one slot per primitive, which silently collapsed instances: '>disc' and
- * '>disc2' both marked the same slot and the second overwrote the first, so two
+ * '>disc:2' both marked the same slot and the second overwrote the first, so two
  * circles drew one. A mark belongs to the lane that made it.
  *
  * Replayed in PRIMITIVE order regardless of arrival order - see viz_service - so
@@ -192,20 +192,13 @@ static inline uint32_t rng(void)
 
 static int gen_index(const char *g)
 {
+    /* EXACTLY THE NAME. A trailing digit used to be stripped here, because
+     * 'disc2' was the second circle; an instance is 'disc:2' now
+     * (docs/MANIFESTO.md §3.3), the command layer takes the address apart, and a
+     * primitive is only ever asked for by its own name. Stripping here as well
+     * would let '>disc2' quietly go on working as a lane nobody could route. */
     for (int i = 0; i < NGEN; i++) {
         if (strcmp(s_names[i], g) == 0) { return i; }
-    }
-    /* A TRAILING DIGIT IS AN INSTANCE, NOT A DIFFERENT PRIMITIVE. 'disc2' draws a
-     * circle; what differs is the lane, not the shape. Same rule as cmd.c's
-     * dispatch, and it has to agree with it or '>disc2' would find a command and
-     * then fail to find a primitive. */
-    size_t n = strlen(g);
-    while (n > 1 && g[n - 1] >= '0' && g[n - 1] <= '9') { n--; }
-    if (n == strlen(g)) { return -1; }
-    for (int i = 0; i < NGEN; i++) {
-        if (strlen(s_names[i]) == n && strncmp(s_names[i], g, n) == 0) {
-            return i;
-        }
     }
     return -1;
 }
@@ -982,7 +975,7 @@ bool viz_service(void)
      * repeat what is there. Replaying in the order the lanes happened to fire
      * would make the same three lines mean something different depending on
      * which order they were typed in. */
-    /* POSITIONS FIRST. A '>disc[x]' lane and a '>disc' lane are two lanes in one
+    /* POSITIONS FIRST. A '>disc:x' lane and a '>disc' lane are two lanes in one
      * table, and which comes first there is whichever the player typed first -
      * so the position is applied before anything draws, and the typing order
      * cannot change the picture. */

@@ -83,7 +83,7 @@ differs is only which destination interprets it.
 >hat  x%50x%50x.x. /2
 >bass 0__.3...5_..3...
 >pad  [0,2,4]___[3,5,7]___
->cc cut 0..3..6..9..6.
+>cut 0..3..6..9..6.
 >play
 ```
 
@@ -91,7 +91,8 @@ differs is only which destination interprets it.
 scale degree on a voice, the value on a controller lane. `_` holds the note before
 it, `[0,2,4]` is a chord, `x%15` plays fifteen per cent of the time, `[xx]`
 subdivides a step and `<a b>` alternates bars. A trailing `/2` or `*2` sets that
-lane's own speed. Anything else is refused, with the character boxed, rather than
+lane's own speed. The names are yours: the boot document defines them with lines
+like `>kick = note 36`, and `>conga = note 63` adds one. Anything else is refused, with the character boxed, rather than
 played. An inverted bar sweeps each line in time with the sound, lighting the whole
 step that is sounding, so you can see what is playing in the document you are
 editing.
