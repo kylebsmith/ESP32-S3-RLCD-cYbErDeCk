@@ -146,6 +146,10 @@ const cmd_t *cmd_recognise(const char *line, int *word_at, int *word_len)
         const size_t want = (pass == 0) ? n : b;
         if (pass == 1 && b == n) { break; }
         for (int i = 0; i < s_count; i++) {
+            /* The second pass is the instance rule, and it belongs to lanes only -
+             * see CMD_CAP_LANE. Without this, '>bpm140' resolves to 'bpm' with no
+             * argument and silently reports the tempo instead of setting it. */
+            if (pass == 1 && (s_table[i].caps & CMD_CAP_LANE) == 0) { continue; }
             if (strlen(s_table[i].name) == want &&
                 strncmp(s_table[i].name, start, want) == 0) {
                 /* The MARK covers the whole name, digit included, so the editor

@@ -46,6 +46,19 @@ typedef enum {
 #define CMD_CAP_STORE   0x04u   /* writes flash or the card            */
 #define CMD_CAP_NET     0x08u   /* reaches off the device              */
 #define CMD_CAP_SYSTEM  0x10u   /* changes device state: pairing, power */
+/* A LANE, AND THEREFORE A NAME THAT MAY CARRY AN INSTANCE OR A PART.
+ *
+ * '>disc2' is a second circle and '>disc2[x]' is its position, which the recogniser
+ * reaches by stripping a trailing '[part]' and then trailing digits. That stripping
+ * used to apply to EVERY verb in the table, and the consequence was four silent
+ * no-ops that looked correct on the glass: '>bpm140' matched 'bpm' with an empty
+ * argument and cheerfully REPORTED the tempo instead of setting it, and '>din17',
+ * '>swing58' and '>split8' did the same. A performer typing fast and missing one
+ * space got a command that appeared to work.
+ *
+ * So the rule is scoped to the names it was invented for. Only a lane may wear an
+ * instance digit; everything else must be spelled exactly. */
+#define CMD_CAP_LANE    0x20u   /* a lane: 'disc2', 'disc[x]' resolve here */
 
 /* Who is asking. The owner's hands may do anything; a guide line is still the
  * owner, one step removed; an agent is not the owner and is bounded here

@@ -44,6 +44,30 @@ static const char *TAG = "ens";
  * how long it took. That is safe - no radio send from a callback - and costs
  * nothing in accuracy, because the turnaround is subtracted out. PTP calls this
  * the residence time, and reporting it is why a slow reply is harmless. */
+/* THE BEACON IS BROADCAST; PROBES AND REPLIES ARE UNICAST. Tried the other way, and
+ * the measurement was unambiguous.
+ *
+ * The argument for broadcasting everything is good: a broadcast is never acknowledged
+ * and therefore never retried, so it goes out once and the send callback describes the
+ * transmit that actually happened rather than the last of several attempts. That
+ * matters, because an unacknowledged unicast is retried and its callback fires after
+ * the retries - a timestamp several milliseconds later than the frame that landed.
+ *
+ * It is also, on this hardware at this range, a 90 per cent packet loss. Measured:
+ * unicast probes drew about seventeen replies a second out of twenty; broadcast probes
+ * drew about one and a half. The retries were not overhead, they were the delivery. A
+ * clock that measures beautifully on one exchange in thirteen is worse than one that
+ * measures adequately on seventeen in twenty, because the windows in between are spent
+ * coasting - the same failure the hard RTT gate produced, reached by a third route.
+ *
+ * So: unicast, and the retry problem is handled where it belongs. An unacknowledged
+ * send is marked and its exchange is dropped, because its departure time is not
+ * trustworthy; that costs the fraction of exchanges the air was going to lose anyway.
+ * The beacon stays broadcast because it is an announcement, not a measurement.
+ *
+ * The addressee field stays too. It costs two bytes, it is what lets a reply be
+ * recognised without relying on the sender's address, and with several followers in a
+ * room it is what stops one deck's tag matching another's. */
 typedef enum {
     ENS_BEACON = 1,     /* leader -> everyone: I am here, and my tempo     */
     ENS_PROBE,          /* follower -> leader: what time is it? here is a tag */
@@ -70,6 +94,11 @@ typedef struct __attribute__((packed)) {
      * actually left from the ESP-NOW send callback, which fires when the frame has
      * been transmitted and acknowledged. The tag is what matches the two up. */
     uint32_t tag;       /* PROBE/REPLY: which probe this is about */
+    /* WHO THE REPLY IS FOR. Every packet in this protocol is broadcast - see below -
+     * so a reply has to say whose probe it answers. Two bytes of the asking deck's
+     * MAC, which is enough: a mistaken match needs two decks to collide on both the
+     * low two bytes of their address and a 32-bit tag in the same two milliseconds. */
+    uint8_t  whom[2];
     int32_t  resid_us;  /* REPLY: how long the leader held the probe */
     uint16_t bpm;
     uint8_t  running;
@@ -137,6 +166,26 @@ static int32_t  s_err_us;
  * which is why gating on it starved - it holds a deck to a moment that is not coming
  * back. Six probes agreeing within 300 us is self-evidently a clean window, needs no
  * history to interpret, and says so about THIS moment. */
+/* TWENTY-FOUR PROBES TO A WINDOW, KEEPING SIX, and forty was tried and reverted.
+ *
+ * A deck that is also DRAWING is a deck whose WiFi task shares a core with a panel
+ * render and six full-frame passes a step. The local clock does not care - measured
+ * 4 us standard deviation bare and 5 us with six visual lanes firing, zero late ticks
+ * either way, which is the two-core split doing its job. But the RECEIVE TIMESTAMP is
+ * taken on that busy core, so the probes disagree about twice as much: median spread
+ * 1204 us bare against 2187 us loaded.
+ *
+ * More samples looked like the honest answer to more noise, and eight of forty made it
+ * WORSE, for a reason worth writing down: a window is not forty probes, it is forty
+ * USABLE exchanges, and the usable rate is well under the probe rate. Widening the
+ * window stretched the interval between corrections until the deck was coasting
+ * between them, which is the same failure the hard RTT gate produced by a different
+ * route. Six of twenty-four is measured good - 22 of 22 samples inside 500 us, worst
+ * 264 us - and the way to improve on it is to raise the usable rate, not the window.
+ *
+ * Which is what removing the acknowledgement requirement in on_sent did: it roughly
+ * doubled the usable exchanges at a stroke. Fixing the supply beat enlarging the
+ * bucket. */
 #define WINDOW 24
 #define KEEP    6
 #define PROBE_EVERY_US 50000           /* twenty probes a second, following */
@@ -174,7 +223,9 @@ static bool     s_snap;
  * at. The frozen-numbers failure this was written for looked identical from outside
  * to "the radio is quiet", and the two want opposite fixes. */
 static uint32_t s_replies;      /* replies that arrived at all            */
-static uint32_t s_noair;        /* ... with no recorded departure         */
+static uint32_t s_stale;        /* ... for a probe the table has forgotten */
+static uint32_t s_dup;          /* ... a retransmission of one already seen */
+static uint32_t s_lost;         /* probes the leader never acknowledged    */
 static uint32_t s_windows;      /* windows that produced a correction     */
 
 /* The KEEP lowest-round-trip exchanges of the window, and what each said the
@@ -187,16 +238,64 @@ static int32_t s_spread;               /* how far the kept six disagreed    */
 static int64_t s_last_probe;
 static uint8_t s_leader[6];
 static bool    s_have_leader;
+static uint8_t s_mac[6];               /* ours, to pick our replies out of the air */
 
-/* WHEN THE PROBE ACTUALLY LEFT, learned from the send callback rather than assumed
- * from the moment we asked. A short ring because the callback for one probe can
- * land after the next has been queued if the WiFi task is having a bad moment, and
- * a reply must still be able to find its own probe's departure. */
+/* ONE EXCHANGE, HALF-FILLED BY EITHER CALLBACK, AND WHY IT CANNOT BE SIMPLER.
+ *
+ * A round trip needs two facts from two different callbacks: when the probe actually
+ * left, which only the SEND callback knows, and when the reply arrived, which only the
+ * RECEIVE callback knows. The first version did the arithmetic in the receive callback
+ * and required the departure to be there already - and that is a RACE between two
+ * callbacks on the same task, with no ordering guarantee whatsoever.
+ *
+ * It lost the race 87 per cent of the time. Measured: 1452 of 1675 replies discarded
+ * for having no recorded departure, three corrections in a minute, and a round-trip
+ * floor of 26 ms that was really the dispatch delay of a send callback. Worse, it
+ * measured beautifully first - fifteen per cent discarded, 22 of 22 samples inside
+ * 500 us - so the design was confirmed by luck and the luck did not hold. A
+ * correctness argument that rests on which of two callbacks runs first is not an
+ * argument.
+ *
+ * So neither callback owns the calculation. Each fills in its half and whichever
+ * completes the pair does the arithmetic. Both run on the WiFi task, so they are
+ * serialised against each other and the table needs no lock; and the send callback is
+ * always delivered, so a reply that arrives first is never orphaned.
+ *
+ * Four slots: at twenty probes a second a slot comes round again after 200 ms, and a
+ * round trip is one or two. */
 #define AIRRING 4
-static volatile int64_t  s_air[AIRRING];
-static volatile uint32_t s_air_tag[AIRRING];
+typedef struct {
+    uint32_t tag;                  /* which probe. 0 = the slot is idle        */
+    int64_t  air;                  /* it left. 0 = the send callback is owed   */
+    int64_t  rx;                   /* the reply came. 0 = the reply is owed    */
+    bool     lost;                 /* the send was not acknowledged            */
+    int32_t  resid_us;             /* what the leader reported, with the reply */
+    int32_t  ahead_us;
+    uint16_t bpm;
+} exch_t;
+static volatile exch_t s_exch[AIRRING];
 static uint32_t s_tag;                 /* next tag to hand out              */
-static volatile uint32_t s_tag_flight; /* the tag we are awaiting a send for */
+
+/* WHICH PROBE THE NEXT SEND CALLBACK IS ABOUT, AS A QUEUE RATHER THAN A GUESS.
+ *
+ * This read `s_tag` - the most recently handed-out tag - on the reasoning that only one
+ * probe is ever outstanding. That reasoning is wrong, and wrong in a way that inflated
+ * every measurement: the send callback can be dispatched after the NEXT probe has
+ * already been queued, and it then stamped that probe's slot with the previous probe's
+ * departure. The error is one probe interval, fifty milliseconds, and it showed up as a
+ * round-trip floor of 24 ms - a number with no physical meaning, since a broadcast
+ * frame of twenty-six bytes is on the air in well under one.
+ *
+ * Send callbacks are delivered one per send and in order, so a queue matches them
+ * exactly. Four deep, the same as the exchange table. */
+static volatile uint32_t s_pend[AIRRING];
+static volatile uint8_t  s_pend_head, s_pend_tail;
+
+static volatile exch_t *slot_for(uint32_t tag)
+{
+    volatile exch_t *e = &s_exch[tag % AIRRING];
+    return (e->tag == tag) ? e : NULL;
+}
 
 static void keep_sample(int64_t rtt, int32_t off)
 {
@@ -280,6 +379,112 @@ static int count_peers(void)
     return n;
 }
 
+/* BOTH HALVES ARE IN: do the arithmetic. Called from whichever of the two callbacks
+ * completed the pair, and from nowhere else. */
+static void settle(volatile exch_t *e)
+{
+    if (e->lost || e->air == 0 || e->rx == 0) {
+        return;                         /* still owed a half, or the send failed */
+    }
+    const int64_t now = e->rx;
+    (void)now;
+        /* THE ROUND TRIP, ENTIRELY IN OUR OWN CLOCK.
+         *
+         *   air           the probe's own departure, from the send callback
+         *   now           we got the reply
+         *   resid_us      how long the leader held it
+         *
+         * so rtt is the time on the wire, both ways, with the leader's own delay
+         * taken out and - new in version 3 - our own transmit queueing taken out
+         * too, because `air` is when the frame left rather than when we asked for
+         * it. Half of it is the one-way flight, which is the assumption this whole
+         * method rests on, and it is far more nearly true now that the one clearly
+         * one-sided delay has been removed from the sum.
+         *
+         * The send callback fires on transmit-and-acknowledge, so `air` is later
+         * than the true egress by one short acknowledgement - tens of microseconds,
+         * the same every time, and therefore half of that as a fixed bias in the
+         * result. It is under a tenth of the error budget and buying it back would
+         * cost a second packet. */
+        const int64_t rtt = (e->rx - e->air) - (int64_t)e->resid_us;
+        if (rtt < 0 || rtt > 200000) {
+            return;                     /* nonsense, or a very bad moment */
+        }
+        /* The leader sent this reply at our time (now - rtt/2). It reported that
+         * its pulse `tick` was due `ahead_us` before that send. */
+        const int64_t reply_sent_here = e->rx - rtt / 2;
+        const int64_t due_here = reply_sent_here - (int64_t)e->ahead_us;
+
+        /* Where WE have that pulse. */
+        uint32_t ourtick = 0; int64_t ourdue = 0; int ourbpm = 0;
+        seq_timebase(&ourtick, &ourdue, &ourbpm);
+        if (ourbpm <= 0) { return; }
+        const int64_t per = 60000000LL / ourbpm / 96;
+        if (per <= 0) { return; }
+        /* PHASE IS THE SUB-PULSE PART, AND ONE MODULO IS THE WHOLE OF IT.
+         *
+         * A whole-pulse disagreement is a different bar, not a phase error, so the
+         * difference folds into plus or minus half a pulse. Version 2 folded it with
+         * a `while` loop after subtracting (their tick - ours) * per, and both
+         * halves of that were a mistake. The tick term is an exact multiple of the
+         * pulse, so it vanishes under the fold and never affected the answer - but
+         * two decks that started playing minutes apart differ by a hundred thousand
+         * ticks, so the loop it fed ran a hundred thousand times, inside a radio
+         * callback. A modulo is the same answer in constant time. */
+        int64_t off = (due_here - ourdue) % per;
+        if (off >  per / 2) { off -= per; }
+        if (off < -per / 2) { off += per; }
+        (void)ourtick;
+
+        if (s_floor_rtt == 0 || rtt < s_floor_rtt) {
+            s_floor_rtt = rtt;
+        }
+        keep_sample(rtt, (int32_t)off);
+        s_nsample++;
+        if (s_nsample >= WINDOW) {
+            s_nsample = 0;
+            if (s_nkeep < 3) { s_nkeep = 0; s_skipped++; return; }
+            int32_t spread = 0;
+            const int32_t med = keep_verdict(&spread);
+            s_nkeep  = 0;
+            s_spread = spread;
+            /* TRUST IN PROPORTION TO HOW MUCH THE KEPT PROBES AGREED.
+             *
+             * Two gates were tried before this one. A hard gate at twice the RTT
+             * floor starved, because the floor is the fastest exchange EVER seen and
+             * one lucky probe sets a standard that is not coming back: measured, it
+             * turned a 184 us worst case into 2400 us, worse than no gate at all.
+             * Graduating the gain off the floor instead of gating on it fixed the
+             * starving but kept the floor's real flaw, which is that it judges this
+             * window by a memory.
+             *
+             * Agreement has no memory. Six lightly-queued probes that all put the
+             * offset within 300 us of each other are six measurements corroborating
+             * one another right now, and that is the definition of a window worth
+             * believing. It also degrades in the right direction: a window whose
+             * probes disagree gets a small gain rather than a veto, so corrections
+             * cannot starve, and the local timer coasting at 3 us standard deviation
+             * means a skipped window costs almost nothing anyway. */
+            int32_t gain_div;
+            if (s_snap && spread <= 300) { gain_div = 1; s_snap = false; }
+            else if (spread <= 300)  { gain_div = 2; }
+            else if (spread <= 1200) { gain_div = 4; }
+            else if (spread <= 4000) { gain_div = 8; }
+            else { s_skipped++; return; }
+
+            /* The floor no longer gates anything - it is reported by '>sync' as
+             * the best flight time this pair of decks has managed, which is the
+             * number that says whether the radio or the estimator is the limit. It
+             * still relaxes, because a figure that can only ever fall stops
+             * describing the room after the first lucky packet. */
+            s_floor_rtt += s_floor_rtt / 64 + 1;
+
+            s_windows++;
+            s_err_us = med;
+            seq_nudge_by(med / gain_div, (int)e->bpm);
+        }
+}
+
 /* ESP-NOW hands this to us on the WiFi task. It must not block and must not do
  * anything a radio callback should not: all it does is arithmetic and one call
  * into the sequencer, which itself only slides a 64-bit integer. */
@@ -348,109 +553,31 @@ static void on_recv(const esp_now_recv_info_t *info, const uint8_t *data, int le
         if (s_role != ENSEMBLE_FOLLOW || !p.running) {
             break;
         }
-        /* THE ROUND TRIP, ENTIRELY IN OUR OWN CLOCK.
-         *
-         *   air           the probe's own departure, from the send callback
-         *   now           we got the reply
-         *   resid_us      how long the leader held it
-         *
-         * so rtt is the time on the wire, both ways, with the leader's own delay
-         * taken out and - new in version 3 - our own transmit queueing taken out
-         * too, because `air` is when the frame left rather than when we asked for
-         * it. Half of it is the one-way flight, which is the assumption this whole
-         * method rests on, and it is far more nearly true now that the one clearly
-         * one-sided delay has been removed from the sum.
-         *
-         * The send callback fires on transmit-and-acknowledge, so `air` is later
-         * than the true egress by one short acknowledgement - tens of microseconds,
-         * the same every time, and therefore half of that as a fixed bias in the
-         * result. It is under a tenth of the error budget and buying it back would
-         * cost a second packet. */
+        if (p.whom[0] != s_mac[4] || p.whom[1] != s_mac[5]) {
+            break;                      /* somebody else's answer */
+        }
         s_replies++;
-        int64_t air = 0;
-        const unsigned slot = (unsigned)p.tag % AIRRING;
-        if (s_air_tag[slot] == p.tag) { air = s_air[slot]; }
-        if (air == 0) {
-            s_noair++;
-            break;                      /* no departure recorded: unusable */
+        volatile exch_t *e = slot_for(p.tag);
+        if (e == NULL) {
+            s_stale++;                  /* answered a probe we have forgotten */
+            break;
         }
-        const int64_t rtt = (now - air) - (int64_t)p.resid_us;
-        if (rtt < 0 || rtt > 200000) {
-            break;                      /* nonsense, or a very bad moment */
+        if (e->rx != 0) {
+            /* A DUPLICATE, AND ENTIRELY NORMAL. If our acknowledgement of the reply
+             * goes missing the leader's MAC retransmits it, so the same reply arrives
+             * twice - measured at roughly four in ten while the deck was drawing
+             * hard. The first one is the one that was on the air first, so the second
+             * is dropped rather than allowed to overwrite a good measurement. It is
+             * counted apart from a forgotten probe because the two mean opposite
+             * things about the link. */
+            s_dup++;
+            break;
         }
-        /* The leader sent this reply at our time (now - rtt/2). It reported that
-         * its pulse `tick` was due `ahead_us` before that send. */
-        const int64_t reply_sent_here = now - rtt / 2;
-        const int64_t due_here = reply_sent_here - (int64_t)p.ahead_us;
-
-        /* Where WE have that pulse. */
-        uint32_t ourtick = 0; int64_t ourdue = 0; int ourbpm = 0;
-        seq_timebase(&ourtick, &ourdue, &ourbpm);
-        if (ourbpm <= 0) { break; }
-        const int64_t per = 60000000LL / ourbpm / 96;
-        if (per <= 0) { break; }
-        /* PHASE IS THE SUB-PULSE PART, AND ONE MODULO IS THE WHOLE OF IT.
-         *
-         * A whole-pulse disagreement is a different bar, not a phase error, so the
-         * difference folds into plus or minus half a pulse. Version 2 folded it with
-         * a `while` loop after subtracting (their tick - ours) * per, and both
-         * halves of that were a mistake. The tick term is an exact multiple of the
-         * pulse, so it vanishes under the fold and never affected the answer - but
-         * two decks that started playing minutes apart differ by a hundred thousand
-         * ticks, so the loop it fed ran a hundred thousand times, inside a radio
-         * callback. A modulo is the same answer in constant time. */
-        int64_t off = (due_here - ourdue) % per;
-        if (off >  per / 2) { off -= per; }
-        if (off < -per / 2) { off += per; }
-        (void)ourtick;
-
-        if (s_floor_rtt == 0 || rtt < s_floor_rtt) {
-            s_floor_rtt = rtt;
-        }
-        keep_sample(rtt, (int32_t)off);
-        s_nsample++;
-        if (s_nsample >= WINDOW) {
-            s_nsample = 0;
-            if (s_nkeep < 3) { s_nkeep = 0; s_skipped++; break; }
-            int32_t spread = 0;
-            const int32_t med = keep_verdict(&spread);
-            s_nkeep  = 0;
-            s_spread = spread;
-            /* TRUST IN PROPORTION TO HOW MUCH THE KEPT PROBES AGREED.
-             *
-             * Two gates were tried before this one. A hard gate at twice the RTT
-             * floor starved, because the floor is the fastest exchange EVER seen and
-             * one lucky probe sets a standard that is not coming back: measured, it
-             * turned a 184 us worst case into 2400 us, worse than no gate at all.
-             * Graduating the gain off the floor instead of gating on it fixed the
-             * starving but kept the floor's real flaw, which is that it judges this
-             * window by a memory.
-             *
-             * Agreement has no memory. Six lightly-queued probes that all put the
-             * offset within 300 us of each other are six measurements corroborating
-             * one another right now, and that is the definition of a window worth
-             * believing. It also degrades in the right direction: a window whose
-             * probes disagree gets a small gain rather than a veto, so corrections
-             * cannot starve, and the local timer coasting at 3 us standard deviation
-             * means a skipped window costs almost nothing anyway. */
-            int32_t gain_div;
-            if (s_snap && spread <= 300) { gain_div = 1; s_snap = false; }
-            else if (spread <= 300)  { gain_div = 2; }
-            else if (spread <= 1200) { gain_div = 4; }
-            else if (spread <= 4000) { gain_div = 8; }
-            else { s_skipped++; break; }
-
-            /* The floor no longer gates anything - it is reported by '>sync' as
-             * the best flight time this pair of decks has managed, which is the
-             * number that says whether the radio or the estimator is the limit. It
-             * still relaxes, because a figure that can only ever fall stops
-             * describing the room after the first lucky packet. */
-            s_floor_rtt += s_floor_rtt / 64 + 1;
-
-            s_windows++;
-            s_err_us = med;
-            seq_nudge_by(med / gain_div, (int)p.bpm);
-        }
+        e->rx       = now;
+        e->resid_us = p.resid_us;
+        e->ahead_us = p.ahead_us;
+        e->bpm      = p.bpm;
+        settle(e);
         break;
     }
     default:
@@ -474,19 +601,27 @@ static void on_sent(const esp_now_send_info_t *tx_info, esp_now_send_status_t st
     if (s_role != ENSEMBLE_FOLLOW) {
         return;                 /* beacons and replies are not timed */
     }
-    const uint32_t tag = s_tag_flight;
-    if (tag == 0) { return; }
-    const unsigned slot = (unsigned)tag % AIRRING;
-    if (status == ESP_NOW_SEND_SUCCESS) {
-        s_air[slot]     = esp_timer_get_time();
-        s_air_tag[slot] = tag;
-    } else {
-        /* Not acknowledged, so it may never have been heard and the timing of the
-         * attempt says nothing. Leave the slot empty and let the reply, if one ever
-         * comes, be discarded for having no departure. */
-        s_air_tag[slot] = 0;
+    const int64_t at = esp_timer_get_time();
+    if (s_pend_head == s_pend_tail) {
+        return;                         /* a send we did not queue: not ours */
     }
-    s_tag_flight = 0;
+    const uint32_t tag = s_pend[s_pend_head % AIRRING];
+    s_pend_head++;
+    volatile exch_t *e = slot_for(tag);
+    if (e == NULL || e->air != 0) { return; }
+    /* AN UNACKNOWLEDGED SEND IS NOT A USABLE DEPARTURE. A unicast that draws no
+     * acknowledgement has been retried, so this callback is timing the last attempt
+     * rather than whichever one landed - and a reply may still arrive, which is how
+     * that first looked like a bug worth "fixing" by accepting it. Accepting it puts
+     * milliseconds into the answer. Dropping the exchange costs the fraction the air
+     * was losing anyway, and '>sync' reports the count so a bad room says so. */
+    if (status == ESP_NOW_SEND_SUCCESS) {
+        e->air = at;
+        settle(e);              /* does nothing if the reply is still owed */
+    } else {
+        e->lost = true;
+        s_lost++;
+    }
 }
 
 esp_err_t ensemble_set(ensemble_role_t role)
@@ -523,6 +658,25 @@ esp_err_t ensemble_set(ensemble_role_t role)
         }
         (void)esp_wifi_set_mode(WIFI_MODE_STA);
         (void)esp_wifi_start();
+        /* POWER SAVE OFF, AND THIS IS THE LARGEST SINGLE TIMING FIX IN THE FILE.
+         *
+         * A station defaults to WIFI_PS_MIN_MODEM: the radio sleeps between beacon
+         * intervals and wakes to check for traffic. For a browser that is free battery
+         * life. For a clock it means a transmit waits for the next wake and a receive
+         * is noticed at one, so both ends of every measurement are quantised to
+         * something on the order of tens of milliseconds.
+         *
+         * Measured, with everything else in this file already correct: a round-trip
+         * floor of 22 ms and one reply a second out of twenty probes. Every earlier
+         * explanation for the variance - transmit queueing, acknowledgement retries,
+         * callback ordering - was real and was worth fixing, and all of them together
+         * were smaller than this. The numbers moved by orders of magnitude when a
+         * measurement finally pointed here rather than at the arithmetic.
+         *
+         * A deck is mains- or battery-powered and drawing a screen; the radio's sleep
+         * was never the interesting power saving, and a clock is the thing this
+         * instrument rests on. */
+        (void)esp_wifi_set_ps(WIFI_PS_NONE);
 
         err = esp_now_init();
         if (err != ESP_OK) {
@@ -543,6 +697,7 @@ esp_err_t ensemble_set(ensemble_role_t role)
             esp_now_deinit();
             return ESP_FAIL;
         }
+        (void)esp_wifi_get_mac(WIFI_IF_STA, s_mac);
         s_up = true;
     }
     s_role   = role;
@@ -553,7 +708,9 @@ esp_err_t ensemble_set(ensemble_role_t role)
     s_spread = 0;
     s_seen_bpm = 0;
     s_snap   = false;
-    memset((void *)s_air_tag, 0, sizeof s_air_tag);
+    s_replies = 0; s_stale = 0; s_lost = 0; s_dup = 0; s_windows = 0;
+    memset((void *)s_exch, 0, sizeof s_exch);
+    s_pend_head = 0; s_pend_tail = 0;
     ESP_LOGI(TAG, "%s", role == ENSEMBLE_LEAD ? "leading" : "following");
     return ESP_OK;
 }
@@ -563,10 +720,13 @@ ensemble_role_t ensemble_role(void) { return s_role; }
 int64_t ensemble_floor_rtt(void) { return s_floor_rtt; }
 uint32_t ensemble_skipped(void)   { return s_skipped; }
 int32_t ensemble_spread(void)     { return s_spread; }
-void ensemble_counts(uint32_t *replies, uint32_t *noair, uint32_t *windows)
+void ensemble_counts(uint32_t *replies, uint32_t *stale, uint32_t *lost,
+                     uint32_t *dup, uint32_t *windows)
 {
     if (replies != NULL) { *replies = s_replies; }
-    if (noair   != NULL) { *noair   = s_noair;   }
+    if (stale   != NULL) { *stale   = s_stale;   }
+    if (lost    != NULL) { *lost    = s_lost;    }
+    if (dup     != NULL) { *dup     = s_dup;     }
     if (windows != NULL) { *windows = s_windows; }
 }
 
@@ -615,13 +775,15 @@ void ensemble_service(void)
         ens_pkt_t r;
         stamp(&r, ENS_REPLY);
         r.tag      = s_reply.tag;
+        r.whom[0]  = s_reply.mac[4];
+        r.whom[1]  = s_reply.mac[5];
         r.resid_us = (int32_t)(esp_timer_get_time() - s_reply.got_us);
         s_reply.waiting = false;
-        esp_now_peer_info_t peer = { 0 };
-        memcpy(peer.peer_addr, s_reply.mac, 6);
-        peer.channel = 0;
-        peer.encrypt = false;
         if (!esp_now_is_peer_exist(s_reply.mac)) {
+            esp_now_peer_info_t peer = { 0 };
+            memcpy(peer.peer_addr, s_reply.mac, 6);
+            peer.channel = 0;
+            peer.encrypt = false;
             (void)esp_now_add_peer(&peer);
         }
         (void)esp_now_send(s_reply.mac, (const uint8_t *)&r, sizeof r);
@@ -661,6 +823,15 @@ void ensemble_service(void)
      * has a value meaning "nothing outstanding". */
     if (++s_tag == 0) { s_tag = 1; }
     p.tag = s_tag;
-    s_tag_flight = s_tag;
+    /* CLAIM THE SLOT BEFORE THE SEND, because the send callback can fire the moment
+     * esp_now_send is called and it looks the slot up by tag. */
+    volatile exch_t *e = &s_exch[s_tag % AIRRING];
+    e->tag = 0;                        /* nobody may settle a half-built slot */
+    e->air = 0; e->rx = 0; e->lost = false;
+    e->resid_us = 0; e->ahead_us = 0; e->bpm = 0;
+    e->tag = s_tag;
+    /* Queued before the send, because the callback can fire inside esp_now_send. */
+    s_pend[s_pend_tail % AIRRING] = s_tag;
+    s_pend_tail++;
     (void)esp_now_send(s_leader, (const uint8_t *)&p, sizeof p);
 }

@@ -288,8 +288,10 @@ exchanges**. A tempo is a decision somebody made; a phase is a measurement.
 | round trip, no gate | +384 µs | 2491 µs | 2031 µs | 6 of 8 |
 | round trip + hard RTT gate | +36 µs | 227 µs | **184 µs** | 10 of 10 |
 | round trip + graduated trust, across two tempo changes | +334 µs | 3446 µs | 2322 µs | 8 of 14 |
-| **+ true send time, median of the best six, snap on tempo** | **+1 µs** | **130 µs** | **86 µs** | **22 of 22** |
+| + true send time, median of the best six, snap on tempo | +1 µs | 130 µs | 86 µs | 22 of 22 |
 | the same, second run | −37 µs | 643 µs | 547 µs | 21 of 22 |
+| **+ send callbacks matched by queue, power save off** | **−12 µs** | **55 µs** | **35 µs** | **22 of 22** |
+| **the same, while drawing six visual lanes with the split on** | **−8 µs** | **25 µs** | **25 µs** | **10 of 10** |
 
 Rows four and five are the story of a wrong turn: the hard gate measured beautifully
 in a quiet moment and then **starved**. The floor is the fastest exchange ever seen,
@@ -298,7 +300,9 @@ discarded, and the clock coasts and drifts between the rare accepted ones — wh
 turned a 184 µs worst case into 2400 µs. Graduated trust never starves, and shipped,
 and was still wrong by twenty times.
 
-**Rows six and seven are what ships**, and three changes got there. In descending order
+**Rows eight and nine are what ships.** Six changes got there; the first three below
+were found by reasoning about the protocol and the last three only by measuring, and the
+last three were worth more than the first three put together. In descending order
 of what each was worth:
 
 1. **The probe's departure is measured, not assumed.** `esp_now_send` only *queues* a
@@ -328,6 +332,34 @@ of what each was worth:
    tempo moved, discards the window in progress — half of it was measured against a grid
    that no longer exists — and applies the next corroborated window whole.
 
+4. **The send callback belongs to a queue, not to the latest probe.** `on_sent` read
+   "the most recently handed-out tag" on the reasoning that only one probe is ever
+   outstanding. The callback can be dispatched *after the next probe has been queued*,
+   and it then stamped that probe's slot with the previous probe's departure — an error
+   of one whole probe interval, 50 ms. It showed as a round-trip floor of 13–26 ms,
+   which is a number with no physical meaning for a 26-byte frame, and that is what
+   gave it away. Send callbacks are delivered one per send and in order, so a four-deep
+   queue matches them exactly.
+5. **WiFi power save off.** A station defaults to `WIFI_PS_MIN_MODEM`: the radio sleeps
+   between beacon intervals and wakes to check for traffic. For a browser that is free
+   battery life; for a clock it quantises both ends of every measurement to tens of
+   milliseconds. `esp_wifi_set_ps(WIFI_PS_NONE)` is one line and it is the single
+   largest timing fix in the file. Every earlier explanation for the variance was real
+   and worth fixing, and all of them together were smaller than this one.
+6. **An unacknowledged unicast is dropped, not trusted.** Its callback timed the last
+   retry rather than whichever attempt landed. Accepting those put milliseconds into the
+   answer — which was tried, and measured, and reverted.
+
+**Broadcasting the probes was tried and reverted, and the reason is worth keeping.** A
+broadcast is never acknowledged and therefore never retried, so its send callback
+describes the transmit that actually happened — exactly what fix 6 is working around.
+It is also, on this hardware at this range, about 90 per cent packet loss: unicast
+probes drew roughly seventeen replies a second out of twenty, broadcast probes drew one
+and a half. **The retries were not overhead, they were the delivery.** A clock that
+measures perfectly on one exchange in thirteen is worse than one that measures well on
+seventeen in twenty, because the windows in between are spent coasting — which is the
+same failure the hard RTT gate produced, arrived at by a third route.
+
 One more fix was found along the way and was not about accuracy at all: folding the
 error into ±half a pulse used a `while` loop after subtracting `(their tick − our tick)
 × period`. That term is an exact multiple of the pulse, so it vanished under the fold
@@ -335,10 +367,35 @@ and never affected the answer — but two decks that started playing minutes apa
 by a hundred thousand ticks, so the loop it fed ran a hundred thousand times **inside a
 radio callback**. One modulo is the same answer in constant time.
 
-**So: 43 of 44 samples inside 500 µs across two runs, typically inside 40 µs, worst
-547 µs.** A pulse at 124 bpm is 5040 µs, so the typical case is under one per cent of a
-pulse and the single worst excursion is about a tenth of one. Two orders of magnitude
-below the ~10 ms at which a rhythmic difference is heard.
+**So: 32 of 32 samples inside 500 µs, worst 35 µs, across two tempo changes and with
+one deck drawing hard.** A pulse at 124 bpm is 5040 µs, so this is under one per cent of
+a pulse — and about 0.3 per cent of the ~10 ms at which a rhythmic difference is heard.
+
+The honest caveat: this is a measurement of a room, and the room varies. During one
+stretch of testing the acknowledgement rate on this pair collapsed to about ten per
+cent for a couple of minutes and the worst sample reached 951 µs before recovering by
+itself. The estimator handled it the way it is meant to — the probes stopped agreeing,
+the gain dropped, and the local clock coasted at 4 µs until the air cleared — but a
+congested band is a real condition and 500 µs is not guaranteed through one. What is
+guaranteed is that a bad room degrades the phase and cannot degrade the clock.
+
+### Does drawing move the clock? No `[FACT]`
+
+The question this instrument rests on, so it is measured rather than argued. A deck
+running six visual lanes that all fire every other step, with the preview split on:
+
+| | bare | drawing six lanes |
+|---|---|---|
+| local clock, standard deviation | **4 µs** | **5 µs** |
+| ticks later than 100 µs | 0 of 5919 | 2 of 10013 |
+| ticks later than 250 µs | 0 | 0 |
+| phase against the other deck, worst | 35 µs | 25 µs |
+
+The two-core split is doing its job: the frame is generated in the main loop and the
+clock dispatches on the other core, so the drawing cannot reach it. The phase figure is
+no worse loaded than bare, which was *not* true before fix 4 — a deck under load looked
+like it degraded to 1181 µs, and that was the mis-stamped send callback being provoked
+by a slower main loop rather than the drawing touching the clock.
 
 ### Where the remaining variance comes from `[OPEN]`
 
@@ -350,11 +407,9 @@ chased: taking the median of six lightly-queued exchanges is the JackTrip lesson
 applied to a clock instead of to audio, and it is why the outliers stopped reaching the
 grid.
 
-The one sample in forty-four that exceeded 500 µs came from a window whose six best
-probes disagreed by 861 µs — a genuinely congested moment, correctly identified as one
-and correctly given an eighth of the gain. Tightening further means either refusing
-more windows, which is the mistake already made once, or timestamping at the radio,
-which means a different transport — or the wire.
+Tightening further means either refusing more windows, which is the mistake already
+made once, or timestamping at the radio, which means a different transport — or the
+wire. Neither is worth doing at 35 µs.
 
 Two things that came out of measuring rather than reasoning, both fixed:
 

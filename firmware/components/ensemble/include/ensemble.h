@@ -68,7 +68,12 @@ uint32_t ensemble_skipped(void);
  * delayed; a wide spread with a high floor means the air is busy. */
 int32_t  ensemble_spread(void);
 
-/* Where the exchanges went. `noair` counts replies discarded because the probe they
- * answer has no recorded departure - if that tracks `replies`, the send callback is
- * the problem and not the air. */
-void     ensemble_counts(uint32_t *replies, uint32_t *noair, uint32_t *windows);
+/* WHERE THE EXCHANGES WENT, and the numbers exist because a stalled estimator looked
+ * exactly like a quiet radio from outside - frozen error, no skips - and the two want
+ * opposite fixes. `lost` counts probes the leader never acknowledged, which is the air
+ * being busy. `stale` counts replies for a probe the table has already forgotten,
+ * which would mean the round trip has grown past four probe intervals. `windows`
+ * counts corrections actually applied: if it stops climbing while `replies` does not,
+ * the estimator is the problem and not the room. */
+void     ensemble_counts(uint32_t *replies, uint32_t *stale, uint32_t *lost,
+                         uint32_t *dup, uint32_t *windows);

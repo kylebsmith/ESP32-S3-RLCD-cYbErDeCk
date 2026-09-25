@@ -641,6 +641,16 @@ static cmd_status_t c_ctrl(cmd_ctx_t *ctx)
             what[w++] = *pat++;
         }
         while (*pat == ' ') { pat++; }
+    } else if (ctx->name[0] == 'c' && ctx->name[1] == 'c' &&
+               ctx->name[2] >= '0' && ctx->name[2] <= '9') {
+        /* A NAME THE LISTING PRINTS HAS TO BE A NAME THE LANGUAGE ACCEPTS.
+         *
+         * '>cc 74' names its lane 'cc74', because a controller with no friendly
+         * name still needs one that says which controller it is. '>lanes' then
+         * printed 'cc74' - and typing it back was refused with "no controller
+         * 'cc74'", because this function only knew the bare verb and the sixteen
+         * named controllers. The deck was showing a name it would not take. */
+        snprintf(what, sizeof what, "%s", ctx->name + 2);
     } else {
         snprintf(what, sizeof what, "%s", ctx->name);
     }
@@ -768,6 +778,16 @@ static cmd_status_t c_sync(cmd_ctx_t *ctx)
                  * error is the clock or the room. */
                 cmd_out(ctx, "best trip %d us, %u skipped",
                         (int)ensemble_floor_rtt(), (unsigned)ensemble_skipped());
+                /* And how much the probes behind that number agreed with each
+                 * other, which is the estimator grading its own work. */
+                cmd_out(ctx, "probes agreed within %d us",
+                        (int)ensemble_spread());
+                uint32_t rep = 0, stale = 0, lost = 0, dup = 0, win = 0;
+                ensemble_counts(&rep, &stale, &lost, &dup, &win);
+                cmd_out(ctx, "%u replies, %u twice, %u lost ack",
+                        (unsigned)rep, (unsigned)dup, (unsigned)lost);
+                cmd_out(ctx, "%u corrections, %u stale",
+                        (unsigned)win, (unsigned)stale);
             } else {
                 cmd_out(ctx, "%u packets since asked", (unsigned)heard);
             }
@@ -1905,22 +1925,24 @@ static const cmd_t s_builtins[] = {
      * subsystem. Each is a name bound to a primitive, exactly as 'kick' is a
      * name bound to note 36 - see docs/MAP.md. 'viz' is the old spelling, kept
      * because documents already use it, and marked for deletion at freeze. */
-    { "echo",   c_prim,  CMD_CAP_EDIT,  "keep the last frame - trails" },
-    { "move",   c_prim,  CMD_CAP_EDIT,  "shift it, wrapping" },
-    { "spin",   c_prim,  CMD_CAP_EDIT,  "quarter turns - nothing else rotates" },
-    { "warp",   c_prim,  CMD_CAP_EDIT,  "bend lines along an axis" },
-    { "shake",  c_prim,  CMD_CAP_EDIT,  "tear lines sideways" },
-    { "noise",  c_prim,  CMD_CAP_EDIT,  "a field of sparkles" },
-    { "disc",   c_prim,  CMD_CAP_EDIT,  "a filled circle" },
-    { "box",    c_prim,  CMD_CAP_EDIT,  "a rectangle outline - hard corners" },
-    { "star",   c_prim,  CMD_CAP_EDIT,  "spokes from the centre" },
-    { "ramp",   c_prim,  CMD_CAP_EDIT,  "a dithered gradient" },
-    { "grid",   c_prim,  CMD_CAP_EDIT,  "a lattice" },
-    { "grow",   c_prim,  CMD_CAP_EDIT,  "dilate: marks bloom" },
-    { "thin",   c_prim,  CMD_CAP_EDIT,  "erode: edges eat inward" },
-    { "flip",   c_prim,  CMD_CAP_EDIT,  "invert the frame" },
-    { "tile",   c_prim,  CMD_CAP_EDIT,  "repeat it, 1-4 copies" },
-    { "fold",   c_prim,  CMD_CAP_EDIT,  "mirror it, 1-3 folds" },
+    /* THE FIELDS AND THE OPERATORS - see viz.c for why the sources are fields
+     * rather than shapes, and what 'star', 'shake' and 'tile' were traded for. */
+    { "echo",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "keep the last frame - trails" },
+    { "move",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "shift it, wrapping" },
+    { "spin",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "quarter turns - nothing else rotates" },
+    { "warp",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "bend lines along an axis" },
+    { "noise",  c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "a field of sparkles" },
+    { "disc",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "round field - distance from a point" },
+    { "box",    c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "square field - the corners disc lacks" },
+    { "turn",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "angle field - a sweep. spin it" },
+    { "ramp",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "linear field along an axis" },
+    { "grid",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "periodic field - a lattice" },
+    { "mask",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "keep what is this bright - a level" },
+    { "edge",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "keep where it changes - a contour" },
+    { "grow",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "dilate: marks bloom" },
+    { "thin",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "erode: edges eat inward" },
+    { "flip",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "invert the frame" },
+    { "fold",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "mirror it, 1-3 folds" },
     { "split", c_split, CMD_CAP_EDIT,  "split on | off | <rows>" },
     { "route", c_route, CMD_CAP_EDIT,  "route disc kick" },
     { "usb",   c_usb,   CMD_CAP_SYSTEM,"usb on | off - MIDI over the cable" },
@@ -1934,23 +1956,23 @@ static const cmd_t s_builtins[] = {
     { "panic", c_panic, CMD_CAP_EDIT,  "silence everything" },
     { "mute",  c_mute,  CMD_CAP_EDIT,  "mute hat bass | mute = all on" },
     { "solo",  c_mute,  CMD_CAP_EDIT,  "solo kick | solo = all on" },
-    { "kick",  c_drum,  CMD_CAP_EDIT,  "x...x...x...x..." },
-    { "snare", c_drum,  CMD_CAP_EDIT,  "....x.......x..." },
-    { "hat",   c_drum,  CMD_CAP_EDIT,  "x.x.x.x.x.x.x.x." },
-    { "ohat",  c_drum,  CMD_CAP_EDIT,  "open hat" },
-    { "clap",  c_drum,  CMD_CAP_EDIT,  "clap" },
-    { "tom",   c_drum,  CMD_CAP_EDIT,  "tom" },
-    { "rim",   c_drum,  CMD_CAP_EDIT,  "rim" },
-    { "crash", c_drum,  CMD_CAP_EDIT,  "crash" },
-    { "bass",  c_voice, CMD_CAP_EDIT,  "0..0..3..0..5..." },
-    { "lead",  c_voice, CMD_CAP_EDIT,  "degrees 0-9, 0 is the root" },
-    { "pad",   c_voice, CMD_CAP_EDIT,  "long notes" },
-    { "arp",   c_voice, CMD_CAP_EDIT,  "short notes, high" },
-    { "cc",    c_ctrl,  CMD_CAP_EDIT,  "cc <name|0-127> <pattern>" },
-    { "cut",   c_ctrl,  CMD_CAP_EDIT,  "filter: 0..4..8..4.." },
-    { "res",   c_ctrl,  CMD_CAP_EDIT,  "resonance, 0-9" },
-    { "mod",   c_ctrl,  CMD_CAP_EDIT,  "mod wheel, 0-9" },
-    { "rev",   c_ctrl,  CMD_CAP_EDIT,  "reverb send, 0-9" },
+    { "kick",  c_drum,  CMD_CAP_EDIT|CMD_CAP_LANE,  "x...x...x...x..." },
+    { "snare", c_drum,  CMD_CAP_EDIT|CMD_CAP_LANE,  "....x.......x..." },
+    { "hat",   c_drum,  CMD_CAP_EDIT|CMD_CAP_LANE,  "x.x.x.x.x.x.x.x." },
+    { "ohat",  c_drum,  CMD_CAP_EDIT|CMD_CAP_LANE,  "open hat" },
+    { "clap",  c_drum,  CMD_CAP_EDIT|CMD_CAP_LANE,  "clap" },
+    { "tom",   c_drum,  CMD_CAP_EDIT|CMD_CAP_LANE,  "tom" },
+    { "rim",   c_drum,  CMD_CAP_EDIT|CMD_CAP_LANE,  "rim" },
+    { "crash", c_drum,  CMD_CAP_EDIT|CMD_CAP_LANE,  "crash" },
+    { "bass",  c_voice, CMD_CAP_EDIT|CMD_CAP_LANE,  "0..0..3..0..5..." },
+    { "lead",  c_voice, CMD_CAP_EDIT|CMD_CAP_LANE,  "degrees 0-9, 0 is the root" },
+    { "pad",   c_voice, CMD_CAP_EDIT|CMD_CAP_LANE,  "long notes" },
+    { "arp",   c_voice, CMD_CAP_EDIT|CMD_CAP_LANE,  "short notes, high" },
+    { "cc",    c_ctrl,  CMD_CAP_EDIT|CMD_CAP_LANE,  "cc <name|0-127> <pattern>" },
+    { "cut",   c_ctrl,  CMD_CAP_EDIT|CMD_CAP_LANE,  "filter: 0..4..8..4.." },
+    { "res",   c_ctrl,  CMD_CAP_EDIT|CMD_CAP_LANE,  "resonance, 0-9" },
+    { "mod",   c_ctrl,  CMD_CAP_EDIT|CMD_CAP_LANE,  "mod wheel, 0-9" },
+    { "rev",   c_ctrl,  CMD_CAP_EDIT|CMD_CAP_LANE,  "reverb send, 0-9" },
     { "help",  c_help,  CMD_CAP_READ,                   "list the commands" },
     { "list",  c_list,  CMD_CAP_READ,                   "list open buffers" },
     { "new",   c_new,   CMD_CAP_EDIT,                   "a fresh scratch buffer" },
