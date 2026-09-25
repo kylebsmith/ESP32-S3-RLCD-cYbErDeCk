@@ -7,6 +7,20 @@ is enough to report it.
 Ctrl+Enter runs the line the cursor is on. Ctrl-O comes back from any output
 page. Ctrl-L and Ctrl-J walk between documents.
 
+### Driving it from a terminal, and the one trap in it
+
+Every step here works over the USB cable with no keyboard paired: **CR is Enter and LF
+is Ctrl+Enter**, so a terminal that sends CR opens a line and a script that sends `\n`
+runs one. Bursts are fine — a 26-character line typed as one write arrives intact.
+
+**Ctrl-O is a toggle, not a "go back".** From the document it goes *to* `+out`; from
+`+out` it comes back. And a command only moves you to `+out` if it printed more than one
+line, so where Ctrl-O lands depends on what the last command was. A script that sends it
+unconditionally ends up typing into the output pane and running whatever line the cursor
+happened to be on — which looks exactly like dropped characters, and was diagnosed as
+dropped characters twice before anyone read the pane. Track the pane from what the deck
+says about it: it logs `buffer 3 '+out' selected` when it moves you.
+
 ## 1. It boots
 
 Power on. You should see **KILROY** appear a letter at a time, a rule sweep
