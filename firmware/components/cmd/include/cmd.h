@@ -84,6 +84,11 @@ struct cmd_ctx {
     const char  *arg;        /* rest of the line, unparsed, never NULL */
     cmd_caller_t caller;
     char         msg[96];    /* short human-readable result            */
+    /* WHICH CHARACTER IS WRONG, as an offset into `arg`, or -1. Set by a
+     * command that refuses its argument because of one character, so the
+     * editor can mark that character in the document instead of leaving the
+     * performer to count columns against a message. */
+    int          err_at;
 };
 
 /* Run one line. Returns CMD_ERROR for an unknown name or a refused
@@ -98,6 +103,10 @@ void cmd_out(cmd_ctx_t *ctx, const char *fmt, ...);
 /* How many lines the last command wrote. A result worth reading should show
  * itself rather than waiting to be found. */
 int cmd_last_output_lines(void);
+
+/* The column, in the line the last command was run from, of the character it
+ * refused - or -1. See cmd_ctx.err_at. */
+int cmd_last_error_col(void);
 
 /* Is this line a command the table actually knows?
  *

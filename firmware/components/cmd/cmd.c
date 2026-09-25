@@ -31,6 +31,10 @@ static int s_out_lines;
 
 int cmd_last_output_lines(void) { return s_out_lines; }
 
+static int s_err_col = -1;
+
+int cmd_last_error_col(void) { return s_err_col; }
+
 static const cmd_t *s_table;
 static int          s_count;
 
@@ -166,9 +170,11 @@ const cmd_t *cmd_recognise(const char *line, int *word_at, int *word_len)
 cmd_status_t cmd_run_line(const char *line, cmd_caller_t caller,
                           char *msg_out, size_t msg_max)
 {
-    cmd_ctx_t ctx = { .arg = "", .caller = caller };
+    cmd_ctx_t ctx = { .arg = "", .caller = caller, .err_at = -1 };
     ctx.msg[0] = '\0';
     s_out_lines = 0;
+    s_err_col = -1;
+    const char *const line0 = line;
 
     /* The sigil. A command line is marked, so a document can hold prose and
      * runnable lines side by side without either pretending to be the other -
@@ -224,6 +230,12 @@ cmd_status_t cmd_run_line(const char *line, cmd_caller_t caller,
             snprintf(typed, sizeof typed, "%.*s", (int)namelen, line);
             ctx.name = typed;
             const cmd_status_t st = s_table[i].fn(&ctx);
+            if (ctx.err_at >= 0) {
+                /* ctx.arg may have been advanced past a first word - '>cc cut
+                 * ...' - but it still points into this line, so the column is
+                 * exact either way. */
+                s_err_col = (int)(ctx.arg - line0) + ctx.err_at;
+            }
             if (msg_out != NULL) {
                 snprintf(msg_out, msg_max, "%s", ctx.msg);
             }

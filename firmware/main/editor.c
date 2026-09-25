@@ -93,6 +93,10 @@ static char s_cur_ch  = ' ';
  * know, or it erases the bar every time it repaints that one cell. */
 static bool s_cur_under = false;
 static bool s_cur_over  = false;
+/* Document offset of the character the last run was refused for, or -1. Set
+ * by run_current_line, cleared by the next key that is not pure motion - an
+ * edit, a document switch, another run - so it never points at the wrong text. */
+static int  s_err_off = -1;
 /* When set and in the future, the status bar shows the way out of the output
  * buffer after the command's own message has had its moment. */
 static int64_t s_msg2_until = 0;
@@ -341,48 +345,71 @@ static void status_bar(void)
     }
 }
 
-/* Document offset of the step that is sounding on a lane line, or -1.
+/* The span of the step that is sounding on a lane line, in document offsets:
+ * [*from, *to). Returns false when nothing on this line is sounding.
  *
- * WHY AN OFFSET AND NOT A COLUMN. A 32-step lane written out is 38 characters
+ * WHY OFFSETS AND NOT COLUMNS. A 32-step lane written out is 38 characters
  * against a 30-column grid, so it wraps - and a mark derived from a display
  * row's column would land on the wrong row the moment it did. That is exactly
  * the bug that was fixed once already in current_line(), which read the wrap
  * table instead of the document. Compute in document space, project through
  * the wrap table, never the other way round.
  *
- * THE PLAYHEAD MARKS THE STEP, NOT THE HIT. Three reasons. It reads as one
- * transport sweeping the document rather than four lamps blinking
- * independently; it shows where you are in the bar even on a lane that is
- * resting; and it stays truthful under editing, because changing 'x...' to
- * '..x.' changes which steps sound but not the step-to-column mapping. */
-static int playhead_offset(int line_off, const char *lbuf, int at, int len)
+ * THE PLAYHEAD MARKS THE STEP, NOT THE HIT. It reads as one transport sweeping
+ * the document rather than lamps blinking independently; it shows where you are
+ * in the bar even on a lane that is resting; and it stays truthful under
+ * editing, because changing 'x...' to '..x.' changes which steps sound but not
+ * where they are.
+ *
+ * AND A STEP IS A SPAN (docs/MANIFESTO.md §3.6): 'x%15' lights all four
+ * characters, a chord lights from its first note to its last. The owner kept the
+ * goal - you can always see what is sounding - and dropped the one-character
+ * mechanism that was refusing chords. */
+static bool playhead_span(int line_off, const char *lbuf, int at, int len,
+                          int *from, int *to)
 {
     if (!seq_running()) {
-        return -1;
+        return false;
     }
     const seq_lane_t *l = seq_lane_find(lbuf + at, len);
-    /* Exactly fire_step's skip test. If it would not sound, it must not be
+    /* Exactly the clock's skip test. If it would not sound, it must not be
      * marked - that makes "the playhead is sweeping this line" and "this lane
      * is sounding" the same statement, which is what the toggle relies on. */
-    if (l == NULL || l->muted || l->steps == 0) {
-        return -1;
+    if (l == NULL || l->muted || l->slots == 0) {
+        return false;
     }
     /* The argument, delimited the way the dispatcher delimits it. */
     int a = at + len;
     while (lbuf[a] == ' ' || lbuf[a] == '\t') {
         a++;
     }
-    /* A lane compiled from text that has since been edited would put the mark
-     * on a character that is not the one sounding. The step COUNT is the whole
-     * of what the mapping depends on, so it is the whole of the test. */
-    if (seq_pattern_steps(lbuf + a, SEQ_MAX_STEPS) != l->steps) {
-        return -1;
+    /* A LANE COMPILED FROM TEXT THAT HAS SINCE BEEN EDITED would put the mark on
+     * characters that are not the ones sounding. This compared step COUNTS,
+     * which an edit that keeps the count - 'x...' to '..x.' - passed; the hash
+     * of the text is what the toggle already uses to tell "unchanged" from
+     * "edited", so it is exactly the right test here too. */
+    if (seq_pattern_hash(lbuf + a) != l->src) {
+        return false;
     }
-    /* The global step is not the lane's step the moment one lane is not the
-     * same length as another - which is the point of having lanes. */
-    const int off = seq_pattern_offset(lbuf + a, (int)(seq_position() % (uint32_t)l->steps),
-                                       SEQ_MAX_STEPS);
-    return (off < 0) ? -1 : line_off + a + off;
+    /* THE LANE'S OWN POSITION, not the global sixteenth. This took
+     * seq_position() % steps, so a '/2' lane's mark ran at twice the speed of
+     * its sound and a nested lane's at the wrong one entirely. */
+    int slot = 0;
+    uint32_t cycle = 0;
+    if (!seq_lane_now(l, &slot, &cycle)) {
+        return false;
+    }
+    static seq_comp_t comp;             /* the editor task only */
+    if (seq_pattern_compile(lbuf + a, &comp) != SEQ_PAT_OK) {
+        return false;
+    }
+    int f = 0, t = 0;
+    if (!seq_pattern_mark(&comp, slot, cycle, &f, &t)) {
+        return false;
+    }
+    *from = line_off + a + f;
+    *to   = line_off + a + t;
+    return true;
 }
 
 /* WHAT THE TEXT KEEPS WHEN THE PREVIEW IS UP.
@@ -481,7 +508,7 @@ void editor_draw(void)
     /* Declared outside the row loop ON PURPOSE: it is computed once per
      * LOGICAL line and must survive across that line's continuation rows, so
      * a wrapped lane keeps its playhead. Every logical-line start resets it. */
-    int ph_off = -1;
+    int ph_from = -1, ph_to = -1;
 
     for (int r = 0; r < trows; r++) {
         const int li = s_top_line + r;
@@ -502,11 +529,12 @@ void editor_draw(void)
             (start == 0 || doc_at((size_t)start - 1) == '\n')) {
             char lbuf[128];
             line_at((size_t)start, lbuf, sizeof lbuf);
+            ph_from = ph_to = -1;
             if (cmd_recognise(lbuf, &mark_at, &mark_len) == NULL) {
                 mark_at = -1;
-                ph_off  = -1;
-            } else {
-                ph_off = playhead_offset(start, lbuf, mark_at, mark_len);
+            } else if (!playhead_span(start, lbuf, mark_at, mark_len,
+                                      &ph_from, &ph_to)) {
+                ph_from = ph_to = -1;
             }
         } else if (r == 0 && li < s_line_count) {
             /* The top row can be the CONTINUATION of a line that begins above
@@ -519,8 +547,11 @@ void editor_draw(void)
             char lbuf[128];
             int a, n;
             line_at(s, lbuf, sizeof lbuf);
-            ph_off = (cmd_recognise(lbuf, &a, &n) != NULL)
-                     ? playhead_offset((int)s, lbuf, a, n) : -1;
+            ph_from = ph_to = -1;
+            if (cmd_recognise(lbuf, &a, &n) == NULL ||
+                !playhead_span((int)s, lbuf, a, n, &ph_from, &ph_to)) {
+                ph_from = ph_to = -1;
+            }
         }
 
         const int tc = text_cols_now();
@@ -541,20 +572,32 @@ void editor_draw(void)
              *
              * Computed BEFORE the cursor capture, because the blink needs to
              * know whether the playhead is passing through the cursor cell. */
-            const bool playing = ph_off >= 0 && li < s_line_count &&
-                                 (start + c) == ph_off && (start + c) < end;
-            const bool marked = mark_at >= 0 &&
-                                c >= mark_at && c < mark_at + mark_len;
+            const bool playing = ph_from >= 0 && li < s_line_count &&
+                                 (start + c) >= ph_from && (start + c) < ph_to &&
+                                 (start + c) < end;
+            bool marked = mark_at >= 0 &&
+                          c >= mark_at && c < mark_at + mark_len;
+            /* THE CHARACTER A PATTERN WAS REFUSED FOR, boxed - a bar above and a
+             * bar below, which nothing else on the panel draws - until the next
+             * edit. The status bar says why; this says where, so nobody has to
+             * count columns at 2 a.m. */
+            const bool refused = s_err_off >= 0 && li < s_line_count &&
+                                 (start + c) == s_err_off;
+            bool under = playing;
+            if (refused) {
+                under = true;
+                marked = true;
+            }
             const bool is_cursor = (li == s_cursor_line && c == s_cursor_col);
             if (is_cursor) {
                 s_cur_col = c; s_cur_row = r; s_cur_ch = ch;
-                s_cur_under = playing;
+                s_cur_under = under;
                 s_cur_over  = marked;
             }
             /* The cursor keeps the solid block to itself. A recognised
              * command word gets a bar on top instead of sharing it. */
             const bool inv = is_cursor && s_cursor_on;
-            tg_put(c, r, ch, cell_attr(inv, playing, marked));
+            tg_put(c, r, ch, cell_attr(inv, under, marked));
         }
 
         /* Any column the text does not reach is blanked, so a narrower text
@@ -924,6 +967,18 @@ static void run_current_line(void)
     char msg[96] = "";
     cmd_run_line(line, CMD_BY_HANDS, msg, sizeof msg);
     const int lines = cmd_last_output_lines();
+    {
+        /* Only when the view stays here: a result long enough to move to
+         * '+out' would otherwise box a character of the output page. */
+        const int col = (lines > 1) ? -1 : cmd_last_error_col();
+        if (col >= 0) {
+            size_t ls = doc_cursor();
+            while (ls > 0 && doc_at(ls - 1) != '\n') {
+                ls--;
+            }
+            s_err_off = (int)ls + col;
+        }
+    }
 
     /* A result of more than one line shows itself. Reporting "10 commands" at
      * the bottom of the screen and leaving the actual answer somewhere the
@@ -974,6 +1029,23 @@ void editor_handle(const kbd_event_t *ev)
     default:
         s_goal_col = -1;
         break;
+    }
+
+    /* Anything but pure motion forgets the refused-character mark: an edit may
+     * have fixed it or moved it, a switch leaves its document, and a run sets
+     * its own. Motion keeps it, so the cursor can be walked onto it. */
+    {
+        const bool motion =
+            ev->type == KBD_EV_LEFT || ev->type == KBD_EV_RIGHT ||
+            ev->type == KBD_EV_UP || ev->type == KBD_EV_DOWN ||
+            ev->type == KBD_EV_HOME || ev->type == KBD_EV_END ||
+            (ev->type == KBD_EV_CHAR && (ev->mods & KBD_COMMAND_MODS) &&
+             (ev->ch == 'a' || ev->ch == 'e' || ev->ch == 'b' || ev->ch == 'f' ||
+              ev->ch == 'p' || ev->ch == 'n'));
+        if (!motion && s_err_off >= 0) {
+            s_err_off = -1;
+            editor_invalidate();
+        }
     }
 
     if (ev->type == KBD_EV_ENTER && (ev->mods & KBD_COMMAND_MODS)) {

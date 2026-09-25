@@ -4,8 +4,9 @@
 if this page and the firmware disagree, the firmware is right and this page is
 stale. [MAP.md](MAP.md) §0 has the snippet that counts them.*
 
-*For what is wrong with this language and what should replace it, see
-[MANIFESTO.md](MANIFESTO.md) — two adversarial reviews, unimplemented on purpose.*
+*For what was wrong with this language and what replaced it, see
+[MANIFESTO.md](MANIFESTO.md) — two adversarial reviews, and which of their
+proposals have been decided.*
 
 A performer cannot search. That is the entire reason this page has to fit on one:
 if it does not, the language is too big, and that is a design failure rather than
@@ -21,15 +22,20 @@ a documentation one.
 ```
 
 ```
-  x  hit          X  loud         ,  quiet        ?  maybe (half)
-  .  rest         -  rest         _  rest
-  0-9             a scale degree, a controller value, or an amount
-  x%15            fifteen per cent chance on that step
+  x  hit          .  rest         _  hold the note before it
+  0-9             HOW MUCH: velocity on a drum, degree on a voice,
+                  value on a controller, amount on a picture
+  x%15            fifteen per cent chance on that step, or group
   [xx]            a group: SUBDIVIDES the step it occupies, any depth
+  [0,4,7]         a chord: every member at once
   <a b>           ALTERNATES: a different member each bar
   /2  *2          this lane's own rate, at the end of the line
   u d l r         which way, in front of the pattern or as a step
 ```
+
+A step is one character and what is attached to it; the playhead lights all of
+it. **Anything else is refused** — the bar says why and the character is boxed —
+rather than played as a hit.
 
 `Ctrl+Enter` runs the line. `Enter` always makes a line. Run a line unchanged to
 mute that lane; run it again to bring it back. Type a lane's name alone to delete

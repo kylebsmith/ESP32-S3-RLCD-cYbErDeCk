@@ -91,22 +91,53 @@ typedef enum {
     SEQ_BIND_VIZ,        /* a drawing primitive: digits are amounts   */
 } seq_bind_t;
 
+/* ONE EVENT OF A COMPILED LANE: something happens on a slot of the cycle.
+ *
+ * This replaced four bitmasks and three per-slot tables (accent, ghost, chance,
+ * odds, degree, the step character) when a step stopped being one character -
+ * docs/MANIFESTO.md §3.6. A chord is several events on one slot; a tie is
+ * `hold`; alternation is the cycle class (per, ph) rather than extra slots, so
+ * '<a b>' no longer doubles a lane's length. See seq_pattern.h for how the text
+ * becomes these. */
+typedef struct {
+    uint8_t slot;           /* within one cycle                               */
+    uint8_t val;            /* 0-9, or SEQ_VAL_X for 'x' - the lane's level   */
+    uint8_t hold;           /* extra slots a tie keeps it sounding            */
+    uint8_t prob;           /* 0-100, or SEQ_PROB_ALWAYS                      */
+    uint8_t per, ph;        /* plays on cycles where cycle % per == ph        */
+    char    dir;            /* 'u' 'd' 'l' 'r' written as the step, or 0      */
+    uint8_t spare;
+} seq_ev_t;
+
+/* NINETY-SIX EVENTS A LANE. A full sixty-four slot bar is 64; a sixteen-step
+ * pad of three-note chords is 48; a four-way alternation of sixteen steps is 64.
+ * More than that is refused with the number, like every other limit here. */
+#define SEQ_MAX_EVENTS 96
+/* The pattern as typed, so '>lanes' prints what the player wrote. With a step
+ * that is more than one character, rebuilding the text from the compiled form
+ * would print something they did not type - the thing docs/COMMANDS.md forbids. */
+#define SEQ_TEXT_MAX   100
+
 typedef struct {
     char     name[SEQ_NAME_MAX];
-    uint64_t mask;          /* one bit per slot; the realtime core reads this */
-    uint64_t accent;        /* 'X' - louder                                   */
-    uint64_t ghost;         /* ',' - quieter                                  */
-    uint64_t chance;        /* '?' - maybe                                    */
-    uint8_t  prob[SEQ_MAX_STEPS];  /* per-step chance %, 0 = use the default  */
-    uint8_t  deg[SEQ_MAX_STEPS];  /* scale degree per step, 0xFF = fixed note */
-    uint8_t  steps;         /* how many of them are in play                   */
-    /* THIS LANE'S OWN TIME BASE, in internal ticks per step.
+    /* THE COMPILED LANE. Events sorted by slot, and where each slot's run of
+     * them starts, so the clock looks at exactly the events of the slot it is
+     * on and nothing else. */
+    seq_ev_t ev[SEQ_MAX_EVENTS];
+    uint8_t  first[SEQ_MAX_STEPS + 1];
+    uint8_t  nev;
+    uint8_t  slots;         /* per cycle; 0 means not in play                 */
+    uint8_t  div;           /* slots per step                                 */
+    uint8_t  steps;         /* top-level steps: its length in sixteenths      */
+    /* THIS LANE'S OWN TIME BASE: '*rnum' and '/rden'.
      *
-     * Default SEQ_TICKS_PER_STEP. '/2' doubles it, '*2' halves it. Every lane
-     * keeping its own clock is what makes polyrhythm, half-time and ratchets
-     * the same mechanism rather than three features - and it is why the rate
-     * lives on the lane and not on the transport. */
-    uint16_t tps;
+     * Every lane keeping its own clock is what makes polyrhythm, half-time and
+     * ratchets the same mechanism rather than three features - and it is why
+     * the rate lives on the lane and not on the transport. The slot a tick falls
+     * on is computed exactly from these by seq_pattern_slot_at(); it used to be
+     * an integer ticks-per-slot, which a five-way split cannot be. */
+    uint8_t  rnum, rden;
+    char     text[SEQ_TEXT_MAX];
     uint8_t  note;          /* MIDI note number, for a fixed-pitch lane       */
     uint8_t  chan;          /* 0-15                                           */
     uint8_t  vel;
@@ -129,7 +160,6 @@ typedef struct {
      * seq does not know what a parameter means, exactly as it does not know what
      * a primitive is. It carries a number and hands it over. */
     uint8_t  param;
-    char     chr[SEQ_MAX_STEPS]; /* the step's own character, verbatim         */
     char     dir;           /* 'u','d','l','r' - a direction written in front  */
 
     /* ---- routing: a lane may read another lane's output ---- */
@@ -145,33 +175,34 @@ typedef struct {
 
 esp_err_t seq_init(void);
 
-/* Compile one lane. `steps` is a string where '.', '-' and '_' are rests and
- * anything else is a hit, so "x...x...x...x..." and "o---o---o---o---" both
- * work and nobody has to remember which character is correct.
+/* Compile one lane. The grammar is seq_pattern.h's, in one place:
  *
- * Three characters mean more than "a hit", and they were chosen so that the
- * pattern still reads as a picture of itself:
+ *   x      a hit at the lane's own level
+ *   0-9    a hit with an amount - velocity on a drum, degree on a voice, value
+ *          on a controller, how much on a picture. ONE meaning per binding,
+ *          where a digit on a drum used to be compiled and never read.
+ *   .      rest       _   tie: the note before keeps sounding
+ *   [ab]   subdivide  [0,4,7]  a chord   <ab>  one per cycle   x%15  odds
+ *   /2 *2  rate, !4 play four cycles then stop - at the end, after a space
  *
- *   X   accent - louder. One shift key, and it stands up off the line.
- *   ,   ghost  - quieter. Small on the page, small in the mix.
- *   ?   maybe  - plays about half the time. A question mark is what it is.
+ * It used to be "'.', '-' and '_' are rests and anything else is a hit, so
+ * nobody has to remember which character is correct" - a kindness that also
+ * made every typo a note and every unclosed bracket a septuplet. A pattern that
+ * is not the grammar is REFUSED now: ESP_ERR_INVALID_ARG, with the reason and
+ * the character from seq_lane_error(). Nothing is changed when it is refused,
+ * so a typo mid-performance leaves the lane playing what it played before.
  *
- * And ONE optional parameter, in brackets, attached to the step before it:
- *
- *   ?[15]  this step plays fifteen per cent of the time
- *
- * A bracket is not a step. It occupies no column in the step count, so the
- * playhead still lands on the character that is sounding. There are no nested
- * brackets and there never will be: a bracket may follow a step and contain a
- * number, and that is the whole of it.
- *
- *   0-9 on a MELODIC lane, the scale degree. 0 is the root.
- *
- * A digit on a drum lane is just a hit; a lane knows which kind it is. This
- * matters because it means there is ONE pattern grammar, not two: the same
- * line of text, the same length, the same rests, whether it is a kick or a
- * bassline. */
+ * `steps` is kept verbatim for '>lanes'. ESP_ERR_NO_MEM means no lane is free. */
 esp_err_t seq_lane(const char *name, const char *steps);
+
+/* Why the last seq_lane() refused its pattern, in at most thirty columns, and
+ * the offset of the character it is about (-1 if none). */
+const char *seq_lane_error(int *at);
+
+/* Which slot of a lane is sounding now, and in which of its cycles - for the
+ * playhead. The lane's own clock, not the global sixteenth: a '/2' lane moves at
+ * half speed and a nested one at its subdivision. Returns false when stopped. */
+bool seq_lane_now(const seq_lane_t *l, int *slot, uint32_t *cycle);
 
 /* The key. One word: a root, optionally '#' or 'b', then a mode -
  * "dmin", "c", "f#mix", "apent", "ebblues", "chrom".
@@ -259,9 +290,11 @@ int  seq_get_bpm(void);
 void seq_play(void);
 void seq_stop(void);
 bool seq_running(void);
-/* The global step counter since play. UNMASKED: a lane finds its own step
- * with `seq_position() % lane->steps`, and any mask that is not a multiple of
- * every possible lane length introduces a phase jump when it rolls. */
+/* The global sixteenth counter since play. UNMASKED: any mask that is not a
+ * multiple of every possible lane length introduces a phase jump when it rolls.
+ * NOT a lane's own position - a '/2' or nested lane moves at its own speed, and
+ * the playhead used to take this modulo the lane's length and run at the wrong
+ * one. Use seq_lane_now() for that. */
 uint32_t seq_position(void);
 
 /* ---- sharing time with another deck ------------------------------------- *

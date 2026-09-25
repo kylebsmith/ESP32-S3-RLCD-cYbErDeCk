@@ -298,35 +298,62 @@ and it is how a bar is already read on paper:
     x.[x[xx]].       the second of a pair splits again
 ```
 
-**Probability moved to `%`.** `x%15` is a fifteen-per-cent chance on that step;
-`?` alone is still a half. The bracket is the only punctuation a player already
-reads as grouping, and a group — a step that *contains* steps — has a better
-claim on it than a parameter *of* a step. Recommendation (1) from the previous
-version of this section, taken.
+**Probability moved to `%`.** `x%15` is a fifteen-per-cent chance on that step
+or group. The bracket is the only punctuation a player already reads as grouping,
+and a group — a step that *contains* steps — has a better claim on it than a
+parameter *of* a step. Recommendation (1) from the previous version of this
+section, taken. (`?` was kept as "a half" until 2026-09-25, when it went —
+[MANIFESTO.md](MANIFESTO.md) §3.5.)
 
 **It is a compile-time transform, and that is the important part.** The clock
-reads a flat bitmask at a uniform rate and knows nothing else
-([SUBSTRATE.md](SUBSTRATE.md): the realtime core never parses text), so nesting
-is resolved in `seq_pattern_walk()` by **flattening the tree onto that same
-grid**. `x..[xx]` becomes eight slots at half the step length with hits at 0, 6
-and 7. There is no second code path for a nested lane and nothing new that can
-be late — the sequencer is byte-for-byte as unaware of nesting as it was of
-`/2`.
+never parses text ([SUBSTRATE.md](SUBSTRATE.md)), so nesting is resolved in
+`seq_pattern_compile()` by **laying the tree onto a uniform grid of slots**.
+`x..[xx]` is eight slots at half the step length with hits at 0, 6 and 7. There is
+no second code path for a nested lane — the sequencer is as unaware of nesting as
+it is of `/2`.
+
+What the clock reads changed on 2026-09-25, when a step stopped being one character
+([MANIFESTO.md](MANIFESTO.md) §3.6): it was four bitmasks and three per-slot tables,
+and it is now a list of **events** sorted by slot, each with its amount, its odds, the
+slots a tie holds it, and a cycle class for alternation. A chord is several events on
+one slot. The compiled lane is **handed to the clock** rather than written under it —
+the clock runs on the other core, and a list read through an index cannot be torn
+safely the way a bitmask could.
 
 Each top-level step is given `div` slots, where `div` is the least common
 multiple of what its members need, so every leaf lands exactly on a slot
 boundary. `[xx][xxx]` needs 6 per step and 12 in total.
 
+**A slot's tick was wrong for any split that does not divide 24, and it drifted.**
+The clock has 24 ticks to a sixteenth, and a slot was `24 / div` ticks in integer
+arithmetic — so a five-way split got 4 ticks where it needed 4.8, and `[xxxxx]...`
+looped in 80 ticks instead of 96 — sixteen ticks, 81 ms at 124 bpm, early every
+bar against everything else. That figure is **arithmetic, not measured**: the old
+firmware was never run with a quintuplet on the deck; the host check shows the
+80-tick loop, and the fix below was measured. Slot *g* now starts on the tick
+nearest `g × 24 × rden / (div × rnum)`, computed from the global tick — so every bar
+is exactly a bar (484 ms at 124 bpm, six bars running) and each note is within half
+a tick of where it belongs: the five onsets measured 0, 25, 50, 71, 96 ms against an
+ideal 0, 24.2, 48.4, 72.6, 96.8. A split so fine that two slots would share a tick
+is refused.
+
 **What does not fit is refused, not truncated** — `[xxxxx][xxxx][xxx]` would need
-180 slots. A flat pattern is still *clamped* at 32, and the difference is not a
-compromise: truncating a flat line loses the tail and nothing else, one
-character one step, while a nested bar's subdivision is a property of the whole
-bar, so dropping the end changes the meaning of everything before it.
+180 slots, and is refused with that number.
+
+**Reversed 2026-09-25: a flat pattern is no longer clamped either.** This section
+argued that truncating a flat line "loses the tail and nothing else", so a line of
+seventy steps played its first sixty-four. The fact that changed is that every other
+malformed pattern is now refused with its reason (MANIFESTO §3.2), which left the
+clamp as the one place in the language where typed steps silently did nothing — the
+failure [MANIFESTO.md](MANIFESTO.md) §1 calls undebuggable. It says *needs 70 slots,
+64 fit* now.
 
 The walk also collapsed the last duplicated traversal in the system. `seq_lane()`
 used to walk the characters itself and the editor walked them backwards to place
-the playhead; both call `seq_pattern_walk()` now, so they cannot disagree about
-which characters are steps.
+the playhead; both call `seq_pattern_compile()` now, so they cannot disagree about
+which characters are steps. The editor then asks the lane where it is —
+`seq_lane_now()` — because it used to take the global sixteenth modulo the lane's
+length, and a `/2` lane's playhead ran at twice the speed of its sound.
 
 ## 6. Two decks `[OPEN]`
 
@@ -472,6 +499,21 @@ Composes with everything, verified on hardware: `[x<x .>]`, `<[xx] x>`,
 alternative), and `>disc <9 3>` — a drawing lane alternating, because a drawing
 lane is a lane.
 
+**Superseded 2026-09-25: alternation is a cycle class now, not slots.** The
+flattening above was right about runtime state and wrong about its cost — it spent
+`lcm` slots, and [MANIFESTO.md](MANIFESTO.md) §3.9 named the cliff: a sixteen-step
+lane with a two-way and a three-way alternation needed ninety-six slots and was
+refused at sixty-four. Each note now carries the class of cycles it plays on
+(`cycle % per == ph`), and the cycle is the global tick divided by the lane's length
+— so the "one byte of cycle counter" the manifesto proposed turned out to be none.
+Alternation costs no slots at all.
+
+And the flattening had a second fault nobody had found, because nothing compared it
+with anything: it passed the cycle number down unchanged, so `<0 <1 2>>` played
+0 2 0 2 — the inner group advancing on every bar rather than every time it was
+chosen. Strudel plays 0 1 0 2; so does the deck now. The comparison is what §11 of
+[NEXT.md](NEXT.md) proposes a corpus for, and this is the first thing one found.
+
 One bug worth recording: `<[xx] x>` first compiled with the group given a single
 slot, silently dropping half of it. The rule "how wide is one item" had been
 written twice — once in `seq_pattern_span` and once in `seq_pattern_walk` — and
@@ -506,6 +548,14 @@ The wrong fixes, and why:
 
 - **`disc 5,3`** — two numbers in a step. Breaks one-character-per-step, which is
   what keeps the playhead on the character that is sounding.
+
+  *Re-argued 2026-09-25.* That rule is gone ([MANIFESTO.md](MANIFESTO.md) §3.6), so
+  this refusal needs a reason that survives it, and it has one: `,` now means
+  **simultaneous** — `[5,3]` on a disc lane is two circles at once, amounts 5 and 3,
+  exactly as `[0,4,7]` is three notes at once. Spending the same mark on
+  "coordinates" would give one character two meanings depending on the lane. A
+  position is a parameter, and a parameter is a lane (below). The refusal stands;
+  its old reason does not.
 - **A `>at 3,7` verb** — pairs lanes by convention. Fragile, and a new verb that
   deletes nothing.
 - **More primitives with position baked in** — `discleft`, `discright`. This is how

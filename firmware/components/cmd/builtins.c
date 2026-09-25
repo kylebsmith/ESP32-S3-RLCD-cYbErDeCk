@@ -500,6 +500,28 @@ static bool rerun_silences(const cmd_ctx_t *ctx)
     return rerun_silences_named(ctx->name, ctx->arg);
 }
 
+/* A LANE THAT WAS NOT COMPILED, AND WHY.
+ *
+ * This printed "16 lanes is all there is" for every refusal - including a
+ * pattern too long to hold, which then read as a full lane table to a performer
+ * with three lanes playing. Now each reason is its own sentence, and a pattern
+ * refused because of one character says which, marks it in the document
+ * (cmd_ctx.err_at), and fits the status bar in ONE line - so a typo does not
+ * throw the performer into the output page mid-song. */
+static cmd_status_t lane_refused(cmd_ctx_t *ctx, esp_err_t e)
+{
+    if (e == ESP_ERR_NO_MEM) {
+        cmd_out(ctx, "%d lanes is all there is.", SEQ_MAX_LANES);
+        cmd_out(ctx, "free one: type its name alone");
+        return CMD_ERROR;
+    }
+    int at = -1;
+    const char *why = seq_lane_error(&at);
+    ctx->err_at = at;
+    cmd_out(ctx, "%s", why[0] ? why : "not a pattern");
+    return CMD_ERROR;
+}
+
 static cmd_status_t c_drum(cmd_ctx_t *ctx)
 {
     uint8_t note = 36;
@@ -527,10 +549,9 @@ static cmd_status_t c_drum(cmd_ctx_t *ctx)
         return CMD_DONE;
     }
     seq_lane_note(ctx->name, note, 9);
-    if (seq_lane(ctx->name, ctx->arg) != ESP_OK) {
-        cmd_out(ctx, "%d lanes is all there is.", SEQ_MAX_LANES);
-        cmd_out(ctx, "free one: type its name alone");
-        return CMD_ERROR;
+    const esp_err_t le = seq_lane(ctx->name, ctx->arg);
+    if (le != ESP_OK) {
+        return lane_refused(ctx, le);
     }
     seq_mute(ctx->name, false);
     snprintf(ctx->msg, sizeof ctx->msg, "%s %s", ctx->name, ctx->arg);
@@ -576,10 +597,9 @@ static cmd_status_t c_voice(cmd_ctx_t *ctx)
     }
     seq_lane_melodic(ctx->name, s_voices[v].oct, s_voices[v].chan,
                      s_voices[v].gate);
-    if (seq_lane(ctx->name, ctx->arg) != ESP_OK) {
-        cmd_out(ctx, "%d lanes is all there is.", SEQ_MAX_LANES);
-        cmd_out(ctx, "free one: type its name alone");
-        return CMD_ERROR;
+    const esp_err_t le = seq_lane(ctx->name, ctx->arg);
+    if (le != ESP_OK) {
+        return lane_refused(ctx, le);
     }
     seq_mute(ctx->name, false);
     snprintf(ctx->msg, sizeof ctx->msg, "%s %s in %s", ctx->name, ctx->arg,
@@ -691,10 +711,9 @@ static cmd_status_t c_ctrl(cmd_ctx_t *ctx)
         return CMD_DONE;
     }
     seq_lane_ctrl(ctx->name, cc, 0);
-    if (seq_lane(ctx->name, ctx->arg) != ESP_OK) {
-        cmd_out(ctx, "%d lanes is all there is.", SEQ_MAX_LANES);
-        cmd_out(ctx, "free one: type its name alone");
-        return CMD_ERROR;
+    const esp_err_t le = seq_lane(ctx->name, ctx->arg);
+    if (le != ESP_OK) {
+        return lane_refused(ctx, le);
     }
     seq_mute(ctx->name, false);
     snprintf(ctx->msg, sizeof ctx->msg, "%s cc%u", ctx->name, (unsigned)cc);
@@ -1373,9 +1392,9 @@ static cmd_status_t c_prim(cmd_ctx_t *ctx)
     }
     if (prim < 0) {
         cmd_out(ctx, "no primitive '%.12s'", name);
-        cmd_out(ctx, "noise disc box star ramp grid");
-        cmd_out(ctx, "echo move spin warp shake");
-        cmd_out(ctx, "grow thin flip tile fold");
+        cmd_out(ctx, "noise disc box turn ramp grid");
+        cmd_out(ctx, "mask edge echo move spin warp");
+        cmd_out(ctx, "grow thin flip fold");
         return CMD_ERROR;
     }
 
@@ -1393,10 +1412,9 @@ static cmd_status_t c_prim(cmd_ctx_t *ctx)
         return CMD_DONE;
     }
     seq_lane_viz(name, prim, param);
-    if (seq_lane(name, pat) != ESP_OK) {
-        cmd_out(ctx, "%d lanes is all there is.", SEQ_MAX_LANES);
-        cmd_out(ctx, "free one: type its name alone");
-        return CMD_ERROR;
+    const esp_err_t le = seq_lane(name, pat);
+    if (le != ESP_OK) {
+        return lane_refused(ctx, le);
     }
     seq_mute(name, false);
     viz_split(true);
@@ -1773,30 +1791,17 @@ static cmd_status_t c_lanes(cmd_ctx_t *ctx)
         if (!l[i].used) {
             continue;
         }
-        /* Print what was typed, not a normalised version of it. A listing
-         * that silently rewrites 'X' as 'x' teaches the player that accents
-         * did not register. */
-        char bar[SEQ_MAX_STEPS + 1];
-        int k = 0;
-        for (; k < l[i].steps && k < SEQ_MAX_STEPS; k++) {
-            const uint32_t b = 1u << k;
-            if (!(l[i].mask & b))            { bar[k] = '.'; }
-            else if (l[i].accent & b)        { bar[k] = 'X'; }
-            else if (l[i].ghost & b)         { bar[k] = ','; }
-            else if (l[i].chance & b)        { bar[k] = '?'; }
-            /* A DRAWING LANE'S DIGITS ARE VALUES TOO. This tested melodic or
-             * ctrl, so '>noise 2.4.2.4.' listed back as 'x.x.x.x.' - the
-             * listing claiming the player had typed something they had not,
-             * which docs/COMMANDS.md makes a rule about: print what was typed,
-             * because a listing that rewrites it teaches the player their input
-             * did not register. */
-            else if ((l[i].melodic || l[i].ctrl ||
-                      l[i].bind == SEQ_BIND_VIZ) && l[i].deg[k] != 0xFF) {
-                bar[k] = (char)('0' + l[i].deg[k]);
-            } else                           { bar[k] = 'x'; }
-        }
-        bar[k] = '\0';
-        /* THE BINDING IS A COLUMN. A lane's name no longer tells you where it
+        /* PRINT WHAT WAS TYPED - THE TEXT ITSELF.
+         *
+         * The listing used to rebuild the pattern from the compiled bits, to
+         * prove it had been read. Once a step can be '9%30' or '[0,4,7]', a
+         * rebuild prints something the player did not type, which is exactly
+         * what docs/COMMANDS.md forbids. And a pattern is now either compiled
+         * exactly as written or refused, so the text IS the proof. (The rebuild
+         * also shifted a 32-bit 1 across 64 slots, so a long lane listed wrong
+         * past its thirty-second slot.)
+         *
+         * THE BINDING IS A COLUMN. A lane's name no longer tells you where it
          * goes - '>disc' draws and '>kick' sounds, and both are lanes - so the
          * listing has to say. '<- name' means this lane follows that one and
          * ignores its own steps. */
@@ -1804,27 +1809,8 @@ static cmd_status_t c_lanes(cmd_ctx_t *ctx)
             cmd_out(ctx, "%c%-5s <- %s", l[i].muted ? '-' : ' ',
                     l[i].name, l[i].route);
         } else {
-            cmd_out(ctx, "%c%-5s %s", l[i].muted ? '-' : ' ', l[i].name, bar);
-        }
-        /* Show the odds the '%' set. The bar can only render '?', so a
-         * listing without this cannot confirm that a '?%15' was read at all -
-         * which is precisely the uncertainty that had the owner unable to tell
-         * whether probability was working. */
-        {
-            char od[32] = {0};
-            int any = 0;
-            for (int q = 0; q < l[i].steps && q < SEQ_MAX_STEPS; q++) {
-                if (l[i].prob[q] != 255) {
-                    char one[8];
-                    snprintf(one, sizeof one, "%s%u", any ? "," : "",
-                             (unsigned)l[i].prob[q]);
-                    strncat(od, one, sizeof od - strlen(od) - 1);
-                    any = 1;
-                }
-            }
-            if (any) {
-                cmd_out(ctx, "      odds %.23s", od);
-            }
+            cmd_out(ctx, "%c%-5s %s", l[i].muted ? '-' : ' ', l[i].name,
+                    l[i].text);
         }
     }
     /* THIRTY COLUMNS. This was "%d bpm  swing %d  key %s  clock %s", which

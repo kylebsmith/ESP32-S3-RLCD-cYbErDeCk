@@ -32,10 +32,11 @@ If the screen stays blank, a button is held down: every reset reports
 ## 2. The guide plays
 
 Ctrl-L until the status bar reads `guide`. Run each `>` line from the top.
-By `>play` you should have a kick, a hat with ghost notes, a bassline in D
-minor, and a filter sweep.
+By `>play` you should have an accented kick, a soft hat whose last hit comes and
+goes, a tied bassline in D minor, two held chords on the pad, and a filter sweep.
 
-An inverted bar should sweep along each pattern line in time with the sound.
+An inverted bar should sweep along each pattern line in time with the sound,
+covering the whole step that is sounding — all of `x%50`, all of a chord.
 
 ## 3. Editing while it runs
 
@@ -48,12 +49,39 @@ silent. Again — it comes back.
 ## 4. Probability
 
 ```
->hat ?%3?%3?%3?%3
->hat ?%97?%97?%97?%97
+>hat x%3x%3x%3x%3
+>hat x%97x%97x%97x%97
 ```
 
-Near-silence, then near-constant. `>lanes` prints an `odds` line showing the
-percentages it read.
+Near-silence, then near-constant. `>lanes` prints each line exactly as it was
+compiled.
+
+## 4b. How much, how long, all at once
+
+```
+>send mon on
+>kick 9...5...
+>bass 0__.3...
+>pad [0,2,4]...
+>play
+```
+
+The console shows each note with its velocity and the time it went out. The kick
+alternates 127 and 71. The bass's first note is held two extra sixteenths — its
+off comes about 420 ms after its on at 124 bpm, where the next is about 180. The
+pad plays three notes on one timestamp. `>send mon off` to stop the log.
+
+## 4c. Mistakes are refused
+
+```
+>hat x...x...x;..
+>kick X...x...
+>hat [x.x.
+```
+
+Each is refused in one line on the status bar — *';' is not a step*, *X is gone: 9
+is loud*, *'[' is never closed* — and the character is boxed in the document until
+you edit. Whatever was playing keeps playing.
 
 ## 5. Time ratios
 
@@ -138,7 +166,7 @@ hit, by lane name.
 ## 11. Visuals, in the same document
 
 ```
->kick X...x...X...x...
+>kick 9...x...9...x...
 >bass 0...5...3...7...
 >echo 8
 >noise 2.4.2.4.
@@ -203,25 +231,30 @@ since the tiles mean nothing to a receiver.
 
 ```
 >kick x...<x .>...     a hit on the two, every other bar
->hat  <x.x. xxxx>      swap a whole group, bar to bar
+>hat  x.x.x.x.<[xxxx] x>...  a roll on the 9th step, every other bar
 >bass 0...<3 5>...     the value changes
 >snare <x%15 x%90>     and so do the odds
 >disc  <9 3>           pictures alternate too
 ```
 
-Angle brackets pick one; square brackets subdivide. They compose in either order:
+A lane's bar is its own length — one character at the top is one sixteenth — so
+`<>` swaps once per pass of the line it is in, not once per four beats. Angle
+brackets pick one; square brackets subdivide. They compose in either order:
 `[x<x .>]` is a doubled step whose second half comes and goes, and `<[xx] x>` is
 two hits one bar and one the next. Groups of different length run their own
-cycles — `<a b><c d e>` takes six bars to repeat.
+cycles — `<0 1><2 3 4>` takes six bars to repeat — and a group inside a group
+advances only when it is chosen: `<0 <1 2>>` plays 0 1 0 2.
 
-Probability is `%`: `x%15` is a fifteen-per-cent chance on that step, `?` alone is
-still a half, and they combine as `?%15`. Odds travel with the alternative, so
-`x%15<3%20 5%80>` keeps each one's own. The bracket was spent on the parameter
-before; a group had the better claim on it.
+Probability is `%`: `x%15` is a fifteen-per-cent chance on that step, and `[..]%50`
+puts odds on a whole group, multiplying with any inside it. Notes that start
+together share one roll, so a chord with odds plays whole or not at all. Odds
+travel with the alternative, so `x%15<3%20 5%80>` keeps each one's own. The
+bracket was spent on the parameter before; a group had the better claim on it.
 
 Nesting is resolved when the line compiles, so a nested lane costs the clock
-nothing. What cannot fit is refused rather than shortened — a nested bar's
-subdivision is a property of the whole bar.
+nothing. What cannot fit is refused rather than shortened. A five- or seven-way
+split keeps exact time — `>hat [xxxxx]...` lands its bar on the kick's, every
+bar.
 
 **A digit is always how much: 0 none, 9 full.** In every primitive. A `u`, `d`,
 `l` or `r` is which way, either in front of the pattern (`>ramp u 4.6.9.6.`)

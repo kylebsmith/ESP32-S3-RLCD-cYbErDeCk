@@ -200,22 +200,30 @@ yours to organise, rename and archive like any other writing.
 
 A lane is a line of characters. The characters are the same whether the lane
 is a kick drum, a bassline or — when the destination exists — a frame trigger
-on another board.
+on another board. A step is one character and what is attached to it.
 
 | Char | Means |
 |---|---|
-| `.` `-` `_` | rest |
-| `x` and anything else | a hit at the lane's velocity |
-| `X` | accent — three-quarters of the way to full |
-| `,` | ghost — a third |
-| `0`–`9` | on a melodic lane, the scale degree; `0` is the root |
+| `x` | a hit at the lane's own level |
+| `0`–`9` | a hit with an amount: velocity on a drum (`9` is 127), the scale degree on a voice (`0` is the root), the value on a controller, how much on a picture |
+| `.` | rest — the only one |
+| `_` | tie: the note before it keeps sounding |
+| `[xx]` `[0,4,7]` `<a b>` | subdivide; a chord; one per bar |
+| `%15` | after a step or group: fifteen per cent odds |
+| anything else | **refused**, with the character boxed in the document |
+
+It used to be "`.` `-` `_` rest, and anything else is a hit", so that nobody had
+to remember which character hits. The kindness had a price nobody saw until it
+was looked for: every typo was a note, an unclosed bracket was a septuplet, and
+the shipped guide was playing its own comments. See
+[MANIFESTO.md](MANIFESTO.md) §3.2.
 
 ```
 >bpm 124
 >scale dmin
->kick X...x...X...x...
->hat  x,x,x,x,x,x,x,x,
->bass 0...3...5...3...
+>kick 9...x...9...x...
+>hat  x3x3x3x3x3x3x3x3
+>bass 0__.3...5_..3...
 >play
 ```
 

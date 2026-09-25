@@ -165,12 +165,22 @@ static void dest_usb(const char *lane, uint8_t status, uint8_t d1, uint8_t d2,
 static void dest_mon(const char *lane, uint8_t status, uint8_t d1, uint8_t d2,
                      uint32_t when_us)
 {
-    (void)when_us;
-    (void)lane;
-    /* Note-ons only. Clock is 48 messages a second and would bury the thing
-     * the player is actually looking for. */
-    if ((status & 0xF0) == 0x90 && d2 > 0) {
-        ESP_LOGI("midi", "note %3u vel %3u ch %u", d1, d2, (status & 0x0F) + 1);
+    /* Notes on AND off, and controllers, each with its lane and the moment the
+     * clock decided it. Offs are here because a tie is a note that ends later,
+     * and nothing else on the device can show how long a note was. Clock and
+     * the step marker stay out: they are fifty messages a second and would bury
+     * the thing the player is looking for. */
+    const unsigned ms = (unsigned)(when_us / 1000u);
+    const uint8_t kind = status & 0xF0;
+    if (kind == 0x90 && d2 > 0) {
+        ESP_LOGI("midi", "%-5s on  %3u v%-3u ch%-2u t%u", lane, d1, d2,
+                 (status & 0x0F) + 1, ms);
+    } else if (kind == 0x80 || (kind == 0x90 && d2 == 0)) {
+        ESP_LOGI("midi", "%-5s off %3u      ch%-2u t%u", lane, d1,
+                 (status & 0x0F) + 1, ms);
+    } else if (kind == 0xB0 && d1 != 123) {
+        ESP_LOGI("midi", "%-5s cc%-3u = %3u   ch%-2u t%u", lane, d1, d2,
+                 (status & 0x0F) + 1, ms);
     }
 }
 
@@ -252,15 +262,24 @@ static void ensure_guide_buffer(void)
              * interface - so firmware that overwrites it destroys exactly the
              * thing the design is for. The new track goes on top, where it is
              * read first, and whatever was there stays underneath. */
-            bool has_play = false;
+            bool has_play = false, has_mark = false;
+            const size_t mlen = sizeof GUIDE_MARK - 1;
             for (size_t k = 0; k + 5 <= doc_len(); k++) {
                 if (doc_at(k) == '>' && doc_at(k+1) == 'p' && doc_at(k+2) == 'l' &&
                     doc_at(k+3) == 'a' && doc_at(k+4) == 'y') {
                     has_play = true;
-                    break;
+                }
+                if (k + mlen <= doc_len()) {
+                    size_t j = 0;
+                    while (j < mlen && doc_at(k + j) == GUIDE_MARK[j]) { j++; }
+                    if (j == mlen) { has_mark = true; }
                 }
             }
-            if (!has_play) {
+            /* AND HAS IT SEEN THIS GRAMMAR? A guide from before docs/MANIFESTO.md
+             * §3.6 teaches 'X...' and 'x,x?' - lines that are now refused - so it
+             * gets the new text too, on top, with everything the owner wrote kept
+             * underneath. */
+            if (!has_play || !has_mark) {
                 const size_t had = doc_len();
                 char *keep = malloc(had + 1);
                 if (keep != NULL) {

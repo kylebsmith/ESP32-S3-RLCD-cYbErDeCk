@@ -79,18 +79,22 @@ differs is only which destination interprets it.
 ```
 >bpm 124
 >scale dmin
->kick X...x...X...x...
->hat  x?x?x.x. /2
->bass 0...3...5...3...
+>kick 9...x...9...x...
+>hat  x%50x%50x.x. /2
+>bass 0__.3...5_..3...
+>pad  [0,2,4]___[3,5,7]___
 >cc cut 0..3..6..9..6.
 >play
 ```
 
-`x` is a hit, `X` an accent, `,` a ghost, `?` a maybe, `?[15]` a fifteen per
-cent maybe, `.` a rest. Digits are scale degrees on a melodic lane and values on
-a controller lane. A trailing `/2` or `*2` sets that lane's own speed. An
-inverted bar sweeps the line in time with the sound, so you can see what is
-playing in the document you are editing.
+`x` is a hit and `.` a rest. A digit is **how much** — velocity on a drum, the
+scale degree on a voice, the value on a controller lane. `_` holds the note before
+it, `[0,2,4]` is a chord, `x%15` plays fifteen per cent of the time, `[xx]`
+subdivides a step and `<a b>` alternates bars. A trailing `/2` or `*2` sets that
+lane's own speed. Anything else is refused, with the character boxed, rather than
+played. An inverted bar sweeps each line in time with the sound, lighting the whole
+step that is sounding, so you can see what is playing in the document you are
+editing.
 
 Output goes to named destinations rather than a compiled-in sink, which is why
 the same pattern can drive a synth and a projector without either knowing about
