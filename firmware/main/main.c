@@ -19,6 +19,7 @@
 #include "dinmidi.h"
 #include "ensemble.h"
 #include "vitals.h"
+#include "view.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -492,6 +493,9 @@ void app_main(void)
      * visual half of the same lane grammar: one pattern, and whether it is a
      * drum or a frame trigger is the destination's business. */
     seq_dest_add("osc", net_osc_send, net_osc_flush, "OSC /deck/<lane>");
+    /* THE PICTURE, to an HDMI node - docs/VIEW.md. A destination like the rest,
+     * off until '>send view on'. */
+    view_init();
     /* BLE MIDI is OFF by default. It is quantised to the connection interval
      * and shares one radio with the keyboard link, so typing contends with
      * the notes - which is exactly when the owner heard the timing go loose.
@@ -793,6 +797,7 @@ void app_main(void)
 
         if (viz_service()) {
             need_draw = true;
+            view_frame();
         }
 
         if (need_draw) {

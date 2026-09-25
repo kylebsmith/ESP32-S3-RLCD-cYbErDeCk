@@ -126,6 +126,7 @@ routes draws in table order, whatever order the lines were typed.
 |---|---|
 | `route disc kick` | the circle fires on the kick, at its velocity. Any two lanes. Chains. |
 | `send` | list destinations; `send mon on` |
+| `send view on` | **the picture on HDMI**, from an RP2040 DVI node — `send view 40x12` for a size. [VIEW.md](VIEW.md) |
 | `usb on` | be a USB MIDI device — needs a computer. Reboots. |
 | `din 17` | **MIDI on a wire — needs no computer.** Drives an SP404, a eurorack brain, anything with MIDI IN. Wire it first: [HARDWARE.md](HARDWARE.md) |
 | `osc 10.0.0.5 9000` | `/deck/<lane>` over the network |

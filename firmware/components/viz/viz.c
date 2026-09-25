@@ -119,6 +119,7 @@ typedef struct {
 static pmark_t s_pmark[MARK_MAX];
 static volatile uint8_t s_npmark;
 static volatile uint32_t s_mark_tick;
+static uint32_t s_frame_tick;      /* the tick the frame on show was drawn for */
 static volatile bool     s_pending;
 
 static char    s_fb[VIZ_H][VIZ_W + 1];
@@ -172,7 +173,41 @@ static int s_w = 28, s_h = 10;
 int viz_cols(void) { return s_w; }
 int viz_rows(void) { return s_h; }
 
+static int s_out_w, s_out_h;        /* the output's size, 0 = the pane's */
+
+static void resize(int w, int h);
+
+void viz_out_size(int w, int h)
+{
+    s_out_w = (w > 0 && h > 0) ? w : 0;
+    s_out_h = (w > 0 && h > 0) ? h : 0;
+    if (s_out_w > 0) {
+        resize(s_out_w, s_out_h);
+    }
+}
+
+char viz_cell_fit(int x, int y, int pw, int ph)
+{
+    if (pw <= 0 || ph <= 0 || s_w <= 0 || s_h <= 0) {
+        return ' ';
+    }
+    const int sx = (pw == s_w) ? x : x * s_w / pw;
+    const int sy = (ph == s_h) ? y : y * s_h / ph;
+    if (sx < 0 || sy < 0 || sx >= s_w || sy >= s_h) {
+        return ' ';
+    }
+    return s_fb[sy][sx];
+}
+
 void viz_size(int w, int h)
+{
+    if (s_out_w > 0) {
+        return;                     /* the output decides, not the pane */
+    }
+    resize(w, h);
+}
+
+static void resize(int w, int h)
 {
     if (w < 4)     { w = 4; }
     if (h < 2)     { h = 2; }
@@ -972,6 +1007,7 @@ bool viz_service(void)
     }
     s_pending = false;
     const uint32_t tick = s_mark_tick;
+    s_frame_tick = tick;
 
     /* Keep this frame before it is wiped: echo needs the one before it, and a
      * copy taken here is the only place it is guaranteed to be complete. */
@@ -1024,6 +1060,20 @@ bool viz_service(void)
     return true;
 }
 
+int viz_frame(uint8_t *cells, int max, int *w, int *h, uint32_t *tick)
+{
+    if (w != NULL)    { *w = s_w; }
+    if (h != NULL)    { *h = s_h; }
+    if (tick != NULL) { *tick = s_frame_tick; }
+    int n = 0;
+    for (int y = 0; y < s_h; y++) {
+        for (int x = 0; x < s_w && n < max; x++) {
+            cells[n++] = (uint8_t)s_fb[y][x];
+        }
+    }
+    return n;
+}
+
 int viz_text(char *out, int max)
 {
     /* THE WIRE GETS ASCII, THE GLASS GETS THE TILES.
@@ -1034,10 +1084,9 @@ int viz_text(char *out, int max)
      * " .:*#@", each sparkle to '*', an arc to '#'. That is a downsample and is
      * stated as one; the panel is not affected.
      *
-     * When there is a receiver that wants the real thing - the RP2040 with the
-     * HDMI output - the format to send it is the glyph bytes, and this is the
-     * function to add that to. It is not guessed at now, because a wire format
-     * invented before its reader is a wire format nobody implements. */
+     * The receiver that wants the real thing now exists - the RP2040 with the
+     * HDMI output - and it gets the glyph bytes from viz_frame(), in the format
+     * docs/VIEW.md describes. This stays the ASCII for everything else. */
     int n = 0;
     for (int y = 0; y < s_h && n < max - 1; y++) {
         char line[VIZ_W + 2];

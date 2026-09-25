@@ -473,8 +473,12 @@ static void draw_pane(const viz_pane_t *p)
             } else if (cc == 0 || cc == p->w - 1) {
                 ch = '|';
             } else {
+                /* The frame SAMPLED to the pane: the same cell when the two are
+                 * one size, the nearest when an output bigger than the panel
+                 * is setting the size (viz_out_size). */
                 const int vx = cc - 1;
-                ch = (row != NULL && vx < iw && row[vx] != '\0') ? row[vx] : ' ';
+                (void)row;
+                ch = viz_cell_fit(vx, r - 1, iw, ih);
             }
             tg_put(p->x + cc, p->y + r, ch, TG_NORMAL);
         }

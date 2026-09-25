@@ -68,6 +68,18 @@
  * so the generators always draw into the rectangle that is actually visible -
  * and '>frame' sends that same rectangle, nothing padded and nothing lost. */
 void viz_size(int w, int h);
+
+/* THE OUTPUT'S SIZE, when something bigger than the panel is watching - the
+ * HDMI view node (docs/VIEW.md). Nonzero pins the frame at w x h and viz_size()
+ * from the pane stops deciding it; the pane then shows the frame sampled down to
+ * its own size with viz_cell_fit(), so the preview keeps its shape and stays
+ * what it was asked to stay: an approximation of the output. Zero gives the
+ * decision back to the pane. */
+void viz_out_size(int w, int h);
+
+/* The cell to show at (x, y) of a pane pw x ph: the frame's own cell when the
+ * two are the same size, its nearest when the output is bigger. */
+char viz_cell_fit(int x, int y, int pw, int ph);
 int  viz_cols(void);
 int  viz_rows(void);
 
@@ -183,6 +195,13 @@ const char *viz_row(int y);
 
 /* The whole frame as one newline-separated string, for '>frame'. */
 int viz_text(char *out, int max);
+
+/* THE FRAME AS IT IS, FOR THE VIEW NODE: the glyph bytes row by row - 32-126
+ * text, 128-155 the deck's own tiles - its size in cells, and the tick it was
+ * drawn for. viz_text() above is the lossy ASCII for monitors; this is the
+ * picture itself, which docs/VIEW.md carries to the HDMI node. Returns the
+ * number of cells written, 0 if nothing has been drawn. */
+int viz_frame(uint8_t *cells, int max, int *w, int *h, uint32_t *tick);
 
 /* Split-screen preview. The picture takes about half the rows; '>split 8' asks
  * for a number of rows instead, because now that the split always stacks, rows

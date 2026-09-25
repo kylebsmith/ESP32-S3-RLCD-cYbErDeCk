@@ -1869,10 +1869,32 @@ static cmd_status_t c_send(cmd_ctx_t *ctx)
                  seq_dest_is_on(name) ? "on" : "off");
         return CMD_DONE;
     }
+    /* THE VIEW NODE TAKES A SIZE AS WELL: '>send view 53x20' is on, at that
+     * many cells. 'on' alone is 53x20 - the whole 640x480 screen in the deck's
+     * own 12x24 face - and 'off' gives the size back to the preview pane. The
+     * pane keeps its own shape throughout and shows a sample of the output. */
+    int vw = 0, vh = 0;
+    const bool view = (strcmp(name, "view") == 0);
+    if (view && sscanf(state, "%dx%d", &vw, &vh) == 2) {
+        if (vw < 4 || vh < 2 || vw > VIZ_W || vh > VIZ_H) {
+            cmd_out(ctx, "view is 4x2 to %dx%d cells", VIZ_W, VIZ_H);
+            return CMD_ERROR;
+        }
+        snprintf(state, sizeof state, "on");
+    }
     const bool on = strcmp(state, "on") == 0;
     if (!on && strcmp(state, "off") != 0) {
-        cmd_out(ctx, "send <name> on | off");
+        cmd_out(ctx, view ? "send view on | off | 53x20" : "send <name> on | off");
         return CMD_ERROR;
+    }
+    if (view) {
+        if (!on) {
+            viz_out_size(0, 0);
+        } else {
+            viz_out_size(vw ? vw : 53, vh ? vh : 20);
+            viz_split(true);
+        }
+        tg_invalidate();
     }
     if (seq_dest_enable(name, on) != ESP_OK) {
         cmd_out(ctx, "no destination called '%s'. try just: send", name);

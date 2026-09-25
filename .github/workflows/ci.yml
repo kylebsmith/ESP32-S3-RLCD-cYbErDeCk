@@ -241,6 +241,20 @@ jobs:
           diff -u firmware/components/textgrid/font12x24.c /tmp/font12x24.c
           python3 tools/check_fonts.py
 
+      # The HDMI view node (docs/VIEW.md): frames packed by the deck's
+      # view_wire.h must be read by the node's view_read.h - the files the two
+      # boards build - including after junk and a torn frame, where the old
+      # reader lost the next frame too. And the node's glyphs are generated from
+      # the panel's own art, so they are diffed like the panel's faces.
+      - name: Check the view node's wire format and its font
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror \
+             -I firmware/main -I view/deckview \
+             -o /tmp/test_view_wire tools/test_view_wire.c
+          /tmp/test_view_wire
+          python3 tools/make_font.py --view > /tmp/deckfont.h
+          diff -u view/deckview/deckfont.h /tmp/deckfont.h
+
       - name: Check the documentation is self-consistent
         run: python3 tools/check_docs.py
 
