@@ -1,6 +1,6 @@
 {
-  "passed": 115,
-  "total": 115,
+  "passed": 119,
+  "total": 119,
   "results": [
     {
       "check": "chassis: watertight",
@@ -24,7 +24,7 @@
       "check": "backplate: watertight",
       "class": "MESH",
       "ok": true,
-      "detail": "16800 faces"
+      "detail": "17608 faces"
     },
     {
       "check": "backplate: single body",
@@ -36,7 +36,7 @@
       "check": "backplate: positive volume",
       "class": "MESH",
       "ok": true,
-      "detail": "45923 mm^3 -> 56.9 g in PLA"
+      "detail": "46183 mm^3 -> 57.3 g in PLA"
     },
     {
       "check": "buttons: watertight",
@@ -60,7 +60,7 @@
       "check": "cover: watertight",
       "class": "MESH",
       "ok": true,
-      "detail": "7288 faces"
+      "detail": "6424 faces"
     },
     {
       "check": "cover: single body",
@@ -72,7 +72,7 @@
       "check": "cover: positive volume",
       "class": "MESH",
       "ok": true,
-      "detail": "49231 mm^3 -> 61.0 g in PLA"
+      "detail": "48273 mm^3 -> 59.9 g in PLA"
     },
     {
       "check": "board: watertight",
@@ -162,7 +162,7 @@
       "check": "backplate is not degenerate",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "109.25 x 133.25 x 13.20, 45923 mm^3"
+      "detail": "109.25 x 133.25 x 14.20, 46183 mm^3"
     },
     {
       "check": "buttons is not degenerate",
@@ -174,7 +174,7 @@
       "check": "cover is not degenerate",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "115.95 x 139.95 x 4.45, 49231 mm^3"
+      "detail": "120.95 x 144.95 x 6.55, 48273 mm^3"
     },
     {
       "check": "chassis fits the print bed",
@@ -186,7 +186,7 @@
       "check": "backplate fits the print bed",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "109.2 x 133.2 x 13.2"
+      "detail": "109.2 x 133.2 x 14.2"
     },
     {
       "check": "buttons fits the print bed",
@@ -198,7 +198,7 @@
       "check": "cover fits the print bed",
       "class": "ENVELOPE",
       "ok": true,
-      "detail": "116.0 x 139.9 x 4.5"
+      "detail": "121.0 x 144.9 x 6.6"
     },
     {
       "check": "board does not clash with the chassis",
@@ -216,7 +216,7 @@
       "check": "board is inside the assembled envelope",
       "class": "FIT",
       "ok": true,
-      "detail": "bounds [[-46.25, -2.78, -5.0], [46.25, 66.32, 14.2]] in [-58.12, -70.12, -10.0]..[58.12, 70.12, 16.85]"
+      "detail": "bounds [[-46.25, -2.78, -5.0], [46.25, 66.32, 14.2]] in [-58.12, -70.12, -11.0]..[58.12, 70.12, 16.85]"
     },
     {
       "check": "keyboard does not clash with the chassis",
@@ -234,7 +234,7 @@
       "check": "keyboard is inside the assembled envelope",
       "class": "FIT",
       "ok": true,
-      "detail": "bounds [[-54.4, -65.4, 3.45], [54.4, -6.9, 14.84]] in [-58.12, -70.12, -10.0]..[58.12, 70.12, 16.85]"
+      "detail": "bounds [[-54.4, -65.4, 3.45], [54.4, -6.9, 14.84]] in [-58.12, -70.12, -11.0]..[58.12, 70.12, 16.85]"
     },
     {
       "check": "board pocket clearance",
@@ -270,19 +270,19 @@
       "check": "18650 fits inside the battery cowl",
       "class": "FIT",
       "ok": true,
-      "detail": "cell reaches z=-5.00, cowl inner face at z=-8.00, clearance 3.00 mm"
+      "detail": "cell reaches z=-5.00, cowl inner face at z=-9.00, clearance 4.00 mm"
     },
     {
       "check": "cowl clears the holder protrusion",
       "class": "FIT",
       "ok": true,
-      "detail": "holder reaches 5.00 mm past the back plate's outer face; cowl gives 8.00 mm of internal rise"
+      "detail": "holder reaches 5.00 mm past the back plate's outer face; cowl gives 9.00 mm of internal rise"
     },
     {
       "check": "cowl wall stays intact along its rise",
       "class": "FIT",
       "ok": true,
-      "detail": "thinnest 2.00 mm at 2.0 mm depth (2.5 beads at 0.8 mm)"
+      "detail": "thinnest 2.00 mm at 2.2 mm depth (2.5 beads at 0.8 mm)"
     },
     {
       "check": "front face lands on the panel module, not just past its glass",
@@ -420,7 +420,7 @@
       "check": "cowl cavity is at full section where the holder is deepest",
       "class": "STACK",
       "ok": true,
-      "detail": "narrowest cavity section 78.800 x 23.100 at z = -1.60 against a 77.80 x 22.10 holder: +0.500 mm per side, declared clearance 0.50"
+      "detail": "narrowest cavity section 78.800 x 23.100 at z = -1.80 against a 77.80 x 22.10 holder: +0.500 mm per side, declared clearance 0.50"
     },
     {
       "check": "keyboard still covers its aperture with the pocket play taken up",
@@ -519,34 +519,40 @@
       "detail": "rib tips close the 5.50 bore to 4.80; the discs run 4.90..5.10, so interference is 0.10..0.30 mm diametral"
     },
     {
-      "check": "the cover seats on the front face without clashing",
+      "check": "the lip clears the side ports",
       "class": "MAGNET",
       "ok": true,
-      "detail": "shared volume 0.0000 mm^3 with both register platforms engaged in their apertures"
+      "detail": "wall reaches chassis z = 13.25; the USB-C opening's top edge is at 12.78, so anything deeper starts covering it"
     },
     {
-      "check": "register platforms clear the glass and the keycaps",
+      "check": "the lip takes less than the rim offers",
       "class": "MAGNET",
       "ok": true,
-      "detail": "platforms reach 1.50 mm in; the glass is 2.65 below the face (1.15 clear) and the keycaps 2.80 (1.30 clear)"
+      "detail": "lip reaches 0.70 mm under a rim that undercuts 1.023 mm per side, so the ramp on stays gentle and the shell is never forced"
+    },
+    {
+      "check": "the lip engages as ONE continuous ring",
+      "class": "MAGNET",
+      "ok": true,
+      "detail": "1 engagement region(s) totalling 270.7 mm^3; more than one means the ring is broken and the hold is local again"
+    },
+    {
+      "check": "the engagement is a hook, not a clash",
+      "class": "MAGNET",
+      "ok": true,
+      "detail": "270.7 mm^3 round a 513 mm rim, against a 359 mm^3 ceiling for a 0.70 mm hook over a 1.00 mm lip"
+    },
+    {
+      "check": "the lip still holds after the part has warped",
+      "class": "MAGNET",
+      "ok": true,
+      "detail": "lip engaged over 99% of its length at 0.8 mm of bow, 99% at 0.3 mm of splay, 99% at both together"
     },
     {
       "check": "magnets are not asked to carry shear",
       "class": "MAGNET",
       "ok": true,
-      "detail": "4 pairs make 15.4 N of pull across 0.8 mm but only 3.2 N of shear; the two 1.5 mm platforms carry it instead"
-    },
-    {
-      "check": "crush ribs are at least one extrusion wide",
-      "class": "MAGNET",
-      "ok": true,
-      "detail": "narrowest rib 1.467 mm = 1.83 extrusions at a 0.8 nozzle, across 48 sections; below 1.00 the slicer sets the width, not this design"
-    },
-    {
-      "check": "gaps between crush ribs survive the slicer",
-      "class": "MAGNET",
-      "ok": true,
-      "detail": "narrowest gap 1.342 mm = 1.68 extrusions; below 1.00 the ribs bridge into a solid ring and there is no crush relief left"
+      "detail": "4 pairs make 15.4 N of pull across 0.8 mm but only 3.2 N of shear; a 3.6 mm wall hooking the rim carries it instead"
     },
     {
       "check": "back plate fits the chassis opening",
@@ -691,6 +697,24 @@
       "class": "DATUM",
       "ok": true,
       "detail": "34.0 x 8.0 mm window reaches the keyboard's power switch and charging port, which share one short edge"
+    },
+    {
+      "check": "every [DERIVED] = N comment tells the truth",
+      "class": "PARAM",
+      "ok": true,
+      "detail": "52 claims checked against the value they name"
+    },
+    {
+      "check": "no parameter is undef in the renderer",
+      "class": "PARAM",
+      "ok": true,
+      "detail": "403 scalars echoed out of OpenSCAD; none undef"
+    },
+    {
+      "check": "both readers agree on every parameter",
+      "class": "PARAM",
+      "ok": true,
+      "detail": "403 shared scalars, both readers agree"
     }
   ]
 }

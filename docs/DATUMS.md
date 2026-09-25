@@ -347,6 +347,289 @@ a wider recess behind it. This back plate is 3.2 mm thick and the header stands
 8.603 mm off the PCB back — **1.60 mm proud of the standoff plane** — so the
 body itself must pass through. The window here is sized from the body.
 
+### C-40 — "It'll warp and float" — so the lip was tested warped
+
+The v3 shell was reported against before it was printed: *"PLA warps and shit
+over time so eventually it won't sit level and flush and it's not designed to
+actually engage with the enclosure so it's just a floating slab on top."*
+
+Half of that was wrong and half of it found a real defect.
+
+**It did engage** — a continuous lip hooking the rim, 92.7 mm³ in one ring. But
+the warp concern was right, and it was right about a mechanism the design had
+not addressed at all.
+
+### The inner face was a mating surface, and should not have been
+
+The cover's whole inner face met the deck's whole front face. **Two large flat
+surfaces meeting is exactly what rocks when either one bows**, and PLA bows —
+on the bed, and again over months as it relaxes. The lip could be perfect and
+the cover would still sit proud in the middle.
+
+So the middle is not a mating surface any more. The inner face is recessed
+0.50 mm across everything except a 5 mm perimeter land — which the wall
+stiffens and keeps true — and four pads at the magnets, which stay at full
+height because 0.5 mm of extra gap costs roughly half the pull.
+
+**It floats over a void by design, rather than floating because it does not
+fit.**
+
+### Then the lip was deformed and asked again
+
+A part that fits when perfect is not the question. The lip ring was displaced
+under two failure modes and re-tested against the shell solid:
+
+| | v3 as drawn | now |
+|---|---|---|
+| bow, corners lift 0.8 mm | 99.2 % held | **99.2 %** |
+| splay, mouth opens 0.2 mm | **2.2 %** | 99.2 % |
+| splay 0.3 mm | 0.0 % | **99.2 %** |
+| splay 0.4 mm | 0.0 % | 37.8 % |
+| bow 0.8 **and** splay 0.3 | — | **99.2 %** |
+
+**Bow was never the problem** — the relieved face absorbs it completely. Splay
+was, and the cause was the design's own arithmetic: **the hook is measured at
+the mouth, but the land sits above it**, where the shell has already narrowed.
+A 0.50 mm hook behind a 0.60 mm entry chamfer left **0.17 mm of real
+engagement** — a third of the number it was being quoted as.
+
+Cutting the entry to 0.20 and deepening the hook to 0.70 doubled the splay
+tolerance, 0.17 → 0.35 mm. Every 0.1 mm of entry chamfer is 0.1 mm of
+engagement given away.
+
+### Two process failures worth recording
+
+**A parameter edit silently did nothing.** The hook change was applied with an
+unchecked string replacement that did not match, and the warp improvement was
+reported from the *relief* change alone. It was caught by `git diff --stat`
+showing **insertions and no deletions** on a patch that was supposed to replace
+three lines. Parameter edits now assert the line they are replacing.
+
+**A magic number failed the moment the design moved.** The interference check
+carried a hand-picked 220 mm³ ceiling and rejected the deeper hook at 270.7.
+The bound is now derived — rim length × hook depth × lip height = 359 mm³ —
+so it tracks the design instead of freezing one version of it.
+
+### Nothing outside the cover moved
+
+Verified rather than asserted: the only changed parameters are `cover_*`, the
+only changed module is `cover()`, and `check_golden --stl` reports chassis,
+backplate and buttons identical to **0.00000 mm and 0.0000 mm³**.
+
+### C-39 — The grip fingers were the wrong answer, correctly measured
+
+C-38 replaced a warped flat plate with a tray on six sprung grip fingers. Every
+number in it was good: six fingers biting 3.26 mm³ each, exactly even, zero
+support. It was still wrong, and the owner's verdict named both halves — *"fingers
+are gonna be fragile, visual aesthetic is of cheap consumer products."*
+
+**Discrete snap features are a local answer to a global problem.** Each finger is
+a small cantilever doing a job alone, so each is a place the part can break, and
+six little hooks in a row read as moulded consumer plastic. Measuring them
+evenly did not make them right. A mechanism had been bolted **onto** the object
+instead of the object **being** the mechanism.
+
+### The rim was already an undercut
+
+Measured on the rendered chassis, the flank tapers **1.023 mm per side over the
+last 3.60 mm** before the front face:
+
+| depth below the face | half-width | undercut |
+|---|---|---|
+| 0.05 | 56.928 | — |
+| 2.00 | 57.390 | 0.462 |
+| 3.60 | 57.951 | **1.023** |
+| 5.00 | 58.125 | 1.197 |
+
+So a single continuous eased lip hooks that rim **all the way round at once** —
+roughly 460 mm of engagement instead of six 9 mm fingers. Nothing local, nothing
+sprung, nothing to snap off. It goes on in one press: the lip rides a 1.5 mm
+ramp of the deck's own taper while the whole shell breathes a few tenths, and
+the four magnets — **unchanged, same sites, same pockets** — pull the last of it
+home.
+
+Measured: **92.7 mm³ of interference in exactly one region.** One ring, not six
+bites.
+
+### Depth was set by the ports, not by preference
+
+The USB-C opening's top edge is at chassis z = 12.78, so a wall deeper than
+**4.07 mm** starts covering it. 3.60 leaves 0.47 mm of clearance and still buys
+the full 1.023 mm undercut. The lip takes 0.50 of that — half — so the ramp
+stays gentle and the shell is never forced.
+
+### Two overhangs the measurement caught
+
+The lip's flare was built at 1:1, which is 45° on the straight runs but measured
+**40.2° at the corners**, where the superellipse takes a smaller radial step for
+the same rise. And the shell inherited the deck's own edge roll, which flares
+outward off the bed at ~42°.
+
+Raising the flare to 1.35:1 and giving the cover its own longer roll
+(`cover_edge_soft` 0.80, `cover_edge_roll` 0.24) took support from **85.3 mm² to
+0.00**. An intermediate attempt at 1.75:1 made it *worse* — 372 mm² — because it
+left only 0.61 mm of chamber; recorded because the obvious direction was the
+wrong one.
+
+### The checks
+
+`MAGNET` now asks about the **ring**, and the load-bearing one is that it *is* a
+ring: **more than one engagement region means the retention has gone local again
+without anyone deciding that it should.**
+
+### C-38 — The cover was a flat plate, and flat plates warp
+
+The first cover was a 116 × 140 mm plate, 2.95 mm thick, held on four magnets.
+It printed warped, and a warped plate cannot register on a flat face. Reported
+from the print: *"it prints unflat so it doesn't actually clasp."*
+
+Nothing was dimensionally wrong with it. It is the **geometry itself** that is
+the defect — a thin wide plate is exactly what curls on an FDM bed, and this
+design then asked four discrete magnets to pull that curl flat across a
+520 mm perimeter. They cannot. The plate and its retention were both wrong for
+the same reason: **the design registered on the face, and the face is the part
+that moves.**
+
+### One fix for both halves
+
+A closed perimeter skirt turns the part from a plate into a shallow box
+section, which barely warps to begin with, and moves registration from the
+face to the **sides**, which do not.
+
+**The shell was already the right shape for this.** Measured on the rendered
+chassis, it is a barrel: full 116.250 mm from z = 4.90 to z = 11.90, tapering
+to 113.914 at the front face. That is **1.168 mm per side of lead-in that
+already existed**, and a full-width band to grip. No enclosure change — the
+geometry was frozen, and it did not need to move.
+
+| | Was | Now |
+|---|---|---|
+| Form | flat plate | tray, 8.00 mm skirt |
+| Registers on | the front face | the shell's flanks |
+| Retention | 4 magnets | 6 grip fingers + the same 4 magnets |
+| Magnets | structure | seating and anti-rattle |
+| Shear | `cover_reg_depth` platforms in the apertures | the skirt |
+
+The magnet configuration is **unchanged** — same four sites, same pockets, same
+gap.
+
+### Three things the measurements caught
+
+**Fingers, not a continuous band.** A continuous interference lip would have to
+be stretched by hoop strain over 116 mm of stiff wall. PLA-CF cracks before it
+stretches. Discrete cantilevers flex locally — and because each finds its own
+position, **residual warp costs nothing, since no finger depends on another
+being where it should be.** Root strain is `3δt/2L²` = **0.94 %** at δ = 0.25,
+t = 1.60, L = 8.00. That is also why the skirt is 8 mm and not 5: strain goes
+as 1/L², and at 5 mm it is over PLA-CF's limit.
+
+**A finger on the corner gripped a quarter of its neighbours.** The first
+placement put one at y = 62, past where the corner blend starts at y = 58.9 and
+the shell begins to narrow. Measured interference: **2.68 and 1.21 mm³ against
+5.08** for the others. A presence check would have passed it. The fix was to
+stop sharing positions between the flanks — they do not have the same
+obstructions, since +X carries the USB-C and microSD tunnels and −X the
+keyboard service window. All six now bite **3.26 mm³ each, exactly even.**
+
+**An unsupported ledge, 1,200 mm² of it.** The plate was an `rse_soft` barrel
+and the skirt a separate straight tube; where they met, the skirt stood proud
+of the plate's inset bottom, leaving an annular overhang facing the bed. One
+continuous straight-sided form removes it, holds the wall constant, and is the
+more minimal object. Printed show-face-down the part now needs **0.00 mm² of
+support**.
+
+### The checks
+
+`MAGNET` loses the two register-platform checks and gains three that ask the
+mesh: that the skirt lands inside the full-width band, that every finger bites,
+and — the one that would have caught the corner — **that they bite evenly**.
+
+### C-37 — The flood-coat dam was lying on two countersinks
+
+The back is finished with poured self-levelling acrylic, which needs a wall to
+level against. The obvious move is a dam around the plate's perimeter, and that
+is what was built: 1.20 mm high, 2.00 mm wall, following the plate outline.
+
+The audit rejected it immediately — **6 probes covered, up to 1.20 mm of
+material over the countersink**, on both M2.5 board screws at y = +62.83. That
+is [C-25](#c-25--the-cowl-was-lying-on-top-of-two-screws-and-a-window) again,
+exactly: a feature lying on top of a screw, dimensionally perfect and
+functionally impossible.
+
+**There is no ring that works.** The dam has to clear four M2.5 countersinks
+*and* the 82.80 mm battery cowl, on a 109.25 mm plate:
+
+| Constraint | Dam outer edge must be inboard of |
+|---|---|
+| Board screw heads at x = ±42.75 | x = 40.25 → 14.375 mm inset |
+| Board screw heads at y = +62.83 | y = 60.33 → 6.295 mm inset |
+| Battery cowl, 82.80 wide | x = 41.40 |
+
+A 14.4 mm inset leaves a flooded panel 76 mm wide — narrower than the cowl that
+crosses it. The geometry does not close.
+
+And the functional objection is worse than the geometric one: **a coat poured
+over the fasteners seals the plate shut.** The dam would have made the device
+harder to open, which is the opposite of the requirement it was serving.
+
+### The fix: the dam is a jig, not a feature
+
+The plate drops into a frame that stands `pour_dam_rise` proud of it, the resin
+levels inside that, and the frame comes off once the coat has gelled.
+
+It surrounds the plate rather than crossing it, so it is outboard of every
+fastener by construction and cannot foul anything. It touches no validated
+geometry. It is reusable, and it can be reprinted without reprinting a part of
+the device.
+
+The general lesson: **a fixture is not a worse answer than a feature, it is
+often the correct one.** The requirement was "the resin must have something to
+level against during the pour" — which is a statement about a *process*, and
+the instinct to solve it in the *product* is what put material over a screw.
+
+### C-36 — The battery cowl gained a millimetre, and the golden check caught it
+
+Not a defect. A deliberate change, recorded because `tools/check_golden.py`
+refused it and refusing it is the check working exactly as designed.
+
+The cowl is not only a cover for the cell. Resting on it the deck **leans
+toward the user**, which is the posture it is used in on a desk, and it is what
+the fingers wrap when it is held. Both wanted more of it.
+
+| | Was | Now |
+|---|---|---|
+| `batt_cowl_extra` | — | **1.00** |
+| `batt_cowl_rise` | 10.00 | **11.00** |
+| `batt_cowl_crown` | 0.700 | **0.622** |
+| Lean angle on the cowl | 6.38° | **7.01°** |
+
+7° sits inside the 5–11° band keyboards are normally tilted to.
+
+**`batt_cowl_crown` moved on its own, and that is correct.** It is
+`(cell clearance) / (rise - wall)`. The numerator — what the cell actually
+needs — is unchanged at 5.60 mm. Only the denominator grew, so the crown starts
+proportionally lower and **the extra millimetre goes into the dome rather than
+into the cavity**. The cell's clearance is preserved exactly while the form
+gets fuller, which is what a hand rest wants. Had the numerator moved, this
+would have been a defect.
+
+**Why the golden baseline was re-cut rather than the change gated.** `batt_cowl_*`
+is not in `check_golden.py`'s `V2_ONLY` list, so the change reaches v1's frozen
+surface. That list exists for parameters that *cannot* move v1 geometry; this
+one does, and pretending otherwise by widening the list would have made the
+check lie. The alternative — gating on `variant` — does not work either, because
+`check_golden` parses `parameters.scad` as written rather than forcing
+`variant = 1`, so a gated value would still read as changed. That is a latent
+weakness in the tool and is recorded here as such.
+
+So the baseline was re-cut with `--update`, which is the sanctioned path for a
+deliberate change. The check did its job: this did not happen silently, it
+happened in front of somebody who then had to write this down.
+
+**The already-printed chassis is unaffected.** The cowl is on the back plate,
+which is a separate part with unchanged mounting. Reprint the plate; keep
+everything else.
+
 ### C-35 — The crush ribs were narrower than the nozzle that had to print them
 
 Eight ribs, 0.35 mm tall, cut into the magnet bore so the discs would grip
@@ -1431,3 +1714,879 @@ build, put calipers on:
 
 `tools/validate.py` proves internal consistency. It cannot prove that the datums
 match reality; only calipers can do that.
+
+### C-41 — The carry case: three rejections, one plane
+
+Version 1 of the sleeve passed every check it had. The verdict named three
+things none of those checks asked about — *"those lugs sit in a way that make
+them super fucking fragile and awkward from a geometric standpoint, also this
+should echo the form of the device more directly. also there is no method of
+inserting those magnets whatsoever, no one could get their little grabbers in
+there to do that."*
+
+All three were true, and the third is the one that mattered, because it was not
+a styling complaint. It was a defect.
+
+### The magnets could not be fitted, and could not have held anything anyway
+
+The pockets opened into a cavity 155 mm deep, closed on five sides. Nothing
+reaches that. No check had asked whether a feature could be *assembled*, only
+whether it was geometrically correct, and it was geometrically correct.
+
+Worse, checking the retention arithmetic that had never been done:
+
+| gap to the deck's disc | 2.00 mm — its own 0.80 skin, 0.80 flock, 0.40 clearance |
+|---|---|
+| inverse square off the 0.80 mm vendor figure | 0.62 N a pair, **2.46 N** for four |
+| two-point fit through contact and 0.80 mm | 2.08 N a pair, **8.32 N** for four |
+| deck weight | **≈ 3.4 N** |
+| what resists, the deck leaving along Y | shear at 20.6 % → 0.51–1.71 N, plus µ≈0.4 friction → 1.0–3.3 N |
+
+Read as favourably as the data allows, four magnets are *comparable to* the
+deck's weight, not a multiple of it. They are a **seat**, not a latch, and
+parameters.scad now says so where someone would otherwise assume otherwise.
+
+### Splitting it on a plane answered all three
+
+The case is now two halves joined by eight M5 × 25 socket screws into hex nuts
+trapped at the parting face — driven from the front with one key, because no
+socket reaches down a 16 mm flank. The split was chosen for access, and paid
+four more times:
+
+- both halves print **face-down and flat**: measured **0 mm² of near-flat
+  ceiling** in each, against a budget of 20
+- the magnet pockets open **upward on the bed** and are filled by hand
+- the inside is two open trays, which is the only sane way to flock it
+- the back no longer needs a spine to stand on
+
+### The spine was a support trap, and the fix cost 11 mm of depth
+
+The one-piece back carried a raised spine for the cowl channel. Printed
+back-down, the spine crown is the first layer and the slab bottom sits
+**11.00 mm above it** — a downward-facing flat face **20 mm wide over the full
+155 mm, 3,100 mm² a side**. Flaring the spine out to meet the slab does not
+rescue it: 11 mm of rise over 28 mm of run is **21°**, half of what FDM holds.
+
+So the back drops to the channel floor everywhere. It costs 11 mm of depth and
+returns a part with nothing under it — and a solid rectangular block is the
+more honest object.
+
+### Form: it was square, and it was square because of the fastener
+
+The first attempt at this revision put the fasteners in the flank, which an M5
+nut needs **15 mm** of. That made the case **150.65 × 155.45 — square**, where
+the deck is plainly portrait at 1.2065. It had lost the proportion in service of
+a nut, which is the wrong thing to lose it for, and no check asked.
+
+So the flank went back to 8 mm and the fasteners moved into the rails, which
+have 22 mm of material anyway. Three numbers are now pinned to the deck and none
+to taste:
+
+| corner | `corner_blend × case_w / body_w` | **12.97** |
+|---|---|---|
+| mouth height | solved so `case_h/case_w == body_h/body_w` | **15.00** |
+| exponent | `form_n`, unchanged | **3.2** |
+
+Offsetting the deck's corner outward by the wall would have given 20.40 mm on a
+135 mm body — proportionally almost twice as round as the deck, which is why v1
+read as a pebble. `check_case.py` now measures the ratio: **1.2065 against
+1.2065**. The flat plinth v1 needed to stand on the bed is gone with the print
+orientation that forced it, so top and bottom are the same corner.
+
+### Lugs: a rail, not a tab, not a hole in a wall
+
+v1 cut a 4 mm slot through a 10 mm flank *at the top corner*, where the outline
+is already turning — 3 mm of wall each side. v2, written in this same
+revision, replaced it with a 32 mm pad on each flank. That measured strong and
+it read as **two tabs stuck to a box** — the same bolted-on look that got the
+grip fingers thrown out in C-38, arrived at again by a different route.
+
+A tab is a local answer to a global problem, which is the lesson C-39 already
+recorded and which did not transfer. So the third version is not local: **one
+squared band per flank, 14 mm proud, 134 mm long**, carrying all four fasteners
+*and* the strap slot.
+
+| | v1 | v2 (tab) | now (rail) |
+|---|---|---|---|
+| material each side of the slot | 3.00 mm | 7.50 mm | **6.50 mm** |
+| depth behind it | 27.25 mm | 38.25 mm | **38.25 mm** |
+| shear section a side | 82 mm² | 287 mm² | **249 mm²** |
+| length of flank it structures | 16 mm | 32 mm | **134 mm** |
+
+The rail gives up 38 mm² of shear against the tab and buys four times the
+length of engaged flank, which is the trade worth making. Both ends stop inside
+the **straight run** of the flank, so a termination is always a clean step and
+never a step onto a curve. The slot sits 47 mm below the mouth: lugs at the rim
+foul the hand drawing the deck out, and a bag hung from its rim tips forward.
+
+### Two checks in this file were worth less than nothing
+
+`check_case.py` gained a seam test, and the first two versions of it **passed on
+anything**:
+
+1. It measured containment against `trimesh.util.concatenate([front, back])`.
+   The halves share a face at the joint, so a ray crossing two coincident
+   surfaces flips parity twice and `contains()` reports solid material as open
+   air. It failed three true checks — *false* failures, which is the cheap
+   direction. Fixed with a real boolean union.
+2. It compared the mating faces by summing `polygon.exterior.area`. Shapely's
+   `.exterior` is a **LinearRing**, and a ring has zero area. The check read
+   *"outlines 0 and 0 mm², 0.00 % apart"* and passed. It would have passed on
+   any two shapes in existence.
+
+Fixing (2) to real areas was still not enough: narrowing the section by 0.6 mm
+moves its **area** by 0.4 %, under any sane tolerance. The joint is now compared
+as **rings, in millimetres** — `hausdorff_distance` — which reads 0.001 mm on
+the true pair and 0.330 mm on the deliberately mismatched one.
+
+**Three instruments, two of them worthless, before one measured the thing.**
+The pattern this file keeps recording is not that geometry is hard. It is that
+a check computing the wrong quantity is more dangerous than no check, because
+it is reported as a pass.
+
+### The two readers of parameters.scad did not agree
+
+Deriving the mouth height put `case_rim` above the `case_w` it depends on.
+`tools/params.py` resolved the forward reference and reported **15.00 mm**.
+OpenSCAD left it **undef** and propagated undef through every dimension
+downstream. Every Python gate in this repo passed on a parameter set the
+renderer could not evaluate.
+
+Two asserts happened to touch the affected values and caught it. That was luck:
+moving `case_edge_ch` the same way is silent — no assert touches it, the part
+still renders, and it renders **without its chamfers**.
+
+`validate.py` now echoes **every scalar parameters.scad assigns** out of
+OpenSCAD itself and compares it against what params.py believes — 382 of them,
+checked for undef and for drift. Verified to fail on exactly that silent case
+and to pass on the corrected file. Two checks, 116 → 118.
+
+The lesson is narrower than "tools disagree". It is that **the forgiving reader
+is the one every gate runs on**, so the gates were all measuring a file the
+renderer never saw.
+
+### C-42 — The rails clashed with the curve, and the fasteners only went down the sides
+
+Two complaints, and they turned out to be one fault: *"the combination of the
+rectangular shapes where the holes are, plus the squircle-esque shape come
+together at this weird angle the geometry clashes. Based on the curves and the
+rectangular, the screw holes need to also attach all the way around not just on
+the sides."*
+
+A rail is a **straight bar** laid against an outline that is straight in the
+middle and curved at the ends. Its ends always land somewhere the body is
+turning, and the wedge between them reads as a mistake. And a rail can only
+exist where the body is straight — which is exactly why the fasteners could
+only be on the sides. Same fault, two symptoms.
+
+### The fasteners are the outline now
+
+There is no list of screw coordinates anywhere in this project. `ring_path()`
+takes the case's own outline, insets it to the middle of the wall, and samples
+it at even arc length:
+
+    inset outline  ->  arc length  ->  13 fasteners at a 35.7 mm pitch
+
+So they follow the superellipse **round the bottom corners** instead of
+stopping where a straight bar would have to. Measured on the rendered part: 12
+gaps between **32.1 and 35.8 mm**, spread 10.3 % — and the low end is geometry,
+not error, because a chord under-reads an arc. Nothing can drift off the form,
+because the ring *is* the form.
+
+### The ring is a U, and that is physics, not a concession
+
+A fastener parallel to Z needs material through the **whole depth**. Across the
+mouth there is none — the deck's own cross-section has to pass through there.
+The flanks and the floor have full-depth metal; the mouth cannot. So the ring
+runs as far up both flanks as it can and stops, and `check_case.py` asserts it
+**turns the corners**: 5 fasteners below the deck, 2 of them out past the cavity
+in both bottom corners.
+
+### It was square, because of a nut — again
+
+A 16 mm wall is what an M5 nut needs (9.47 mm across corners leaves 3.27 mm of
+metal either side, and the ring runs down the middle of it). At 16 mm all round
+the case is **150.65 wide**, and holding the deck's proportion at that width
+makes it 181.75 tall. C-41 solved the same tension by shrinking the flank; that
+option is gone once the fasteners have to go round.
+
+Holding the proportion fixes the case's **height**. It does not say where to
+spend it, and that is the actual decision:
+
+| | mouth | floor | consequence |
+|---|---|---|---|
+| spend it at the mouth | 24.3 mm | 16.0 mm | deck sits down a hole, needs a scallop to reach |
+| **spend it at the floor** | **12.0 mm** | **28.3 mm** | invisible, no scallop, 28 mm of PLA on the drop end |
+
+### The scallop that got built and thrown away
+
+The 24 mm mouth was built, with an **80 × 22.3 mm r47 arc** cut through both
+halves to reach the deck. It worked. It was also, on a 150 mm face, not a
+detail but *the silhouette* — it turned a brutalist slab into a tote bag.
+Shrinking it to a subtle 8 mm dish keeps the silhouette and stops solving the
+problem: you cannot reach 24 mm down through an 8 mm relief.
+
+Moving the height into the floor removes the problem instead of styling around
+it. Recorded so nobody adds the scallop back without first asking why the mouth
+is 12 mm.
+
+### Five strap lugs, and the one that ruled out a family
+
+| version | what it was | why it went |
+|---|---|---|
+| 1 | 4 mm slot through a 10 mm flank, at the corner | thin web, awkward place |
+| 2 | 32 mm pad on the flank | read as a tab stuck on |
+| 3 | 134 mm rectangular rail | **clashed with the curve** — this correction |
+| 4 | tangent stadium, 8 mm proud | still read as an ear |
+| 5 | superellipse pad, 46 mm, form_n 3.2 | — |
+
+Version 4 failed for a reason worth writing down, because it rules out a whole
+family of answers. **Tangency between two parallel faces 8 mm apart can only be
+made by a semicircle of radius 4** — no larger radius is tangent to both — so a
+tangent boss always ends in a tight 4 mm turn, and a tight turn at each end is
+what an ear looks like. The escape is a long shallow swell, and that is
+geometrically unavailable here: the slot has to sit high on the flank for a bag
+to hang flat, a swell centred there runs out of straight flank within about
+44 mm, and a 44 mm swell needs r34 ends — a **40° junction, worse than the
+stadium it replaced.**
+
+So the boss stays local and stops fighting the outline. It **speaks it**: a pad
+on the deck's own superelliptical corners and the deck's own exponent. The
+complaint was that a rectangle and a squircle met at a weird angle. There is no
+rectangle now.
+
+### A boss that measured, rendered and photographed while not existing
+
+Replacing the stadium with the pad was done with two `str.replace()` calls. The
+first deleted the old module along with its comment; the second, which was
+supposed to rewrite that module, therefore matched nothing and **silently did
+nothing**. OpenSCAD does not stop for this — it prints
+
+    WARNING: Ignoring unknown module 'lug_pad'
+
+and renders the part without it. The render was produced, looked at, and
+described as *"integrated rather than hung on"* — of a boss that was not there.
+
+`build.sh` has treated that warning as fatal for the enclosure for a long time.
+The render that fooled me was an ad-hoc `openscad | grep '^ERROR'` that did not.
+`check_case.py`'s own `render()` now treats it as fatal too, so running the file
+directly is no weaker than running the gate.
+
+The lesson is not "read the warnings". It is that **a guard only guards the path
+it is on**, and the convenient path around it is the one that gets used while
+iterating.
+
+### What caught what
+
+Of the defects in this correction, the checks caught the pad (two failures, both
+real) only because `check_case.py` had been rewritten to find the fastener bores
+**in a section of the actual part** rather than read their coordinates from
+parameters. The headline number it reports — `166.6 over the strap bosses`
+against a 150.65 body — is the one that said the boss was missing.
+
+Two checks in the same file had to be fixed before they were worth anything:
+
+1. The port-burial check probed a point 13 mm into the wall. The strap slot
+   passes through the outer half of the wall **directly outboard of the microSD
+   port**, so the probe landed in fresh air and called a port with 7.5 mm of
+   metal over it exposed. "Buried" is a thickness, not a yes/no; it is measured
+   with a ray cast now — USB-C 24.0 mm, microSD 24.0 mm, keyboard 16.0 mm.
+2. The ring-spacing check walked the fasteners nearest-neighbour from bottom
+   dead centre. The ring is a **U, not a loop**, so that walk runs out to one
+   end and then jumps 134 mm across the open mouth to pick up the other side —
+   reported as a **236 % spacing error** on a part that is evenly spaced. It
+   starts at an end now.
+
+### C-43 — Thirteen screws that clamped nothing
+
+An adversarial review of the C-42 case, run across five independent lenses,
+confirmed four findings out of twenty-three claims. Two lenses — print and
+structure — arrived separately at the same one, and it is the worst defect this
+project has recorded:
+
+**The thirteen M5 screws put zero clamp force across the joint.**
+
+### Why
+
+The hex pockets opened at the parting face. A screw pulls its nut **toward the
+head**, and on that side the pocket had no roof — so the nut rose the 0.20 mm
+of float and bore on the **front half's own parting face**. Head and nut then
+both reacted against the front half. The load closed on itself inside one part.
+
+Measured on the rendered halves, probing the nut's bearing annulus (r = 3.2 mm,
+outside the Ø5.40 bore, inside the hex's 4.10 mm inradius) at all 13 sites and
+18 angles, just below the joint:
+
+| | |
+|---|---|
+| back-half material above the nut | **0 / 234** |
+| front-half material the nut bears on | **234 / 234** |
+
+`parameters.scad` had encoded the fault in its own arithmetic and nobody read
+it: `case_bolt_stack = (case_z1 - case_split_z) + case_nut_h` — front half plus
+nut pocket, with **zero back-half thickness in the stack**. The assert then
+checked a 25 mm screw against it and passed.
+
+So **8,300 mm² of mating face carried nothing**, and the two halves were held
+together by four slip-fit Ø4 pins.
+
+### All twenty checks passed, and two of them certified it
+
+- *"every nut pocket is enclosed in material"* probed a **lateral** ring and
+  never looked up.
+- *"every screw bore runs front face to nut"* asserted the axis was **clear** —
+  it actively certified the absence of the material that would have clamped.
+
+This is the project's named defect class in its purest form yet: the geometry
+that mattered was geometry no check interrogated, and the checks that existed
+were confidently measuring the wrong thing.
+
+### The fix
+
+The hex is now a **counterbore at the back face** with **10.93 mm** of back-half
+metal above it. The nut bears **up** on that roof, pushing the back half onto
+the front half, and the bore runs all the way through:
+
+    head -> front half (19.125) -> back half (10.925) -> nut (4.70)
+    stack 34.75 mm, screw M5 x 35, tip 3.25 mm inside the back face
+
+It still assembles with one hex key and no spanner: the hex keys the nut against
+rotation, and a nut dropped in loose is caught by the screw and drawn onto its
+seat. The back face gains thirteen hex wells — the "unbroken back" of C-41 is
+gone, and that is the right trade for a joint that actually closes.
+
+**The check that would have caught it** measures the load path itself: back-half
+material in the nut's bearing annulus, from its seat to the joint, at every
+site. Verified to fail on the C-42 geometry — **468/936** — and pass on this one
+at 936/936.
+
+### The nut was the wrong nut
+
+`case_nut_t = 4.00` was labelled **ISO 4032**. 4.00 is the **DIN 934** figure;
+ISO 4032 M5 is m = 4.40 min / **4.70 max**. A legal ISO nut would have stood up
+to 0.50 mm proud of a pocket cut for it, and the joint would have closed only by
+ploughing all thirteen nuts into their pocket floors. Now 4.70, which accepts
+either standard.
+
+The `case_fit = 0.20` comment also claimed a "press fit" while specifying
+**+0.10 mm a side of clearance**. It is a clearance fit; the comment says so now,
+and explains why that is correct here — the hex only has to key the nut against
+rotation, because the screw seats it.
+
+### Nine [DERIVED] comments were lying
+
+The review's minor finding was two stale `[DERIVED] = N` comments. Checking the
+whole file found **nine**, seven of them in the frozen enclosure and stale since
+whatever edit moved their inputs:
+
+| | claimed | actual |
+|---|---|---|
+| `front_face_half_h` | 68.244 | **68.944** |
+| `magnet_boss_d` | 8.50 | **8.70** |
+| `magnet_y_lo` / `magnet_y_hi` | 7.975 / 54.575 | **8.575 / 53.600** |
+| `cover_mouth_w` / `cover_mouth_h` | 114.902 / 138.902 | **114.502 / 138.502** |
+| `case_y_floor` / `case_cy` | −87.325 / 3.550 | **−99.627 / −8.751** |
+| `case_nut_h` | 4.200 | **4.900** |
+
+**No geometry moved** — every expression was right; only the numbers a reader
+would trust were not. `validate.py` now checks all 52 such claims against the
+value they name, matched strictly on the file's own `[DERIVED] = N` form so that
+prose containing an equals sign is not mistaken for a claim. 118 → 119 checks.
+
+### What this says about review
+
+The C-42 work ran twenty checks, four gates and a visual inspection, and shipped
+a case that does not bolt shut. What found it was **five reviewers who had not
+written it**, told to refute rather than agree, with instructions to measure the
+mesh rather than read the source. Nineteen of their twenty-three claims did not
+survive their own verification pass — the four that did were worth the other
+nineteen.
+
+### C-44 — Take the ornament off
+
+*"Thats an absurd amount of M5 bolts, and these bolts should go all the way
+through industrial interesting brutalist, the form should be more natural and
+flowing and smoothed ... output the fundamental fundamental ass shrink wrapped
+shape but robust, two part, elegant, and I will work on creating the silouette
+more intersting in tinkercad."*
+
+Four things, and the last one changes what the job is: this is now a **base
+object for someone else to shape**, so everything that was there to be looked at
+comes off and only what has to be right stays.
+
+### Thirteen to seven, and why not six
+
+Thirteen at a 35.7 mm pitch was instrument-case spacing applied without asking
+whether this is an instrument case. Seven: bottom dead centre, both bottom
+corners, both mid-flanks, both flank **tops**.
+
+Six was tried first — sampled on half pitches so nothing sits at dead centre,
+which is tidier. It is the worse object. It puts the topmost fastener **44 mm
+below the mouth** and leaves the one end of the ring that is already open
+unclamped. Seven costs one bolt and holds the mouth shut. Measured: 6 gaps,
+66.1–70.7 mm, 6.6 % spread.
+
+### The bolt goes all the way through
+
+Head proud on the front face, plain hex nut proud on the back, nothing recessed.
+It is what was asked for and it is also the only one of the three arrangements
+tried here that is structurally obvious — C-43 had to reason carefully about
+where a buried nut bears; a through-bolt has nowhere for the load to
+short-circuit. **M5 × 45**, ending 2.05 mm past the nut's far face.
+
+The cost is a spanner. Nothing keys the nut, because a hex recess deep enough to
+hold it needs 7.73 mm of metal outboard and the rolled edge does not leave it.
+Seven nuts, one 8 mm spanner.
+
+### Rolled, not chamfered
+
+A chamfer is two arrises and a flat — it reads machined. `rse_soft` lofts the
+outline through a smoothstep whose value **and first derivative** both vanish at
+the face, so the surface arrives there with zero slope and leaves no arris at
+all.
+
+It is also, unexpectedly, the more printable edge:
+
+| | chamfered (C-43) | rolled |
+|---|---|---|
+| near-flat ceiling | 0 mm² | **0 mm²** |
+| face under 44° | 206 mm² | **0 mm²** |
+
+The 206 mm² was the 45° chamfers themselves sitting exactly on the limit. A
+roll whose derivative vanishes at both ends is **vertical where it meets each
+face** and only reaches ~28° in the middle, so there is nothing marginal left.
+
+`case_soft` is not free, though: the bores are straight while the surface rolls
+inward, so every millimetre of roll is a millimetre off the metal outboard of a
+bore. That is what moves the ring off the wall's centreline —
+`case_bolt_ins = (case_side + case_soft) / 2`, which puts 3.80 mm each side
+instead of 8.00 inboard and 5.00 out.
+
+### Six strap bosses, and then none
+
+| version | what it was | why it went |
+|---|---|---|
+| 1 | slot through a 10 mm flank, at the corner | thin web, awkward place |
+| 2 | 32 mm pad | read as a tab stuck on |
+| 3 | 134 mm rectangular rail | clashed with the curve (C-42) |
+| 4 | tangent stadium | still read as an ear |
+| 5 | superellipse pad | the best of them, and still an object stuck on |
+| 6 | **nothing** | — |
+
+The wall is 16 mm because an M5 bore needs it to be. That is already enough to
+put a slot straight through with **4.00 mm of metal either side and 38.25 mm of
+depth** — 153 mm² in shear a side, far past anything a strap applies. **The boss
+was never carrying the load. It was carrying the idea of carrying the load.**
+
+### Shrink-wrapped is not available, and here is the number
+
+"Shrink wrapped" cannot mean thin walls while M5 bolts pass through them:
+
+| thread | bore | min wall | case width |
+|---|---|---|---|
+| M5 | 5.40 | 14.4 | 147.5 |
+| M4 | 4.50 | 13.5 | 145.7 |
+| M3 | 3.40 | 12.4 | 143.5 |
+
+Dropping two thread sizes buys **4 mm** of width on a 150 mm object. The cavity
+alone is 118.65 wide. So the wall stays at 16, and what "stripped back" actually
+buys is the ornament: no bosses, no chamfers, no counterbores, six fewer bolts,
+and an unbroken silhouette to work from.
+
+### The guard held this time
+
+Rewriting this file broke halfway through a scripted edit and left
+`carrycase.scad` referencing three variables that no longer existed. The render
+guard added in C-42 — `WARNING: Ignoring` treated as fatal — caught it on the
+first render, named all three, and cost about a minute.
+
+C-42 records the same class of failure costing an entire review cycle and a
+render I looked at and described approvingly. The difference between the two is
+one `grep`.
+
+### C-45 — The widest line was the seam
+
+*"the corner radius for the smoothing shouldnt be individual for each side so
+that they come together with a crease in the middle, it should feel like a
+seamless single object"*
+
+C-44 rolled **each half separately, from the seam outward**. Both halves were
+therefore at their widest AT the parting plane and the surface curved away from
+it in both directions — so the object's widest line ran all the way round at
+mid-height. Two pillows stacked, not one case.
+
+The outer form is built once now, over the whole 38.25 mm, and the halves are
+cut out of it. The roll belongs to the **object**, and lives at its two outer
+faces where an edge actually is. Measured through the depth:
+
+| z | −16 | −8 | −4 → +10 | +16 | +20 |
+|---|---|---|---|---|---|
+| width | 144.68 | 149.45 | **150.65** | 147.89 | 145.17 |
+
+Straight for 14 mm through the middle, which is where the seam falls. The joint
+chamfer drops 0.60 → **0.30**: a hairline, not a shadow gap, because the object
+is meant to read as one piece.
+
+It is built as the **intersection of two one-ended rolls facing opposite ways**.
+Each is full width where the other is rolled, so the intersection takes the roll
+at both faces and full width between. They cross only where both are at full
+width *and* both have zero slope, so they meet tangentially and add no line of
+their own.
+
+### 0.01 mm over 8,800 mm²
+
+The first build of it failed `the halves do not interpenetrate` by **86.87 mm³**
+— which over the 8,792 mm² mating face is exactly **0.01 mm**. `rse_plate`
+extrudes upward from its origin, so the mirrored half's pinch plate sat one
+plate-thickness past the parting plane and the two halves overlapped across
+their whole joint.
+
+Harmless in print and wrong in the model, and the only reason it was seen at all
+is that the check measures a boolean intersection volume rather than asking
+whether the two halves *look* like they meet.
+
+### Open, and waiting on reference images
+
+Three of the same message's asks are not resolved and are deliberately not
+guessed at:
+
+1. **M5 × 20 does not fit.** The depth is set by the deck (16.85) plus its
+   battery cowl (11.00) plus flock and walls: **38.25 mm**, none of it styling.
+   A 20 mm screw entering the front face reaches z = +2.05 and stops 18.25 mm
+   short of the back face where the nut goes. M5 × 40 is the shortest that
+   reaches an inlaid nut.
+2. **Inlaid hex on the back** needs 7.73 mm of metal outboard of the bolt axis
+   and the rolled edge leaves 1.77 mm at the face. It needs either a thicker
+   wall, a smaller roll, or the ring moved inboard against its cavity margin.
+3. **The silhouette and the strap lugs.** Six lug versions have now been
+   rejected (C-38 → C-44) and each was inferred from a verbal description. The
+   owner offered reference images; that is a better instrument than a seventh
+   guess, and this is recorded as an open item rather than another attempt.
+
+### C-46 — Heat-set inserts, an off-centre seam, and a captive D-ring
+
+*"instead of the bolt going all the way through it should be 7 total bolts and
+we use M5x10 mm heat inserts on one side ... the holes for the lugs should not
+be rectangles they should be holes and they should allow for a D ring ... the
+sillouette can be rectangular but not be just a brick, the gemoetry can be more
+intersting and midcentury modern."*
+
+### The insert changes three things at once
+
+| | through-bolt | heat-set insert |
+|---|---|---|
+| what the wall carries | M5 nut, 9.47 across corners | **Ø7.00 insert** |
+| wall it needs | 15.47 | **13.00** |
+| what the screw spans | the whole 38.25 mm object | **one half** |
+| screw | M5 × 45 | **M5 × 20** |
+
+So **M5 × 20 works after all** — it was impossible as a through-bolt and is
+comfortable here, because the screw only has to cross the front half. The wall
+drops 16 → 13 and the case narrows 150.65 → **144.65**.
+
+The C-43 load path still has to be right, and an insert gets it right for a
+different reason than a through-bolt does: it is anchored in the back half's
+plastic by its knurls, so tension runs head → front half → insert → back half
+with nowhere to short-circuit. Measured: 84/84 probes solid round every bore,
+grip **8.95 mm = 1.79 diameters**.
+
+### The seam was at exactly 50 %
+
+That is the single most brick-making number in the object, and it was free to
+move the whole time. The only constraints are that the cowl channel stays in the
+back half and the magnet pockets stay in the front, leaving the window
+**z ∈ (−1.20, +18.05)**.
+
+At **z = +11.00** the halves are 11.05 and 27.20 — a **1:2.46** datum line at a
+proportion someone chose. It also happens to be what makes the screw work:
+11.05 + 8 mm of thread is 19.05.
+
+### Soft in plan, crisp at the face
+
+The previous version softened every axis at once — superellipse corners *and* a
+3 mm roll at both faces. An object with no defined planes reads as a pillow. One
+axis gets the softness now: generous corners in plan, a hard **1 mm chamfer** at
+the faces, so there is a top plane and a bottom plane and all the turning
+happens at the corner.
+
+### The D-ring is trapped, not bolted on
+
+A closed ring cannot be threaded onto a finished part — but a case that comes
+apart can do what a solid one cannot. A **Ø5.20 bore runs front-to-back through
+the flank**, straddling the parting plane; the ring's straight bar lies in it and
+its arch comes out through a tapered relief at each end. Close the case and it is
+captive. No fixings, no plate, nothing that can work loose, and the mechanism is
+invisible.
+
+It is captive because the bore is **closed for 16.45 mm between the two
+reliefs** — a 31.75 mm bar cannot lift out through two windows that far apart.
+That closed run is the whole retention claim, so `check_case.py` measures it.
+
+**Which ring, and why it matters.** The only axis long enough to take the bar
+without running vertically is front-to-back, and that is the case's depth:
+
+| | bar | margin in 38.25 mm |
+|---|---|---|
+| 1¼ in | 31.75 | **+6.50** — drawn |
+| 1½ in | 38.10 | +0.15 — does not fit |
+
+A 1½ in ring needs the case about 4 mm deeper, which is 4 mm of dead air in
+front of the deck. One parameter either way.
+
+### The plinth was built and taken out
+
+A stepped foot is a real midcentury move and it cannot coexist with a fastener
+ring that goes all the way round:
+
+    the ring crosses the floor 6.50 mm in from the bottom edge, so a bore there
+    has 3.80 mm of metal to it. case_bolt_keep wants 3.00. The plinth gets 0.80.
+
+Worse, a plinth **shorter than the corner radius (13.94) sits inside the bottom
+corner's curve and never reads as one** — so the version that would read has to
+be ~18 mm tall, which puts the two bottom-corner fasteners inside it as well. A
+15 mm wall buys 1.80 mm of plinth; that is the trade if it is wanted.
+
+Two print findings are worth keeping from the attempt:
+
+1. Insetting the **depth** as well — the more correct plinth — cannot be
+   printed. The halves lie on their faces, so a Z inset is a ledge pointing at
+   the bed: **377 mm² of it, measured.**
+2. **Tapering that ledge made it worse, not better.** 2.5 mm of rise over 3.3 mm
+   of run is 53° off vertical — past the limit rather than under it. I had the
+   angle the wrong way round and the measurement caught it. X and Y are both
+   in-plane, so an X-only splay would have been free at any angle.
+
+### Two checks that were measuring nothing useful
+
+- The fastener census classified holes **by area**, and the D-ring bore is Ø5.20
+  against a bolt's Ø5.40 — 7 % apart, so any tolerance loose enough to find the
+  bolts swallowed the D-ring too. Classified by **position** now.
+- The plinth check measured **vertices** in a band near the foot. The outline's
+  straight flank carries no vertices between its two ends, so it sampled
+  whatever happened to be there and reported a **5.52 mm inset on a 2.50 mm
+  step**. Sections, not vertices.
+
+Case **144.7 × 174.5 × 38.2 mm**, 459 cm³, ~313 g. 19/19 case checks,
+119/119 validate.
+
+### C-47 — Ninety-four per cent of it is shell
+
+*"this thing is gonna eat up filament, this shouldnt be a fucking brick of
+plastic ... the fucking attachment of the D ring part should just be a chunky
+hole strong robust. not this fiddly little cutout bullshit."*
+
+### The material question, measured before anything was changed
+
+Model volume is not filament. At the repo's own settings — 0.8 mm nozzle,
+3 perimeters, 15 % infill — a perimeter shell is **2.4 mm thick**, and this part
+is thin-walled enough that almost all of it is shell:
+
+| | model | filament | of which shell |
+|---|---|---|---|
+| front half | 146.6 cm³ | 146.1 cm³ | **100 %** |
+| back half | 312.8 cm³ | 203.0 cm³ | 90 % |
+| **total** | 459 cm³ | **349 cm³ → 433 g** | **94 %** |
+
+The front half is *entirely* perimeter: its volume is less than its surface area
+× 2.4. **So hollowing saves nothing** — the 15 % infill is only 6 % of the
+filament. What drives this part is **surface area**, and surface area is set by
+the deck it has to contain.
+
+That reorders every lever:
+
+| | saves |
+|---|---|
+| perimeters 3 → 2 | **130 g** — slicer setting, no geometry change |
+| a 0.6 mm nozzle (3 perims = 1.8 mm) | **98 g** — slicer setting |
+| floor 21.06 → 13.00 | 30 g |
+| wall 4.00 → 3.60 | 25 g |
+| flank 13 → 11 | 5 g |
+
+**The two biggest levers are not geometry at all.** Recorded because four
+revisions of this case have been argued about in terms of wall thickness, and
+wall thickness is worth 5 g.
+
+### Why the flank cannot get thinner
+
+The chain is short and it closes:
+
+1. The mouth has to pass the deck, so there is **no full-depth material across
+   the top** — a fastener parallel to Z cannot go there.
+2. So fasteners live in the flanks and the floor.
+3. An M5 heat-set insert is Ø7.00 and wants 3 mm of metal a side: **13 mm**.
+4. The flanks are the largest single region of the part.
+
+The ways out are an external boss (rejected seven times), M3 instead of M5, or
+accepting it. Not a wall-thickness decision.
+
+### What did change
+
+The proportion rule is **gone**. `case_floor` used to be solved so `case_h/case_w`
+matched the deck's ratio. That was my idea, not a requirement, and it was buying
+a number nobody looks at with **9 mm of solid plastic across a 145 × 38 section**.
+The case is now as big as it has to be: **144.7 × 166.4 × 37.4**, 396 cm³,
+**390 g — 10 % off**, with the remaining 90 % explained above rather than
+hidden.
+
+### The strap lug is a hole
+
+Eight versions now. The last trapped a D-ring's bar in a bore straddling the
+parting plane with tapered reliefs for the arch. It was clever and it was wrong:
+fiddly to print, fiddly to assemble, and it made the strap depend on two 6 mm
+windows.
+
+This is **a hole**. Ø7.00, front to back through the flank, so a cord or split
+ring wraps the full 13 mm of wall and hangs outward, and the load goes into the
+whole height of the flank above it rather than into any feature. The parting
+plane cuts across it, so each half prints it as a plain vertical bore with
+nothing overhanging. 3.00 mm of metal either side — the same margin every
+fastener bore gets.
+
+Ø7 is what the wall allows. A bigger hole needs a local pad, and a pad is the
+thing that has been rejected seven times.
+
+### C-48 — A river rock, and the thin wall that made it heavier
+
+*"thin the walls not around the bolts, and also the bolts need to have a concave
+inset so the top of the bolt will lay flush ... the whole exterior ... should be
+a seamless smooth river rock, not like a curved rectangle."*
+
+### The form
+
+Two things make it a rock rather than a rounded box, and neither is applied
+afterwards:
+
+1. **The section rolls continuously face to face.** `case_roll` at 0.50 means
+   the inset is falling the whole way from one face to the middle and rising
+   again to the other — no flat band anywhere, no arris.
+2. **The wall is 6 mm and swells to 16.5 at each of the nine fastener and strap
+   sites**, by pushing the plan *outline* outward with a cos-squared falloff
+   rather than by adding a pad. There is no junction to crease at.
+
+Built as **one polyhedron**. A stack of hulls cannot do it: the outline dips
+back between swells, so it is not convex and `hull()` would fill the dips.
+Swells combine as `1 - prod(1 - f)` rather than summing, so neighbours blend
+instead of stacking to twice the amplitude.
+
+### The counterbore, not the bolt, sizes the swells
+
+A flush head needs its Ø9.00 counterbore *plus a rim* to sit **inside the front
+face**, and the roll pulls that face in by `case_soft`. That is the whole
+constraint chain, and it is what takes the local wall to 16.50.
+
+### Three things measured that reading would not have caught
+
+**The dish is the wide one.** r30 cutting 1.20 deep leaves a footprint
+**16.80 mm across** — nearly twice the counterbore it was blending — and it cut
+straight out through the rolled edge. A sphere's footprint is
+`2·sqrt(2Rd - d²)`, which is not intuition-sized. Now r11 at 1.00: 9.17 across,
+1.42 mm of rim. The assert had checked the counterbore and not the dish.
+
+**The roll inset was applied twice.** Once to the base outline and again to the
+swell, so the face outline came out at **65.61 where the bolts sit at 65.825** —
+four of seven counterbores broke out of the edge.
+
+**The swell was pushed the wrong way.** Radially from the outline's centre, a
+point high on a flank is mostly *sideways* from that centre, so only part of a
+10.50 mm swell arrives where it is needed: **68.22 measured against 71.83
+wanted.** It pushes along the outline **normal** now — for a counter-clockwise
+polygon, the outward normal of tangent (tx, ty) is (ty, −tx).
+
+All three were found by sectioning the rendered part and counting closed holes.
+A section with **9 closed holes** is a part where nothing broke out; one with 3
+is not, and it looks identical in a render until you turn it.
+
+### The thin wall made it heavier
+
+This is the finding worth keeping. C-47 established that **94 % of this part is
+perimeter shell**, so surface area is what you pay for. Thinning the wall from
+13 to 6 and swelling it back at nine sites:
+
+| | volume | surface | filament |
+|---|---|---|---|
+| 13 mm wall, flat slab | 396 cm³ | 1310 cm² | **390 g** |
+| 6 mm wall + 9 swells | 448 cm³ | 1371 cm² | **430 g** |
+
+**Both went up.** Nine swells at a 26 mm reach overlap, so the wall ends up
+thick almost everywhere anyway — the reach is 18 now, which recovers about 12 g
+of the 48. And the roll itself adds surface.
+
+So "thin the walls except at the bolts" is a **form** decision, not a material
+one. It costs roughly 10 % more filament than the flat slab it replaced, and
+that is the honest price of the rock.
+
+### C-49 — The part had a flat face and a 90° arris while the source said it had neither
+
+C-48 shipped with this sentence in `parameters.scad` and again in `CASE.md`:
+
+> *the inset is falling the whole way from one face to the middle and rising
+> again to the other, so there is no flat band and no arris.*
+
+The part had **23,665 mm² of dead-flat face** — 88 % of its bounding rectangle —
+meeting the flank at a **90.0° edge**, 1,782 edges of it, all the way round both
+faces. Twenty checks passed. Every one of them is about holes, metal, clearance
+or overhang; **not one looked at the shape.**
+
+It was caught by *looking at the render*, which is the second time in this
+project (C-44 was the first) that the renderer was the only thing telling the
+truth. The difference is that in C-44 I looked at a render and described a boss
+that was not in it; here I looked at a render and saw a claim that was not in
+the part. Both say the same thing: **a render is evidence and has to be read
+against the claim, not for it.**
+
+### Why the flat stays
+
+Both halves print **face-down**, which is what makes the two-part split pay: one
+flat bed face and one open tray each, no bridge, no support. Any surface that
+blends smoothly out of a flat bed face leaves a near-horizontal *downward*
+band all the way round the rim — the one overhang FDM cannot do unsupported.
+Crowning the face outward is the same fault: 3 mm of crown over 75 mm of radius
+is a 5° ceiling across the whole face.
+
+So the plateau is not a defect and is **reported, not budgeted**. The arris is
+the defect, and it is now a deliberate **4.00 mm facet at 55° off horizontal** —
+the same number twice, because that angle is also the overhang angle when the
+face is on the bed, and 45° is the limit.
+
+### Three things had to be wrong for a 4 mm facet to render as 0.47 mm
+
+Cutting the facet changed the measured rim from 90° to **83°**. It had 0.473 mm
+of run where 2.80 was asked for. Two faults, in the loft:
+
+**The swell was evaluated at the moving outline.** As the inset falls the
+outline walks *away* from each site, the cos-squared falloff drops, and the
+swell shrinks by roughly what the inset just gave back. Inside a swell the two
+cancel and the wall comes out vertical. The C-48 comment already claimed the
+swell was "a constant push"; the code did not do that.
+
+**Each level was its own narrowed superellipse.** Narrowing it by `2·ins` also
+narrows its corner radius by `ins` — and **moving a corner slides every vertex
+along the flank.** Vertex *j* sat at a different *y* on every level, so it
+sampled the swell somewhere else each time. Fixed by offsetting **one**
+reference outline along its own normals: vertex *j* now stays on one ray for the
+whole depth, so the swell is genuinely constant and the inset is genuinely the
+inset.
+
+And one fault in the new check itself, which is the part worth keeping:
+
+**It located each edge at the midpoint of its two face centroids.** A cap
+triangle can be 60 mm long, so a strap-hole rim reported itself 24 mm from where
+it was and walked straight through the "ignore anything near a fastener" filter.
+Every hole rim in the part — 90° by definition — was being counted as the
+silhouette. It also measured on `front.union(back)`, and the boolean remeshes
+the rim into slivers that read as 180° edges. It measures each half on its own
+mesh now, at the real edge midpoint.
+
+### What it measures
+
+**55.0° on a straight flank, 60.7° at its worst**, which is on a swell shoulder:
+there the outline runs oblique to the push, so 2.80 mm along the normal buys
+less than 2.80 mm of true run and the facet comes out steeper. Steeper is the
+safe direction for an overhang, so it is allowed for rather than chased. The
+check's budget is 63°; an arris is 90°.
+
+### The honest summary
+
+It is **not a river rock**. It is a stone worn flat on two sides. A form with no
+flat anywhere needs supports on the outside faces or a split that puts no face
+on the bed, and both cost more than the shape is worth. Filament went 430 → 436 g.

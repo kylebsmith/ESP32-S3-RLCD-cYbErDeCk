@@ -389,8 +389,13 @@ batt_cowl_clear  = 0.5;    // [DESIGN] clearance over the holder
 //  derived from the cavity's rise. The reasoning behind both numbers is given
 //  at the end of this block, where the rise used to be defined.
 batt_cowl_head   = 2.5;    // [DESIGN] clear rise above the holder for the crown
+//  ERGONOMIC EXTRA. The cowl is not only a cover: resting on it the deck
+//  leans toward the user, which is the posture it is actually used in on a
+//  desk, and it is where the hands sit when it is held. One more millimetre
+//  deepens that lean and gives the fingers a fuller form to wrap.
+batt_cowl_extra  = 1.0;    // [DESIGN] ergonomic rise past what the cell needs
 batt_cowl_rise   = (batt_protrusion - back_t) + batt_cowl_clear + batt_cowl_wall
-                   + batt_cowl_head;
+                   + batt_cowl_head + batt_cowl_extra;
 //  THE COWL'S PLAN FORM IS NOT FREE, AND IT USED TO BE TREATED AS IF IT WERE.
 //  83.0 x 30.0 was taken from the reference's separate clip-on cover, which
 //  sits on a blank panel. This cowl does not: it is integral to the back
@@ -1174,7 +1179,7 @@ variant = 2;   // [DESIGN] 1 = v1.0 as printed, 2 = adds the magnetic cover
 face_roll_1       = 0.984;   // [DERIVED] roll_f(1, edge_roll) at edge_roll = 0.28
 front_face_inset  = edge_soft * face_roll_1;        // [DERIVED] = 1.1808
 front_face_half_w = body_w / 2 - front_face_inset;  // [DERIVED] = 56.944
-front_face_half_h = body_h / 2 - front_face_inset;  // [DERIVED] = 68.244
+front_face_half_h = body_h / 2 - front_face_inset;  // [DERIVED] = 68.944
 
 //  ---- THE MAGNETS -----------------------------------------------------------
 //  Ø5 x 2 mm N52 NdFeB discs, Ni-Cu-Ni plated. A genuine catalogue standard
@@ -1258,7 +1263,7 @@ magnet_seat_clear = 0.15;          // [DESIGN] so the disc can bottom on the ski
 magnet_pocket_h   = magnet_h + magnet_seat_clear;   // [DERIVED] = 2.15
 magnet_skin       = 0.80;          // [DESIGN] 4 layers over the disc, show face
 magnet_boss_wall  = 1.60;          // [DESIGN] 4 extrusions around the bore
-magnet_boss_d     = magnet_bore + 2 * magnet_boss_wall;   // [DERIVED] = 8.50
+magnet_boss_d     = magnet_bore + 2 * magnet_boss_wall;   // [DERIVED] = 8.70
 //  front_t is 2.4 and the stack needs 2.95, so the pocket grows INWARD as a
 //  local boss rather than thinning the show face.
 magnet_boss_rise  = max(0, magnet_skin + magnet_pocket_h - front_t);  // = 0.55
@@ -1297,8 +1302,8 @@ magnet_x     = (magnet_x_min + magnet_x_max) / 2;               // [DERIVED]
 //  centres; the stations sit exactly there, which is also as far apart as they
 //  can get, and spacing is what resists peel.
 magnet_boss_keepout = shell_screw_boss_d / 2 + magnet_boss_d / 2 + 1.0;
-magnet_y_lo = boss_rows[0] + magnet_boss_keepout;   // [DERIVED] =  7.975
-magnet_y_hi = boss_rows[1] - magnet_boss_keepout;   // [DERIVED] = 54.575
+magnet_y_lo = boss_rows[0] + magnet_boss_keepout;   // [DERIVED] =  8.575
+magnet_y_hi = boss_rows[1] - magnet_boss_keepout;   // [DERIVED] = 53.600
 
 //  ONE list, consumed by the shell AND by the cover. Hard-coding these twice is
 //  exactly the surgery-on-every-script failure this section exists to avoid.
@@ -1326,15 +1331,116 @@ function magnet_sites() = [ for (sy = [magnet_y_lo, magnet_y_hi],
 //  show face. Change magnet_h or magnet_skin and the cover follows.
 cover_t         = magnet_pocket_h + magnet_skin;   // [DERIVED] = 2.95
 cover_gap       = 0.15;   // [DESIGN] shadow gap per side; flush is a tolerance trap
-cover_w         = body_w - 2 * cover_gap;
-cover_h         = body_h - 2 * cover_gap;
+//  ---- THE COVER IS A SHELL THAT HOOKS THE RIM -----------------------------
+//  Version 1 was a flat plate on four magnets. It printed warped and could not
+//  clasp - a 116 x 140 mm plate 2.95 mm thick is exactly what curls on an FDM
+//  bed, and four magnets cannot pull that curl flat across a 520 mm perimeter.
+//
+//  Version 2 answered that with six sprung grip fingers. It measured well and
+//  it was wrong: discrete snap features are fragile, and they read as cheap
+//  consumer plastic. A mechanism had been bolted ONTO the object instead of the
+//  object BEING the mechanism.
+//
+//  This is the third answer and it has no features at all. The shell's flank
+//  tapers 1.023 mm per side over the last 3.60 mm before the front face -
+//  measured, not assumed - so that rim is already an undercut running the whole
+//  way round. A shell with one continuous eased lip hooks under all 460 mm of
+//  it at once. Nothing local, nothing sprung, nothing to snap off. It goes on
+//  with a single press: the lip rides a 1.5 mm ramp of the shell's own taper,
+//  the whole shell breathing a few tenths as it passes, and the magnets pull
+//  the last of it home.
+//
+//  DEPTH IS SET BY THE PORTS, not by preference. The USB-C opening's top edge
+//  is at chassis z = 12.78, so a wall deeper than 4.07 mm begins to cover it.
+//  3.60 leaves 0.47 mm and still buys a 1.023 mm undercut.
+cover_wall_d   = 3.60;   // [DESIGN] wall depth below the face
+cover_wall_t   = 2.00;   // [DESIGN] wall thickness
+cover_clear    = 0.35;   // [DESIGN] chamber clearance over the shell
+cover_hook     = 0.70;   // [DESIGN] of the 1.023 mm the rim offers. See the
+                         //   note below on why this is not the engagement.
+                         //   the 1.023 mm available. Half, so the ramp stays
+                         //   gentle and the shell never has to be forced.
+cover_lip_t    = 0.80;   // [DESIGN] straight land on the lip
+cover_lip_entry = 0.20;  // [DESIGN] just enough ease to find the rim.
+//
+//  THE HOOK IS MEASURED AT THE MOUTH, BUT THE LAND SITS ABOVE IT, and the
+//  shell has already narrowed by then. A 0.50 hook behind a 0.60 entry
+//  chamfer left 0.17 mm of real engagement at the middle of the land - a
+//  third of the number it was being quoted as. A warp test found it: the lip
+//  let go at 0.20 mm of splay, inside what a part might creep to.
+//
+//  Every 0.1 mm of entry chamfer is 0.1 mm of engagement given away, so the
+//  entry is cut to 0.20 and the hook deepened to 0.70. Engagement across the
+//  land now runs 0.65 down to 0.38 mm instead of 0.31 down to 0.10.
 
-//  LOCATION, which magnets cannot supply. Both apertures are already drafted
-//  sockets, so the cover grows a platform into each: they carry every bit of
-//  shear, they self-centre as the cover closes, and they cost no new features
-//  on the show face. Depth is set by what is behind them - the glass at 2.65
-//  and the keycaps at 2.80 - with better than 1 mm to spare.
-cover_reg_depth = 1.50;   // [DESIGN] into each aperture
+//  [MEASURED on the rendered chassis] half-sizes at the mouth plane, chassis
+//  z = body_t - cover_wall_d. These are what the lip hooks.
+cover_rim_hw   = 57.951;
+cover_rim_hh   = 69.951;
+
+cover_mouth_w  = 2 * (cover_rim_hw - cover_hook);       // [DERIVED] = 114.502
+cover_mouth_h  = 2 * (cover_rim_hh - cover_hook);       // [DERIVED] = 138.502
+cover_cham_w   = body_w + 2 * cover_clear;              // [DERIVED] = 116.95
+cover_cham_h   = body_h + 2 * cover_clear;              // [DERIVED] = 140.95
+cover_w        = cover_cham_w + 2 * cover_wall_t;       // [DERIVED] = 120.95
+cover_h        = cover_cham_h + 2 * cover_wall_t;       // [DERIVED] = 144.95
+cover_corner_r = corner_blend + cover_clear + cover_wall_t;
+cover_flare    = (cover_cham_w - cover_mouth_w) / 2;    // [DERIVED] radial step
+//  The flare's AXIAL rise is not equal to its radial step. At 1:1 it is 45
+//  degrees on the straight runs but measured 40.2 at the corners, where the
+//  superellipse takes a smaller radial step for the same rise. 1.35:1 puts the
+//  shallowest part of it at 52 degrees, clear of the 45 rule everywhere.
+cover_flare_rise = cover_flare * 1.35;                  // [DERIVED]
+
+//  The shell gets its own, tighter edge roll. The deck's own 1.20 / 0.28 makes
+//  a surface that flares outward as it rises off the bed at about 42 degrees -
+//  fine on the deck, which prints the other way up, marginal here.
+cover_edge_soft = 0.80;   // [DESIGN]
+cover_edge_roll = 0.24;   // [DESIGN]
+//  ---- THE INNER FACE DOES NOT TOUCH ---------------------------------------
+//  Two large flat faces meeting is what rocks when either one bows, and PLA
+//  bows: on the bed, and again over months as it relaxes. A lip can be perfect
+//  and the cover will still sit proud in the middle.
+//
+//  So the middle is not a mating surface at all. The inner face is recessed
+//  across everything except a narrow perimeter land - which the wall stiffens
+//  and keeps true - and four pads at the magnets, which must stay at full
+//  height because 0.5 mm of extra gap costs roughly half the pull.
+//
+//  The consequence is the point: warp in the centre of the plate has nothing to
+//  bear against, so it cannot lift the edges or rock the part. It is floating
+//  over a void BY DESIGN, rather than floating because it does not fit.
+cover_land     = 5.00;   // [DESIGN] perimeter contact band
+cover_recess   = 0.50;   // [DESIGN] how far the middle is held clear. Deeper
+                         //   than any warp this part will realistically take,
+                         //   and it costs nothing - the plate is 2.95 thick.
+cover_pad_d    = magnet_boss_d;   // [DERIVED] magnet pads stay at full height
+
+assert(cover_recess < cover_t - 1.2,
+       "recess leaves under 1.2 mm of plate over the magnet pockets");
+assert(cover_land >= 3.0,
+       "perimeter land too narrow to seat on without digging in");
+
+//  ONE affordance for removal, and it is a form, not a hole: a very shallow,
+//  very wide scallop on the bottom edge. Wide-and-shallow reads as drawn;
+//  small-and-round reads as a hole punched in a finished object.
+cover_relief_r = 210.0;  // [DESIGN] scallop radius
+cover_relief_d = 1.60;   // [DESIGN] bite into the edge -> a 51 mm wide sweep
+
+assert(cover_hook < 1.023,
+       "lip reaches deeper than the rim's undercut; it would foul on the way on");
+assert(body_t - cover_wall_d > 12.78,
+       "cover wall is deep enough to cover the USB-C opening");
+//  The flare is 45 degrees by construction - the same number is used for the
+//  radial step and the axial rise - so this asserts it is a real step rather
+//  than a coincidence that it vanished. It is NOT hook + clear: the rim at the
+//  mouth plane is already 0.174 mm narrower than the shell's widest section.
+assert(cover_flare > 0.3,
+       "chamber and mouth have collapsed together; there is no lip left to hook");
+assert(cover_wall_d > cover_lip_entry + cover_lip_t + cover_flare_rise,
+       "lip zone is deeper than the wall; there is no chamber for the deck to sit in");
+
+cover_reg_depth = 0.00;   // [SUPERSEDED] the skirt carries shear now; see C-38
 cover_reg_clear = 0.30;   // [DESIGN] per side, at the outer face
 //  The platforms are RIMS, not slabs. A rim locates exactly as well as a solid
 //  block, adds stiffness where a flat plate wants it most - around the two big
@@ -1362,9 +1468,6 @@ cover_reg_blend_kbd = aper_blend_kbd + kbd_aper_draft
 //  the keyboard service window - so the intended peel starts furthest from the
 //  hooked keyboard end. A scallop, not a lever: it says how the cover comes off
 //  without adding a mechanism.
-cover_notch_r     = 10.0;   // [DESIGN] scallop radius
-cover_notch_depth =  3.0;   // [DESIGN] how far it bites into the edge
-cover_notch_x     = 28.0;   // [DESIGN] right of centre, on the top edge
 
 //  A locating rib that stands taller than the gap to the LARGEST body stops
 //  that body entering at all, and one that strays into a corner blend or the
@@ -1523,3 +1626,509 @@ assert(grille_count * grille_slot_h + (grille_count - 1) * (grille_pitch - grill
 
 echo(str("cYbErDeCk envelope [", preset, "]: ",
          body_w, " x ", body_h, " x ", body_t, " mm"));
+
+// =============================================================================
+//  CONCRETE JACKET  (variant 3)
+// =============================================================================
+//  The printed chassis is NOT replaced. It stays exactly as validated and
+//  becomes the permanent core: it keeps every tolerance, every heat-set insert
+//  and every 115 checks that were run against it. Concrete is cast AROUND it as
+//  an outer jacket, doing only what concrete is good at - mass, face and edge.
+//
+//  WHY NOT CAST THE WHOLE ENCLOSURE. Plain concrete has no useful tensile
+//  strength and the wall here is 3.2 mm. Cast at that section it would craze on
+//  the first drop and would not hold an M2 heat-set insert at all - you cannot
+//  heat-set into stone. Both problems disappear if the plastic stays.
+//
+//  The jacket is captive by geometry, not by adhesive: it wraps the front face
+//  and all four sides, and its apertures are smaller than the body, so it
+//  cannot be slid off in any direction. Cast in place is the whole fixing.
+conc_t         = 7.00;   // [DESIGN] jacket wall. GFRC is reliable from about 6;
+                         //   below that it chips at edges, above 8 the object
+                         //   passes 600 g and stops being a handheld.
+conc_chamfer   = 1.60;   // [DESIGN] front edge break. Cast concrete will not
+                         //   hold a sharp arris - it spalls on demould.
+conc_draft_deg = 2.00;   // [DESIGN] per-side draft toward the open back so the
+                         //   casting releases from the collar. 1 deg is the
+                         //   floor for a rough mould face; 2 is safe.
+conc_aper_relief = 0.60; // [DESIGN] concrete apertures sit proud of the
+                         //   plastic ones, so the reveal reads as a deliberate
+                         //   plastic edge rather than as a bad register.
+conc_aper_draft  = 1.20; // [DESIGN] per-side flare of the aperture blockouts,
+                         //   outward toward the show face, so they pull.
+conc_top_open  = true;   // [DESIGN] leave the top edge free of concrete. The
+                         //   three buttons and both microphones open through
+                         //   that edge; burying them would mean lengthening
+                         //   every cap. A plastic control strip along the top
+                         //   is the honest answer and reads as deliberate.
+conc_density   = 2.10;   // [VENDOR] g/cm3, GFRC with acrylic fortifier
+
+//  ---- the mould ------------------------------------------------------------
+conc_mold_base   = 6.00; // [DESIGN] face plate thickness
+conc_mold_wall   = 6.00; // [DESIGN] collar wall
+conc_flange      = 14.0; // [DESIGN] bolt flange width
+conc_bolt_d      = 4.50; // [STANDARD] M4 clearance
+conc_pin_d       = 4.00; // [DESIGN] alignment dowel
+conc_pin_h       = 6.00; // [DESIGN]
+conc_mold_gap    = 0.15; // [DESIGN] collar-to-face-plate slip fit
+
+conc_w         = body_w + 2 * conc_t;              // [DERIVED] = 130.25
+conc_h         = body_h + 2 * conc_t;              // [DERIVED] = 154.25
+conc_stack     = body_t + conc_t;                  // [DERIVED] = 23.85
+conc_blend     = corner_blend + conc_t;            // [DERIVED]
+conc_draft     = conc_stack * tan(conc_draft_deg); // [DERIVED] total per side
+
+assert(conc_t >= 6.0,
+       "concrete jacket under 6 mm: GFRC chips at the edges below this");
+assert(conc_chamfer >= 1.0,
+       "a sharp cast arris spalls on demould; break the front edge");
+assert(conc_draft_deg >= 1.0,
+       "less than 1 degree of draft and the casting will not leave the collar");
+
+
+// =============================================================================
+//  BACK FACE: FLOOD-COATED WITH TWO-PART ACRYLIC, USING A JIG
+// =============================================================================
+//  The back plate is finished with poured self-levelling acrylic, and that only
+//  works inside a dam - without one the resin runs off the edge, starves the
+//  perimeter and leaves a lip of bare plastic exactly where the eye goes.
+//
+//  THE DAM CANNOT BE PART OF THE PLATE. It was built that way first and the
+//  audit rejected it: a perimeter wall must clear the four M2.5 countersinks
+//  AND the 82.80 mm battery cowl, and on a 109.25 mm plate there is no ring
+//  that does both. Printed over a countersink it is the C-25 defect exactly -
+//  something lying on top of a screw - and it would also have sealed the
+//  fasteners under the coat, which is worse than ugly.
+//
+//  So the dam is a JIG. The plate drops into a frame that stands proud of it,
+//  the resin levels inside that, and the frame comes off once the coat has
+//  gelled. It touches no validated geometry, it sits entirely outboard of every
+//  fastener because it surrounds the plate rather than crossing it, and it is
+//  reusable.
+pour_dam_clear = 0.30;   // [DESIGN] slip fit around the plate
+pour_dam_wall  = 3.00;   // [DESIGN] frame wall
+pour_dam_rise  = 2.00;   // [DESIGN] how far the frame stands above the plate
+                         //   face. Two-part acrylic self-levels at roughly
+                         //   0.8-1.0 mm; 2.0 leaves headroom for the meniscus
+                         //   and for a second coat.
+pour_dam_floor = 2.00;   // [DESIGN] frame floor, so the plate sits level
+
+assert(pour_dam_rise >= 1.5,
+       "pour dam under 1.5 mm gives a self-levelling coat no headroom");
+
+// =============================================================================
+//  CONCRETE: THUMB RELIEF AT THE KEYBOARD
+// =============================================================================
+//  The jacket puts 7 mm of concrete in front of the chassis face, and the
+//  keycaps sit just behind that face. Left square, the keyboard would be at the
+//  bottom of a 7 mm well and the outer keys would be unreachable by a thumb.
+//
+//  So the concrete ramps away from the keyboard aperture. A straight chamfer,
+//  not a cove: over the same depth a chamfer clears far more lateral room, and
+//  lateral room is what a thumb actually needs. The same ramp serves the other
+//  posture - resting on the battery cowl, leaning back, typed with fingers.
+conc_kbd_relief = 5.50;  // [DESIGN] per-side ramp at the keyboard, leaving
+                         //   conc_t - this = 1.50 mm of land at the aperture
+                         //   edge. Below about 1.5 a cast arris spalls.
+assert(conc_t - conc_kbd_relief >= 1.5,
+       "keyboard ramp leaves under 1.5 mm of concrete land; the edge will spall");
+
+// =============================================================================
+//  CARRY CASE  (cad/carrycase.scad)
+// =============================================================================
+//  Not a cover. A sleeve the whole deck slides into, vertically, like a side
+//  bag: front, back, both flanks and the bottom, open only at the top. Every
+//  port is buried. It is meant to be flocked inside and filled, sanded and
+//  polished outside until it reads as one industrial object, so every external
+//  surface here is continuous and every internal one carries a flock allowance.
+//
+//  THE COWL IS THE GUIDE. The deck's battery cowl is 83.93 x 28.23 mm at its
+//  foot and stands 11.00 mm off the back - measured on the rendered plate, not
+//  assumed. A channel that width running the full height of the cavity lets the
+//  deck slide in and keys it in X and in rotation at the same time. The bump
+//  stops being a problem to accommodate and becomes the location feature.
+case_flock  = 0.80;   // [DESIGN] flock pile, per surface. Nylon flock lands
+                      //   0.5-1.0; 0.8 is the middle and it is the difference
+                      //   between a deck that slides and one that binds.
+case_clear  = 0.40;   // [DESIGN] clearance on top of the flock
+case_pad    = case_flock + case_clear;              // [DERIVED] = 1.20
+
+//  ---- IT IS TWO PARTS, BOLTED -----------------------------------------------
+//  One piece could be printed. It could not be reached into - the magnet
+//  pockets opened into a cavity 155 mm deep with nothing to get at them by.
+//  A plane parallel to the face fixes that and pays four more times: both
+//  halves print flat and face-down, the magnet pockets open upward on the bed,
+//  the inside becomes two open trays to flock, and the back stops needing a
+//  spine to stand on.
+//
+//  The seam is not hidden. A 0.6 mm chamfer each side makes it a 1.2 mm shadow
+//  gap, which is the only honest thing to do with a joint you cannot fill.
+case_wall   = 3.60;   // [DESIGN] front and back. WAS 4.00. These two faces are
+                      //   solid slabs - 4.00 mm is five extrusions at a 0.8
+                      //   nozzle, so nothing in them is infill - and they are
+                      //   a quarter of the filament. The floor is the magnet
+                      //   skin: case_mag_skin must clear 4 layers, which puts
+                      //   the wall at 3.35 minimum.
+
+//  ---- THE WALL IS UNIFORM, AND THAT IS WHY THE FASTENERS CAN GO ROUND -------
+//  v3 put the fasteners in two rectangular rails on the flanks. Two faults,
+//  and the owner named both: "the rectangular shapes where the holes are, plus
+//  the squircle-esque shape come together at this weird angle the geometry
+//  clashes ... the screw holes need to also attach all the way around."
+//
+//  They are the same fault. A rail is a STRAIGHT bar laid against an outline
+//  that is straight in the middle and curved at the ends, so its ends always
+//  land somewhere the body is turning and the wedge between them reads as a
+//  mistake. And a rail can only exist where the body is straight, which is why
+//  the fasteners could only be on the sides.
+//
+//  Make the wall one thickness the whole way round and both go away together.
+//  There is no rail to clash, because the fasteners sit ON the outline - see
+//  THE FASTENER RING below - and the outline goes round, so they go round.
+//  ---- THIN EVERYWHERE, THICK ONLY AT THE FASTENERS ---------------------------
+//  Every version until now carried a wall thick enough for a fastener ALL THE
+//  WAY ROUND, because a uniform wall is the only kind a plain offset can make.
+//  That put 13 mm of PLA everywhere to serve nine holes, and the flanks were
+//  measured at 36 per cent of the filament.
+//
+//  The wall is 6 mm now and SWELLS to 16.5 at each of the nine sites. The swell
+//  is not a pad stuck on: the plan outline itself is pushed outward with a
+//  smooth falloff, so the surface has no junction anywhere - which is also what
+//  a river rock is.
+case_side   = 6.00;   // [DESIGN] the thin wall, between the swells
+//  THE MOUTH IS SET BY A HAND, THE FLOOR TAKES UP THE SLACK. Holding the deck's
+//  proportion fixes the case's HEIGHT; it does not say where to spend it. Spend
+//  it at the mouth and the deck sits 24 mm down a hole, which needs a scallop
+//  cut in the front to get it out - and a scallop big enough to matter eats the
+//  silhouette. Spend it at the floor and it is invisible, it needs no scallop,
+//  and it puts 28 mm of solid PLA at the end you actually drop the thing on.
+case_rim    = 12.00;  // [DESIGN] how far the mouth stands above the seated deck.
+                      //   12 is a finger pad: enough to pinch the deck's top
+                      //   edge front and back and draw it out.
+
+//  [MEASURED on the rendered back plate]
+case_cowl_w = 83.93;  // cowl foot, along X
+case_cowl_r = 11.00;  // how far it stands off the back face
+
+case_cav_w  = body_w + 2 * case_pad;                // [DERIVED] = 118.65
+case_cav_hw = case_cav_w / 2;
+case_w      = case_cav_w + 2 * case_side;           // [DERIVED] = 130.65
+case_slot_w = case_cowl_w + 2 * case_pad;           // [DERIVED] =  86.33
+case_z_fr   = body_t + case_pad;                    // [DERIVED] cavity front
+case_z_bk   = -case_pad;                            // [DERIVED] cavity back
+case_z_cowl = -case_cowl_r - case_pad;              // [DERIVED] channel floor
+
+//  THE FLOOR IS 12, NOT 21, AND THE PROPORTION RULE IS GONE.
+//  case_floor used to be solved so that case_h/case_w matched the deck's own
+//  ratio. That was my idea, not a requirement, and it was buying a number
+//  nobody looks at with 9 mm of solid plastic across the full 145 x 38 section.
+//  The case is now as big as it has to be and no bigger.
+case_floor  = 13.00;  // [DESIGN] enough to land on, and no less than the flank so
+                      //   the fastener ring rounds the corner at the same margin
+
+case_y_bot  = -body_h/2 - case_pad;                 // [DERIVED] deck lands here
+case_y_top  =  body_h/2 + case_rim;                 // [DERIVED] the mouth
+case_y_floor= case_y_bot - case_floor;              // [DERIVED] = -84.325
+case_h      = case_y_top - case_y_floor;            // [DERIVED] = 166.45
+case_cy     = (case_y_top + case_y_floor) / 2;      // [DERIVED] =   -1.10
+case_cav_r  = corner_blend + case_pad;              // [DERIVED] =  12.40
+
+//  THE BACK IS FLAT, AND THAT IS A PRINT FINDING BEFORE IT IS A STYLE ONE.
+//  The obvious back is a slab with a raised spine carrying the cowl channel.
+//  Printed back-down the spine crown is the first layer and the slab bottom
+//  sits 11.00 mm above it - a downward-facing flat face 20 mm wide running the
+//  full height, 3,100 mm2 a side, needing support. Flaring the spine out to
+//  meet the slab does not fix it: 11 mm of rise over 28 mm of run is 21 deg,
+//  half of what FDM will hold. So the back drops to the channel floor
+//  everywhere. It costs 11 mm of depth, it prints with nothing under it, and a
+//  solid rectangular block is the more honest object anyway.
+case_z0     = case_z_cowl - case_wall;              // [DERIVED] = -15.80 back
+case_z1     = case_z_fr   + case_wall;              // [DERIVED] =  21.65 front
+//  THE SPLIT IS NOT IN THE MIDDLE, AND THAT IS THE POINT.
+//  It sat at exactly 50 % of the depth, so the seam read as a crack down the
+//  centre of a brick rather than as a line anyone chose. It is free to move -
+//  the only constraints are that the cowl channel stays in the back half
+//  (z > case_z_bk) and the magnet pockets stay in the front (z < case_z_fr),
+//  which leaves the whole window from -1.20 to +18.05.
+//
+//  At +11.00 the halves are 11.05 and 27.20: a 1:2.46 datum line at a
+//  proportion someone picked. It also makes the screw work - the front half is
+//  the only thing a screw has to cross before it reaches its insert, and
+//  11.05 + 8 of thread is 19.05, so M5 x 20 spans it with 0.95 to spare.
+case_split_z = 8.65;                                // [DESIGN] front half 13.00
+//  ---- NO PLINTH, AND WHY IT IS RECORDED --------------------------------------
+//  A stepped foot was built and taken out again. It cannot coexist with a
+//  fastener ring that goes all the way round, and the arithmetic is flat:
+//
+//    the ring crosses the floor 6.50 mm in from the bottom edge, so a bore
+//    there has 3.80 mm of metal to that edge. case_bolt_keep wants 3.00. The
+//    plinth therefore gets 0.80 mm, which disappears under sanding.
+//
+//  It gets worse than merely subtle. A plinth shorter than the corner radius
+//  (13.94) sits entirely inside the bottom corner's curve and never reads as a
+//  plinth at all, so the version that WOULD read has to be ~18 mm tall - which
+//  puts the two bottom-corner fasteners inside it too.
+//
+//  A 15 mm wall buys 1.80 mm of plinth. That is the trade if it is wanted: 4 mm
+//  on the case width for a foot.
+//
+//  Two print findings from the attempt, worth keeping. Insetting the DEPTH as
+//  well - the more correct plinth - cannot be printed: the halves lie on their
+//  faces, so a Z inset is a ledge pointing at the bed, 377 mm2 of it measured.
+//  And tapering that ledge made it worse, not better: 2.5 mm of rise over 3.3
+//  of run is 53 degrees off vertical, past the limit rather than under it.
+
+case_seam_ch = 0.30;  // [DESIGN] a hairline at the joint, not a shadow gap:
+                      //   the object reads as one piece, so this is only
+                      //   enough relief to stop a few tenths of print
+                      //   mismatch showing as a step. WAS 0.60.
+
+//  ---- RIVER ROCK -------------------------------------------------------------
+//  A river stone worn flat on two sides, which is the only rock this can be.
+//
+//  THE TWO FACES ARE FLAT AND THAT IS NOT A STYLE CHOICE. Both halves print
+//  face-down, and that is what makes the two-part split pay: one flat bed face
+//  and one open tray each, no bridge, no support. A face that blended smoothly
+//  into the curved flank would leave a near-horizontal DOWNWARD-facing band all
+//  the way round the rim - the one overhang FDM cannot do unsupported. Crowning
+//  the face outward is the same fault at 5 degrees over 75 mm. So the plateau
+//  stays: 23,665 mm^2 of it, 88% of the bounding rectangle. Measured, not
+//  estimated - the version that claimed "no flat band and no arris" had exactly
+//  this plateau and a 90-degree edge round it. See C-49.
+//
+//  EVERYTHING BETWEEN THE FACES IS CURVE. case_roll at 0.50 means the inset is
+//  falling the whole way from one face to the middle and rising again to the
+//  other: no straight run, no girth line, no parting crease.
+//
+//  AND THE RIM IS A DELIBERATE FACET, not the 90-degree arris it used to be.
+//  case_face_ang is off HORIZONTAL, so it is also the overhang angle when that
+//  face is on the bed: 45 is the FDM limit, so 55 is a facet you can cut and
+//  still not need support. It is the one chamfer on the object and it is meant
+//  to be seen.
+//
+//  The roll is not free: it pulls the FRONT FACE in, and the bolt heads have to
+//  sit in it. That is what sizes the swells - see case_boss_amp.
+case_soft    = 4.00;  // [DESIGN] how far each face draws in
+case_roll    = 0.50;  // [DESIGN] the whole half-depth, so nothing is flat
+case_face_ch  = 4.00; // [DESIGN] the facet at each face rim, as rise
+case_face_ang = 55;   // [DESIGN] degrees off horizontal; 45 is the overhang limit
+case_face_run = case_face_ch / tan(case_face_ang);   // [DERIVED] = 2.80
+
+assert(case_face_ang > 46,
+       "the rim facet is a near-flat ceiling when that face is on the bed");
+assert(case_face_run < case_soft,
+       "the rim facet eats the whole face inset before the roll starts");
+
+//  THE CORNER ECHOES THE DECK, IT DOES NOT INHERIT IT. Offsetting the deck's
+//  corner outward by the wall gives 28.60 mm on a 150 mm body - proportionally
+//  more than twice as round as the deck, which is why an early version read as
+//  a pebble. Holding the RATIO instead gives a corner that is the same fraction
+//  of width the deck's is, on the same exponent.
+case_r      = corner_blend * case_w / body_w;       // [DERIVED] =  12.59
+
+//  ---- THE FASTENER RING ------------------------------------------------------
+//  The fasteners are not a list of coordinates. They are the case's own outline,
+//  inset to the middle of the wall and sampled at even arc length, so they
+//  follow the superellipse round the bottom corners instead of stopping where a
+//  straight rail would have to. Nothing can drift off the form, because the
+//  ring IS the form. cad/carrycase.scad builds it; these set its shape.
+//  Back on the wall's centreline: with a 1 mm chamfer rather than a 3 mm roll
+//  there is no longer a reason to bias it inboard.
+//  The ring is an OUTSET OF THE CAVITY, not an inset of the outline. With a
+//  wall that varies from 6 to 16.5 there is no single inset that lands a bore
+//  6.50 mm outboard of the cavity everywhere, which is what the 3 mm metal
+//  margin needs.
+case_bolt_out = 6.50;                          // [DESIGN] outboard of the cavity
+case_ring_w   = 2 * (case_cav_hw + case_bolt_out);           // = 131.65
+case_ring_bot = case_y_floor + case_bolt_out;
+case_ring_topline = case_y_top - case_bolt_out;
+case_ring_h   = case_ring_topline - case_ring_bot;
+case_ring_cy  = (case_ring_topline + case_ring_bot) / 2;
+case_ring_r   = case_cav_r + case_bolt_out;                  // = 18.90
+case_bolt_m   = 3;               // [DESIGN] pitches per side. WAS 6, which with
+                                 //   one at bottom dead centre made thirteen -
+                                 //   an absurd number, and it was. Three gives
+                                 //   SEVEN: dead centre, each bottom corner,
+                                 //   each mid-flank, and each flank TOP.
+                                 //
+                                 //   Six were tried, sampled on half pitches so
+                                 //   nothing sat at dead centre. It is the worse
+                                 //   arrangement: it puts the topmost fastener
+                                 //   44 mm below the mouth and leaves the one
+                                 //   end of the ring that is already open
+                                 //   unclamped. Seven costs one bolt and holds
+                                 //   the mouth shut.
+
+//  WHY THE RING IS A U AND NOT A CLOSED LOOP. Nothing is being conceded here:
+//  a fastener parallel to Z needs material through the WHOLE depth, and across
+//  the mouth there is none - the deck's own cross-section has to pass through
+//  there. The flanks and the floor have full-depth metal, the mouth cannot.
+//  So the ring runs as far up both flanks as it can and stops.
+case_bolt_top_back = 16.00;      // [DESIGN] how far short of the flank's end
+                                 //   the ring stops. Two reasons, both real:
+                                 //   it leaves 20 mm of metal above the top
+                                 //   fastener, and it gives the strap boss
+                                 //   straight flank to terminate on.
+
+case_bolt_d     = 5.00;   // [STANDARD] M5, as asked for
+case_bolt_clear = 5.40;   // [STANDARD] ISO 273 medium fit
+//  THE HEADS SIT FLUSH. A 4.80 mm head in a 5.00 mm counterbore lands 0.20
+//  below the surface, and a shallow dish blends its rim into the curve so it
+//  reads as an inset rather than a drilled hole.
+//
+//  That counterbore is what fixes the screw length: it eats 5.00 mm of the
+//  13.00 mm front half, so 8.00 of thread reaches the insert and M5 x 16 is
+//  the size. M5 x 20 would bottom out in a 10 mm insert.
+case_bolt_head_h = 4.80;  // [VENDOR] as specified
+case_cb_d        = 9.00;  // [DESIGN] clears an ISO 4762 O8.50 head
+case_cb_deep     = 5.00;  // [DESIGN] 0.20 below flush
+//  THE DISH IS SIZED BY ITS FOOTPRINT, NOT BY HOW DEEP IT LOOKS. A sphere of
+//  radius R cutting d deep leaves a footprint 2*sqrt(2Rd - d^2) wide, so r30 at
+//  1.2 mm is 16.80 mm across - nearly twice the counterbore it was blending -
+//  and it cut straight out through the rolled edge. r11 at 1.00 is 9.17 across
+//  and leaves a 1.42 mm rim. Built and measured as r30 first; it broke out.
+case_dish_r      = 11.00; // [DESIGN] the concave blend at the rim
+case_dish_d      =  1.00; // [DESIGN] how deep it dishes
+case_dish_w      = 2 * sqrt(2*case_dish_r*case_dish_d - pow(case_dish_d,2));
+case_bolt_len   = 16.00;  // [STANDARD]
+case_insert_d   =  7.00;  // [VENDOR] M5 heat-set insert, outside diameter once
+                          //   it has melted in - this is what the wall has to
+                          //   carry, not the drilled bore
+case_insert_bore=  6.20;  // [VENDOR] the printed hole it is driven into
+case_insert_len = 10.00;  // [VENDOR] as specified
+case_bolt_head_d= 8.50;   // [STANDARD] ISO 4762 socket cap
+case_nut_af     = 8.00;   // [STANDARD] ISO 4032 / DIN 934 M5, across flats
+case_nut_t      = 4.70;   // [STANDARD] ISO 4032 M5, m_max. WAS 4.00, which is
+                          //   the DIN 934 figure under an ISO 4032 label - a
+                          //   legal ISO nut stands up to 0.50 mm proud of a
+                          //   pocket cut for it. Taking the larger of the two
+                          //   makes the pocket accept either.
+case_fit        = 0.20;   // [DESIGN] clearance on the hex: +0.10 a side. NOT a
+                          //   press fit - the hex only has to key the nut
+                          //   against rotation. The screw pulls it onto its
+                          //   seat, so it does not need to be held there.
+case_bolt_keep  = 3.00;   // [DESIGN] least metal from a bore to any surface
+case_nut_h      = case_nut_t + case_fit;                     // [DERIVED] = 4.90
+case_nut_cd     = (case_nut_af + case_fit) / cos(30);        // [DERIVED] = 9.47
+case_insert_z   = case_split_z - case_insert_len;            // [DERIVED] = -1.35
+case_bolt_seat  = case_z1 - case_cb_deep;                    // [DERIVED] = 16.65
+case_bolt_tip   = case_bolt_seat - case_bolt_len;            // [DERIVED] = 0.65
+case_bolt_grip  = case_split_z - case_bolt_tip;              // [DERIVED] = 8.00
+case_bolt_stack = case_cb_deep + case_bolt_len;              // [DERIVED] = 21.00
+case_bolt_n     = 2 * case_bolt_m + 1;                       // [DERIVED] = 7
+
+//  Locating pins. Thirteen screws clamp but each floats 0.20 mm in its
+//  clearance hole, and a 0.20 mm step at a seam that gets sanded is a seam you
+//  can feel. Four printed pins, on the ring, halfway between screws. They carry
+//  nothing; they only stop the halves sliding while the screws go in.
+case_pin_d   = 4.00;  case_pin_h = 3.00;  case_pin_fit = 0.30;
+case_pin_ks  = [0.5, 3.5];   // [DESIGN] where on the ring, in screw pitches
+
+//  ---- THE SWELLS -------------------------------------------------------------
+//  The counterbore, not the bolt, sizes these. A flush head needs its O9.00
+//  counterbore plus a 1.50 mm rim to sit INSIDE the front face, and the roll
+//  pulls that face in by case_soft. So the swell has to reach
+//      bolt_x + cb/2 + rim - (cav + side) + soft  =  10.50 mm
+//  which takes the local wall to 16.50 where a fastener is and leaves it at
+//  6.00 where none is.
+//
+//  The falloff is cos-squared over case_boss_reach, and overlapping swells are
+//  combined as 1 - prod(1 - f) rather than summed, so two sites near each other
+//  blend instead of stacking to twice the amplitude.
+case_boss_amp   = 10.50;  // [DERIVED->DESIGN] see above
+case_boss_reach = 18.00;  // [DESIGN] how far along the outline it dies away.
+                          //   26 was tried: nine swells at that reach overlap
+                          //   and the wall ends up thick everywhere anyway,
+                          //   which is the opposite of the point.
+case_boss_lift  =  6.50;  // [DESIGN] the swell peaks over the bore, which sits
+                          //   this far outboard of the cavity
+
+//  ---- THE STRAP LUG IS A HOLE ------------------------------------------------
+//  Eight versions of this now. The last one trapped a D-ring's bar in a bore
+//  that straddled the parting plane, with tapered reliefs at each end for the
+//  arch to come out of. It was clever and it was wrong: fiddly to print, fiddly
+//  to assemble, and it made the strap depend on two 6 mm windows.
+//
+//  This is a hole. It runs front to back through the flank, so a cord or a
+//  split ring wraps the full 13 mm of wall and hangs outward, and the load goes
+//  into the whole height of the flank above it rather than into any feature.
+//  The parting plane cuts across it, so each half prints it as a plain vertical
+//  bore with nothing overhanging.
+//
+//  O7.00 is what the wall allows: 3.00 mm of metal either side, which is the
+//  same margin every fastener bore gets. A bigger hole needs a local pad, and
+//  a pad is the thing that has been rejected seven times.
+case_lug_d  = 7.00;   // [DESIGN] takes 6 mm cord or a split ring
+case_lug_y  = 62.00;  // [DESIGN] high on the flank, so a strap hangs flat
+case_lug_x  = case_cav_hw + case_bolt_out;                   // = 65.825
+case_lug_mat = (case_side + case_boss_amp - case_lug_d) / 2; // = 4.75 a side
+
+//  ---- NO THUMB SCALLOP, AND WHY IT IS RECORDED --------------------------------
+//  A 24 mm mouth was tried, with an 80 x 22 mm arc cut in the front to reach
+//  the deck. It worked and it was wrong: on a 150 mm face that arc is not a
+//  detail, it is the silhouette, and it turned a brutalist slab into a tote
+//  bag. Shrinking it to a subtle 8 mm dish keeps the silhouette and stops
+//  solving the problem - you cannot reach 24 mm down through an 8 mm relief.
+//
+//  Moving the height into the FLOOR removes the problem rather than styling
+//  around it. Recorded so nobody adds the scallop back without first asking
+//  why the mouth is 12 mm.
+
+//  ---- MAGNETS: WHAT THEY ACTUALLY DO -----------------------------------------
+//  In the one-piece sleeve these were indefensible - blind pockets 155 mm down
+//  a tube that nobody could reach. Split, they open upward on the bed and are
+//  dropped in by hand, so the objection is gone.
+//
+//  What has NOT gone is the arithmetic. The case disc sits flush at the cavity
+//  face, so the closest it can ever be to the deck's is the deck's own 0.80 mm
+//  skin plus 0.80 of flock plus 0.40 of clearance: 2.00 mm, and that is the
+//  floor, not a target. Two ways to price it, both anchored on vendor data:
+//    inverse square off the 0.80 mm figure  ->  0.62 N a pair,  2.46 N for four
+//    two-point fit through contact and 0.80 ->  2.08 N a pair,  8.32 N for four
+//  The deck weighs about 3.4 N and leaves along Y, so what resists is shear at
+//  20.6 per cent - 0.51 to 1.71 N - plus friction from the clamp, mu about 0.4
+//  on flock, another 1.0 to 3.3 N. Even reading every number optimistically
+//  that is comparable to the deck's weight, not a multiple of it.
+//
+//  So they are a SEAT, not a latch: they tell your hand the deck has bottomed
+//  and they stop it rattling. Retention is the cowl channel, the flock, and
+//  carrying it mouth-up. Recorded here so nobody later reads four magnets as a
+//  reason to trust the case upside down.
+case_mag_gap   = magnet_skin + case_pad;                     // [DERIVED] = 2.00
+case_mag_skin  = case_z1 - (case_z_fr + magnet_pocket_h);    // [DERIVED] = 1.45
+
+assert((case_side + case_boss_amp - case_lug_d) / 2 >= 3.0,
+       "strap hole leaves under 3 mm of wall either side at its swell");
+assert(case_split_z > case_z_bk + 1 && case_split_z < case_z_fr - 1,
+       "the split plane cuts the cowl channel or the magnet pockets");
+
+assert(case_rim >= 10.0 && case_rim <= 16.0,
+       "mouth too deep to pinch the deck out of, or too shallow to hold it");
+assert(case_bolt_stack <= case_z1 - case_insert_z,
+       "the screw and its counterbore are deeper than the metal they go into");
+//  The C-43 guard, restated for a through-bolt: the nut has to bear on the far
+//  side of the back half, not somewhere inside the front one.
+assert(case_bolt_grip >= 1.2 * case_bolt_d,
+       "under 1.2 diameters of thread engaged in the insert");
+assert(case_bolt_tip > case_insert_z + 0.5,
+       "screw bottoms out in its insert before the joint closes");
+//  The wall is thin BETWEEN the swells; what has to hold is the wall AT one.
+assert((case_side + case_boss_amp - case_insert_d) / 2 >= 3.0,
+       "under 3 mm of metal round a heat-set insert, even at a swell");
+//  The DISH, not the counterbore, is the wide one. Sizing the swell against the
+//  counterbore alone passed while the dish cut out through the rolled edge.
+assert(case_boss_amp - case_soft
+       >= case_bolt_out + max(case_cb_d, case_dish_w)/2 + 1.0 - case_side,
+       "the roll pulls the front face in past the counterbores or their dishes");
+assert(case_cb_deep > case_bolt_head_h,
+       "the head stands proud of its counterbore");
+assert(case_split_z > case_z_bk && case_split_z < case_z_fr,
+       "parting plane misses the cavity, so one half has no tray to flock");
+assert(case_mag_skin >= 4 * layer_h,
+       "under four layers of skin over the case magnet");
+assert(case_r < case_side + case_pad + corner_blend,
+       "case corner is rounder than a plain offset of the deck's");
+assert(case_slot_w < case_cav_w,
+       "cowl channel is wider than the cavity it runs in");
+assert(case_pad >= 0.8,
+       "no room for flock; the deck will bind once the inside is flocked");

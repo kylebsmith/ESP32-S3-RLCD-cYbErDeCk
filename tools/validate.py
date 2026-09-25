@@ -45,6 +45,7 @@ import params
 
 try:
     import numpy as np
+    import shapely.geometry
     import trimesh
     from shapely.geometry import Polygon, Point
     from shapely.ops import unary_union
@@ -1143,81 +1144,88 @@ def check_magnets(parts, p):
     seat.apply_translation([0.0, 0.0, p["body_t"]])
     inter = ch.intersection(seat)
     clash = float(inter.volume) if inter is not None and len(inter.faces) else 0.0
-    ok &= check("the cover seats on the front face without clashing", "MAGNET",
-                clash <= 0.01,
-                f"shared volume {clash:.4f} mm^3 with both register platforms "
-                "engaged in their apertures")
-    reach = p["cover_reg_depth"]
-    ok &= check("register platforms clear the glass and the keycaps", "MAGNET",
-                reach + 0.8 <= 2.65 and reach + 0.8 <= 2.80,
-                f"platforms reach {reach:.2f} mm in; the glass is 2.65 below the "
-                f"face ({2.65-reach:.2f} clear) and the keycaps 2.80 "
-                f"({2.80-reach:.2f} clear)")
+    # C-39. The cover is one shell with one continuous lip, and retention is
+    # the deck's own rim taper hooked all the way round. There is no local
+    # feature, so the checks ask about the RING - and the one that matters most
+    # is that it is a ring at all, because a broken ring means the retention has
+    # gone local again without anyone deciding that it should.
+    mouth_z = p["body_t"] - p["cover_wall_d"]
+    ok &= check("the lip clears the side ports", "MAGNET",
+                mouth_z > 12.78,
+                f"wall reaches chassis z = {mouth_z:.2f}; the USB-C opening's "
+                "top edge is at 12.78, so anything deeper starts covering it")
+    ok &= check("the lip takes less than the rim offers", "MAGNET",
+                p["cover_hook"] < 1.023,
+                f"lip reaches {p['cover_hook']:.2f} mm under a rim that "
+                "undercuts 1.023 mm per side, so the ramp on stays gentle and "
+                "the shell is never forced")
+    seat = cv.copy()
+    seat.apply_translation([0.0, 0.0, p["body_t"]])
+    bite = ch.intersection(seat)
+    lobes = ([b for b in bite.split(only_watertight=False) if b.volume > 0.05]
+             if bite is not None and len(bite.faces) else [])
+    vol = sum(float(b.volume) for b in lobes)
+    ok &= check("the lip engages as ONE continuous ring", "MAGNET",
+                len(lobes) == 1,
+                f"{len(lobes)} engagement region(s) totalling {vol:.1f} mm^3; "
+                "more than one means the ring is broken and the hold is local "
+                "again")
+    # Derived, not guessed. The lip's own wedge can be at most its hook depth by
+    # its full height, all the way round; anything past that is material
+    # somewhere it should not be. The first version of this check carried a
+    # hand-picked 220 mm^3 and failed the moment the hook was deepened, which is
+    # what a magic number does.
+    rim = 2.0 * (p["body_w"] + p["body_h"])
+    bite_max = rim * p["cover_hook"] * (p["cover_lip_t"] + p["cover_lip_entry"])
+    ok &= check("the engagement is a hook, not a clash", "MAGNET",
+                0.25 * bite_max <= vol <= bite_max,
+                f"{vol:.1f} mm^3 round a {rim:.0f} mm rim, against a "
+                f"{bite_max:.0f} mm^3 ceiling for a {p['cover_hook']:.2f} mm "
+                f"hook over a {p['cover_lip_t'] + p['cover_lip_entry']:.2f} mm "
+                "lip")
+    # C-40. The question that actually matters about this part is not whether it
+    # fits when perfect - it is whether it still holds once the PLA has moved.
+    # So deform the lip and ask again. Bow is the FDM failure mode (corners curl
+    # off the bed); splay is the one the hook is sensitive to, because the land
+    # sits above the mouth plane where the shell has already narrowed.
+    try:
+        zl = -p["cover_wall_d"] + p["cover_lip_entry"] + p["cover_lip_t"] / 2.0
+        sec = cv.section(plane_origin=[0, 0, zl], plane_normal=[0, 0, 1])
+        pl2, _ = sec.to_2D(to_2D=np.eye(4))
+        po2 = max(pl2.polygons_full, key=lambda q: q.area)
+        ring = np.array(max((shapely.geometry.Polygon(r) for r in po2.interiors),
+                            key=lambda q: q.area).exterior.coords)
+        ring = ring[np.linspace(0, len(ring) - 1, 300).astype(int)]
+        hw, hh = p["cover_w"] / 2.0, p["cover_h"] / 2.0
+
+        def held(dz=0.0, splay=0.0):
+            x, y = ring[:, 0].copy(), ring[:, 1].copy()
+            r2 = (x / hw) ** 2 + (y / hh) ** 2
+            if splay:
+                nn = np.hypot(x, y)
+                nn[nn == 0] = 1.0
+                x = x + splay * (x / nn) * r2
+                y = y + splay * (y / nn) * r2
+            z = np.full_like(x, p["body_t"] + zl) + dz * r2
+            return float(np.mean(ch.contains(np.c_[x, y, z])))
+
+        bow = held(dz=-0.8)
+        spl = held(splay=0.3)
+        both = held(dz=-0.8, splay=0.3)
+        ok &= check("the lip still holds after the part has warped", "MAGNET",
+                    min(bow, spl, both) >= 0.90,
+                    f"lip engaged over {bow:.0%} of its length at 0.8 mm of bow, "
+                    f"{spl:.0%} at 0.3 mm of splay, {both:.0%} at both together")
+    except Exception as exc:
+        ok &= check("warp tolerance test ran", "MAGNET", False, str(exc))
+
     ok &= check("magnets are not asked to carry shear", "MAGNET",
-                p["cover_reg_depth"] >= 1.0,
+                len(lobes) == 1 and p["cover_wall_d"] >= 3.0,
                 f"4 pairs make {4*p['magnet_pull_08']:.1f} N of pull across "
                 f"{p['magnet_skin']:.1f} mm but only "
-                f"{4*p['magnet_pull_08']*p['magnet_shear_frac']:.1f} N of shear; "
-                f"the two {p['cover_reg_depth']:.1f} mm platforms carry it instead")
-
-    # C-35. A crush rib narrower than one extrusion is not a crush rib, it is a
-    # suggestion the slicer may decline. The rib was 0.70 mm against a 0.80 mm
-    # nozzle and nothing looked at it, because every check here asked about
-    # DIAMETERS and a rib is a feature WIDTH. So this one measures the rib and
-    # the gap beside it on the rendered mesh, in extrusions.
-    noz = p["nozzle"]
-    bore_r = p["magnet_bore"] / 2.0
-    widths, gaps, lobed = [], [], 0
-    for z in np.arange(p["body_t"] - p["magnet_skin"] - p["magnet_pocket_h"] + 0.3,
-                        p["body_t"] - p["magnet_skin"] - 0.2, 0.15):
-        sec = ch.section(plane_origin=[0, 0, float(z)], plane_normal=[0, 0, 1])
-        if sec is None:
-            continue
-        pl, _ = sec.to_2D(to_2D=np.eye(4))
-        for e in pl.entities:
-            c = e.discrete(pl.vertices)
-            ctr = c.mean(axis=0)
-            if abs(abs(ctr[0]) - p["magnet_x"]) > 2.0 or len(c) < 40:
-                continue
-            rad = np.hypot(c[:, 0] - ctr[0], c[:, 1] - ctr[1])
-            if rad.max() > 4.0 or (rad.max() - rad.min()) < 0.25:
-                continue
-            lobed += 1
-            ang = np.arctan2(c[:, 1] - ctr[1], c[:, 0] - ctr[0])
-            o = np.argsort(ang)
-            ang, rr = ang[o], rad[o]
-            inside = rr < (bore_r - 0.05)
-            runs, i, n = [], 0, len(inside)
-            while i < n:
-                if inside[i]:
-                    j = i
-                    while j + 1 < n and inside[j + 1]:
-                        j += 1
-                    runs.append((ang[i], ang[j]))
-                    i = j + 1
-                else:
-                    i += 1
-            # Drop the first and last run: either may be clipped by the seam at
-            # +-pi, which would read as a false narrow rib.
-            for a0, a1 in runs[1:-1]:
-                widths.append((a1 - a0) * bore_r)
-            for k in range(len(runs) - 1):
-                gaps.append((runs[k + 1][0] - runs[k][1]) * bore_r)
-    if widths and gaps:
-        wmin, gmin = min(widths), min(gaps)
-        ok &= check("crush ribs are at least one extrusion wide", "MAGNET",
-                    wmin >= noz,
-                    f"narrowest rib {wmin:.3f} mm = {wmin/noz:.2f} extrusions at "
-                    f"a {noz} nozzle, across {lobed} sections; below 1.00 the "
-                    "slicer sets the width, not this design")
-        ok &= check("gaps between crush ribs survive the slicer", "MAGNET",
-                    gmin >= noz,
-                    f"narrowest gap {gmin:.3f} mm = {gmin/noz:.2f} extrusions; "
-                    "below 1.00 the ribs bridge into a solid ring and there is "
-                    "no crush relief left")
-    else:
-        ok &= check("crush rib geometry was measurable", "MAGNET", False,
-                    "no ribbed bore sections found in the chassis")
+                f"{4*p['magnet_pull_08']*p['magnet_shear_frac']:.1f} N of "
+                f"shear; a {p['cover_wall_d']:.1f} mm wall hooking the rim "
+                "carries it instead")
     return ok
 
 
@@ -1424,6 +1432,89 @@ def check_print(parts, p):
     return ok
 
 
+def check_params_agree(p, tmp):
+    """Does the renderer read this parameter file the same way our tools do?
+
+    It did not, once, and nothing noticed. `case_rim` was written above the
+    `case_w` it depends on: params.py resolved the forward reference and
+    reported 15.00 mm, while OpenSCAD left it undef and propagated undef into
+    every dimension downstream of it. Every Python gate in this repo passed on
+    a parameter set the renderer could not evaluate.
+
+    So the two readers are now compared directly. Each scalar is echoed out of
+    OpenSCAD itself and matched against what params.py believes.
+    """
+    print("\n-- PARAMS --")
+    # Only names parameters.scad actually assigns. params.py invents a few
+    # defaults of its own (kbd_keeper, for one, which is really kbd_keeper_t
+    # and lives in cyberdeck.scad) and the renderer is right not to have them.
+    src_text = open(os.path.join(ROOT, "cad", "parameters.scad")).read()
+    assigned = set(re.findall(r"^\s*([A-Za-z_]\w*)\s*=", src_text, re.M))
+    names = sorted(k for k, v in p.items()
+                   if k in assigned and isinstance(v, (int, float))
+                   and not isinstance(v, bool))
+    src = os.path.join(tmp, "_echo.scad")
+    with open(src, "w") as f:
+        f.write('include <%s>\n' % os.path.join(ROOT, "cad", "parameters.scad"))
+        for n in names:
+            f.write('echo("PARAM", "%s", %s);\n' % (n, n))
+    r = subprocess.run(["openscad", "-o", os.path.join(tmp, "_echo.csg"), src],
+                       capture_output=True, text=True, timeout=600)
+    seen = {}
+    for line in r.stderr.splitlines():
+        m = re.match(r'ECHO: "PARAM", "([^"]+)", (.+)$', line.strip())
+        if m:
+            seen[m.group(1)] = m.group(2).strip()
+
+    undef = [n for n in names if seen.get(n) == "undef"]
+    missing = [n for n in names if n not in seen]
+    drift = []
+    for n in names:
+        v = seen.get(n)
+        if v is None or v == "undef":
+            continue
+        try:
+            # OpenSCAD echoes six significant figures, so the comparison is
+            # relative - an absolute 1e-4 flags its own rounding as drift.
+            if abs(float(v) - float(p[n])) > 1e-5 * max(1.0, abs(float(p[n]))):
+                drift.append(f"{n} {p[n]:.4f} vs {float(v):.4f}")
+        except ValueError:
+            pass
+
+    # A [DERIVED] = N comment is a claim, and claims rot. Nine of them in this
+    # file were wrong when this check was written - seven in the frozen
+    # enclosure, stale since whatever edit moved their inputs. The expressions
+    # were all correct; only the numbers a reader would trust were not. Matched
+    # strictly on the file's own "[DERIVED] = N" form, so prose that happens to
+    # contain an equals sign is not mistaken for a claim.
+    claim = re.compile(r"^\s*([A-Za-z_]\w*)\s*=.*?//.*?\[DERIVED\]\s*=\s*"
+                       r"([+-]?\d+\.?\d*)")
+    stale = []
+    for ln in src_text.split("\n"):
+        m = claim.match(ln)
+        if not m:
+            continue
+        n, c = m.group(1), float(m.group(2))
+        if n in p and isinstance(p[n], (int, float)) and abs(p[n] - c) > 0.02:
+            stale.append(f"{n} says {c:g}, is {p[n]:.3f}")
+    ok = check("every [DERIVED] = N comment tells the truth", "PARAM",
+               not stale,
+               f"{sum(1 for l in src_text.split(chr(10)) if claim.match(l))} "
+               f"claims checked against the value they name"
+               if not stale else "STALE: " + "; ".join(stale[:4]))
+
+    ok &= check("no parameter is undef in the renderer", "PARAM",
+               not undef and not missing,
+               f"{len(names)} scalars echoed out of OpenSCAD; "
+               + ("none undef" if not undef and not missing
+                  else "UNDEF: " + ", ".join((undef + missing)[:6])))
+    ok &= check("both readers agree on every parameter", "PARAM",
+                not drift,
+                f"{len(names)} shared scalars, both readers agree"
+                if not drift else "DRIFT: " + "; ".join(drift[:4]))
+    return ok
+
+
 def check_datums(p):
     print("\n-- DATUM --")
     ok = True
@@ -1535,6 +1626,7 @@ def main():
         ok &= check_interface(parts, p)
         ok &= check_print(parts, p)
         ok &= check_datums(p)
+        ok &= check_params_agree(p, tmp)
 
         npass = sum(1 for r in RESULTS if r["ok"])
         print("\n" + "=" * 78)

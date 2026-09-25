@@ -459,45 +459,77 @@ module magnet_pocket(h) {
 //  One register platform: a drafted rim that drops into an aperture. Outer face
 //  tapers with the aperture so it self-centres; inner face is parallel to it,
 //  so the rim is a constant cover_reg_rim thick all the way round.
-module register_rim(w, h, cr, n, draft) {
-    difference() {
-        rse_aperture(w - 2 * draft, h - 2 * draft,
-                     cover_reg_depth + 0.01, cr, n, draft);
-        translate([0, 0, -0.01])
-            rse_aperture(w - 2 * draft - 2 * cover_reg_rim,
-                         h - 2 * draft - 2 * cover_reg_rim,
-                         cover_reg_depth + 0.03,
-                         max(cr - cover_reg_rim, 0.4), n, draft);
+//  THE COVER. One shell, one continuous lip, no local features.
+//
+//  Local z: 0 is the face plane, sitting on the deck's front face. Negative z
+//  runs down over the shell, so the mouth is at -cover_wall_d.
+//
+//  The cavity is a wide chamber with a narrow mouth, and the step between them
+//  IS the retention - it hooks the rim's own taper all the way round. Read from
+//  the mouth inward: an eased entry, a short straight land, a 45 degree flare,
+//  then the chamber. The flare is 45 because printed show-face-down that
+//  surface is the only overhang in the part.
+module cover_cavity() {
+    d  = cover_wall_d;
+    e  = cover_lip_entry;
+    lt = cover_lip_t;
+    mr = max(cover_corner_r - cover_wall_t - cover_hook - cover_clear, 0.8);
+    cr = max(cover_corner_r - cover_wall_t, 0.8);
+    union() {
+        // eased entry: finds the rim without being aimed
+        hull() {
+            translate([0, 0, -d - 0.01])
+                rse_plate(cover_mouth_w + 2*e, cover_mouth_h + 2*e, 0.01, mr + e, form_n);
+            translate([0, 0, -d + e])
+                rse_plate(cover_mouth_w, cover_mouth_h, 0.01, mr, form_n);
+        }
+        // the land that actually holds
+        translate([0, 0, -d + e])
+            rse_plate(cover_mouth_w, cover_mouth_h, lt, mr, form_n);
+        // 45 degree flare up into the chamber
+        hull() {
+            translate([0, 0, -d + e + lt])
+                rse_plate(cover_mouth_w, cover_mouth_h, 0.01, mr, form_n);
+            translate([0, 0, -d + e + lt + cover_flare_rise])
+                rse_plate(cover_cham_w, cover_cham_h, 0.01, cr, form_n);
+        }
+        // the chamber the deck sits in
+        translate([0, 0, -d + e + lt + cover_flare_rise])
+            rse_plate(cover_cham_w, cover_cham_h,
+                      d - e - lt - cover_flare_rise + 0.01, cr, form_n);
     }
 }
 
 module cover() {
     difference() {
-        union() {
-            rse_soft(cover_w, cover_h, cover_t,
-                     corner_blend - cover_gap, form_n, edge_soft, edge_roll);
-            // register platforms, one per aperture, as rims
-            translate([board_cx + display_off_x, board_bay_cy + display_off_y,
-                       -cover_reg_depth])
-                register_rim(cover_reg_w_display, cover_reg_h_display,
-                             cover_reg_blend_display, form_n,
-                             cover_reg_draft_display);
-            translate([0, kbd_bay_cy, -cover_reg_depth])
-                register_rim(cover_reg_w_kbd, cover_reg_h_kbd,
-                             cover_reg_blend_kbd, aper_n_kbd,
-                             cover_reg_draft_kbd);
+        // one organic form. rse_soft eases both ends, so the mouth reads as a
+        // softened lip rather than a cut edge, and the face crowns very
+        // slightly - the same language as the deck it covers.
+        translate([0, 0, -cover_wall_d])
+            rse_soft(cover_w, cover_h, cover_wall_d + cover_t,
+                     cover_corner_r, form_n, cover_edge_soft, cover_edge_roll);
+        cover_cavity();
+        // The middle of the inner face, held clear. Everything except a
+        // perimeter land and four magnet pads.
+        difference() {
+            translate([0, 0, -0.01])
+                rse_plate(cover_cham_w - 2*cover_land, cover_cham_h - 2*cover_land,
+                          cover_recess + 0.01,
+                          max(cover_corner_r - cover_wall_t - cover_land, 0.8),
+                          form_n);
+            for (m = magnet_sites())
+                translate([m[0], m[1], -0.02])
+                    cylinder(d = cover_pad_d, h = cover_recess + 0.03);
         }
         // magnet pockets, opening on the INNER face. No skin on this side: it
         // is never seen, and halving the gap is worth more than another magnet.
         for (m = magnet_sites())
             translate([m[0], m[1], -0.01])
                 magnet_pocket(magnet_pocket_h + 0.01);
-        // thumb scallop - ONE affordance, on the flank opposite the keyboard
-        // service window, so the intended peel starts furthest from the end
-        // that is keyed deepest into its aperture.
-        translate([cover_notch_x,
-                   cover_h / 2 + cover_notch_r - cover_notch_depth, -1])
-            cylinder(r = cover_notch_r, h = cover_t + 2);
+        // the one affordance: a wide shallow sweep on the bottom edge
+        translate([0, -cover_h/2 - cover_relief_r + cover_relief_d,
+                   -cover_wall_d - 1])
+            cylinder(r = cover_relief_r, h = cover_wall_d + cover_t + 2);
     }
 }
 
