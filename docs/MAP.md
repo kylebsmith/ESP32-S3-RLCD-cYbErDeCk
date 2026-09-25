@@ -427,7 +427,7 @@ losing move and an uninteresting one.
 So: anything expressible as a **mark in a pattern** is fair game. Anything needing
 a **function applied to a pattern** is refused.
 
-### 9.1 Per-cycle alternation — `<a b>` `[OPEN]` **strongest candidate**
+### 9.1 Per-cycle alternation — `<a b>` `[FACT]` — done
 
 A step that takes a different value each bar:
 
@@ -443,13 +443,29 @@ pattern from a loop — and it is pure notation, one more bracket type. Tidal's
 `<>` is exactly this and it is the most-used piece of its mini-notation for good
 reason.
 
-Cost: a per-slot list of alternatives, indexed by the bar counter. Around 128
-bytes a lane. It does **not** flatten by expansion — two bars of sixteen is
-already the whole 32-slot budget — so the value is chosen at fire time from the
-tick the lane already has.
+**It cost no runtime state at all**, which is better than the estimate above. That
+estimate assumed a per-slot alternative table indexed by a bar counter in the fire
+path. The right answer was the one nesting already uses: **expand at compile
+time.** Lay the pattern down once per cycle with the group resolved differently
+each time, and the lane's ordinary wrap does the alternation — a sixteen-step lane
+alternating two ways is simply a thirty-two slot lane, on the same flat bitmask at
+the same uniform rate. No variant table, no cycle counter, nothing new that can be
+late.
 
-Deletes nothing, and that is the one mark against it. It earns its place by being
-the difference between a sequencer and something that develops.
+The budget moved to pay for it: `SEQ_MAX_STEPS` is 64 and the four bitmasks are
+64-bit, which is eight bytes a lane and lets a sixteen-step lane alternate three
+ways or nest and alternate together.
+
+Composes with everything, verified on hardware: `[x<x .>]`, `<[xx] x>`,
+`<a b><c d e>` (six bars to repeat), `x%15<3%20 5%80>` (odds travel with the
+alternative), and `>disc <9 3>` — a drawing lane alternating, because a drawing
+lane is a lane.
+
+One bug worth recording: `<[xx] x>` first compiled with the group given a single
+slot, silently dropping half of it. The rule "how wide is one item" had been
+written twice — once in `seq_pattern_span` and once in `seq_pattern_walk` — and
+only one copy learned about `<>`. Two copies of one rule is exactly the drift this
+header exists to prevent, and it had drifted inside itself. There is one copy now.
 
 ### 9.2 Euclidean rhythm — `x(3,8)` `[OPEN]`
 

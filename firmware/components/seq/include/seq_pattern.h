@@ -138,7 +138,7 @@ static inline int seq_pattern_rate(const char *pat, int *num, int *den)
  * is REFUSED rather than truncated - a silently shortened bar is a bug that
  * sounds like a composition choice.
  */
-#define SEQ_PATTERN_MAX_SLOTS 32
+#define SEQ_PATTERN_MAX_SLOTS 64
 #define SEQ_PATTERN_MAX_DEPTH  4
 
 typedef struct {
@@ -155,11 +155,16 @@ static inline const char *seq_pattern_item_end(const char *p, const char *end)
     if (p >= end) {
         return p;
     }
-    if (*p == '[') {
+    if (*p == '[' || *p == '<') {
+        /* Both brackets nest, and a group may contain the other kind, so the
+         * depth counts them together: '[x<x .>]' closes correctly only if '<'
+         * and '[' are the same currency. */
+        const char open_c = *p;
+        const char close_c = (open_c == '[') ? ']' : '>';
         int depth = 0;
         while (p < end) {
-            if (*p == '[') { depth++; }
-            else if (*p == ']') { depth--; if (depth == 0) { return p + 1; } }
+            if (*p == open_c)       { depth++; }
+            else if (*p == close_c) { depth--; if (depth == 0) { return p + 1; } }
             p++;
         }
         return p;                       /* unterminated: to the end */
@@ -182,17 +187,66 @@ static inline int seq_pattern_lcm(int a, int b)
     return a / seq_pattern_gcd(a, b) * b;
 }
 
-/* Slots this level needs so every descendant lands on a boundary. */
+/* Members at this level: how many items, and how many alternatives the widest
+ * '<>' among them has. Used by both the span and the cycle count. */
+static inline int seq_pattern_count(const char *p, const char *end)
+{
+    int k = 0;
+    while (p < end) {
+        if (seq_pattern_is_spacing(*p)) { p++; continue; }
+        p = seq_pattern_item_end(p, end);
+        k++;
+    }
+    return k;
+}
+
+static inline int seq_pattern_span(const char *p, const char *end, int depth);
+
+/* HOW WIDE IS ONE ITEM. A plain step is one. A '[]' is as wide as its contents
+ * need. A '<>' is as wide as its WIDEST MEMBER needs, because only one member
+ * plays per cycle but the step has to hold whichever one it is.
+ *
+ * This exists because the answer was written twice - once inside
+ * seq_pattern_span and once in seq_pattern_walk's top-level loop - and only one
+ * copy learned about '<>'. So '<[xx] x>' gave the group a share of one and
+ * silently dropped half of it: the pattern compiled, played, and was quietly
+ * wrong. Two copies of one rule is the drift this whole header exists to
+ * prevent, and it had drifted inside itself. */
+static inline int seq_pattern_item_span(const char *p, const char *e, int depth)
+{
+    if (depth <= 0 || e - 1 <= p + 1) {
+        return 1;
+    }
+    if (*p == '[') {
+        return seq_pattern_span(p + 1, e - 1, depth - 1);
+    }
+    if (*p == '<') {
+        int s = 1;
+        const char *q = p + 1, *qend = e - 1;
+        while (q < qend) {
+            if (seq_pattern_is_spacing(*q)) { q++; continue; }
+            const char *qe = seq_pattern_item_end(q, qend);
+            s = seq_pattern_lcm(s, seq_pattern_item_span(q, qe, depth - 1));
+            q = qe;
+        }
+        return s;
+    }
+    return 1;
+}
+
+/* Slots this level needs so every descendant lands on a boundary.
+ *
+ * A '<>' group occupies ONE step - it is a step that plays a different member
+ * each cycle - so it contributes nothing here. What it contributes is CYCLES,
+ * counted separately by seq_pattern_cycles(). Keeping the two apart is what
+ * makes '[xx]' and '<x .>' compose instead of fighting. */
 static inline int seq_pattern_span(const char *p, const char *end, int depth)
 {
     int k = 0, l = 1;
     while (p < end) {
         if (seq_pattern_is_spacing(*p)) { p++; continue; }
         const char *e = seq_pattern_item_end(p, end);
-        int s = 1;
-        if (*p == '[' && depth > 0 && e - 1 > p + 1) {
-            s = seq_pattern_span(p + 1, e - 1, depth - 1);
-        }
+        const int s = seq_pattern_item_span(p, e, depth);
         l = seq_pattern_lcm(l, s);
         k++;
         if (k * l > SEQ_PATTERN_MAX_SLOTS) { return k * l; }  /* let it overflow */
@@ -201,18 +255,34 @@ static inline int seq_pattern_span(const char *p, const char *end, int depth)
     return (k == 0) ? 1 : k * l;
 }
 
+/* Cycles before the pattern repeats exactly: the least common multiple of every
+ * '<>' group's member count, at any depth. One when there is no alternation. */
+static inline int seq_pattern_cycles(const char *p, const char *end, int depth)
+{
+    int cyc = 1;
+    while (p < end) {
+        if (seq_pattern_is_spacing(*p)) { p++; continue; }
+        const char *e = seq_pattern_item_end(p, end);
+        if ((*p == '[' || *p == '<') && depth > 0 && e - 1 > p + 1) {
+            if (*p == '<') {
+                cyc = seq_pattern_lcm(cyc, seq_pattern_count(p + 1, e - 1));
+            }
+            /* A group of either kind may contain alternation further down. */
+            cyc = seq_pattern_lcm(cyc, seq_pattern_cycles(p + 1, e - 1, depth - 1));
+        }
+        p = e;
+        if (cyc > SEQ_PATTERN_MAX_SLOTS) { return cyc; }
+    }
+    return cyc;
+}
+
 /* Fill in where each slot's mark lives. `base` is the pattern's first
  * character, so the offsets are absolute. */
 static inline void seq_pattern_place(const char *p, const char *end,
                                      const char *base, int start, int width,
-                                     seq_walk_t *o, int depth)
+                                     seq_walk_t *o, int depth, int cycle)
 {
-    int k = 0;
-    for (const char *q = p; q < end; ) {
-        if (seq_pattern_is_spacing(*q)) { q++; continue; }
-        q = seq_pattern_item_end(q, end);
-        k++;
-    }
+    const int k = seq_pattern_count(p, end);
     if (k == 0) { return; }
     /* A CLAMPED FLAT PATTERN HAS MORE ITEMS THAN SLOTS, and share would floor
      * to zero - which silently placed nothing at all and turned a 40-step line
@@ -228,7 +298,33 @@ static inline void seq_pattern_place(const char *p, const char *end,
         const int at = start + idx * share;
         if (*p == '[') {
             if (depth > 0 && e - 1 > p + 1) {
-                seq_pattern_place(p + 1, e - 1, base, at, share, o, depth - 1);
+                seq_pattern_place(p + 1, e - 1, base, at, share, o, depth - 1,
+                                  cycle);
+            }
+        } else if (*p == '<') {
+            /* ALTERNATION: one member per cycle, and the member is itself an
+             * item - so it may be a group, a step with a '%', or another '<>'.
+             * That falls out of placing it exactly as if it had been written
+             * alone in this step. */
+            if (depth > 0 && e - 1 > p + 1) {
+                const char *ms = p + 1, *me = e - 1;
+                const int n = seq_pattern_count(ms, me);
+                if (n > 0) {
+                    const int want = cycle % n;
+                    int j = 0;
+                    const char *q = ms;
+                    while (q < me) {
+                        if (seq_pattern_is_spacing(*q)) { q++; continue; }
+                        const char *qe = seq_pattern_item_end(q, me);
+                        if (j == want) {
+                            seq_pattern_place(q, qe, base, at, share, o,
+                                              depth - 1, cycle);
+                            break;
+                        }
+                        j++;
+                        q = qe;
+                    }
+                }
             }
         } else if (at >= 0 && at < SEQ_PATTERN_MAX_SLOTS) {
             o->at[at] = (int16_t)(p - base);
@@ -255,10 +351,7 @@ static inline int seq_pattern_walk(const char *pat, seq_walk_t *o)
     for (const char *q = pat; q < end; ) {
         if (seq_pattern_is_spacing(*q)) { q++; continue; }
         const char *e = seq_pattern_item_end(q, end);
-        int s = 1;
-        if (*q == '[' && e - 1 > q + 1) {
-            s = seq_pattern_span(q + 1, e - 1, SEQ_PATTERN_MAX_DEPTH - 1);
-        }
+        const int s = seq_pattern_item_span(q, e, SEQ_PATTERN_MAX_DEPTH);
         l = seq_pattern_lcm(l, s);
         k++;
         q = e;
@@ -279,9 +372,25 @@ static inline int seq_pattern_walk(const char *pat, seq_walk_t *o)
     if (l == 1 && k > SEQ_PATTERN_MAX_SLOTS) {
         k = SEQ_PATTERN_MAX_SLOTS;
     }
+    /* CYCLES ARE SLOTS, WHICH IS THE WHOLE TRICK.
+     *
+     * '<a b>' does not need runtime state, a variant table or a cycle counter in
+     * the fire path. Lay the pattern down once per cycle with the group resolved
+     * differently each time, and the lane's ordinary wrap does the alternation -
+     * a sixteen-step lane with one two-way alternation is simply a thirty-two
+     * slot lane. Same flat bitmask, same uniform rate, nothing new that can be
+     * late. Exactly what '[xx]' already does for subdivision. */
+    const int cycles = seq_pattern_cycles(pat, end, SEQ_PATTERN_MAX_DEPTH);
+    const int per = k * l;
+    if (cycles < 1 || per * cycles > SEQ_PATTERN_MAX_SLOTS) {
+        return -1;
+    }
     o->div = l;
-    o->n   = k * l;
-    seq_pattern_place(pat, end, pat, 0, o->n, o, SEQ_PATTERN_MAX_DEPTH);
+    o->n   = per * cycles;
+    for (int cy = 0; cy < cycles; cy++) {
+        seq_pattern_place(pat, end, pat, cy * per, per, o,
+                          SEQ_PATTERN_MAX_DEPTH, cy);
+    }
     return o->n;
 }
 

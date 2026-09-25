@@ -185,9 +185,25 @@ since the tiles mean nothing to a receiver.
 >kick x.[x[xx]].       the second of a pair splits again
 ```
 
-Probability is `%` now: `x%15` is a fifteen-per-cent chance on that step, `?`
-alone is still a half, and they combine as `?%15`. The bracket was spent on the
-parameter before; a group had the better claim on it.
+**Patterns alternate.** `<a b>` plays a different member each bar:
+
+```
+>kick x...<x .>...     a hit on the two, every other bar
+>hat  <x.x. xxxx>      swap a whole group, bar to bar
+>bass 0...<3 5>...     the value changes
+>snare <x%15 x%90>     and so do the odds
+>disc  <9 3>           pictures alternate too
+```
+
+Angle brackets pick one; square brackets subdivide. They compose in either order:
+`[x<x .>]` is a doubled step whose second half comes and goes, and `<[xx] x>` is
+two hits one bar and one the next. Groups of different length run their own
+cycles — `<a b><c d e>` takes six bars to repeat.
+
+Probability is `%`: `x%15` is a fifteen-per-cent chance on that step, `?` alone is
+still a half, and they combine as `?%15`. Odds travel with the alternative, so
+`x%15<3%20 5%80>` keeps each one's own. The bracket was spent on the parameter
+before; a group had the better claim on it.
 
 Nesting is resolved when the line compiles, so a nested lane costs the clock
 nothing. What cannot fit is refused rather than shortened — a nested bar's

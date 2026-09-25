@@ -234,6 +234,83 @@ int main(void)
         }
     }
 
+    /* 9c. ALTERNATION. '<a b>' plays a different member each cycle, and it is
+     * resolved the same way nesting is: by laying the pattern down once per cycle
+     * with the group picked differently each time. So it costs NO runtime state -
+     * no variant table, no cycle counter in the fire path - and a sixteen-step
+     * lane that alternates two ways is simply a thirty-two slot lane on the same
+     * flat bitmask at the same uniform rate.
+     *
+     * Each case states the expansion, because the expansion is the thing that has
+     * to be right. */
+    {
+        struct { const char *pat; int n; int div; const char *flat; } alt[] = {
+            /* the value changes every other bar */
+            { "x<3 5>",        4,  1, "x3x5" },
+            /* a hit that is there every other bar */
+            { "<x .>",         2,  1, "x." },
+            /* in place, inside a longer bar */
+            { "0...<3 5>...", 16,  1, "0...3...0...5..." },
+            /* three ways round */
+            { "x<a b c>",      6,  1, "xaxbxc" },
+            /* alternation inside a subdivision */
+            { "[x<x .>]",      4,  2, "xxx." },
+            /* and a subdivision inside an alternation - the group must get room
+             * for its widest member, or half of it is silently dropped */
+            { "<[xx] x>",      4,  2, "xxx." },
+            /* two groups of different length: six cycles, not two or three */
+            { "<a b><c d e>", 12,  1, "acbdaebcadbe" },
+        };
+        for (unsigned i = 0; i < sizeof alt / sizeof alt[0]; i++) {
+            seq_walk_t w;
+            const int n = seq_pattern_walk(alt[i].pat, &w);
+            char got[80];
+            int k = 0;
+            for (; k < n && k < 64; k++) {
+                got[k] = (w.at[k] < 0) ? '.' : alt[i].pat[w.at[k]];
+            }
+            got[k] = '\0';
+            if (n != alt[i].n || w.div != alt[i].div ||
+                strcmp(got, alt[i].flat) != 0) {
+                printf("[FAIL] %-14s n=%d/%d div=%d/%d\n         got  %s\n"
+                       "         want %s\n",
+                       alt[i].pat, n, alt[i].n, w.div, alt[i].div,
+                       got, alt[i].flat);
+                fails++;
+            } else {
+                printf("[ ok ] %-14s -> %s  (%d slots, div %d)\n",
+                       alt[i].pat, got, n, w.div);
+            }
+        }
+
+        /* '%' MUST SURVIVE ALTERNATION, per alternative. A member is just an
+         * item, so its odds travel with it. */
+        {
+            const char *b = "<x%15 x%90>";
+            seq_walk_t w;
+            const int n = seq_pattern_walk(b, &w);
+            eqi("alternation keeps two slots", n, 2);
+            eqi("first member's odds",  seq_pattern_param(b + w.at[0] + 1), 15);
+            eqi("second member's odds", seq_pattern_param(b + w.at[1] + 1), 90);
+        }
+        {
+            /* Zero is a real value: certain one bar, never the next. */
+            const char *b = "<x x%0>";
+            seq_walk_t w;
+            seq_pattern_walk(b, &w);
+            eqi("no odds on the first",  seq_pattern_param(b + w.at[0] + 1), -1);
+            eqi("never on the second",   seq_pattern_param(b + w.at[1] + 1), 0);
+        }
+
+        /* A pattern whose expansion cannot fit is refused rather than shortened:
+         * dropping cycles changes what the lane plays, not just its length. */
+        {
+            seq_walk_t w;
+            eqi("an expansion that cannot fit is refused",
+                seq_pattern_walk("x...x...x...x...x...x...x...x...<3 5>", &w), -1);
+        }
+    }
+
     /* 10. THE RATE TOKEN IS NOT PART OF THE PICTURE.
      *
      * '/2' must not compile as two extra hits, and the playhead must not walk

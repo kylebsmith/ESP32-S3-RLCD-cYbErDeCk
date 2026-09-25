@@ -37,7 +37,18 @@
  * what the owner's own first piece wanted: seven sounding lanes and six
  * drawing ones. */
 #define SEQ_MAX_LANES 16
-#define SEQ_MAX_STEPS 32
+/* SIXTY-FOUR, BECAUSE ALTERNATION SPENDS SLOTS.
+ *
+ * It was 32, which is a bar of thirty-seconds and felt generous - until '<a b>'
+ * arrived. Alternation is resolved by laying the pattern down once per cycle with
+ * the group resolved differently each time (see seq_pattern.h), so a sixteen-step
+ * lane with one two-way alternation needs 32 slots and had nothing left. At 64 the
+ * same lane can alternate three ways, or nest and alternate together.
+ *
+ * The cost is the mask type: one bit per slot, so the four bitmasks become 64-bit.
+ * That is eight bytes a lane more, and the realtime core reads them exactly as
+ * before. */
+#define SEQ_MAX_STEPS 64
 #define SEQ_NAME_MAX  12
 
 /* The clock runs at 24 pulses per quarter note and a step is six of them.
@@ -82,10 +93,10 @@ typedef enum {
 
 typedef struct {
     char     name[SEQ_NAME_MAX];
-    uint32_t mask;          /* one bit per step; the realtime core reads this */
-    uint32_t accent;        /* 'X' - louder                                   */
-    uint32_t ghost;         /* ',' - quieter                                  */
-    uint32_t chance;        /* '?' - maybe                                    */
+    uint64_t mask;          /* one bit per slot; the realtime core reads this */
+    uint64_t accent;        /* 'X' - louder                                   */
+    uint64_t ghost;         /* ',' - quieter                                  */
+    uint64_t chance;        /* '?' - maybe                                    */
     uint8_t  prob[SEQ_MAX_STEPS];  /* per-step chance %, 0 = use the default  */
     uint8_t  deg[SEQ_MAX_STEPS];  /* scale degree per step, 0xFF = fixed note */
     uint8_t  steps;         /* how many of them are in play                   */

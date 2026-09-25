@@ -448,14 +448,14 @@ static void fire_lanes(uint32_t tick)
                 continue;
             }
             s_emitting = l->name;
-            if (!(l->mask & (1u << s))) {
+            if (!(l->mask & (1ull << s))) {
                 continue;
             }
         }
         /* '?' - maybe. Half, because half is the only ratio that needs no
          * number after it, and a number after it would be the start of the
          * syntax this instrument is trying not to have. */
-        if (l->route[0] == '\0' && (l->chance & (1u << s))) {
+        if (l->route[0] == '\0' && (l->chance & (1ull << s))) {
             /* '?' alone is half; '?[15]' is fifteen per cent. Half is the
              * default because it is the only ratio that needs no number, and
              * the bracket is there for when the player wants a different one
@@ -471,8 +471,8 @@ static void fire_lanes(uint32_t tick)
          * numbers, so setting a lane quiet keeps its accents in proportion
          * instead of flattening the whole pattern against a ceiling. */
         int vel = l->vel;
-        if (l->accent & (1u << s)) { vel = vel + (127 - vel) * 3 / 4; }
-        if (l->ghost  & (1u << s)) { vel = vel / 3; }
+        if (l->accent & (1ull << s)) { vel = vel + (127 - vel) * 3 / 4; }
+        if (l->ghost  & (1ull << s)) { vel = vel / 3; }
         if (vel < 1)   { vel = 1; }
         if (vel > 127) { vel = 127; }
 
@@ -791,7 +791,7 @@ esp_err_t seq_lane(const char *name, const char *steps)
         return ESP_ERR_INVALID_SIZE;
     }
 
-    uint32_t mask = 0, accent = 0, ghost = 0, chance = 0;
+    uint64_t mask = 0, accent = 0, ghost = 0, chance = 0;
     char chr[SEQ_MAX_STEPS];
     uint8_t deg[SEQ_MAX_STEPS];
     uint8_t prob[SEQ_MAX_STEPS];
@@ -812,11 +812,11 @@ esp_err_t seq_lane(const char *name, const char *steps)
         if (ch == '.' || ch == '-' || ch == '_') {
             continue;
         }
-        mask |= (1u << i);
+        mask |= (1ull << i);
         chr[i] = ch;
-        if (ch == 'X') { accent |= (1u << i); }
-        if (ch == ',') { ghost  |= (1u << i); }
-        if (ch == '?') { chance |= (1u << i); }
+        if (ch == 'X') { accent |= (1ull << i); }
+        if (ch == ',') { ghost  |= (1ull << i); }
+        if (ch == '?') { chance |= (1ull << i); }
         if (ch >= '0' && ch <= '9') { deg[i] = (uint8_t)(ch - '0'); }
 
         /* '%NN' is a parameter on this step, and it implies maybe. 0 means
@@ -825,7 +825,7 @@ esp_err_t seq_lane(const char *name, const char *steps)
         const int v = seq_pattern_param(steps + off + 1);
         if (v >= 0 && v <= 100) {
             prob[i] = (uint8_t)v;
-            chance |= (1u << i);
+            chance |= (1ull << i);
         }
     }
 
