@@ -107,8 +107,8 @@ the other:
 | `>send ble on` | BLE MIDI, off by default — the radio is the keyboard's |
 | `>osc <ip> <port>` | OSC as `/deck/<lane>`, for visuals and other machines |
 | `>frame` | the current document, as ASCII, to whatever is rendering |
-| `>host deck <pass>` | the deck becomes the Wi-Fi network |
-| `>ssh you@host <pass> <cmd>` | run something elsewhere, read the reply here |
+| `>host deck` | the deck becomes the Wi-Fi network (it asks for a password) |
+| `>ssh you@host <cmd>` | run something elsewhere, read the reply here (it asks for the password) |
 
 There is no command mode and no menu. Commands are lines of text beginning with
 `>`, in any document, run with Ctrl+Enter — so a document is a piece of music, a

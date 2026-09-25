@@ -130,8 +130,8 @@ routes draws in table order, whatever order the lines were typed.
 | `usb on` | be a USB MIDI device — needs a computer. Reboots. |
 | `din 17` | **MIDI on a wire — needs no computer.** Drives an SP404, a eurorack brain, anything with MIDI IN. Wire it first: [HARDWARE.md](HARDWARE.md) |
 | `osc 10.0.0.5 9000` | `/deck/<lane>` over the network |
-| `wifi <ssid> <pass>` | join; `wifi off`, `wifi forget` |
-| `host deck 12345678` | *be* the network |
+| `wifi <ssid>` | join - it asks for the password; `wifi off`, `wifi forget` |
+| `host deck` | *be* the network - it asks for a password |
 
 ## Looking — 6
 
@@ -167,7 +167,7 @@ routes draws in table order, whatever order the lines were typed.
 | `solo kick` | |
 | `kbd` | what is typing; `kbd forget` to pair a different keyboard |
 | `battery` | find the sense pin |
-| `ssh me@host pass ls` | a terminal, from the deck |
+| `ssh me@host ls` | a command, run elsewhere - it asks for the password |
 | `flash now` | reboot to the ROM loader |
 
 ---

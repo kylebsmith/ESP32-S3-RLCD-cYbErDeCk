@@ -15,6 +15,10 @@ static const char *TAG = "net";
 #define NVS_NS "deck"
 
 static bool           s_started;      /* the Wi-Fi driver is up            */
+/* ...and the radio is on. Not the same thing: '>wifi off' stops the radio and
+ * keeps the driver, and the status said "join <ssid> -" after it - on a deck
+ * that had been HOSTING, too - because it asked only whether the driver was up. */
+static bool           s_on;
 static bool           s_joined;       /* a station link has an address     */
 static bool           s_hosting;
 static char           s_ssid[33];
@@ -26,7 +30,7 @@ bool net_up(void) { return s_joined || s_hosting; }
 
 void net_status(char *out, size_t max)
 {
-    if (!s_started) {
+    if (!s_started || !s_on) {
         snprintf(out, max, "wifi off");
         return;
     }
@@ -173,6 +177,7 @@ esp_err_t net_join(const char *ssid, const char *pass)
     ESP_RETURN_ON_ERROR(esp_wifi_set_mode(WIFI_MODE_STA), TAG, "mode");
     ESP_RETURN_ON_ERROR(esp_wifi_set_config(WIFI_IF_STA, &wc), TAG, "cfg");
     ESP_RETURN_ON_ERROR(esp_wifi_start(), TAG, "start");
+    s_on = true;
     return esp_wifi_connect();
 }
 
@@ -204,6 +209,7 @@ esp_err_t net_host(const char *ssid, const char *pass)
     ESP_RETURN_ON_ERROR(esp_wifi_set_mode(WIFI_MODE_AP), TAG, "mode");
     ESP_RETURN_ON_ERROR(esp_wifi_set_config(WIFI_IF_AP, &wc), TAG, "cfg");
     ESP_RETURN_ON_ERROR(esp_wifi_start(), TAG, "start");
+    s_on = true;
     s_hosting = true;
     s_joined  = false;
     snprintf(s_ip, sizeof s_ip, "192.168.4.1");
@@ -218,7 +224,7 @@ void net_stop(void)
         return;
     }
     esp_wifi_stop();
-    s_joined = s_hosting = false;
+    s_on = s_joined = s_hosting = false;
     snprintf(s_ip, sizeof s_ip, "-");
     ESP_LOGW(TAG, "radio off - the airtime is the keyboard's again");
 }

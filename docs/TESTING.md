@@ -129,21 +129,29 @@ input, set the transport to External.
 ## 9. Network
 
 ```
->host deck 12345678
+>host deck
 ```
 
-The deck becomes a Wi-Fi network at `192.168.4.1`. Join it from a laptop.
+The status line asks for a password: type it and press Enter. It shows a star
+for each character and **never enters the document** - a password on a line would
+be journalled, mirrored to the card and copied to the DGX. Under eight characters,
+or none, and the deck hosts an open network and says so. Esc stops without
+starting anything. The deck becomes a Wi-Fi network at `192.168.4.1`. Join it from
+a laptop.
 
 Or join an existing one:
 
 ```
->wifi <ssid> <password>
+>wifi <ssid>
 >wifi
 ```
 
-The second command shows the address once it has one. Credentials are
-remembered **as soon as they are typed**, and re-joined at every boot.
-`>wifi forget` clears them.
+It asks for the password the same way. The second command shows the address once
+it has one. Credentials are remembered **as soon as Enter is pressed**, in NVS and
+never in a document, and re-joined at every boot. `>wifi forget` clears them.
+
+A password still typed on the line the old way - `>wifi home hunter2` - is
+refused, and cut from the line before autosave can keep it.
 
 ## 10. OSC out
 
@@ -372,18 +380,33 @@ running `>frame` again is the whole of visual coding on this device.
 
 ## 13. SSH
 
-Turn on Remote Login (macOS: Settings → General → Sharing). Then with the deck
-on the same network:
+**Untested against a real server** - the decks had no network with an sshd on it.
+Use a throwaway account on the laptop, never a real password, as docs/NEXT.md §10
+asks. Turn on Remote Login (macOS: Settings → General → Sharing). Then with the
+deck on the same network:
 
 ```
->ssh you@192.168.1.42 yourpassword ls
+>ssh you@192.168.1.42 ls
 ```
 
-The reply arrives in `+ssh`. Ctrl-O comes back.
+The status line asks for the password; it never goes on the line. The session
+runs beside the editor - you can keep typing - and when it ends the reply is shown
+in `+out`. Ctrl-O comes back.
 
-The host key is **shown, not verified** — the fingerprint is printed so you can
-see it change. The password is on the line, which is why `+ssh` is transient
-and never reaches the journal, the SD card or a backup.
+**The host's key is kept the first time** and printed as `ssh-keygen -lf` prints
+it. Check it by eye against the laptop's own, from the key type the deck names:
+the deck cannot use ed25519 host keys, so it will be the ECDSA or RSA one:
+
+```
+ssh-keygen -lf /etc/ssh/ssh_host_ecdsa_key.pub
+```
+
+From then on a different key is **refused before any password is sent**. If you
+changed the key yourself, `>ssh forget 192.168.1.42` and connect again.
+
+What was exercised, 2026-09-25, on two decks with one hosting a test network: an
+address nobody answers reports `no answer in 5 seconds` at 5.0 s while the editor
+keeps its 194 turns a second; a closed port reports `connection refused`.
 
 ## 14. Battery
 
@@ -498,4 +521,5 @@ power it down.
   BOOT button to reflash from there.
 - `>lanes` shows a pattern from its compiled form, so spacing you typed for
   readability isn't echoed back.
-- No SSH key auth yet — password only.
+- No SSH key auth yet — password only, asked for and never on a line.
+- An SSH session has never been run against a real server: see §13.

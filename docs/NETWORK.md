@@ -128,6 +128,12 @@ overwrites the deck, so it is the owner's call.
 
 Until then: feasible on strong evidence, unproven on this board.
 
+**Measured since, 2026-09-25, in this firmware** (the heartbeat's free internal
+heap): about **98 KB free before Wi-Fi, 15-16.5 KB with the station up, 14.2 KB
+with the access point up**. The radio costs about 82 KB of internal RAM here, and
+what is left is the budget an SSH session's crypto has to fit in - see *SSH, as
+built* below.
+
 ## Build order, when this is picked up
 
 1. **Measure first.** Bring up Wi-Fi in *this* firmware and log free internal
@@ -148,6 +154,69 @@ assessment on 2026-09-20, against ESP-IDF v5.5.4 (`dfe53e20`),
 xtensa-esp32s3-elf-gcc 14.2.0, libssh2 1.11.2_DEV, wolfSSH master, wolfSSL
 v5.9.1-stable and OpenSSH 9.9p2. Raspberry Pi OS sshd defaults were read from
 the Debian trixie `sshd_config(5)` for OpenSSH 1:10.0p1.
+
+---
+
+## SSH, as built — what was wrong, what was decided `[BUILT]` `[OPEN]`
+
+*2026-09-25, docs/NEXT.md §10: "test it, and fix the defect it has". The defect the
+brief named was real, and there were three more.*
+
+**1. The password was a word of the line.** `>ssh user@host pass ls` put it in a
+document line, and a document is journalled, mirrored to the SD card and copied to
+the owner's DGX - ground rule 6. `>wifi <ssid> <pass>` and `>host deck 12345678`,
+both taught by the guide, did the same. **Now no command takes a password on its
+line.** A command that needs one asks on the status line; the keys go to a buffer
+shown as stars (`firmware/main/ask.h`), are handed to the command on Enter and wiped
+on Enter and on Esc, and the document never sees them. `wifi` and `host` take one
+word, and a second word is the old password: refused, and cut from the line before
+autosave can keep it. `ssh` sends nothing when the answer appears in its command.
+Checked on the deck: `>wifi TESTNET notreal-1` left `>wifi TESTNET` and a 20-byte
+save; a passphrase typed at the prompt reached the radio and not the document.
+
+**2. The host key was shown, not checked. Decision: keep it on first use, refuse a
+change before any password is sent.** With password authentication an unchecked
+key is not a cosmetic gap: whoever answers in the host's place is handed the
+password - encrypted, but to them. Keeping the first key (in NVS, never a document)
+is what ssh(1) does for a new host, and the alternative - typing a 43-character
+fingerprint into the deck before the first connection - is a ritual nobody would
+perform. The first connection is still taken on trust, so the deck prints the
+fingerprint exactly as `ssh-keygen -lf` prints it, with the key's type: libssh2's
+mbedTLS backend cannot use ed25519 host keys (*the four things* above), so it is
+the host's ECDSA or RSA key to compare. `>ssh forget <host>` is for a key the owner
+changed. The format is checked against a real key's `ssh-keygen` output in
+`tools/test_ask.c`; **the check against a live server is unverified**.
+
+**3. The session ran on the editor's task,** which a task watchdog panics after 10
+seconds without a turn, while `connect()` waited out twelve SYN retries. By reading
+the code, `>ssh` to an address nobody answers would have rebooted the deck
+mid-set; **that was not reproduced on hardware**. Now the session is its own task,
+with its stack in PSRAM because the radio leaves about 16 KB internal, `connect()`
+is bounded at 5 seconds, and what the session says comes back through a message
+buffer to `+out`. Measured on two decks, one hosting a test network: an address
+nobody answers says `no answer in 5 seconds` at 5.0 s while the editor keeps 194
+turns a second; a closed port says `connection refused`.
+
+**4. The reply went to `+ssh`, which nothing ever showed.** It goes to `+out` now,
+shown when the session ends, and Ctrl-O comes back like any other command's output.
+
+**Unverified: a session against a real server** - handshake, authentication, the
+command's output, the key kept and a changed one refused. No sshd was reachable
+from the decks without changing the network of the owner's Mac. Also unverified:
+whether the handshake's crypto fits, since this project configures mbedTLS to take
+**only internal RAM** (`CONFIG_MBEDTLS_INTERNAL_MEM_ALLOC`) and about 16 KB is left
+with the radio up. If it does not fit, the session says `handshake failed`; the
+remedy is mbedTLS allocating from PSRAM, which touches the Wi-Fi stack's crypto too
+and wants its own test.
+
+**Proposed, not built: key authentication.** The deck makes its own key pair,
+keeps the private half in NVS and shows the public half, which is not a secret; the
+owner adds it to `authorized_keys` once, and no password is typed at all. That is
+the right end state for "control Claude Code on my laptop from the deck", and it
+needs a reachable sshd to test before it is worth building.
+
+**Observed once:** a deck joining another deck's open network took 44 seconds to
+get an address by DHCP after associating.
 
 ---
 
