@@ -424,11 +424,29 @@ Two things that came out of measuring rather than reasoning, both fixed:
   count flickered between none and one until the follower's probe rate went up and
   the staleness window widened.
 
-### Ableton Link is still not implemented `[OPEN]`
+### Ableton Link: not in this push, and why `[DECIDED]` 2026-09-25
 
-Nothing here is Link, and nothing is stubbed. What this does share is Link's
-*model* — a local timer corrected slowly from round-trip measurements — so if the
-licence question (GPLv2+ or commercial from Ableton) is ever settled, Link replaces
-the transport underneath `seq_timebase()` and `seq_nudge_by()` and nothing above
-them changes.
+**Not integrated.** [NEXT.md](NEXT.md) §7 made the licence the gate and asked for the
+decision to be written here if the answer was no. It is no, for now, and the reason
+is the licence rather than the engineering: Link is GPLv2+ or commercial from
+Ableton, this repository is MIT, and taking the GPL makes the whole firmware GPL.
+That is a decision about the project that belongs to its owner, and this push did
+not make it on their behalf.
+
+**Nothing is lost by waiting**, which is what makes "not now" the right answer rather
+than a postponement:
+
+- **Between decks**, the ESP-NOW ensemble already does what Link would be used for:
+  two decks in phase within 35 µs, 32 of 32 samples inside 500 µs across tempo
+  changes, no router — measured above.
+- **With a DAW**, MIDI clock already does it over USB: 49.600 clocks a second for a
+  requested 124 bpm, measured at the host (docs/OS.md).
+- **The seam is ready.** The ensemble shares Link's *model* — a local timer
+  corrected slowly from round trips — so if the licence question is ever settled,
+  Link replaces the transport under `seq_timebase()` and `seq_nudge_by()` and nothing
+  above them changes. Nothing is stubbed to look like Link, and nothing should be.
+
+**What would reopen it:** the owner choosing GPLv2+ for the firmware, or a
+commercial licence from Ableton; or a performance that needs a phone or a laptop
+app that speaks only Link, which neither ESP-NOW nor MIDI clock reaches.
 
