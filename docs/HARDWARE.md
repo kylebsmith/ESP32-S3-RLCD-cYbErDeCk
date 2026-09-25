@@ -223,6 +223,14 @@ of the time. Draw rose from 117 to 150 ms when the view stopped blocking - most
 likely the USB interrupts that used to land inside the 31 ms wait now landing inside
 everything else. That explanation is unverified.
 
+**Not done, on the same numbers.** §9 also lists a table for the tone ramp and the
+Bayer dither, and hoisting the fields' row terms out of their inner loops. Under the
+heaviest scene the pictures cost 52 ms in 10 s - about 0.6 ms a frame for seven
+lanes over 1,060 cells - so neither can buy a number anyone would notice, and the
+rule cuts both ways: no optimization without a number, and none where the number
+says it cannot matter. The push is the term to watch now, and at about 2.3 ms for
+6.5 KB it is already close to its wire time.
+
 ### The 6 x 12 recommendation did not survive contact `[MEASURED]`
 
 *Character-cell geometry* above recommends 6 x 12 giving 66 x 25, on the
