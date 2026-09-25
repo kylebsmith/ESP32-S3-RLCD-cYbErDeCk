@@ -83,12 +83,29 @@ void vitals_begin(void)
              (unsigned)s_prev.uptime_s, s_prev.usb_mode ? "USB MIDI" : "serial");
     snprintf(s_line[n++], sizeof s_line[0], "  %u loops/s, %uK heap",
              rate, (unsigned)(s_prev.heap_free / 1024));
+    /* THREE OUTCOMES, NOT TWO, and the third is the one that cost a session.
+     *
+     * A goodbye is written immediately BEFORE the restart, so it records an
+     * intention rather than an outcome - and when esp_restart() itself deadlocked
+     * the record said "restarted on purpose" about a deck that never restarted at
+     * all. The first version of this reported exactly that, confidently.
+     *
+     * The discriminator is the reset reason of the boot that reads it. A
+     * deliberate restart that WORKED arrives here as a software or USB reset; one
+     * that hung is recovered by a power cycle, so it arrives as POWERON. Said
+     * goodbye and then needed a human to press the button means the restart never
+     * completed.
+     *
+     * A deliberate power cycle straight after a successful '>usb off' reads as the
+     * same thing. That is a false positive worth having: it says the restart may
+     * not have completed, which is cheap to dismiss, where missing a real one cost
+     * three sessions of blaming the transport. */
+    const esp_reset_reason_t now = esp_reset_reason();
     if (!s_prev.deliberate) {
-        /* A power cycle after a USB MIDI run is how this hang is recovered, so
-         * this pair IS the fingerprint. Said plainly, because the console that
-         * would otherwise have reported it is the thing that dies. */
         /* The run never closed its record, so it did not choose to stop. */
         snprintf(s_line[n++], sizeof s_line[0], "  STOPPED DEAD - see OS.md");
+    } else if (now == ESP_RST_POWERON) {
+        snprintf(s_line[n++], sizeof s_line[0], "  RESTART HUNG - see OS.md");
     } else {
         snprintf(s_line[n++], sizeof s_line[0], "  restarted on purpose");
     }
@@ -98,8 +115,7 @@ void vitals_begin(void)
         ESP_LOGW(TAG, "%s", s_line[i]);
     }
     ESP_LOGW(TAG, "  ticks %u, reset then %d, now %d",
-             (unsigned)s_prev.ticks, (int)s_prev.reset_reason,
-             (int)esp_reset_reason());
+             (unsigned)s_prev.ticks, (int)s_prev.reset_reason, (int)now);
 }
 
 const vitals_t *vitals_previous(void) { return &s_prev; }

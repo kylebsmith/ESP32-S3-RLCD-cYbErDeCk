@@ -618,13 +618,28 @@ Two things, and neither was cleverness:
 - **Writing the evidence to flash.** `vitals.c` records uptime, loop count, heap
   and mode once a minute while USB MIDI is active, and a *deliberate* restart
   closes the record with a goodbye. A record that was never closed is a run that
-  never chose to stop. The board that died had written exactly one record, at
+  never chose to stop.
+
+  **And the first version of that got it wrong.** A goodbye is written immediately
+  before the restart, so it records an *intention*, not an outcome — and when the
+  restart itself deadlocked, the record said "restarted on purpose" about a deck
+  that never restarted at all. It reported exactly that, confidently, about the
+  board I had just watched hang. The discriminator is the reset reason of the boot
+  that reads it: a deliberate restart that worked arrives as a software or USB
+  reset, while one that hung is recovered by a power cycle and arrives as POWERON.
+  Said goodbye and then needed a human to press the button means it never
+  completed. Three outcomes, not two. The board that died had written exactly one record, at
   60 s, with the loop running at a healthy 185/s - so it was fine and then stopped
   abruptly, which ruled out slow degradation before any theory was proposed.
 - **Watching a board that nobody touched.** The five-minute clean run is what
   turned "USB MIDI is unreliable" into "something I am doing kills it".
 
 ### Still open `[OPEN]`
+
+Two branches of the verdict are **written but unexercised**: `STOPPED DEAD` (a run
+that never said goodbye) and `RESTART HUNG` (said goodbye, recovered by hand). Only
+`restarted on purpose` is verified on hardware, because the condition that produced
+the other two is now fixed and they are the ones that would fire if it came back.
 
 `>flash now` from USB MIDI mode has the same deadlock and is **not** fixed. It
 cannot use the same escape: it sets `FORCE_DOWNLOAD_BOOT` in the RTC domain and
