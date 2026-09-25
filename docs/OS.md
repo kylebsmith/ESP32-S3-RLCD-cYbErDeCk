@@ -544,3 +544,71 @@ and USB-Serial/JTAG; the risk is real but the stated mechanism is invented).
 
 No vendor file is redistributed by this repository. See
 [PROVENANCE.md](PROVENANCE.md).
+
+---
+
+## The deck hangs in USB MIDI mode `[OPEN]`
+
+**Reproduced three times in one session. Not root-caused. This is the reason
+`>usb on` should not go to a user test unsupervised.**
+
+### What happens
+
+Enter USB MIDI mode, work over the composite device's CDC console for a few
+minutes, and everything on the deck stops. The USB device stays enumerated - the
+port is still there, macOS still lists `cyberdeck` as a MIDI input - and nothing
+responds.
+
+### What is established `[FACT]`
+
+- The CDC console is dead **both ways**: no output, and typed commands do nothing.
+- **MIDI is dead too.** Measured with mido: zero clocks, zero notes, zero
+  anything over eight seconds while the deck was playing a moment before. So this
+  is not a console problem - the sequencer and the transport task are gone.
+- TinyUSB's own task survives, which is why the device stays enumerated. That
+  task is on core 1 at priority 5.
+- **The task watchdog does not reboot it.** It is armed on the editor loop with a
+  ten-second timeout and `CONFIG_ESP_TASK_WDT_PANIC=y`, and
+  `CONFIG_ESP_SYSTEM_PANIC_SILENT_REBOOT=y` exists so a panic cannot stall trying
+  to print. Neither fires.
+- Only a power cycle recovers it. Unplugging is not enough on battery - the RTC
+  domain stays up, so it takes a PWR hold.
+- It has never been observed in serial mode, over many hours.
+
+### What has been ruled out `[FACT]`
+
+- **A blocking write to the CDC.** `tusb_write()` in `vfs_tinyusb.c` calls
+  `tinyusb_cdcacm_write_queue_char()` and `break`s when the buffer is full; the
+  flush is non-blocking. Nothing in the log path waits on a host.
+- **The DTR/RTS console gate.** `esp_tinyusb` keeps the CDC silent until
+  `dtr && rts`, so a closed port mutes it - but toggling both lines low and back
+  high, which re-fires the line-state callback, produced nothing. And it would not
+  explain MIDI stopping.
+- **A hung editor loop alone.** MIDI dying means the esp_timer task on core 1 and
+  the transport task are dead too, which is more than the editor.
+
+### What it is most likely to be `[OPEN]`
+
+Everything dies except one TinyUSB task, and the watchdog that should catch it
+does not run. That points at something below the scheduler rather than at any one
+task: a panic whose handler cannot complete, an interrupt watchdog, or memory
+corruption that takes the timer and the WDT with it. The USB MIDI path is the only
+code that differs between the working case and the failing one, and
+`CFG_TUD_MIDI_TX_EPSIZE` was already forced to 4 there to make a note flush at
+all - that area is worth suspicion.
+
+### The diagnostic that is missing
+
+The console dying is exactly what makes this undiagnosable, so the evidence has to
+go somewhere that does not depend on it - and RTC memory is no good either,
+because the recovery is a power cycle and that clears it. **A small record in NVS**
+- loop iterations, uptime, reset reason, USB mode, written once a minute - would
+turn a silent hang into a fact on the next boot. That is the next thing to build
+here, before another attempt at a fix.
+
+### Until then
+
+Ship user tests in serial mode, or in USB MIDI mode with the owner told that a
+PWR hold is the recovery. Do not put `>usb on` in a boot document on a deck that
+is going out of the room.
+

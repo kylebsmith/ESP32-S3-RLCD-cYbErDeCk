@@ -308,6 +308,16 @@ or anything else with a MIDI IN.
 **It needs a resistor loop before you trust it** — a MIDI output is a current
 loop, not a logic level. See [HARDWARE.md](HARDWARE.md). `>din off` stops it.
 
+**Known bug: the deck hangs in USB MIDI mode**, reproduced three times, not
+root-caused — see [OS.md](OS.md). Everything stops while USB stays enumerated, and
+only a PWR hold recovers it. `din` and serial mode are unaffected. Do not put
+`>usb on` in a boot document on a deck going out of the room.
+
+Also worth knowing: **`>usb on` reboots, and the reboot loses the lanes, the
+tempo, `sync` and `play`** — the document survives but nothing is re-run. Put the
+whole piece in a document and `>run` it after the reboot, or put `>usb on` in
+`boot` so the deck comes up that way.
+
 The other transports all need something else to be the host: `>usb on` makes the
 deck a USB MIDI *device* (so: a computer or tablet), `>send ble on` needs a BLE
 MIDI host, `>osc <ip> <port>` needs something listening on the network.
