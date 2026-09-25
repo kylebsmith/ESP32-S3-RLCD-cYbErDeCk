@@ -1118,45 +1118,20 @@ static cmd_status_t c_battery(cmd_ctx_t *ctx)
  * buffer, no second environment. */
 /* A DRAWING LANE, WHICH IS JUST A LANE.
  *
- * Reached two ways, and they compile to exactly the same thing:
+ *     >disc 0..3..6..9..     exactly the shape of '>kick x...x...'
  *
- *     >disc 0..3..6..9..     the primitive's own name, like '>kick'
- *     >viz disc 0..3..6..9.. the old spelling, kept for saved documents
+ * There was a '>viz disc ...' spelling during the collapse, kept while saved
+ * documents still used it. It is gone: one name, one way to write it. Two
+ * spellings for one thing is the redundancy docs/MAP.md exists to refuse, and
+ * an alias that survives to the freeze is an alias that survives for ever.
  *
- * The second is an ALIAS MARKED FOR DELETION. It exists because documents
- * already written use it, and docs/MAP.md says the language stops rather than
- * migrating people twice; at freeze it goes and this comment goes with it.
- *
- * Both paths do the same two things a drum lane does - bind, then compile -
- * because after the collapse there is one lane table and a drawing lane differs
- * from a kick only in where its events go. */
+ * This does the same two things a drum lane does - bind, then compile - because
+ * there is one lane table and a drawing lane differs from a kick only in where
+ * its events go. */
 static cmd_status_t c_prim(cmd_ctx_t *ctx)
 {
     const char *name = ctx->name;
     const char *pat  = ctx->arg;
-    char word[16];
-
-    if (strcmp(name, "viz") == 0) {
-        /* The alias: the first word of the argument is the primitive. */
-        size_t w = 0;
-        while (*pat != '\0' && *pat != ' ' && w < sizeof word - 1) {
-            word[w++] = *pat++;
-        }
-        word[w] = '\0';
-        while (*pat == ' ') { pat++; }
-        if (word[0] == '\0') {
-            cmd_out(ctx, "draws: noise disc ramp grid");
-            cmd_out(ctx, "bends: echo move warp shake");
-            cmd_out(ctx, "       grow thin flip tile fold");
-            cmd_out(ctx, "0-9 is how much, 9 full.");
-            cmd_out(ctx, "u d l r is which way.");
-            cmd_out(ctx, "try: echo 9 / noise 2 / move d");
-            cmd_out(ctx, "each is a lane, like kick.");
-            snprintf(ctx->msg, sizeof ctx->msg, "echo 9, then noise 2");
-            return CMD_DONE;
-        }
-        name = word;
-    }
 
     const int prim = viz_prim_index(name);
     if (prim < 0) {
@@ -1201,7 +1176,7 @@ static cmd_status_t c_split(cmd_ctx_t *ctx)
      *
      * ON AND OFF ARE SPELLED OUT BECAUSE A DOCUMENT LINE HAS TO BE IDEMPOTENT.
      * A bare '>split' toggles, which is right for a hand at the keyboard and
-     * wrong in a document: '>viz ring ...' turns the preview on by itself, so
+     * wrong in a document: '>disc 9' turns the preview on by itself, so
      * a '>split' further down the page turned it back OFF, and re-running the
      * page flipped it again. Running a document twice has to leave the device
      * in the same state both times, or the text is not a description of the
@@ -1724,7 +1699,6 @@ static const cmd_t s_builtins[] = {
     { "flip",   c_prim,  CMD_CAP_EDIT,  "invert the frame" },
     { "tile",   c_prim,  CMD_CAP_EDIT,  "repeat it, 1-4 copies" },
     { "fold",   c_prim,  CMD_CAP_EDIT,  "mirror it, 1-3 folds" },
-    { "viz",   c_prim,  CMD_CAP_EDIT,  "alias: viz disc x... = disc x..." },
     { "split", c_split, CMD_CAP_EDIT,  "split on | off | <rows>" },
     { "route", c_route, CMD_CAP_EDIT,  "route disc kick" },
     { "usb",   c_usb,   CMD_CAP_SYSTEM,"usb on | off - MIDI over the cable" },

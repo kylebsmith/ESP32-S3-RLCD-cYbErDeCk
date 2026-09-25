@@ -87,7 +87,7 @@
     ">play\n" \
     "\n" \
     "x hit  X loud  , quiet\n" \
-    "? maybe   ?[15] 15% odds\n" \
+    "? maybe   x%15 15% odds\n" \
     ". rest  0-9 is a degree\n" \
     "0 is the root. On a cc\n" \
     "lane, 0-9 are values.\n" \
@@ -111,10 +111,21 @@
     ">osc 192.168.4.2 9000\n" \
     ">ssh me@host pass ls\n" \
     "\n" \
-    "VISUALS - same document\n" \
-    ">viz noise x?x?x?x?\n" \
-    ">viz bar 0..3..9..3..\n" \
-    ">route noise bass\n" \
+    "x..[xx] nests. any depth.\n" \
+    "[xx][xxx] is 2 against 3.\n" \
+    "\n" \
+    "PICTURES - same document,\n" \
+    "same clock. each one is a\n" \
+    "lane, exactly like a drum.\n" \
+    "draws: noise disc ramp grid\n" \
+    "bends: echo move warp shake\n" \
+    "  grow thin flip tile fold\n" \
+    ">echo 8    then add:\n" \
+    ">noise 2.4.2.4.\n" \
+    ">move d    trails fall\n" \
+    ">route disc kick\n" \
+    "0-9 is how much. u d l r\n" \
+    "is which way.\n" \
     ">split  preview on/off\n" \
     ">frame  send it over osc\n" \
     ">list   your documents\n" \

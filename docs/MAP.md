@@ -25,9 +25,22 @@ almost anything is useful — it is:
 
 > **Does this let me delete something? Or does it collapse two things into one?**
 
-If neither, it is refused, however good it is. Sixty-three verbs is already more
-than one hand can hold, and a third of them below are shown to be the same verb
-wearing different hats.
+If neither, it is refused, however good it is.
+
+**Sixty-five verbs `[FACT]`**, counted from the command table itself:
+
+```
+    python3 - <<'EOF'
+    import re; s=open('firmware/components/cmd/builtins.c').read()
+    i=s.index('static const cmd_t'); t=s[i:s.index('};',i)]
+    print(len(set(re.findall(r'\{\s*"([a-z0-9]+)"\s*,\s*c_', t))))
+    EOF
+```
+
+That command is here because the number was wrong twice. Earlier revisions of
+this document said sixty-three, from a grep that also matched the `{ "kick", 36 }`
+note-lookup tables — data rows, not verbs. A document whose job is to refuse
+features on the strength of a count has to be able to show its arithmetic.
 
 ---
 
@@ -65,9 +78,9 @@ wrong. Teach the *binding* about the output.
 
 ## 2. The surface, as it stands `[FACT]`
 
-Sixty-three names. Grouped by what they actually touch:
+Sixty-five names, grouped by what they actually touch:
 
-### Lanes that make sound — 16 names, one behaviour
+### Lanes that make sound — 17 names, one behaviour
 ```
 kick snare hat ohat clap tom rim crash      bound to a drum note on ch 10
 bass lead pad arp                           bound to a note + octave + gate
@@ -78,15 +91,17 @@ All seventeen call the same two functions: `seq_lane_note`/`seq_lane_melodic`/
 `seq_lane_ctrl` to set the binding, then `seq_lane()` to compile the pattern.
 The names are *presets*, not features.
 
-### Lanes that make pictures — 1 name, 13 bindings
+### Lanes that make pictures — 13 names, one behaviour
 ```
-viz <primitive> <pattern>    echo move warp shake
-                             noise disc ramp grid
-                             grow thin flip tile fold
+echo move warp shake         operators: they bend what is there
+noise disc ramp grid         sources: they put ink down
+grow thin flip tile fold
 ```
-Calls `viz_lane()`, which is a near-copy of `seq_lane()`.
+Peers of the drums. Each is a name bound to a primitive exactly as `kick` is a
+name bound to note 36, and they go through the same `seq_lane()` as everything
+else. There is no `viz` keyword.
 
-### The clock — 5
+### The clock — 6
 ```
 bpm scale swing sync play stop
 ```
@@ -100,19 +115,19 @@ osc       set an OSC target
 wifi host join a network, or be one
 ```
 
-### Looking at things — 4
+### Looking at things — 6
 ```
-lanes jitter dump density split
+lanes jitter dump density split frame
 ```
 
-### Documents — 9
+### Documents — 10
 ```
 help list new name open run save close guide prose
 ```
 
-### Escape hatches — 4
+### Escape hatches and the rest — 7
 ```
-panic flash battery mute/solo
+panic flash battery mute solo route ssh
 ```
 
 ---
@@ -222,9 +237,10 @@ What this buys, concretely:
   plotter: a binding, not a language change. This is the medium-agnosticism,
   made structural instead of aspirational.
 
-Cost: a real refactor of `seq.c` and `viz.c`, and `>viz noise 2` stops working in
-documents already saved. Mitigation: keep `viz` as an alias that strips itself —
-one table row, deleted at freeze.
+Cost: a real refactor of `seq.c` and `viz.c`, and `>viz noise 2` stopped working
+in documents already saved. It was kept as an alias through the collapse and is
+now deleted — one name, one way to write it. An alias that survives to the freeze
+is an alias that survives for ever.
 
 **Done, and measured on the deck.** Ten lanes in one listing — `kick hat bass
 cut` alongside `echo noise move disc grow warp` — and three route chains that
@@ -246,8 +262,8 @@ zero late, 5294 of 5294 ticks inside 0.1 ms.** Unchanged — the drawing lanes g
 through the same `fire_lanes()` loop as the notes and still only *mark* the
 frame, leaving the picture to the main loop.
 
-Verb count went 63 → 75: `viz` became an alias and the thirteen primitives took
-their own names. That is a widening of the *table* and not of the language —
+Verb count went **53 → 65**: `viz` is gone and the thirteen primitives took their
+own names. That is a widening of the *table* and not of the language —
 `>disc` is a name bound to a destination exactly as `>kick` is, which is the
 argument §3.2 already makes for the seventeen drum names. What was actually
 deleted is a whole second lane system: one struct, one compile loop, one mute,
@@ -367,13 +383,14 @@ actually written, so the wire can be proven busy without a scope.
 The freeze criteria, written now so that "one more feature" has something to
 argue against later:
 
-1. ~~**One lane table.**~~ Done. `viz` survives as an alias to be deleted at
-   freeze — that deletion is the remaining half of this criterion.
+1. ~~**One lane table.**~~ Done, and the `viz` alias is deleted with it.
 2. ~~**Nesting decided and implemented.**~~ Done. One rule, recursive, resolved
    at compile time.
 3. **One shared clock mechanism** that covers both a second deck and a laptop.
 4. **MIDI in and out on a wire**, so the deck needs no computer at all.
-5. **Sixty-three verbs down, not up.** §3.1 and §4 remove at least two.
+5. **Sixty-five verbs down, not up**, and counted with the snippet in §0 rather
+   than by eye. The collapse spent twelve of them buying one lane system; nothing
+   else may spend any without deleting its own.
 6. **Every verb in one printed page**, because a performer cannot search.
 7. **No verb that exists only to work around another verb.**
 

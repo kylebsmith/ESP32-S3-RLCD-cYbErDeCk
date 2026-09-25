@@ -137,8 +137,8 @@ hit, by lane name.
 **A drawing primitive is a lane, exactly like a drum.** `>disc 9` and `>kick x...`
 are the same sentence with different destinations, so everything that works on
 one works on the other: a bare name drops it, re-running an unchanged line mutes
-it, `/2` halves it, and `>lanes` lists them together. `>viz disc 9` is the old
-spelling and still works; it goes away at freeze.
+it, `/2` halves it, and `>lanes` lists them together. There is no `viz` keyword —
+it was an alias during the collapse and it is gone.
 
 The lower half of the screen becomes a live frame inside a stroked border,
 advancing on the same clock as the music. `>split on` and `>split off` are
@@ -194,22 +194,22 @@ nothing. What cannot fit is refused rather than shortened — a nested bar's
 subdivision is a property of the whole bar.
 
 **A digit is always how much: 0 none, 9 full.** In every primitive. A `u`, `d`,
-`l` or `r` is which way, either in front of the pattern (`>viz ramp u 4.6.9.6.`)
-or as a step of it (`>viz move d....d...`). Speed is the pattern, so `/2` and
+`l` or `r` is which way, either in front of the pattern (`>ramp u 4.6.9.6.`)
+or as a step of it (`>move d....d...`). Speed is the pattern, so `/2` and
 `*2` halve and double a visual lane exactly as they do a drum.
 
 Old shapes are combinations now. Rain is `noise` + `move d` + `echo`. A bar is
-`ramp`. A wave is `ramp` + `warp`. Start with `>viz echo 9` and then add a
+`ramp`. A wave is `ramp` + `warp`. Start with `>echo 9` and then add a
 source — that one line is the difference between a blinking shape and an
 animation.
 
 **Run a visual line again to mute it**, exactly as a drum lane works. Running it
-a third time brings it back. An empty pattern (`>viz disc`) removes the lane
+a third time brings it back. An empty pattern (`>disc`) removes the lane
 outright and takes its routing with it.
 
 `>route disc kick` makes the disc **fire on every kick**, at the size of that
 hit's velocity. Routing is *when* as well as *how much*: a routed lane ignores
-its own pattern and follows its source. Put `>viz echo 8` above it and the pulse
+its own pattern and follows its source. Put `>echo 8` above it and the pulse
 gets a tail. **Anything that plays can drive anything else**, and chains work:
 
 ```
