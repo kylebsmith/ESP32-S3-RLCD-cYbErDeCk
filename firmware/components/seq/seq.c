@@ -14,6 +14,7 @@ static const char *TAG = "seq";
 
 static seq_tick_hook_t s_on_tick;
 static seq_play_hook_t s_on_play;
+static seq_draw_hook_t s_on_draw;
 
 static seq_lane_t s_lanes[SEQ_MAX_LANES];
 static int        s_bpm = 120;
@@ -107,6 +108,8 @@ void seq_stats(seq_stat_t *c, seq_stat_t *x)
     if (c != NULL) { *c = s_clock_stat; }
     if (x != NULL) { *x = s_xport_stat; }
 }
+
+void seq_set_draw_hook(seq_draw_hook_t fn) { s_on_draw = fn; }
 
 void seq_set_hooks(seq_tick_hook_t t, seq_play_hook_t p)
 {
@@ -398,26 +401,61 @@ static int lane_step_now(const seq_lane_t *l, uint32_t tick, int *out_step)
     return 1;
 }
 
+/* A LANE PLAYED. Tell anything routed from it.
+ *
+ * This is the whole of routing, and it is four lines because there is one lane
+ * table. Before the collapse the music half published nothing and the visual
+ * half kept its own copy of this loop, so a kick could drive a circle and a
+ * circle could drive nothing. */
+static void published(seq_lane_t *src, uint8_t value)
+{
+    src->last_val = (uint8_t)((value * 9 + 63) / 127);
+    for (int j = 0; j < SEQ_MAX_LANES; j++) {
+        seq_lane_t *d = &s_lanes[j];
+        if (d->route[0] != '\0' && strcmp(d->route, src->name) == 0) {
+            d->trig = true;
+            d->trig_val = src->last_val;
+        }
+    }
+    if (s_on_play != NULL) {
+        s_on_play(src->name, value);
+    }
+}
+
 static void fire_lanes(uint32_t tick)
 {
     s_emitting = NULL;
     for (int i = 0; i < SEQ_MAX_LANES; i++) {
-        const seq_lane_t *l = &s_lanes[i];
+        /* NOT const: a routed lane clears its own trigger here. */
+        seq_lane_t *l = &s_lanes[i];
         if (!l->used || l->muted || l->steps == 0) {
             continue;
         }
         int s = 0;
-        if (!lane_step_now(l, tick, &s)) {
-            continue;
-        }
-        s_emitting = l->name;
-        if (!(l->mask & (1u << s))) {
-            continue;
+        if (l->route[0] != '\0') {
+            /* ROUTED: the source decides both when and how much, and this
+             * lane's own steps are not consulted. A routed lane that also had
+             * to agree with its own pattern fired only where the two happened
+             * to coincide, which is most of the way to never. */
+            if (!l->trig) {
+                continue;
+            }
+            l->trig = false;
+            s = 0;
+            s_emitting = l->name;
+        } else {
+            if (!lane_step_now(l, tick, &s)) {
+                continue;
+            }
+            s_emitting = l->name;
+            if (!(l->mask & (1u << s))) {
+                continue;
+            }
         }
         /* '?' - maybe. Half, because half is the only ratio that needs no
          * number after it, and a number after it would be the start of the
          * syntax this instrument is trying not to have. */
-        if (l->chance & (1u << s)) {
+        if (l->route[0] == '\0' && (l->chance & (1u << s))) {
             /* '?' alone is half; '?[15]' is fifteen per cent. Half is the
              * default because it is the only ratio that needs no number, and
              * the bracket is there for when the player wants a different one
@@ -443,6 +481,30 @@ static void fire_lanes(uint32_t tick)
          * bottom of the range, which on most synths is inaudible and on a few
          * is a thump nobody asked for, and the player would reasonably
          * conclude the lane was broken. */
+        /* A DRAWING LANE. The value is an amount 0-9 and the destination is a
+         * primitive; nothing about MIDI applies. Marked rather than drawn,
+         * because generating a frame is a pass over the whole picture and this
+         * is an esp_timer callback - docs/OS.md forbids acting here. The main
+         * loop replays the marks in primitive order. */
+        if (l->bind == SEQ_BIND_VIZ) {
+            int amt;
+            if (l->route[0] != '\0') {
+                amt = (int)l->trig_val;
+            } else {
+                amt = (l->deg[s] == 0xFF) ? 9 : (int)l->deg[s];
+            }
+            if (amt < 0) { amt = 0; }
+            if (amt > 9) { amt = 9; }
+            const char ch = l->chr[s];
+            const char dir = (ch == 'u' || ch == 'd' || ch == 'l' || ch == 'r')
+                             ? ch : l->dir;
+            if (s_on_draw != NULL) {
+                s_on_draw((int)l->prim, amt, dir, tick);
+            }
+            published(l, (uint8_t)(amt * 127 / 9));
+            continue;
+        }
+
         if (l->ctrl) {
             /* Digits are values: 0 is 0 and 9 is 127. A step with no digit
              * holds the last value rather than jumping to zero, because a
@@ -459,18 +521,14 @@ static void fire_lanes(uint32_t tick)
             }
             const uint8_t v = (uint8_t)((l->deg[s] * 127) / 9);
             emit((uint8_t)(0xB0 | (l->chan & 0x0F)), l->cc, v);
-            if (s_on_play != NULL) {
-                s_on_play(l->name, v);
-            }
+            published(l, v);
             continue;
         }
         const uint8_t note = l->melodic
             ? degree_note(l->deg[s] == 0xFF ? 0 : l->deg[s], l->octave)
             : l->note;
         emit((uint8_t)(0x90 | (l->chan & 0x0F)), note, (uint8_t)vel);
-        if (s_on_play != NULL) {
-            s_on_play(l->name, (uint8_t)vel);
-        }
+        published(l, (uint8_t)vel);
         schedule_off(l->chan, note, l->gate_ms);
     }
 }
@@ -665,7 +723,12 @@ esp_err_t seq_forget(const char *name)
      * into this very field, so zeroing it here would make an event already in
      * flight report an empty lane; find() memsets the slot when it hands it to
      * the next name, by which point the queue has long drained. */
+    /* Gone means gone, including its route: keeping it meant turning a lane off
+     * and on again brought the old routing back with it. */
     l->mask = 0;
+    l->steps = 0;
+    l->route[0] = '\0';
+    l->trig = false;
     l->used = false;
     return ESP_OK;
 }
@@ -674,6 +737,9 @@ void seq_forget_all(void)
 {
     for (int i = 0; i < SEQ_MAX_LANES; i++) {
         s_lanes[i].mask = 0;
+        s_lanes[i].steps = 0;
+        s_lanes[i].route[0] = '\0';
+        s_lanes[i].trig = false;
         s_lanes[i].used = false;
     }
 }
@@ -684,9 +750,28 @@ esp_err_t seq_lane(const char *name, const char *steps)
     if (l == NULL) {
         return ESP_ERR_NO_MEM;
     }
+    /* A DIRECTION IN FRONT OF THE PATTERN, BECAUSE A STEP CANNOT SAY BOTH.
+     *
+     * One character per step means a step holds a value or a direction, and the
+     * bindings that point somewhere need both at once: '>ramp 4' cannot say
+     * which way and '>ramp u' cannot say how far. So a lone u, d, l or r before
+     * the pattern sets the lane's direction and is not a step. Harmless on a
+     * note lane, which never reads it. */
+    char dir = 'd';
+    if ((steps[0] == 'u' || steps[0] == 'd' ||
+         steps[0] == 'l' || steps[0] == 'r') &&
+        (steps[1] == ' ' || steps[1] == '\t')) {
+        dir = steps[0];
+        steps++;
+        while (*steps == ' ' || *steps == '\t') { steps++; }
+        if (*steps == '\0') { steps = "9"; }
+    }
+
     int rnum = 1, rden = 1;
     const int plen = seq_pattern_rate(steps, &rnum, &rden);
     uint32_t mask = 0, accent = 0, ghost = 0, chance = 0;
+    char chr[SEQ_MAX_STEPS];
+    memset(chr, 0, sizeof chr);
     uint8_t  deg[SEQ_MAX_STEPS];
     uint8_t  prob[SEQ_MAX_STEPS];
     memset(deg, 0xFF, sizeof deg);
@@ -720,6 +805,7 @@ esp_err_t seq_lane(const char *name, const char *steps)
             if (*p == ',') { ghost  |= (1u << n); }
             if (*p == '?') { chance |= (1u << n); }
             if (*p >= '0' && *p <= '9') { deg[n] = (uint8_t)(*p - '0'); }
+            chr[n] = *p;             /* verbatim: some bindings read the mark */
         }
         n++;
     }
@@ -734,6 +820,8 @@ esp_err_t seq_lane(const char *name, const char *steps)
     l->chance = chance;
     memcpy(l->prob, prob, sizeof l->prob);
     memcpy(l->deg, deg, sizeof l->deg);
+    memcpy(l->chr, chr, sizeof l->chr);
+    l->dir    = dir;
     l->steps  = (uint8_t)n;
     {
         /* Ticks per step for this lane. Clamped so a nonsense rate cannot
@@ -750,6 +838,55 @@ esp_err_t seq_lane(const char *name, const char *steps)
     return ESP_OK;
 }
 
+esp_err_t seq_lane_viz(const char *name, int prim)
+{
+    seq_lane_t *l = find(name, true);
+    if (l == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
+    l->bind    = SEQ_BIND_VIZ;
+    l->prim    = (uint8_t)prim;
+    l->melodic = false;
+    l->ctrl    = false;
+    return ESP_OK;
+}
+
+esp_err_t seq_route(const char *name, const char *src)
+{
+    seq_lane_t *l = find(name, false);
+    if (l == NULL) {
+        return ESP_ERR_NOT_FOUND;
+    }
+    /* A LANE CANNOT DRIVE ITSELF. Every lane publishes what it played, so a
+     * self-route would re-trigger every step for ever with nothing in the clock
+     * able to stop it - a lane that plays on its own and ignores the transport,
+     * which is not a lane. Refused rather than tolerated, because the line
+     * reads perfectly sensibly and the failure does not. */
+    if (src != NULL && strcmp(src, name) == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    snprintf(l->route, sizeof l->route, "%s", src ? src : "");
+    l->trig = false;    /* no stale trigger from whatever it used to follow */
+
+    /* A ROUTE IS A PATTERN. Making a lane live should not need a pattern
+     * written first - and a routed lane ignores the one you write, so writing
+     * it was a step that only made sense to whoever wrote the code. One step at
+     * full value, which the source overrides on every hit. */
+    if (l->route[0] != '\0' && l->steps == 0) {
+        l->mask  = 1u;
+        l->steps = 1;
+        l->chance = 0;
+        memset(l->prob, 255, sizeof l->prob);
+        memset(l->deg, 0xFF, sizeof l->deg);
+        memset(l->chr, 0, sizeof l->chr);
+        l->tps = SEQ_TICKS_PER_STEP;
+        l->src = 0;
+        l->muted = false;
+        l->used = true;
+    }
+    return ESP_OK;
+}
+
 esp_err_t seq_lane_ctrl(const char *name, int cc, int chan)
 {
     seq_lane_t *l = find(name, true);
@@ -758,6 +895,7 @@ esp_err_t seq_lane_ctrl(const char *name, int cc, int chan)
     }
     l->ctrl    = true;
     l->melodic = false;
+    l->bind    = SEQ_BIND_CC;
     if (cc >= 0 && cc < 128)   { l->cc = (uint8_t)cc; }
     if (chan >= 0 && chan < 16) { l->chan = (uint8_t)chan; }
     return ESP_OK;

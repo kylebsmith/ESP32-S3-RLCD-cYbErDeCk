@@ -90,56 +90,47 @@ typedef struct {
 viz_pane_t viz_pane(int cols, int rows);
 
 
-/* Compile a visual lane. `gen` is one of the eight names; `pattern` is the
- * ordinary lane grammar, and a step's digit is its intensity 0-9. */
-esp_err_t viz_lane(const char *gen, const char *pattern);
+/* THE PRIMITIVES, AS A TABLE OF NAMES.
+ *
+ * viz no longer owns lanes. A drawing lane lives in seq's one lane table with
+ * SEQ_BIND_VIZ and a primitive index, so a circle and a kick are the same
+ * sentence with different destinations - see docs/MAP.md. What is left here is
+ * the drawing: thirteen primitives, a frame, and a pane to show it in.
+ *
+ * This is the collapse that removed two lane structs, two compile loops over
+ * the same pattern walk, two mute mechanisms, two budgets and two listings.
+ * Every bug in that area used to have to be found twice. */
+int         viz_prim_count(void);
+const char *viz_prim_name(int i);
+int         viz_prim_index(const char *name);   /* -1 if there is no such one */
 
-/* Every visual lane off, and every route with it. The companion to
- * seq_forget_all(): a new document is a blank frame as well as a blank score. */
+/* A lane bound to `prim` fired. CALLED FROM THE CLOCK CALLBACK, so this only
+ * records - generating a frame is a pass over the whole picture and doing that
+ * between two ticks is what docs/OS.md forbids. */
+void viz_mark(int prim, int amt, char dir, uint32_t tick);
+
+/* Draw the frame the marks asked for, if any. Called from the main loop;
+ * returns true when a new frame was generated.
+ *
+ * Marks are replayed in PRIMITIVE order, not the order they arrived, because
+ * the order is a pipeline: history, then motion, then sources, then repetition.
+ * That is what makes echo plus move read as a trail rather than a judder, and
+ * it is a property of the table rather than of the lanes. */
+bool viz_service(void);
+
+/* Is anything drawing? True while a primitive has been marked and not yet
+ * blanked, so the split knows whether the pane is live. */
+bool viz_active(void);
+
+/* Blank the frame and forget every pending mark. A new document is a blank
+ * picture as well as a blank score; the LANES are seq's to forget. */
 void viz_forget_all(void);
 
-/* Take intensity from another lane's last output rather than from the digits.
- * `src` NULL or empty unroutes. */
-esp_err_t viz_route(const char *gen, const char *src);
 
-/* WHAT IS RUNNING, so '>lanes' can say. A visual lane was invisible: there was
- * no way to see which primitives existed, which were muted, or what anything
- * was routed from - so a route that was not working looked exactly like a
- * route that was. Returns false past the last primitive. `steps` is the
- * compiled step count, which is how you tell a live lane from a name. */
-bool viz_lane_info(int i, const char **name, const char **src,
-                   bool *used, bool *muted, int *steps);
-
-/* Told by the sequencer: this lane just played this value. Feeds routing. */
-void viz_lane_played(const char *lane, uint8_t value);
-
-/* Told by the sequencer that a step happened. CALLED FROM THE CLOCK CALLBACK,
- * so it does nothing but write down which step it was.
- *
- * THE FRAME IS NOT DRAWN HERE. Generating one is a pass over the whole picture
- * for every lane that fires, and esp_timer dispatches on a shared task - so
- * doing it here put that work between one tick and the next, and cost a late
- * tick whenever several lanes landed on the same step. docs/OS.md forbids
- * exactly this, and it is the same mistake already fixed in four other places
- * in this firmware: the callback records, the main loop acts.
- *
- * The animation still runs on the music's clock. What moved is only WHERE the
- * pixels are computed, not when the frame is due. */
-void viz_tick(uint32_t step);
-
-/* Draw the frame the last viz_tick asked for. Called from the main loop;
- * returns true if a new one was generated.
- *
- * Steps that arrive while the loop is busy COALESCE, and that is correct rather
- * than merely tolerable: the preview is a monitor, the newest frame is the only
- * one worth showing, and a backlog of stale frames would make the picture lag
- * the music - which is the one thing it must not do. */
-bool viz_service(void);
 
 /* One row of the frame, NUL-terminated at the live width. Rows at or past
  * viz_rows() are empty, so a caller cannot read stale ink out of the buffer. */
 const char *viz_row(int y);
-bool viz_active(void);
 
 /* The whole frame as one newline-separated string, for '>frame'. */
 int viz_text(char *out, int max);

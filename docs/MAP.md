@@ -192,7 +192,7 @@ is: a property of the piece (a lane) or a property of the monitor (a view verb).
 
 ---
 
-## 4. The unification `[OPEN]` — the next real change
+## 4. The unification `[FACT]` — done
 
 One lane table. A lane holds a pattern and a **binding**:
 
@@ -226,8 +226,38 @@ Cost: a real refactor of `seq.c` and `viz.c`, and `>viz noise 2` stops working i
 documents already saved. Mitigation: keep `viz` as an alias that strips itself —
 one table row, deleted at freeze.
 
-**This is the change to make before any new feature.** Every feature added
-before it gets added twice.
+**Done, and measured on the deck.** Ten lanes in one listing — `kick hat bass
+cut` alongside `echo noise move disc grow warp` — and three route chains that
+cross bindings:
+
+```
+    disc  <- kick      a circle follows a drum
+    grow  <- disc      a bloom follows the circle      <- was impossible
+    warp  <- cut       a bend follows a filter sweep   <- was impossible
+```
+
+`kick → disc → grow` is a two-hop chain across three different bindings, which
+is the emergent behaviour the separate tables could not express: routing existed
+in the visual half only, so a drum could drive a circle and a circle could drive
+nothing at all.
+
+Clock after the collapse, with all ten lanes running: **sd 3 µs, spread 79 µs,
+zero late, 5294 of 5294 ticks inside 0.1 ms.** Unchanged — the drawing lanes go
+through the same `fire_lanes()` loop as the notes and still only *mark* the
+frame, leaving the picture to the main loop.
+
+Verb count went 63 → 75: `viz` became an alias and the thirteen primitives took
+their own names. That is a widening of the *table* and not of the language —
+`>disc` is a name bound to a destination exactly as `>kick` is, which is the
+argument §3.2 already makes for the seventeen drum names. What was actually
+deleted is a whole second lane system: one struct, one compile loop, one mute,
+one re-run toggle, one routing mechanism, one budget, one listing.
+
+Two traps it re-created and which are now closed: `>route grow disc` failed on a
+fresh document because seq will not invent a lane and does not know what a
+primitive is (the command layer binds it first now), and the listing printed
+`x.x.x.x.` where `2.4.2.4.` had been typed, because it tested `melodic || ctrl`
+and a drawing lane is neither.
 
 ---
 
@@ -326,7 +356,8 @@ actually written, so the wire can be proven busy without a scope.
 The freeze criteria, written now so that "one more feature" has something to
 argue against later:
 
-1. **One lane table.** §4 done, `viz` gone.
+1. ~~**One lane table.**~~ Done. `viz` survives as an alias to be deleted at
+   freeze — that deletion is the remaining half of this criterion.
 2. **Nesting decided and implemented.** §5, one syntax, no exceptions.
 3. **One shared clock mechanism** that covers both a second deck and a laptop.
 4. **MIDI in and out on a wire**, so the deck needs no computer at all.

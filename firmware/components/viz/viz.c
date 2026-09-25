@@ -42,35 +42,26 @@ static const char *s_names[NGEN] = {
     "tile", "fold",                  /* repetition             */
 };
 
+/* WHAT THE CLOCK LEFT FOR THE MAIN LOOP.
+ *
+ * One slot per primitive: was it marked this frame, and with what. That is all
+ * that used to require a thirteen-lane table with its own patterns, rates,
+ * probabilities, mutes and routes - every one of which was a second copy of
+ * something seq already had. The lanes live in seq now; this is the handoff.
+ *
+ * Volatile because the clock callback writes it and the main loop reads it. A
+ * second mark before the frame is drawn overwrites the first, which is correct:
+ * the picture is a monitor and the newest value is the only one worth showing. */
 typedef struct {
-    bool    used;
-    uint32_t mask, chance;
-    uint8_t  val[SEQ_MAX_STEPS];   /* 0-9 amount, 255 = no digit given  */
-    /* The step's own character. A digit says HOW MUCH; a letter says WHICH
-     * WAY, and the two primitives that point somewhere - move and warp - read
-     * it as u, d, l or r. Storing the character rather than translating it at
-     * compile time means one grammar: any non-rest character is a hit, and
-     * what it MEANS is the primitive's business. */
-    char     chr[SEQ_MAX_STEPS];
-    /* The lane's direction, from a 'u', 'd', 'l' or 'r' written before the
-     * pattern. A step's own letter overrides it for that step. */
-    char     dir;
-    uint8_t  prob[SEQ_MAX_STEPS];
-    uint8_t  steps;
-    uint16_t tps;                  /* this lane's ticks per step */
-    char     src[NAME_MAX + 4];    /* routed from this lane, or empty */
-    uint8_t  routed_val;           /* what that lane last played, 0-9 */
-    bool     muted;                /* run the same line again to silence  */
-    /* Set by the source lane in the clock callback, cleared by the frame on
-     * the main loop. Last trigger wins, which is right: a frame shows the most
-     * recent hit and there is nothing useful to do with an older one. */
-    volatile bool    trig;
-    volatile uint8_t trig_val;
-    uint32_t hash;                 /* of the pattern, for that comparison */
-    uint8_t  last_amt;             /* what this lane last drew, for routing */
-} vlane_t;
+    volatile bool    hit;
+    volatile uint8_t amt;
+    volatile char    dir;
+} mark_t;
 
-static vlane_t s_l[NGEN];
+static mark_t  s_mark[NGEN];
+static volatile uint32_t s_mark_tick;
+static volatile bool     s_pending;
+
 static char    s_fb[VIZ_H][VIZ_W + 1];
 /* The frame before this one, for echo. Feedback is the single technique that
  * turns a still picture into an animation, so it gets the memory it needs. */
@@ -113,7 +104,6 @@ static inline int tone_of(char ch)
 }
 
 static void clear_frame(void);
-static void viz_frame(uint32_t tick);
 
 /* The live frame size. Defaults to something drawable so a frame exists before
  * any layout has been set - viz_tick() can be called from the clock the moment
@@ -149,11 +139,11 @@ static int gen_index(const char *g)
     return -1;
 }
 
-bool viz_active(void)
-{
-    for (int i = 0; i < NGEN; i++) { if (s_l[i].used) { return true; } }
-    return false;
-}
+/* Anything drawing? True while a primitive has been marked and not yet blanked,
+ * which is what the split needs to know. The LANES are seq's business. */
+static bool s_live;
+
+bool viz_active(void) { return s_live; }
 
 static int s_split_h;                /* 0 means "about half the rows" */
 
@@ -198,214 +188,15 @@ const char *viz_row(int y)
     return (y >= 0 && y < s_h) ? s_fb[y] : "";
 }
 
-esp_err_t viz_lane(const char *gen, const char *pattern)
-{
-    const int gi = gen_index(gen);
-    if (gi < 0) { return ESP_ERR_NOT_FOUND; }
-    vlane_t *l = &s_l[gi];
-
-    if (pattern == NULL || pattern[0] == '\0') {
-        /* GONE MEANS GONE, INCLUDING ITS ROUTE. Clearing the lane but keeping
-         * 'src' meant turning a primitive off and on again brought its old
-         * routing back with it, so removing a lane appeared not to change the
-         * routing at all - which is what the owner saw. */
-        l->used = false;
-        l->src[0] = '\0';
-        l->routed_val = 0;
-        l->muted = false;
-        l->trig = false;
-        return ESP_OK;
-    }
-
-    /* RUN THE SAME LINE AGAIN TO SILENCE IT, the way a drum lane does.
-     *
-     * This is the live-coding gesture the music half already had and the
-     * visual half did not: Ctrl+Enter on a line that is already running and
-     * unchanged turns it off, and again turns it back on. A visual lane is a
-     * lane, so it answers the same gesture - having to retype the line as
-     * empty to stop it was the one place the two halves disagreed. */
-    const uint32_t h = seq_pattern_hash(pattern);
-    if (l->used && l->hash == h) {
-        l->muted = !l->muted;
-        return ESP_OK;
-    }
-    l->muted = false;
-    l->hash = h;
-
-    /* A DIRECTION IN FRONT OF THE PATTERN, BECAUSE A STEP CANNOT SAY BOTH.
-     *
-     * One character per step means a step holds an amount or a direction, and
-     * the primitives that point somewhere need both at once - '>viz ramp 4'
-     * has no way to say which way, and '>viz ramp u' has no way to say how
-     * far. So a lone u, d, l or r before the pattern sets the lane's direction
-     * and is not a step:
-     *
-     *     >viz ramp u 4.6.9.6.      up, at those amounts
-     *     >viz move d....d...       down, twice a bar, full
-     *
-     * Both idioms work and neither needs explaining twice: a letter in front is
-     * the lane's direction, a letter in a step is that step's direction, and
-     * the default is down because falling is what ASCII does first. */
-    char dir = 'd';
-    if ((pattern[0] == 'u' || pattern[0] == 'd' ||
-         pattern[0] == 'l' || pattern[0] == 'r') &&
-        (pattern[1] == ' ' || pattern[1] == '\t')) {
-        dir = pattern[0];
-        pattern++;
-        while (*pattern == ' ' || *pattern == '\t') { pattern++; }
-        if (*pattern == '\0') {
-            /* 'ramp u' on its own: the direction, at full amount, every step.
-             * Refusing here would make the shortest useful line an error. */
-            pattern = "9";
-        }
-    }
-
-    /* THE SAME WALK AS A MUSIC LANE. seq_pattern.h owns which characters are
-     * steps, where a bracket attaches, and what a trailing rate means - so a
-     * visual line and a drum line cannot drift apart about their own grammar,
-     * and the playhead lands correctly on both. */
-    int rnum = 1, rden = 1;
-    const int plen = seq_pattern_rate(pattern, &rnum, &rden);
-    uint32_t mask = 0, chance = 0;
-    uint8_t val[SEQ_MAX_STEPS], prob[SEQ_MAX_STEPS];
-    char    chr[SEQ_MAX_STEPS];
-    memset(val, 255, sizeof val);
-    memset(prob, 255, sizeof prob);
-    memset(chr, 0, sizeof chr);
-    int n = 0;
-    const char *stop = pattern + plen;
-    for (const char *p = pattern; p < stop && *p && n < SEQ_MAX_STEPS; p++) {
-        const int pl = seq_pattern_param_len(p);
-        if (pl > 0) {
-            const int v = seq_pattern_param(p);
-            if (v >= 0 && v <= 100 && n > 0) {
-                prob[n - 1] = (uint8_t)v;
-                chance |= (1u << (n - 1));
-            }
-            p += pl - 1;
-            continue;
-        }
-        if (seq_pattern_is_spacing(*p)) { continue; }
-        if (*p != '.' && *p != '-' && *p != '_') {
-            mask |= (1u << n);
-            chr[n] = *p;
-            if (*p == '?') { chance |= (1u << n); }
-            if (*p >= '0' && *p <= '9') { val[n] = (uint8_t)(*p - '0'); }
-        }
-        n++;
-    }
-    if (n == 0) { l->used = false; return ESP_OK; }
-
-    l->mask = mask; l->chance = chance; l->steps = (uint8_t)n;
-    memcpy(l->val, val, sizeof l->val);
-    memcpy(l->prob, prob, sizeof l->prob);
-    memcpy(l->chr, chr, sizeof l->chr);
-    long t = (long)SEQ_TICKS_PER_STEP * rden / (rnum > 0 ? rnum : 1);
-    if (t < 1) { t = 1; }
-    l->tps = (uint16_t)(t > 32767 ? 32767 : t);
-    l->dir = dir;
-    l->used = true;
-    return ESP_OK;
-}
-
 void viz_forget_all(void)
 {
     for (int i = 0; i < NGEN; i++) {
-        s_l[i].used = false;
-        s_l[i].src[0] = '\0';
-        s_l[i].routed_val = 0;
-        s_l[i].trig = false;
+        s_mark[i].hit = false;
     }
+    s_pending = false;
+    s_live = false;
+    memset(s_prev, TONE_0, sizeof s_prev);
     clear_frame();
-}
-
-bool viz_lane_info(int i, const char **name, const char **src,
-                   bool *used, bool *muted, int *steps)
-{
-    if (i < 0 || i >= NGEN) { return false; }
-    if (name)  { *name  = s_names[i]; }
-    if (src)   { *src   = s_l[i].src; }
-    if (used)  { *used  = s_l[i].used; }
-    if (muted) { *muted = s_l[i].muted; }
-    if (steps) { *steps = s_l[i].steps; }
-    return true;
-}
-
-esp_err_t viz_route(const char *gen, const char *src)
-{
-    const int gi = gen_index(gen);
-    if (gi < 0) { return ESP_ERR_NOT_FOUND; }
-    /* A LANE CANNOT DRIVE ITSELF.
-     *
-     * Every primitive publishes what it drew so the others can follow it, so
-     * '>route disc disc' would have the disc re-trigger itself every frame,
-     * for ever, with nothing in the music able to stop it - a lane that plays
-     * on its own and ignores the clock, which is not a lane. Refused rather
-     * than quietly tolerated, because the line reads perfectly sensibly. */
-    if (src != NULL && strcmp(src, gen) == 0) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    snprintf(s_l[gi].src, sizeof s_l[gi].src, "%s", src ? src : "");
-    /* A route that has not fired yet must not be holding a stale trigger from
-     * whatever it used to follow. */
-    s_l[gi].trig = false;
-
-    /* A ROUTE IS A PATTERN. Making one live should not require writing a
-     * pattern first.
-     *
-     * A lane needs compiled steps to be live, so '>route disc kick' on its own
-     * did nothing at all: you had to write '>viz disc x...x...x...x...' first,
-     * and then the pattern you wrote was ignored, because a routed lane follows
-     * its source instead of its own steps. Writing a pattern that is guaranteed
-     * to be discarded, in order to enable a lane that does not use it, is the
-     * kind of step that only makes sense to whoever wrote the code.
-     *
-     * So routing a lane makes it live. One step, full amount, which the source
-     * then overrides on every hit - it exists only so the lane is something
-     * rather than nothing. Unrouting leaves it live with that step, which is
-     * the honest outcome: you asked for this primitive, and now it is yours to
-     * pattern or to remove with '>viz <name>'. */
-    if (s_l[gi].src[0] != '\0' && !s_l[gi].used) {
-        s_l[gi].steps = 1;
-        s_l[gi].mask  = 1u;
-        s_l[gi].chance = 0;
-        memset(s_l[gi].val, 255, sizeof s_l[gi].val);
-        memset(s_l[gi].prob, 255, sizeof s_l[gi].prob);
-        memset(s_l[gi].chr, 0, sizeof s_l[gi].chr);
-        s_l[gi].dir = 'd';
-        s_l[gi].tps = SEQ_TICKS_PER_STEP;
-        s_l[gi].hash = 0;
-        s_l[gi].muted = false;
-        s_l[gi].used = true;
-    }
-    return ESP_OK;
-}
-
-void viz_lane_played(const char *lane, uint8_t value)
-{
-    if (lane == NULL || lane[0] == '\0') { return; }
-    for (int i = 0; i < NGEN; i++) {
-        if (s_l[i].src[0] != '\0' && strcmp(s_l[i].src, lane) == 0) {
-            /* ROUTING IS WHEN AS WELL AS HOW MUCH.
-             *
-             * It used to be how much ALONE: the source set an amount and the
-             * visual lane still fired on its own pattern. A drum's velocity is
-             * very nearly constant, so '>route disc kick' left the disc sitting
-             * at full size forever and never pulsing - the owner's report was
-             * that there was no disc on the kick, and they were right, because
-             * nothing about the kick's TIMING reached the picture.
-             *
-             * A routed lane now fires when its source fires. That is what the
-             * word means, it is what makes a kick visible, and with '>viz echo'
-             * on top it is a pulse with a tail. */
-            s_l[i].trig = true;
-            s_l[i].trig_val = (uint8_t)((value * 9 + 63) / 127);
-            /* MIDI velocity and CC are both 0-127; the visuals think in 0-9,
-             * which is the same resolution the pattern digits have. Mapping
-             * here rather than at every use keeps one scale in the system. */
-            s_l[i].routed_val = (uint8_t)((value * 9 + 63) / 127);
-        }
-    }
 }
 
 static void clear_frame(void)
@@ -783,117 +574,68 @@ static const draw_fn s_draw[NGEN] = {
 
 /* What the clock leaves for the main loop: a step number and a flag. Written in
  * the callback, read and cleared in viz_service. */
-static volatile uint32_t s_pending_tick;
-static volatile bool     s_pending;
 
-/* IS ANY LANE DUE ON THIS TICK? Cheap enough for the callback - eight modulos
- * and no memory traffic - and it is what makes the frame rate right.
- *
- * The clock runs at 96 PPQN, so this is called about 200 times a second at
- * 124 bpm, while a sixteenth-note lane fires eight times a second. Flagging
- * every tick meant the frame was regenerated two hundred times a second and
- * the pane redrawn with it: eight seconds of rendering in every ten, eighty
- * per cent of a core, for twenty-four identical pictures in a row.
- *
- * It was also WRONG, not merely wasteful. The frame is cleared before the
- * lanes are drawn, so on a tick where nothing fires the old code cleared the
- * picture and drew nothing back - the frame was blank between steps, and it
- * only ever looked right because the editor happened to sample it on step
- * boundaries. One frame per step, which is what the device is for, is also
- * the only version that is correct. */
-static bool any_lane_due(uint32_t tick)
+/* ---- the handoff from the clock ---------------------------------------- */
+
+int viz_prim_count(void) { return NGEN; }
+
+const char *viz_prim_name(int i)
 {
-    for (int i = 0; i < NGEN; i++) {
-        const vlane_t *l = &s_l[i];
-        /* A MUTED LANE STILL ASKS FOR FRAMES. It draws nothing, but the frame
-         * has to be regenerated or the last picture simply stays on the glass -
-         * so muting a lane froze the screen instead of clearing it, and looked
-         * for all the world like the mute had not worked. */
-        if (!l->used || l->steps == 0) { continue; }
-        if (l->trig) { return true; }          /* its source just fired */
-        const uint32_t tps = l->tps ? l->tps : SEQ_TICKS_PER_STEP;
-        if ((tick % tps) == 0) { return true; }
-    }
-    return false;
+    return (i >= 0 && i < NGEN) ? s_names[i] : "";
 }
 
-void viz_tick(uint32_t tick)
+int viz_prim_index(const char *name)
 {
-    if (!any_lane_due(tick)) { return; }
-    s_pending_tick = tick;
+    return gen_index(name);
+}
+
+void viz_mark(int prim, int amt, char dir, uint32_t tick)
+{
+    if (prim < 0 || prim >= NGEN) {
+        return;
+    }
+    /* RECORD ONLY. This runs in the clock callback. Generating a frame is a
+     * pass over the whole picture for every primitive that fired, and doing
+     * that between two ticks is the coupling docs/OS.md exists to forbid - it
+     * has had to be undone in four other places in this firmware. */
+    s_mark[prim].hit = true;
+    s_mark[prim].amt = (uint8_t)(amt < 0 ? 0 : (amt > 9 ? 9 : amt));
+    s_mark[prim].dir = dir;
+    s_mark_tick = tick;
     s_pending = true;
 }
 
 bool viz_service(void)
 {
-    if (!s_pending) { return false; }
+    if (!s_pending) {
+        return false;
+    }
     s_pending = false;
-    if (!viz_active()) { return false; }
-    viz_frame(s_pending_tick);
-    return true;
-}
+    const uint32_t tick = s_mark_tick;
 
-static void viz_frame(uint32_t tick)
-{
-    if (!viz_active()) { return; }
     /* Keep this frame before it is wiped: echo needs the one before it, and a
      * copy taken here is the only place it is guaranteed to be complete. */
-    for (int y = 0; y < s_h; y++) {
-        memcpy(s_prev[y], s_fb[y], (size_t)s_w + 1);
-    }
+    memcpy(s_prev, s_fb, sizeof s_prev);
     clear_frame();
 
+    /* PRIMITIVE ORDER, NOT ARRIVAL ORDER, and the order is a pipeline:
+     * history, then motion, then sources, then repetition. echo lays the last
+     * frame down dimmer, move shifts it so the history streaks while this
+     * frame's source lands fresh, then the sources draw, then tile and fold
+     * repeat what is there. Replaying in the order the lanes happened to fire
+     * would make the same three lines mean something different depending on
+     * which order they were typed in. */
+    bool drew = false;
     for (int i = 0; i < NGEN; i++) {
-        vlane_t *l = &s_l[i];
-        if (!l->used || l->muted || l->steps == 0) { continue; }
-
-        const uint32_t tps = l->tps ? l->tps : SEQ_TICKS_PER_STEP;
-        const uint32_t step = tick / tps;
-        int amt, s;
-
-        if (l->src[0] != '\0') {
-            /* ROUTED: the source decides both when and how much. The lane's own
-             * pattern is not consulted, because a routed lane that also had to
-             * agree with its own steps fired only where the two happened to
-             * coincide - which is most of the way to never. Its first step
-             * still supplies the direction letter, so '>viz ramp u 9' keeps
-             * pointing up after '>route ramp bass'. */
-            if (!l->trig) { continue; }
-            l->trig = false;
-            amt = (int)l->trig_val;
-            s = 0;
-        } else {
-            if ((tick % tps) != 0) { continue; }
-            s = (int)(step % l->steps);
-            if (!(l->mask & (1u << s))) { continue; }
-            if (l->chance & (1u << s)) {
-                const uint32_t pct = (l->prob[s] == 255u) ? 50u : l->prob[s];
-                if ((rng() % 100u) >= pct) { continue; }
-            }
-            amt = (l->val[s] == 255) ? 9 : l->val[s];
+        if (!s_mark[i].hit) {
+            continue;
         }
-        if (amt < 0) { amt = 0; }
-        if (amt > 9) { amt = 9; }
-
-        /* A letter in the step wins over the lane's direction; a digit or an
-         * 'x' leaves the lane's direction alone. */
-        const char ch = l->chr[s];
-        const char dir = (ch == 'u' || ch == 'd' || ch == 'l' || ch == 'r')
-                         ? ch : l->dir;
-        s_draw[i](amt, dir, step);
-
-        /* A VISUAL LANE IS A SOURCE FOR ROUTING TOO.
-         *
-         * Routing could only ever read a MUSIC lane, so the visual half was a
-         * leaf: eight things a kick could drive and nothing that could drive
-         * each other. Publishing what each primitive just drew closes the
-         * loop - 'route grow disc' makes the bloom follow the circle, 'route
-         * flip noise' strobes on the field's density - and it is the same one
-         * idea, a lane may read another lane's output, with no new command and
-         * no new syntax. */
-        l->last_amt = (uint8_t)amt;
-        viz_lane_played(s_names[i], (uint8_t)(amt * 127 / 9));
+        s_mark[i].hit = false;
+        s_draw[i]((int)s_mark[i].amt, s_mark[i].dir, tick);
+        drew = true;
     }
+    s_live = drew || s_live;
+    return true;
 }
 
 int viz_text(char *out, int max)

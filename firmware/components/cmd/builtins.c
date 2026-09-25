@@ -423,13 +423,21 @@ static const struct { const char *name; uint8_t note; } s_drums[] = {
  *
  * BY_HANDS only. A guide replayed by an agent must not silence every lane on
  * its second pass. */
-static bool rerun_silences(const cmd_ctx_t *ctx)
+static bool rerun_silences_named(const char *name, const char *pat)
 {
-    if (ctx->caller != CMD_BY_HANDS || !seq_running()) {
+    if (!seq_running()) {
         return false;
     }
-    const seq_lane_t *l = seq_lane_find(ctx->name, -1);
-    return l != NULL && !l->muted && l->src == seq_pattern_hash(ctx->arg);
+    const seq_lane_t *l = seq_lane_find(name, -1);
+    return l != NULL && !l->muted && l->src == seq_pattern_hash(pat);
+}
+
+static bool rerun_silences(const cmd_ctx_t *ctx)
+{
+    if (ctx->caller != CMD_BY_HANDS) {
+        return false;
+    }
+    return rerun_silences_named(ctx->name, ctx->arg);
 }
 
 static cmd_status_t c_drum(cmd_ctx_t *ctx)
@@ -460,7 +468,7 @@ static cmd_status_t c_drum(cmd_ctx_t *ctx)
     }
     seq_lane_note(ctx->name, note, 9);
     if (seq_lane(ctx->name, ctx->arg) != ESP_OK) {
-        cmd_out(ctx, "8 lanes is all there is.");
+        cmd_out(ctx, "%d lanes is all there is.", SEQ_MAX_LANES);
         cmd_out(ctx, "free one: type its name alone");
         return CMD_ERROR;
     }
@@ -509,7 +517,7 @@ static cmd_status_t c_voice(cmd_ctx_t *ctx)
     seq_lane_melodic(ctx->name, s_voices[v].oct, s_voices[v].chan,
                      s_voices[v].gate);
     if (seq_lane(ctx->name, ctx->arg) != ESP_OK) {
-        cmd_out(ctx, "8 lanes is all there is.");
+        cmd_out(ctx, "%d lanes is all there is.", SEQ_MAX_LANES);
         cmd_out(ctx, "free one: type its name alone");
         return CMD_ERROR;
     }
@@ -614,7 +622,7 @@ static cmd_status_t c_ctrl(cmd_ctx_t *ctx)
     }
     seq_lane_ctrl(ctx->name, cc, 0);
     if (seq_lane(ctx->name, ctx->arg) != ESP_OK) {
-        cmd_out(ctx, "8 lanes is all there is.");
+        cmd_out(ctx, "%d lanes is all there is.", SEQ_MAX_LANES);
         cmd_out(ctx, "free one: type its name alone");
         return CMD_ERROR;
     }
@@ -1108,56 +1116,82 @@ static cmd_status_t c_battery(cmd_ctx_t *ctx)
  * With no argument it sends the current document, so an ASCII drawing IS a
  * frame and editing it live IS visual coding - the same Ctrl+Enter, the same
  * buffer, no second environment. */
-/* '>viz <name> <pattern>' - a visual lane, in the same grammar as a drum.
+/* A DRAWING LANE, WHICH IS JUST A LANE.
  *
- *   >viz noise x?x?x?x?          a field, half the time
- *   >viz disc  0..3..6..9..6..3  a circle breathing
- *   >viz ramp  u 4.6.9.6.        a gradient sweeping upward
- *   >viz echo  9                 keep the last frame: everything gets a tail
- *   >viz move  d....d...         and the tail falls
+ * Reached two ways, and they compile to exactly the same thing:
  *
- * THREE SOURCES AND FIVE OPERATORS - see viz.h for why that shape rather than
- * eight shapes. A digit is always HOW MUCH, 0 none to 9 full, in every one of
- * them; a u, d, l or r is which way. Speed is the pattern, not a number, so
- * '/2' halves a lane exactly as it does for a drum.
+ *     >disc 0..3..6..9..     the primitive's own name, like '>kick'
+ *     >viz disc 0..3..6..9.. the old spelling, kept for saved documents
  *
- * '>viz <name>' with no pattern removes that lane. */
-static cmd_status_t c_viz(cmd_ctx_t *ctx)
+ * The second is an ALIAS MARKED FOR DELETION. It exists because documents
+ * already written use it, and docs/MAP.md says the language stops rather than
+ * migrating people twice; at freeze it goes and this comment goes with it.
+ *
+ * Both paths do the same two things a drum lane does - bind, then compile -
+ * because after the collapse there is one lane table and a drawing lane differs
+ * from a kick only in where its events go. */
+static cmd_status_t c_prim(cmd_ctx_t *ctx)
 {
-    if (ctx->arg[0] == '\0') {
-        cmd_out(ctx, "viz <name> <pattern>");
-        cmd_out(ctx, "draws: noise disc ramp grid");
-        cmd_out(ctx, "bends: echo move warp shake");
-        cmd_out(ctx, "       grow thin flip tile fold");
-        cmd_out(ctx, "run a line again to mute it");
-        cmd_out(ctx, "0-9 is how much, 9 full.");
-        cmd_out(ctx, "u d l r is which way.");
-        cmd_out(ctx, "try: viz echo 9");
-        cmd_out(ctx, "then viz noise 2");
-        cmd_out(ctx, "then viz move d");
-        snprintf(ctx->msg, sizeof ctx->msg, "viz noise x?x?x?x?");
-        return CMD_DONE;
+    const char *name = ctx->name;
+    const char *pat  = ctx->arg;
+    char word[16];
+
+    if (strcmp(name, "viz") == 0) {
+        /* The alias: the first word of the argument is the primitive. */
+        size_t w = 0;
+        while (*pat != '\0' && *pat != ' ' && w < sizeof word - 1) {
+            word[w++] = *pat++;
+        }
+        word[w] = '\0';
+        while (*pat == ' ') { pat++; }
+        if (word[0] == '\0') {
+            cmd_out(ctx, "draws: noise disc ramp grid");
+            cmd_out(ctx, "bends: echo move warp shake");
+            cmd_out(ctx, "       grow thin flip tile fold");
+            cmd_out(ctx, "0-9 is how much, 9 full.");
+            cmd_out(ctx, "u d l r is which way.");
+            cmd_out(ctx, "try: echo 9 / noise 2 / move d");
+            cmd_out(ctx, "each is a lane, like kick.");
+            snprintf(ctx->msg, sizeof ctx->msg, "echo 9, then noise 2");
+            return CMD_DONE;
+        }
+        name = word;
     }
-    char gen[16];
-    const char *pat = ctx->arg;
-    size_t i = 0;
-    while (*pat && *pat != ' ' && i < sizeof gen - 1) { gen[i++] = *pat++; }
-    gen[i] = '\0';
-    while (*pat == ' ') { pat++; }
-    if (viz_lane(gen, pat) != ESP_OK) {
-        cmd_out(ctx, "no primitive '%s'", gen);
+
+    const int prim = viz_prim_index(name);
+    if (prim < 0) {
+        cmd_out(ctx, "no primitive '%.12s'", name);
         cmd_out(ctx, "noise disc ramp grid");
         cmd_out(ctx, "echo move warp shake");
         cmd_out(ctx, "grow thin flip tile fold");
         return CMD_ERROR;
     }
-    if (pat[0] != '\0') { viz_split(true); }
-    snprintf(ctx->msg, sizeof ctx->msg, "%s %.18s", gen, pat);
+
+    /* A bare name drops the lane, and a re-run of an unchanged line mutes it -
+     * both identical to a drum lane, because it IS a drum lane with a different
+     * destination. Neither behaviour is written here twice any more. */
+    if (pat[0] == '\0') {
+        const bool had = seq_forget(name) == ESP_OK;
+        snprintf(ctx->msg, sizeof ctx->msg, had ? "%s gone" : "no %s", name);
+        return CMD_DONE;
+    }
+    if (rerun_silences_named(name, pat)) {
+        seq_mute(name, true);
+        snprintf(ctx->msg, sizeof ctx->msg, "%s silent", name);
+        return CMD_DONE;
+    }
+    seq_lane_viz(name, prim);
+    if (seq_lane(name, pat) != ESP_OK) {
+        cmd_out(ctx, "%d lanes is all there is.", SEQ_MAX_LANES);
+        cmd_out(ctx, "free one: type its name alone");
+        return CMD_ERROR;
+    }
+    seq_mute(name, false);
+    viz_split(true);
+    snprintf(ctx->msg, sizeof ctx->msg, "%s %.16s", name, pat);
     return CMD_DONE;
 }
 
-/* '>split' - the preview, on or off. Toggling the same command off again is
- * the owner's ask and the right shape: one word, two states, no submenu. */
 static cmd_status_t c_split(cmd_ctx_t *ctx)
 {
     /* '>split 20' sets how many columns the visual gets and turns it on. The
@@ -1218,16 +1252,31 @@ static cmd_status_t c_route(cmd_ctx_t *ctx)
     }
     char gen[16], src[16];
     two_words(ctx->arg, gen, sizeof gen, src, sizeof src);
-    const esp_err_t re = viz_route(gen, src);
+    /* A ROUTE IS A PATTERN, AND THAT HAS TO SURVIVE THE COLLAPSE.
+     *
+     * seq_route works on a lane that exists, and seq deliberately does not know
+     * what a drawing primitive is - so '>route grow disc' failed on a fresh
+     * document with "no lane 'grow'", which is exactly the trap that was fixed
+     * in the visual half last week and came straight back when the lane table
+     * moved. Binding here is the command layer's job, because this is the only
+     * layer that knows a primitive from a drum. */
+    if (seq_lane_find(gen, -1) == NULL) {
+        const int prim = viz_prim_index(gen);
+        if (prim >= 0) {
+            seq_lane_viz(gen, prim);
+        }
+    }
+    const esp_err_t re = seq_route(gen, src);
     if (re == ESP_ERR_INVALID_ARG) {
         cmd_out(ctx, "%s cannot follow itself", gen);
         return CMD_ERROR;
     }
     if (re != ESP_OK) {
-        cmd_out(ctx, "no primitive '%s'", gen);
-        cmd_out(ctx, "noise disc ramp grid");
-        cmd_out(ctx, "echo move warp shake");
-        cmd_out(ctx, "grow thin flip tile fold");
+        /* ANY LANE, NOT JUST A PRIMITIVE. Routing used to live in the visual
+         * half only, so a kick could drive a circle and a circle could drive
+         * nothing. One table means one mechanism for every pair. */
+        cmd_out(ctx, "no lane '%.12s' to drive", gen);
+        cmd_out(ctx, "write it first, then route it");
         return CMD_ERROR;
     }
     /* A SOURCE THAT DOES NOT EXIST IS THE SILENT FAILURE HERE. The route is
@@ -1235,11 +1284,7 @@ static cmd_status_t c_route(cmd_ctx_t *ctx)
      * nothing anywhere says why. Typing it is still allowed - the lane may be
      * written on the next line - but it says so. */
     if (src[0] != '\0') {
-        bool known = seq_lane_find(src, -1) != NULL;
-        const char *nm;
-        for (int i = 0; !known && viz_lane_info(i, &nm, NULL, NULL, NULL, NULL); i++) {
-            if (strcmp(nm, src) == 0) { known = true; }
-        }
+        const bool known = seq_lane_find(src, -1) != NULL;
         if (!known) {
             cmd_out(ctx, "no lane '%s' yet - it will", src);
             cmd_out(ctx, "stay silent until there is one");
@@ -1526,12 +1571,28 @@ static cmd_status_t c_lanes(cmd_ctx_t *ctx)
             else if (l[i].accent & b)        { bar[k] = 'X'; }
             else if (l[i].ghost & b)         { bar[k] = ','; }
             else if (l[i].chance & b)        { bar[k] = '?'; }
-            else if ((l[i].melodic || l[i].ctrl) && l[i].deg[k] != 0xFF) {
+            /* A DRAWING LANE'S DIGITS ARE VALUES TOO. This tested melodic or
+             * ctrl, so '>noise 2.4.2.4.' listed back as 'x.x.x.x.' - the
+             * listing claiming the player had typed something they had not,
+             * which docs/COMMANDS.md makes a rule about: print what was typed,
+             * because a listing that rewrites it teaches the player their input
+             * did not register. */
+            else if ((l[i].melodic || l[i].ctrl ||
+                      l[i].bind == SEQ_BIND_VIZ) && l[i].deg[k] != 0xFF) {
                 bar[k] = (char)('0' + l[i].deg[k]);
             } else                           { bar[k] = 'x'; }
         }
         bar[k] = '\0';
-        cmd_out(ctx, "%c%-5s %s", l[i].muted ? '-' : ' ', l[i].name, bar);
+        /* THE BINDING IS A COLUMN. A lane's name no longer tells you where it
+         * goes - '>disc' draws and '>kick' sounds, and both are lanes - so the
+         * listing has to say. '<- name' means this lane follows that one and
+         * ignores its own steps. */
+        if (l[i].route[0] != '\0') {
+            cmd_out(ctx, "%c%-5s <- %s", l[i].muted ? '-' : ' ',
+                    l[i].name, l[i].route);
+        } else {
+            cmd_out(ctx, "%c%-5s %s", l[i].muted ? '-' : ' ', l[i].name, bar);
+        }
         /* Show the odds the brackets set. The bar can only render '?', so a
          * listing without this cannot confirm that a '?[15]' was read at all -
          * which is precisely the uncertainty that had the owner unable to tell
@@ -1565,30 +1626,10 @@ static cmd_status_t c_lanes(cmd_ctx_t *ctx)
             strncat(dests, " ", sizeof dests - strlen(dests) - 1);
         }
     }
-    /* THE VISUAL HALF, IN THE SAME LISTING.
-     *
-     * A visual lane had no listing at all, so there was no way to see which
-     * primitives were live, which were muted, or what anything followed - and
-     * a route that was not working looked exactly like a route that was. One
-     * list, because they are one document and one clock. */
-    {
-        const char *nm, *src;
-        bool used, muted;
-        int steps, shown = 0;
-        for (int i = 0; viz_lane_info(i, &nm, &src, &used, &muted, &steps); i++) {
-            if (!used) { continue; }
-            if (shown == 0) { cmd_out(ctx, "-- visuals --"); }
-            shown++;
-            if (src[0] != '\0') {
-                cmd_out(ctx, "%c%-6s <- %s", muted ? '-' : ' ', nm, src);
-            } else {
-                cmd_out(ctx, "%c%-6s %d steps", muted ? '-' : ' ', nm, steps);
-            }
-        }
-        if (shown > 0) {
-            cmd_out(ctx, "- means muted. viz <name> to drop");
-        }
-    }
+    /* ONE LISTING, because there is one table. This used to print the music
+     * lanes and then walk a second table for the visual ones, with a rule
+     * between them - two loops describing two structs that were the same
+     * struct. What a lane is BOUND to is one column now. */
     cmd_out(ctx, "to: %s", dests[0] ? dests : "nowhere - try: send ble on");
     const uint32_t lost = seq_dropped();
     if (lost > 0) {
@@ -1666,7 +1707,24 @@ static const cmd_t s_builtins[] = {
     { "osc",   c_osc,   CMD_CAP_NET,   "osc <ip> <port> - /deck/<lane>" },
     { "ssh",   c_ssh,   CMD_CAP_NET,   "ssh user@host pass <command>" },
     { "frame", c_frame, CMD_CAP_NET,   "send the frame over osc" },
-    { "viz",   c_viz,   CMD_CAP_EDIT,  "viz echo 9 | viz noise 2" },
+    /* THE DRAWING LANES, peers of the drums rather than arguments to a
+     * subsystem. Each is a name bound to a primitive, exactly as 'kick' is a
+     * name bound to note 36 - see docs/MAP.md. 'viz' is the old spelling, kept
+     * because documents already use it, and marked for deletion at freeze. */
+    { "echo",   c_prim,  CMD_CAP_EDIT,  "keep the last frame - trails" },
+    { "move",   c_prim,  CMD_CAP_EDIT,  "shift it, wrapping" },
+    { "warp",   c_prim,  CMD_CAP_EDIT,  "bend lines along an axis" },
+    { "shake",  c_prim,  CMD_CAP_EDIT,  "tear lines sideways" },
+    { "noise",  c_prim,  CMD_CAP_EDIT,  "a field of sparkles" },
+    { "disc",   c_prim,  CMD_CAP_EDIT,  "a filled circle" },
+    { "ramp",   c_prim,  CMD_CAP_EDIT,  "a dithered gradient" },
+    { "grid",   c_prim,  CMD_CAP_EDIT,  "a lattice" },
+    { "grow",   c_prim,  CMD_CAP_EDIT,  "dilate: marks bloom" },
+    { "thin",   c_prim,  CMD_CAP_EDIT,  "erode: edges eat inward" },
+    { "flip",   c_prim,  CMD_CAP_EDIT,  "invert the frame" },
+    { "tile",   c_prim,  CMD_CAP_EDIT,  "repeat it, 1-4 copies" },
+    { "fold",   c_prim,  CMD_CAP_EDIT,  "mirror it, 1-3 folds" },
+    { "viz",   c_prim,  CMD_CAP_EDIT,  "alias: viz disc x... = disc x..." },
     { "split", c_split, CMD_CAP_EDIT,  "split on | off | <rows>" },
     { "route", c_route, CMD_CAP_EDIT,  "route disc kick" },
     { "usb",   c_usb,   CMD_CAP_SYSTEM,"usb on | off - MIDI over the cable" },

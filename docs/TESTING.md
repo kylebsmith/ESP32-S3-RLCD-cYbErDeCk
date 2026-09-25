@@ -126,12 +126,19 @@ hit, by lane name.
 ```
 >kick X...x...X...x...
 >bass 0...5...3...7...
->viz echo 9
->viz noise 2
->viz move d
+>echo 8
+>noise 2.4.2.4.
+>move d
 >route disc kick
+>route grow disc
 >play
 ```
+
+**A drawing primitive is a lane, exactly like a drum.** `>disc 9` and `>kick x...`
+are the same sentence with different destinations, so everything that works on
+one works on the other: a bare name drops it, re-running an unchanged line mutes
+it, `/2` halves it, and `>lanes` lists them together. `>viz disc 9` is the old
+spelling and still works; it goes away at freeze.
 
 The lower half of the screen becomes a live frame inside a stroked border,
 advancing on the same clock as the music. `>split on` and `>split off` are
@@ -186,10 +193,17 @@ outright and takes its routing with it.
 `>route disc kick` makes the disc **fire on every kick**, at the size of that
 hit's velocity. Routing is *when* as well as *how much*: a routed lane ignores
 its own pattern and follows its source. Put `>viz echo 8` above it and the pulse
-gets a tail. Anything that plays can be a source: a drum, a melodic lane, or a **control
-lane** — `>route warp cut` makes the filter sweep bend the picture, which is the
-sidechain idea at full stretch. Visual lanes can drive each other too, so
-`>route grow disc` makes the bloom follow the circle. A lane cannot follow
+gets a tail. **Anything that plays can drive anything else**, and chains work:
+
+```
+>route disc kick      the circle fires on the kick, at that hit's velocity
+>route grow disc      the bloom follows the circle
+>route warp cut       the bend follows the filter sweep
+```
+
+`kick → disc → grow` is two hops across three kinds of destination. Routing a
+primitive that has no lane yet creates it, so `>route grow disc` needs no pattern
+written first. A lane cannot follow
 itself (it would re-trigger for ever), and routing to a name that is not a lane
 yet says so rather than going quietly silent. Unroute with `>route disc`.
 

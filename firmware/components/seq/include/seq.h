@@ -29,7 +29,14 @@
 #include <stdint.h>
 #include "esp_err.h"
 
-#define SEQ_MAX_LANES 8
+/* SIXTEEN, BECAUSE THERE IS ONE BUDGET NOW.
+ *
+ * It was eight music lanes AND thirteen visual primitives, counted separately,
+ * which meant a piece that leaned visual was penalised for it while eight drum
+ * slots sat empty. One table means the player decides the mix, and sixteen is
+ * what the owner's own first piece wanted: seven sounding lanes and six
+ * drawing ones. */
+#define SEQ_MAX_LANES 16
 #define SEQ_MAX_STEPS 32
 #define SEQ_NAME_MAX  12
 
@@ -54,6 +61,24 @@
 #define SEQ_PPQN           96
 #define SEQ_TICKS_PER_STEP 24
 #define SEQ_CLOCK_EVERY    4      /* 96 / 24 = MIDI clock divisor */
+
+/* WHERE A LANE'S EVENTS GO.
+ *
+ * This enum is the whole point of the collapse. A lane compiles text into WHEN
+ * and HOW MUCH; the binding says WHERE, and the language never mentions it. So
+ * '>kick x...x...' and '>disc x...x...' are the same sentence with different
+ * destinations, and a new output medium - an RP2040 over HDMI, a light rig, a
+ * plotter - is a new value here rather than a change to the grammar.
+ *
+ * Before this there were two lane structs, field for field the same, with two
+ * compile loops over the same pattern walk, two mute mechanisms, two budgets
+ * and two listings. Every bug in that area was found twice, or found in one
+ * half and left standing in the other for days. */
+typedef enum {
+    SEQ_BIND_NOTE = 0,   /* a MIDI note: drums and the melodic voices */
+    SEQ_BIND_CC,         /* a controller number: digits are values    */
+    SEQ_BIND_VIZ,        /* a drawing primitive: digits are amounts   */
+} seq_bind_t;
 
 typedef struct {
     char     name[SEQ_NAME_MAX];
@@ -82,6 +107,22 @@ typedef struct {
     bool     melodic;
     bool     ctrl;          /* a controller lane: digits are VALUES, not notes */
     uint8_t  cc;
+
+    /* ---- the binding, and what only some bindings need ---- */
+    seq_bind_t bind;
+    uint8_t  prim;          /* SEQ_BIND_VIZ: which drawing primitive           */
+    char     chr[SEQ_MAX_STEPS]; /* the step's own character, verbatim         */
+    char     dir;           /* 'u','d','l','r' - a direction written in front  */
+
+    /* ---- routing: a lane may read another lane's output ---- */
+    /* THE SAME MECHANISM FOR EVERY PAIR. A kick can drive a circle's radius, a
+     * filter sweep can drive a wave's amplitude, and a circle can drive a
+     * bloom - because there is one table and one last_val, where before there
+     * were two tables and routing existed in only one of them. */
+    char     route[SEQ_NAME_MAX];  /* driven by this lane, or empty            */
+    uint8_t  last_val;      /* what this lane last played, 0-9                 */
+    volatile bool    trig;  /* the source fired; set in the clock callback      */
+    volatile uint8_t trig_val;
 } seq_lane_t;
 
 esp_err_t seq_init(void);
@@ -137,6 +178,22 @@ esp_err_t seq_lane_melodic(const char *name, int octave, int chan,
  * back. Same grammar as every other lane - same rests, same '?' probability,
  * same playhead - which is the point. */
 esp_err_t seq_lane_ctrl(const char *name, int cc, int chan);
+
+/* Bind a lane to a drawing primitive. `prim` is an index into viz's own table;
+ * seq does not know what a primitive is, only that it has a number. */
+esp_err_t seq_lane_viz(const char *name, int prim);
+
+/* ROUTING, FOR ANY PAIR OF LANES.
+ *
+ * A routed lane fires WHEN its source fires, at that hit's value, and ignores
+ * its own steps. Routing used to set only an amount, and a drum's velocity
+ * barely varies - so a routed lane sat at full value forever and nothing about
+ * the source's timing reached it.
+ *
+ * A lane cannot drive itself: every lane publishes what it played, so a
+ * self-route would re-trigger for ever with nothing in the clock able to stop
+ * it. Refused with ESP_ERR_INVALID_ARG. `src` NULL or empty unroutes. */
+esp_err_t seq_route(const char *name, const char *src);
 
 /* Shuffle, as a percentage: 50 is straight, 67 is triplet swing, 75 is as
  * far as this goes before it stops being a groove. Every ODD sixteenth is
@@ -307,6 +364,12 @@ void seq_stats_reset(void);
 typedef void (*seq_tick_hook_t)(uint32_t tick);
 typedef void (*seq_play_hook_t)(const char *lane, uint8_t value);
 void seq_set_hooks(seq_tick_hook_t on_tick, seq_play_hook_t on_play);
+
+/* A DRAWING LANE FIRED. Called from the clock callback, so the implementation
+ * must only RECORD - see SEQ_BIND_VIZ. `prim` is the index passed to
+ * seq_lane_viz; seq never learns what it means. */
+typedef void (*seq_draw_hook_t)(int prim, int amt, char dir, uint32_t tick);
+void seq_set_draw_hook(seq_draw_hook_t fn);
 
 /* Events dropped because the transport could not keep up. A late note is
  * worse than a lost one, so the clock never blocks - but the count must be

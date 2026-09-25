@@ -412,7 +412,12 @@ void app_main(void)
      * pointer: BLE MIDI, USB MIDI and a UART all plug in here without the
      * musical core changing. */
     cmd_set_announce(announce);
-    seq_set_hooks(viz_tick, viz_lane_played);
+    /* ONE HOOK, AND IT ONLY RECORDS. seq owns every lane now, including the
+     * drawing ones, so it no longer needs telling when a step happened or what
+     * a lane played - it knows both. What it does not know is what a primitive
+     * is, so a drawing lane hands viz an index and an amount and the main loop
+     * turns that into a picture. */
+    seq_set_draw_hook(viz_mark);
     seq_dest_add("ble", dest_ble, blemidi_flush, "BLE MIDI (off by default)");
     seq_dest_add("mon", dest_mon, NULL, "echo notes to console");
     /* DIN/TRS MIDI. Registered always, so '>send' lists it and the owner can
