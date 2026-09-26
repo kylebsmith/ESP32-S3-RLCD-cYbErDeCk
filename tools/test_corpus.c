@@ -107,13 +107,31 @@ typedef struct {
     int nreasons;
 } tally_t;
 
+/* A field of a corpus line into a fixed buffer. A field that does not fit is a
+ * fault in the corpus, said out loud - cut short it would be tested as some
+ * other pattern and could pass. */
+static int s_too_long;
+
+static void field(char *dst, size_t n, const char *src)
+{
+    const size_t k = strlen(src);
+    if (k >= n) {
+        printf("[FAIL] a corpus field of %zu characters does not fit in %zu: %.40s...\n",
+               k, n - 1, src);
+        s_too_long++;
+        dst[0] = '\0';
+        return;
+    }
+    memcpy(dst, src, k + 1);
+}
+
 static void count_reason(tally_t *t, const char *why)
 {
     for (int i = 0; i < t->nreasons; i++) {
         if (strcmp(t->reasons[i], why) == 0) { t->reason_n[i]++; return; }
     }
     if (t->nreasons < 64) {
-        snprintf(t->reasons[t->nreasons], sizeof t->reasons[0], "%s", why);
+        field(t->reasons[t->nreasons], sizeof t->reasons[0], why);
         t->reason_n[t->nreasons++] = 1;
     }
 }
@@ -186,15 +204,15 @@ static int run(const char *path, int verbose)
         line[strcspn(line, "\n")] = '\0';
         if (strncmp(line, "## world", 8) == 0) { t = &world; continue; }
         if (line[0] == 'S' || line[0] == 'W') {
-            snprintf(src, sizeof src, "%s", line + 2);
+            field(src, sizeof src, line + 2);
             rhythm = (line[0] == 'W');
             have = 0;
         } else if (line[0] == 'D') {
-            snprintf(deck, sizeof deck, "%s", line + 2);
+            field(deck, sizeof deck, line + 2);
         } else if (line[0] == 'N') {
             cycles = atoi(line + 2);
         } else if (line[0] == 'E') {
-            snprintf(events, sizeof events, "%s", line + 2);
+            field(events, sizeof events, line + 2);
             have = 1;
             check(t, src, deck, cycles, events, rhythm, verbose && t == &feat);
         } else if (line[0] == 'X') {
@@ -218,7 +236,7 @@ static int run(const char *path, int verbose)
             printf("          %3d  %s\n", world.reason_n[i], world.reasons[i]);
         }
     }
-    return (feat.fail + world.fail) != 0;
+    return (feat.fail + world.fail + s_too_long) != 0;
 }
 
 int main(int argc, char **argv)
