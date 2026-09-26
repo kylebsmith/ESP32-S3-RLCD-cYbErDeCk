@@ -56,6 +56,12 @@ bool net_up(void);
  * a link yet. */
 bool net_radio_on(void);
 
+/* The station's power save: on, the radio dozes between the router's beacons
+ * and anything sent to the deck waits for it - measured on a home network, pings
+ * of 78 ms on average and 301 ms at worst. Off while the deck must answer
+ * quickly: an OSC input, the ensemble. */
+void net_power_save(bool on);
+
 /* Where OSC goes. Setting a target enables the destination; port 0 disables. */
 esp_err_t net_osc_target(const char *ip, int port);
 

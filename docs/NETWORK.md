@@ -246,6 +246,19 @@ from another deck's network (*SSH, as built*) may be the same thing; that is
 unverified. **Also unverified:** how much longer a keyboard now takes to reconnect
 while Wi-Fi is on — no keyboard was here to time it.
 
+**From a laptop, on a home network** (the owner's, the same day): the deck joined it,
+listened, and a script on the laptop (`tools/osc_send.py`) moved `knob1`. A phone's
+fader values — 0, 0.25, 0.5, 1.0 — became 0, 32, 64 and 127 on the filter, a plain
+93 stayed 93, and a pad press played a kick exactly one step after a hat. But
+**sending to the filter moving took 62 to 265 ms**: the deck's Wi-Fi was in power
+save, dozing between the router's beacons with a listen interval of 307 ms, and the
+router held every message until it woke. Pings said the same — 78 ms on average,
+301 at worst, against 6 ms to the router. The ensemble already turned power save off
+for this reason; OSC in did not. **Now listening turns it off**, and the same test,
+twenty moves from one process: **20 of 20 with the right value, 4 ms at best, 22 ms
+median, 55 ms at worst** — pings 29 ms on average. What remains above the router's 6 ms
+is unexplained; the keyboard's Bluetooth link shares the radio, and that is a guess.
+
 ---
 
 ## Shared time: two decks, and Ableton `[OPEN]`

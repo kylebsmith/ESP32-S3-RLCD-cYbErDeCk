@@ -30,6 +30,13 @@ bool net_up(void) { return s_joined || s_hosting; }
 
 bool net_radio_on(void) { return s_on; }
 
+void net_power_save(bool on)
+{
+    if (s_started) {
+        (void)esp_wifi_set_ps(on ? WIFI_PS_MIN_MODEM : WIFI_PS_NONE);
+    }
+}
+
 void net_status(char *out, size_t max)
 {
     if (!s_started || !s_on) {

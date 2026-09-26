@@ -847,6 +847,8 @@ its own lanes named `knob1` and `pad1` to it: 280 of 280 messages arrived in eac
 two twenty-second windows; the listener's `cut` followed every step of the sender's
 `0..3..6..9..` — 0, 42, 84, 127 in order — at 308-429 ms intervals where the pattern's
 step is 363; and every kick the pad fired landed exactly one step after a hat, on the
-listener's grid. **Unverified:** a phone or a laptop app as the sender; the float
-path is checked on the host only.
+listener's grid. From a laptop on a home network the fader values 0, 0.25, 0.5 and
+1.0 arrived as 0, 32, 64 and 127, twenty of twenty, 22 ms from sending to the filter
+moving once listening turned the Wi-Fi's power save off ([NETWORK.md](NETWORK.md)).
+**Unverified:** a phone as the sender.
 

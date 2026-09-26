@@ -1601,6 +1601,19 @@ static cmd_status_t c_split(cmd_ctx_t *ctx)
  * idea - a lane may read another lane's output - and it works between any two,
  * which is why it is not called sidechaining: the same mechanism sends a kick
  * to a bar height or a filter sweep to a wave amplitude. */
+/* Is `name` a defined input - '>knob1 = knob'? */
+static bool input_named(const char *name)
+{
+    int n = 0;
+    const seq_input_t *in = seq_inputs(&n);
+    for (int i = 0; i < n; i++) {
+        if (in[i].kind != SEQ_INPUT_NONE && strcmp(in[i].name, name) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static cmd_status_t c_route(cmd_ctx_t *ctx)
 {
     if (ctx->arg[0] == '\0') {
@@ -1672,9 +1685,13 @@ static cmd_status_t c_route(cmd_ctx_t *ctx)
         } else if (sl->count == 0) {
             cmd_out(ctx, "%s never ends - give it !n", base);
         }
-    } else if (from[0] != '\0' && seq_lane_find(from, -1) == NULL) {
-        cmd_out(ctx, "no lane '%s' yet - it will", from);
-        cmd_out(ctx, "stay silent until there is one");
+    } else if (from[0] != '\0' && seq_lane_find(from, -1) == NULL &&
+               !input_named(from)) {
+        /* An INPUT is a source with no lane behind it ('>knob1 = knob'), so
+         * this said "no lane 'knob1' yet" about a route that worked - the
+         * owner's first try of OSC in, 2026-09-25. */
+        cmd_out(ctx, "nothing called %s yet -", from);
+        cmd_out(ctx, "silent until a lane or input is");
     }
     snprintf(ctx->msg, sizeof ctx->msg, from[0] ? "%s <- %s" : "%s unrouted",
              gen, from);
@@ -2003,6 +2020,15 @@ static cmd_status_t c_osc(cmd_ctx_t *ctx)
         if (net_osc_listen((int)pn, seq_input_set) != ESP_OK) {
             snprintf(ctx->msg, sizeof ctx->msg, "could not listen");
             return CMD_ERROR;
+        }
+        /* A knob is a gesture: it cannot wait for the radio to wake. With
+         * power save on, a message sat at the router until the deck's next
+         * wake-up - 62 to 265 ms from a laptop to the filter moving. The
+         * ensemble turns it off for the same reason and keeps it off. */
+        if (pn > 0) {
+            net_power_save(false);
+        } else if (ensemble_role() == ENSEMBLE_OFF) {
+            net_power_save(true);
         }
         snprintf(ctx->msg, sizeof ctx->msg, pn > 0 ? "osc in on %ld"
                                                    : "osc in off", pn);
