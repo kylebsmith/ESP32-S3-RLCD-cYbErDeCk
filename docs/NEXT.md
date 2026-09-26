@@ -25,8 +25,8 @@ a circle, a eurorack module and a knob on somebody else's desk.
 >   *A correction* and *And the count*). §9's "the panel push is almost certainly the
 >   budget" was the drawing, at seven times the push — fixed
 >   ([HARDWARE.md](HARDWARE.md), *The drawing was the budget*).
-> - **Still open:** `>flash now` from USB MIDI mode; the unverified items listed in
->   the pull request that merged this work.
+> - **Still open:** `>flash now` from USB MIDI mode, and the unverified items listed
+>   in [the pull request for this push](https://github.com/kylebsmith/ESP32-S3-RLCD-cYbErDeCk/pull/1).
 
 ---
 
