@@ -255,6 +255,14 @@ static void session(ssh_job_t *j)
         say("handshake failed");
         goto done;
     }
+    /* libssh2 makes the socket non-blocking during the handshake, and relies on
+     * it: its timeouts only run when a read says it would block. When the build
+     * lost HAVE_O_NONBLOCK a session hung after the reply (CMakeLists.txt), so
+     * this says so rather than waiting to find out. */
+    if ((fcntl(sock, F_GETFL, 0) & O_NONBLOCK) == 0) {
+        ESP_LOGE(TAG, "the ssh socket is still blocking - libssh2 was built "
+                      "without HAVE_O_NONBLOCK, and a read can wait for ever");
+    }
     /* The host's key, before anything is sent to it - see read_kept(). */
     const char *fp = libssh2_hostkey_hash(ses, LIBSSH2_HOSTKEY_HASH_SHA256);
     if (fp == NULL) {
@@ -303,14 +311,20 @@ static void session(ssh_job_t *j)
         snprintf(s_last, sizeof s_last, "ssh: auth failed");
         goto done;
     }
+    ESP_LOGD(TAG, "step: authenticated");
     ch = libssh2_channel_open_session(ses);
+    ESP_LOGD(TAG, "step: channel %s", ch ? "open" : "refused");
     if (ch == NULL) {
         say("server refused a channel");
         goto done;
     }
-    if (libssh2_channel_exec(ch, cmd) != 0) {
-        say("could not run it");
-        goto done;
+    {
+        const int ex = libssh2_channel_exec(ch, cmd);
+        ESP_LOGD(TAG, "step: exec %d", ex);
+        if (ex != 0) {
+            say("could not run it");
+            goto done;
+        }
     }
 
     /* Read the whole reply, splitting on newlines so it lands as lines in a
@@ -322,6 +336,12 @@ static void session(ssh_job_t *j)
     int lines = 0;
     for (;;) {
         const ssize_t n = libssh2_channel_read(ch, buf, sizeof buf);
+        ESP_LOGD(TAG, "step: read %d, eof %d", (int)n, libssh2_channel_eof(ch));
+        if (n < 0) {
+            char *why = NULL;
+            libssh2_session_last_error(ses, &why, NULL, 0);
+            ESP_LOGW(TAG, "step: read error %d: %s", (int)n, why ? why : "?");
+        }
         if (n <= 0) {
             break;
         }
@@ -348,11 +368,15 @@ reply_done:
     }
     snprintf(s_last, sizeof s_last, "ssh: %d line%s", lines,
              lines == 1 ? "" : "s");
+    ESP_LOGD(TAG, "step: reply read, %d line%s", lines, lines == 1 ? "" : "s");
 
 done:
-    if (ch != NULL)  { libssh2_channel_free(ch); }
+    if (ch != NULL)  { ESP_LOGD(TAG, "step: freeing the channel");
+                       libssh2_channel_free(ch);
+                       ESP_LOGD(TAG, "step: channel freed"); }
     if (ses != NULL) { libssh2_session_disconnect(ses, "bye");
-                       libssh2_session_free(ses); }
+                       libssh2_session_free(ses);
+                       ESP_LOGD(TAG, "step: session closed"); }
     libssh2_exit();
     close(sock);
 }

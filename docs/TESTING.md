@@ -409,8 +409,8 @@ running `>frame` again is the whole of visual coding on this device.
 
 ## 13. SSH
 
-**Tested against a real OpenSSH server up to the login, never through it** - see
-[NETWORK.md](NETWORK.md), *SSH, as built*. Use a throwaway account on the laptop,
+**Tested against real OpenSSH servers, through the login and a command's reply** -
+see [NETWORK.md](NETWORK.md), *SSH, as built*. Use a throwaway account on the laptop,
 never a real password, as docs/NEXT.md §10 asks. Turn on Remote Login (macOS: Settings → General → Sharing). Then with the
 deck on the same network:
 

@@ -20,9 +20,17 @@ idf_component_register(SRCS "ssh.c" ${LS2_SRCS}
                        REQUIRES mbedtls lwip esp_timer
                        PRIV_REQUIRES docstore nvs_flash)
 
+# HAVE_O_NONBLOCK IS THE ONE THAT HANGS. Without it libssh2's session_nonblock()
+# does nothing and returns success, so libssh2 believes its socket reads return
+# when there is nothing more to read - and on a blocking socket they wait
+# instead. After a command's whole reply had arrived, the next read waited for
+# ever: '>ssh' ran the command, never showed the reply, and held the deck's
+# one ssh slot until a reboot (2026-09-26). ssh.c checks the socket after the
+# handshake and says so if this is ever lost again.
 target_compile_definitions(${COMPONENT_LIB} PRIVATE
     LIBSSH2_MBEDTLS=1
     LIBSSH2_NO_ZLIB=1
+    HAVE_O_NONBLOCK=1
     HAVE_UNISTD_H=1 HAVE_INTTYPES_H=1 HAVE_STDLIB_H=1 HAVE_SYS_SELECT_H=1
     HAVE_SYS_SOCKET_H=1 HAVE_SYS_TIME_H=1 HAVE_ARPA_INET_H=1
     HAVE_NETINET_IN_H=1 HAVE_SELECT=1 HAVE_SNPRINTF=1 HAVE_GETTIMEOFDAY=1

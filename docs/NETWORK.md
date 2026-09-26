@@ -219,10 +219,28 @@ deck sent a dummy password to be refused. Measured:
 - The dummy password reached the server and was refused, and the deck reported
   `auth failed` and closed the session.
 
-**Still unverified: a login that succeeds, and a command's reply in `+out`.** That
-needs a server that accepts a login, which the owner's own account is not to be used
-for — a throwaway account, a container with its own sshd, or key authentication
-(proposed below, not built).
+**Then through the login**, against OpenSSH 10.3 in a throwaway container on the
+laptop — a user and a random password that existed only inside it, the password kept
+out of the repository and deleted with the container afterwards:
+
+- The login succeeded, and `uname -a` came back as one line in `+out`; a `printf` of
+  three lines came back as three; `seq 1 250` stopped at the 200-line bound.
+- A wrong password: `auth failed`. The old habit — the answer typed at the prompt
+  also written on the line — sent nothing: the server saw no connection at all.
+- The password was in none of the 29 lines of the document the commands were typed
+  in.
+
+**And it found a fifth defect: a session hung after the reply, for good.** The first
+real login ran its command, received the whole reply, and never showed it — the deck
+kept working, but its one ssh slot stayed taken until a reboot. The build never told
+libssh2 how to make a socket non-blocking (`HAVE_O_NONBLOCK`), and in that case its
+`session_nonblock()` does nothing and reports success: libssh2 believed a read would
+return when there was nothing more to read, and on the blocking socket it waited
+instead, past its own timeout, which only runs when a read says it would block. Found
+by logging each step of the session: the reply's 112 bytes and the end of the reply
+were both there, and each read returned only when a socket timeout added for the
+purpose expired. Now the build defines it, CI checks that it does, and the firmware
+warns at run time if the socket is ever blocking after the handshake.
 
 **Proposed, not built: key authentication.** The deck makes its own key pair,
 keeps the private half in NVS and shows the public half, which is not a secret; the

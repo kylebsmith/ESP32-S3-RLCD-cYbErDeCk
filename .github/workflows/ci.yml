@@ -113,6 +113,14 @@ jobs:
              -o /tmp/test_vitals tools/test_vitals.c
           /tmp/test_vitals
 
+      # libssh2 built without HAVE_O_NONBLOCK believes its socket is non-blocking
+      # while it is not, and a session hangs after the reply until the deck
+      # reboots - found against a real server, 2026-09-26. The firmware warns at
+      # run time; this stops the build losing it in the first place.
+      - name: Check libssh2 is built non-blocking
+        run: |
+          grep -q 'HAVE_O_NONBLOCK=1' firmware/components/ssh/CMakeLists.txt
+
       # The clock's ticks follow its grid. They did not: the timer was periodic
       # and a following deck's corrections moved only the grid, so its ticks
       # drifted 2 ppm from the leader while the ensemble reported the grids
