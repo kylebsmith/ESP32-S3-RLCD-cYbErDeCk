@@ -171,6 +171,34 @@ On the deck:
 You should see `/deck/step` with the bar position and `/deck/<lane>` for every
 hit, by lane name.
 
+## 10b. OSC in
+
+On the deck, with it on the same network as the laptop:
+
+```
+>osc in 9000
+>knob1 = knob
+>pad1 = pad
+>route cut knob1
+>route kick pad1
+>play
+```
+
+On the laptop:
+
+```bash
+python3 tools/osc_send.py <the deck's ip> 9000 /deck/knob1 0.5
+```
+
+```bash
+python3 tools/osc_send.py <the deck's ip> 9000 /deck/pad1
+```
+
+`>lanes` shows `knob1 knob  64` and the last two parts of the laptop's address; the
+filter moves, and the kick plays on the next step after the pad. A phone app that
+sends OSC works the same way: a fader from 0 to 1 on `/deck/knob1`. **A phone has not
+been tried** — two decks and this script's packing have.
+
 ## 11. Visuals, in the same document
 
 ```

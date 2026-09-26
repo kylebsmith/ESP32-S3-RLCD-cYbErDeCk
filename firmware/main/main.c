@@ -862,6 +862,9 @@ void app_main(void)
         /* The ensemble broadcast, from the main loop and never the clock
          * callback: a radio send is exactly what docs/OS.md keeps out of there. */
         ensemble_service();
+        /* The keyboard scan gives up most of the radio while Wi-Fi or ESP-NOW
+         * needs it - see kbd_share_radio(). */
+        kbd_share_radio(net_radio_on() || ensemble_role() != ENSEMBLE_OFF);
 
         int64_t prof_t = esp_timer_get_time();
         const bool frame = viz_service();

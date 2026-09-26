@@ -34,7 +34,7 @@ static void def(const char *arg, int kind, int num, int chan, int gate)
     lane_def_t d;
     lane_def_parse(arg, &d);
     if (d.kind != kind || (kind != LD_ERROR && kind != LD_REMOVE &&
-                           kind != LD_DRAW &&
+                           kind != LD_DRAW && kind != LD_KNOB && kind != LD_PAD &&
                            (d.num != num || d.chan != chan || d.gate != gate))) {
         printf("[FAIL] = %-22s got kind %d %d ch%d gate%d (%s)\n", arg, d.kind,
                d.num, d.chan, d.gate, d.why);
@@ -96,6 +96,11 @@ int main(void)
     def(" cc 74",                 LD_CC,   74, 1, 150);
     def(" cc 74 ch 2",            LD_CC,   74, 2, 150);
     def(" disc",                  LD_DRAW,  0, 0, 0);
+    /* Inputs (docs/NEXT.md §5, §8): a name fed from outside. */
+    def(" knob",                  LD_KNOB,  0, 0, 0);
+    def(" pad",                   LD_PAD,   0, 0, 0);
+    def(" knob 3",                LD_ERROR, 0, 0, 0);
+    def(" pad ch 2",              LD_ERROR, 0, 0, 0);
     def("",                       LD_REMOVE, 0, 0, 0);
     def("   ",                    LD_REMOVE, 0, 0, 0);
 

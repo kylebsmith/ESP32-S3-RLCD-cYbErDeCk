@@ -68,6 +68,11 @@ sixteen sounds; the sixteen pictures answer to their own names.
 kick that is already playing; `>conga =` forgets the name and its lanes. A name is
 up to eight letters and cannot be a verb or a picture.
 
+**Inputs are names too.** `>knob1 = knob` holds a value, `>pad1 = pad` fires on a
+press, and `>route cut knob1` makes the filter follow it. With `>osc in 9000`, OSC to
+`/deck/knob1` sets it — a phone, a laptop, another deck. A pad lands on the next
+step; a knob on the next tick. [MAP.md](MAP.md) §9.8.
+
 **Sixteen lanes at once**, any mix. `route` connects any two.
 
 **A count ends a lane, and an end starts another.** `>intro x.x.x.x. !2` plays two
@@ -129,7 +134,7 @@ routes draws in table order, whatever order the lines were typed.
 | `send view on` | **the picture on HDMI**, from an RP2040 DVI node — `send view 40x12` for a size. [VIEW.md](VIEW.md) |
 | `usb on` | be a USB MIDI device — needs a computer. Reboots. |
 | `din 17` | **MIDI on a wire — needs no computer.** Drives an SP404, a eurorack brain, anything with MIDI IN. Wire it first: [HARDWARE.md](HARDWARE.md) |
-| `osc 10.0.0.5 9000` | `/deck/<lane>` over the network |
+| `osc 10.0.0.5 9000` | `/deck/<lane>` over the network; `osc in 9000` listens for inputs |
 | `wifi <ssid>` | join - it asks for the password; `wifi off`, `wifi forget` |
 | `host deck` | *be* the network - it asks for a password |
 

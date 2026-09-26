@@ -626,10 +626,13 @@ static void publish_end(seq_lane_t *src)
 
 static uint8_t s_maxrank;
 
+static void fire_inputs(uint32_t tick, int sw);
+
 static void fire_lanes(uint32_t tick)
 {
     s_emitting = NULL;
     const int sw = swing_ticks();
+    fire_inputs(tick, sw);
     /* IN ROUTE ORDER, AND PARTS FIRST.
      *
      * A routed lane hears its source when the source fires, so the source has to
@@ -788,6 +791,112 @@ static void stage_apply(void)
  * It ticks at 96 PPQN, a multiple of the 24 MIDI clock is defined at, so sync
  * costs one message on every fourth tick that already exists. At 120 bpm a tick
  * is 5,208 us and a sixteenth is twenty-four of them, 125,000 us exactly. */
+static seq_input_t s_inputs[SEQ_MAX_INPUTS];
+
+static seq_input_t *input_find(const char *name)
+{
+    for (int i = 0; i < SEQ_MAX_INPUTS; i++) {
+        if (s_inputs[i].kind != SEQ_INPUT_NONE &&
+            strcmp(s_inputs[i].name, name) == 0) {
+            return &s_inputs[i];
+        }
+    }
+    return NULL;
+}
+
+esp_err_t seq_input_define(const char *name, seq_input_kind_t kind)
+{
+    if (name == NULL || name[0] == '\0' || strlen(name) >= SEQ_NAME_MAX ||
+        kind == SEQ_INPUT_NONE) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    seq_input_t *in = input_find(name);
+    if (in == NULL) {
+        for (int i = 0; i < SEQ_MAX_INPUTS && in == NULL; i++) {
+            if (s_inputs[i].kind == SEQ_INPUT_NONE) {
+                in = &s_inputs[i];
+            }
+        }
+        if (in == NULL) {
+            return ESP_ERR_NO_MEM;
+        }
+        in->pending = false;
+        in->value = 0;
+        in->from = 0;
+        in->count = 0;
+        snprintf(in->name, sizeof in->name, "%s", name);
+    }
+    in->kind = (uint8_t)kind;       /* last: it is what marks the slot used */
+    return ESP_OK;
+}
+
+void seq_input_remove(const char *name)
+{
+    seq_input_t *in = input_find(name);
+    if (in != NULL) {
+        in->kind = SEQ_INPUT_NONE;
+        in->pending = false;
+    }
+}
+
+bool seq_input_set(const char *name, uint8_t value, uint32_t from)
+{
+    seq_input_t *in = input_find(name);
+    if (in == NULL) {
+        return false;
+    }
+    in->count++;
+    in->from = from;
+    if (in->kind == SEQ_INPUT_PAD && value == 0) {
+        return true;                  /* a release */
+    }
+    in->value = value > 127 ? 127 : value;
+    in->pending = true;
+    return true;
+}
+
+const seq_input_t *seq_inputs(int *count)
+{
+    if (count != NULL) {
+        *count = SEQ_MAX_INPUTS;
+    }
+    return s_inputs;
+}
+
+/* Hand an input's value to every lane routed from it - published(), for a
+ * source that is a name and not a lane. */
+static void publish_input(const char *name, uint8_t value)
+{
+    for (int j = 0; j < SEQ_MAX_LANES; j++) {
+        seq_lane_t *d = &s_lanes[j];
+        if (d->used && d->route[0] != '\0' && strcmp(d->route, name) == 0) {
+            d->trig = true;
+            d->trig_val = value;
+        }
+    }
+}
+
+/* Before the lanes, so a lane routed from an input hears it on this tick. */
+static void fire_inputs(uint32_t tick, int sw)
+{
+    for (int i = 0; i < SEQ_MAX_INPUTS; i++) {
+        seq_input_t *in = &s_inputs[i];
+        if (in->kind == SEQ_INPUT_NONE || !in->pending) {
+            continue;
+        }
+        if (in->kind == SEQ_INPUT_PAD) {
+            /* On the next step, swung as a lane's steps are swung. */
+            int st = 0;
+            uint32_t cy = 0;
+            if (!seq_pattern_slot_at(tick, 1, 1, 1, 1, sw, &st, &cy)) {
+                continue;
+            }
+        }
+        in->pending = false;
+        publish_input(in->name, in->value);
+    }
+}
+
 /* Arm the one-shot for the next tick - see seq_clock.h. */
 static void arm_next(int64_t tick_began)
 {

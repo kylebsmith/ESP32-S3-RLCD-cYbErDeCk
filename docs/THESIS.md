@@ -71,6 +71,13 @@ silent until it knows the leader's count, so its first note lands on the leader'
 step. A join is heard as a second player coming in, not as a flam
 ([NETWORK.md](NETWORK.md), *And the count*).
 
+**A knob is a name on the page.** An input — a phone's fader today, a satellite's
+encoder later — is defined like a drum, `>knob1 = knob`, and connected by the same
+word, `>route cut knob1`. Whoever reads the screen reads what the gesture controls,
+in the performer's own words, rather than a mapping hidden in a controller's
+settings ([MAP.md](MAP.md) §9.8). A pad lands on the step, so a press is heard in
+time, not when its packet arrived.
+
 ### For power, not legibility — listed so the line stays honest
 
 **The pre-turned face** made a cell 22 times cheaper to draw

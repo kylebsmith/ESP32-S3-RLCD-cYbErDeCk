@@ -175,6 +175,8 @@ enum {
     LD_VOICE,         /* degrees in the key: a melodic part */
     LD_CC,            /* a controller                       */
     LD_DRAW,          /* another name for a picture         */
+    LD_KNOB,          /* an input holding a value (seq.h)    */
+    LD_PAD,           /* an input that fires on a press      */
     LD_ERROR,
 };
 
@@ -252,6 +254,18 @@ static inline int lane_def_parse(const char *arg, lane_def_t *d)
                 snprintf(d->why, sizeof d->why, "'%.10s'? ch N or gate N", w);
                 return d->kind = LD_ERROR;
             }
+        }
+        return d->kind;
+    }
+    /* AN INPUT: a name whose value comes from outside - OSC to /deck/<name>
+     * today, a satellite's control later (docs/NEXT.md §5, §8). Nothing else
+     * goes on the line: where it is fed from is the name itself. */
+    if (strcmp(w, "knob") == 0 || strcmp(w, "pad") == 0) {
+        d->kind = (w[0] == 'k') ? LD_KNOB : LD_PAD;
+        if (lane_word(&p, w, sizeof w) > 0) {
+            snprintf(d->why, sizeof d->why, "%s takes nothing else",
+                     d->kind == LD_KNOB ? "knob" : "pad");
+            return d->kind = LD_ERROR;
         }
         return d->kind;
     }

@@ -28,6 +28,8 @@ static esp_netif_t   *s_ap;
 
 bool net_up(void) { return s_joined || s_hosting; }
 
+bool net_radio_on(void) { return s_on; }
+
 void net_status(char *out, size_t max)
 {
     if (!s_started || !s_on) {

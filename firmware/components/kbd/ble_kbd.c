@@ -892,11 +892,21 @@ static int gap_event(struct ble_gap_event *ev, void *arg)
     }
 }
 
+/* THE RADIO IS SHARED - see kbd_share_radio(). */
+static volatile bool s_share;
+
 static void scan_start(void)
 {
     struct ble_gap_disc_params p = {
-        .itvl              = 0,
-        .window            = 0,
+        /* 0 and 0 are NimBLE's fast defaults - a 30 ms window every 30 ms, all
+         * of the radio's time, for as long as no keyboard is connected. Alone
+         * on the radio that is the quickest reconnect there is. Beside Wi-Fi it
+         * left the access point deaf: of 280 OSC messages one deck sent another
+         * in twenty seconds, 10 arrived. A 30 ms window every 160 ms, and all
+         * 280 did (2026-09-25). So the scan takes the radio only when nothing
+         * else needs it. */
+        .itvl              = s_share ? BLE_GAP_SCAN_ITVL_MS(160) : 0,
+        .window            = s_share ? BLE_GAP_SCAN_WIN_MS(30) : 0,
         .filter_policy     = 0,
         .limited           = 0,
         .passive           = 0,
@@ -994,6 +1004,19 @@ static void host_task(void *arg)
     (void)arg;
     nimble_port_run();
     nimble_port_freertos_deinit();
+}
+
+void kbd_share_radio(bool shared)
+{
+    if (shared == s_share) {
+        return;
+    }
+    s_share = shared;
+    /* A scan keeps the duty it started with, so one in progress is restarted. */
+    if (ble_gap_disc_active()) {
+        ble_gap_disc_cancel();
+        scan_start();
+    }
 }
 
 void kbd_forget_all(void)

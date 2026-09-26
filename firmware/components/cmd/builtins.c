@@ -458,7 +458,8 @@ static cmd_status_t c_density(cmd_ctx_t *ctx)
  */
 typedef struct {
     char     name[LANE_BASE_MAX + 1];
-    uint8_t  kind;          /* LD_NOTE, LD_VOICE, LD_CC or LD_DRAW          */
+    uint8_t  kind;          /* LD_NOTE, LD_VOICE, LD_CC, LD_DRAW, or an
+                             * input: LD_KNOB, LD_PAD                        */
     uint8_t  num;           /* note, octave, controller, or picture index   */
     uint8_t  chan;          /* 0-15                                         */
     uint16_t gate;          /* ms                                           */
@@ -539,6 +540,12 @@ static bool binding_of(const lane_name_t *ln, seq_binding_t *b, char *why,
             b->cc = a->num;
             b->chan = a->chan;
             break;
+        case LD_KNOB:
+        case LD_PAD:
+            /* An input plays nothing of its own: it is a source. */
+            snprintf(why, wn, "%s is a %s: route from it", ln->base,
+                     a->kind == LD_KNOB ? "knob" : "pad");
+            return false;
         default:
             prim = a->num;
             break;
@@ -794,6 +801,12 @@ cmd_status_t cmd_define(cmd_ctx_t *ctx, const char *word, size_t n)
         return CMD_ERROR;
     }
     alias_t *a = alias_find(ln.base);
+    /* An input stops being one whatever it becomes, and a name that becomes an
+     * input takes its lanes with it: an input has no pattern to play. */
+    if (a != NULL && (a->kind == LD_KNOB || a->kind == LD_PAD) &&
+        d.kind != a->kind) {
+        seq_input_remove(ln.base);
+    }
     if (d.kind == LD_REMOVE) {
         if (a == NULL) {
             snprintf(ctx->msg, sizeof ctx->msg, "no name %s", ln.base);
@@ -815,6 +828,23 @@ cmd_status_t cmd_define(cmd_ctx_t *ctx, const char *word, size_t n)
         a->name[0] = '\0';
         snprintf(ctx->msg, sizeof ctx->msg, "%s is not a name now", ln.base);
         return CMD_DONE;
+    }
+    if (d.kind == LD_KNOB || d.kind == LD_PAD) {
+        if (seq_input_define(ln.base, d.kind == LD_KNOB ? SEQ_INPUT_KNOB
+                                                        : SEQ_INPUT_PAD) != ESP_OK) {
+            cmd_out(ctx, "%d inputs is all there is", SEQ_MAX_INPUTS);
+            return CMD_ERROR;
+        }
+        int n2 = 0;
+        const seq_lane_t *l = seq_lanes(&n2);
+        for (int i = 0; i < SEQ_MAX_LANES; i++) {
+            lane_name_t o;
+            if (l[i].used &&
+                lane_name_parse(l[i].name, strlen(l[i].name), &o) == LN_OK &&
+                strcmp(o.base, ln.base) == 0) {
+                seq_forget(l[i].name);
+            }
+        }
     }
     int prim = -1;
     if (d.kind == LD_DRAW) {
@@ -1937,7 +1967,42 @@ static cmd_status_t c_osc(cmd_ctx_t *ctx)
         cmd_out(ctx, "osc <ip> <port>");
         cmd_out(ctx, "sends /deck/<lane> i i");
         cmd_out(ctx, "%u msgs in %u packets", (unsigned)m, (unsigned)p);
+        uint32_t im = 0, iu = 0, ir = 0;
+        net_osc_in_counts(&im, &iu, &ir);
+        if (net_osc_listening() != 0) {
+            cmd_out(ctx, "in on %d: %u read, %u used",
+                    net_osc_listening(), (unsigned)im, (unsigned)iu);
+            if (ir > 0) {
+                cmd_out(ctx, "  %u datagrams refused", (unsigned)ir);
+            }
+        } else {
+            cmd_out(ctx, "osc in <port> - /deck/<name>");
+            cmd_out(ctx, "sets a knob or a pad");
+        }
         snprintf(ctx->msg, sizeof ctx->msg, "osc 192.168.4.2 9000");
+        return CMD_DONE;
+    }
+    /* '>osc in 9000' - LISTEN. docs/NEXT.md §8: /deck/<name> sets the input
+     * of that name ('>knob1 = knob'), and what is routed from it follows. */
+    if (strncmp(ctx->arg, "in", 2) == 0 &&
+        (ctx->arg[2] == '\0' || ctx->arg[2] == ' ')) {
+        const char *a = ctx->arg + 2;
+        while (*a == ' ') { a++; }
+        long pn = 0;
+        if (strcmp(a, "off") != 0 && !whole_number(a, 1, 65535, &pn)) {
+            snprintf(ctx->msg, sizeof ctx->msg, "osc in <port> | off");
+            return CMD_ERROR;
+        }
+        if (pn > 0 && !net_up()) {
+            snprintf(ctx->msg, sizeof ctx->msg, "osc in needs wifi");
+            return CMD_ERROR;
+        }
+        if (net_osc_listen((int)pn, seq_input_set) != ESP_OK) {
+            snprintf(ctx->msg, sizeof ctx->msg, "could not listen");
+            return CMD_ERROR;
+        }
+        snprintf(ctx->msg, sizeof ctx->msg, pn > 0 ? "osc in on %ld"
+                                                   : "osc in off", pn);
         return CMD_DONE;
     }
     char ip[24], port[8];
@@ -2102,6 +2167,28 @@ static cmd_status_t c_lanes(cmd_ctx_t *ctx)
                     l[i].route, at);
         } else {
             cmd_out(ctx, "%c%-5s %s%s", mute, l[i].name, l[i].text, at);
+        }
+    }
+    /* THE INPUTS, with their value and who last set it - which is how a dead
+     * phone is told from a bad route (docs/NEXT.md §5: a source must be able
+     * to say what it is). */
+    {
+        int ni = 0;
+        const seq_input_t *in = seq_inputs(&ni);
+        for (int i = 0; i < ni; i++) {
+            if (in[i].kind == SEQ_INPUT_NONE) {
+                continue;
+            }
+            const uint32_t f = in[i].from;
+            if (in[i].count == 0) {
+                cmd_out(ctx, " %-5s %s, not heard yet", in[i].name,
+                        in[i].kind == SEQ_INPUT_KNOB ? "knob" : "pad");
+            } else {
+                cmd_out(ctx, " %-5s %s %3u .%u.%u", in[i].name,
+                        in[i].kind == SEQ_INPUT_KNOB ? "knob" : "pad ",
+                        (unsigned)in[i].value, (unsigned)((f >> 16) & 0xFF),
+                        (unsigned)(f >> 24));
+            }
         }
     }
     /* THIRTY COLUMNS. This was "%d bpm  swing %d  key %s  clock %s", which

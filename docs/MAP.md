@@ -804,3 +804,49 @@ cut followed the kick and the rim hit at the kick's velocity.
 chorus after verse — needs a lane with two sources, and a lane has one. The
 arrangement that exists today is linear, with the last section looping by having no
 count.
+
+### 9.8 Inputs — `>knob1 = knob`, and an OSC endpoint is a lane source `[FACT]` — done
+
+[NEXT.md](NEXT.md) §5 set the rule before any satellite existed: *an encoder is a
+lane whose events come from hardware instead of a pattern, and a button is a lane
+that fires on press* — read through `route`, or a second routing system gets built
+beside the one that works. §8 added that OSC must be the same mechanism. So an
+input is **a name with a value**, defined like any other name, and it adds no verb:
+
+```
+>knob1 = knob             a value 0-127, held on the deck
+>pad1 = pad               fires on a press
+>route cut knob1          the filter follows the knob
+>route kick pad1          the kick plays when the pad is pressed
+>osc in 9000              /deck/<name> sets the input of that name
+```
+
+The decisions, each for a stated reason:
+
+- **The value lives on the deck**, as §5 asked, so a phone that drops off loses
+  nothing and two senders can share a name.
+- **A knob fires its routes on the next tick** after it changes — a gesture, for
+  which 5 ms is nothing. **A pad fires on the next step**, swing included, because a
+  button that triggers a note must land on the grid, not on the packet.
+- **The address is the name.** `/deck/knob1` feeds `knob1`; nothing else goes on the
+  definition line. A message to a name nobody defined is counted and dropped: a
+  packet cannot create anything.
+- **The number is the message's last numeric argument** — a phone's fader sends a
+  float from 0 to 1, another deck's `>osc` sends the controller then the value, a
+  bare message is a press at full value (`osc_parse.h`).
+- **Listening is off until asked.** `>osc in <port>` is a subcommand of the verb
+  that already configures OSC, not a verb of its own.
+- **Inputs act while the clock runs**, like every lane.
+
+`>lanes` lists each input with its value and the last two parts of whoever set it —
+`knob1 knob 84 .4.2` — which is how a dead phone is told from a bad route (§5: *a
+source must be able to say what it is*).
+
+Measured on two decks, one hosting a test network and listening, the other sending
+its own lanes named `knob1` and `pad1` to it: 280 of 280 messages arrived in each of
+two twenty-second windows; the listener's `cut` followed every step of the sender's
+`0..3..6..9..` — 0, 42, 84, 127 in order — at 308-429 ms intervals where the pattern's
+step is 363; and every kick the pad fired landed exactly one step after a hat, on the
+listener's grid. **Unverified:** a phone or a laptop app as the sender; the float
+path is checked on the host only.
+

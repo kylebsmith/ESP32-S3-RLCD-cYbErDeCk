@@ -17,7 +17,7 @@ deck sends /deck/step with the bar position, /deck/<lane> with two ints, and
     python3 tools/osc_listen.py 9001
 
 Then on the deck:
-    >wifi <ssid> <pass>      (or >host deck 12345678 and join it)
+    >wifi <ssid>             (it asks for the password; or >host deck, and join it)
     >osc <this machine's ip> 9000
     >play
     >frame

@@ -389,6 +389,43 @@ bool seq_awaiting(void);
 
 const seq_lane_t *seq_lanes(int *count);
 
+/* ---- inputs: lanes whose events come from outside (docs/NEXT.md §5, §8) ----
+ *
+ * AN INPUT IS A NAME WITH A VALUE, and whatever is routed from it follows it -
+ * '>route cut knob1' - through the route mechanism every lane already uses. A
+ * knob holds a value 0-127 and fires its routes on the next tick after it
+ * changes: a gesture, for which a tick is nothing. A pad fires its routes on the
+ * next STEP after a press, swing included, because a button that triggers a
+ * note must land on the grid and not on the moment the packet arrived.
+ *
+ * The value lives here, on the deck, so a source going away loses nothing and
+ * two sources can share a name. An OSC message to /deck/<name> sets it today;
+ * a satellite's encoder will set the same thing. Inputs act while the clock
+ * runs, like every lane. */
+typedef enum {
+    SEQ_INPUT_NONE = 0,
+    SEQ_INPUT_KNOB,
+    SEQ_INPUT_PAD,
+} seq_input_kind_t;
+
+#define SEQ_MAX_INPUTS 16
+
+typedef struct {
+    char              name[SEQ_NAME_MAX];
+    volatile uint8_t  kind;          /* seq_input_kind_t; NONE = a free slot  */
+    volatile uint8_t  value;         /* 0-127, the last one set               */
+    volatile bool     pending;       /* set, and not yet published            */
+    volatile uint32_t from;          /* who set it: an IPv4 address, or 0     */
+    volatile uint32_t count;         /* how many times it has been set        */
+} seq_input_t;
+
+esp_err_t seq_input_define(const char *name, seq_input_kind_t kind);
+void      seq_input_remove(const char *name);
+/* From any task - a network receive, a radio callback. False when no input has
+ * that name. A pad pressed with 0 is a release, and does nothing. */
+bool      seq_input_set(const char *name, uint8_t value, uint32_t from);
+const seq_input_t *seq_inputs(int *count);
+
 /* WHERE EVENTS GO, AND WHY IT IS A TABLE.
  *
  * Max/MSP splits its world down the middle: `~` objects are audio, `jit.`

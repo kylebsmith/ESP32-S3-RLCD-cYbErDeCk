@@ -220,6 +220,34 @@ get an address by DHCP after associating.
 
 ---
 
+## OSC in, and the keyboard scan that deafened the radio `[BUILT]` `[MEASURED]` 2026-09-25
+
+**OSC in is a lane source** ([NEXT.md](NEXT.md) §8, [MAP.md](MAP.md) §9.8):
+`>osc in 9000` listens, and `/deck/<name>` sets the input called `<name>` —
+`>knob1 = knob`, `>pad1 = pad` — whose routes follow it. The reader
+(`osc_parse.h`) takes a message, a bundle, or messages end to end, which is what this
+deck's own `>osc` sends; it checks every length against the datagram, because the
+datagram is from anyone, and refuses a malformed one whole.
+
+**The first test found something bigger than OSC.** Two decks, one hosting a test
+network and listening, the other sending its lanes to it: in the first thirteen
+seconds 119 messages arrived; then 137 in the next 38; then **5 in 23 seconds**,
+while the sender's own count said 280 went out. Neither deck's heap moved and neither
+link dropped. Both decks were **scanning for a keyboard** — neither had one — and the
+scan used NimBLE's defaults, a 30 ms window every 30 ms: *all* of the radio's time,
+for as long as no keyboard is connected, on the radio Wi-Fi shares.
+
+With a 30 ms window every 160 ms, the same test delivered **280 of 280** in each of
+two twenty-second windows. So the scan now takes the radio only when nothing else
+needs it: full time while Wi-Fi and ESP-NOW are off, the 30-in-160 ms window while
+either is on (`kbd_share_radio`). This is not only OSC — it is every use of the radio
+while no keyboard is paired, and the 44 seconds a deck once took to get an address
+from another deck's network (*SSH, as built*) may be the same thing; that is
+unverified. **Also unverified:** how much longer a keyboard now takes to reconnect
+while Wi-Fi is on — no keyboard was here to time it.
+
+---
+
 ## Shared time: two decks, and Ableton `[OPEN]`
 
 Three problems that look like one and are not. Separating them is most of the

@@ -52,6 +52,9 @@ void net_stop(void);
 /* One line, 30 columns: mode, whether it is up, and the address. */
 void net_status(char *out, size_t max);
 bool net_up(void);
+/* The Wi-Fi radio is on - joining, joined or hosting - whether or not there is
+ * a link yet. */
+bool net_radio_on(void);
 
 /* Where OSC goes. Setting a target enables the destination; port 0 disables. */
 esp_err_t net_osc_target(const char *ip, int port);
@@ -73,3 +76,12 @@ esp_err_t net_osc_frame(const char *text);
 
 /* Datagrams sent, and messages packed into them. */
 void net_osc_counts(uint32_t *msgs, uint32_t *packets);
+
+/* OSC IN: listen on `port` for '/deck/<name>' and hand the name and its value,
+ * 0-127, to `fn` from the listening task - with who sent it, an IPv4 address.
+ * `fn` returns whether the name meant anything. Port 0 stops listening. */
+typedef bool (*net_osc_in_fn)(const char *name, uint8_t value, uint32_t from);
+esp_err_t net_osc_listen(int port, net_osc_in_fn fn);
+int       net_osc_listening(void);          /* the port, or 0 */
+/* Messages read, messages that set an input, datagrams refused as malformed. */
+void      net_osc_in_counts(uint32_t *msgs, uint32_t *used, uint32_t *refused);
