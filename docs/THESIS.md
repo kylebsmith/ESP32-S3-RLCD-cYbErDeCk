@@ -65,6 +65,12 @@ is a secret shown to the room — the flip side of making everything legible.
 output cannot keep up, the frame is dropped whole ([VIEW.md](VIEW.md)). The performer's
 hands come first; the room loses a frame of a picture, never a gesture.
 
+**A deck that joins waits to hear where the others are.** Two decks started by two
+players now share the step and the bar, not only the tempo, and a following deck is
+silent until it knows the leader's count, so its first note lands on the leader's
+step. A join is heard as a second player coming in, not as a flam
+([NETWORK.md](NETWORK.md), *And the count*).
+
 ### For power, not legibility — listed so the line stays honest
 
 **The pre-turned face** made a cell 22 times cheaper to draw

@@ -19,6 +19,7 @@
 #include <stdlib.h>
 
 #include "seq_clock.h"
+#include "ens_count.h"
 
 static int fails;
 
@@ -120,10 +121,35 @@ int main(void)
     CHECK(seq_clock_wait(1000, 900, false, 0, 7, PER) == 900 + PER - 1000,
           "a stopped clock keeps its period, for the note-offs");
 
+    /* ---- the count, which the phase cannot see (ens_count.h) ------------ */
+    /* The leader is at pulse T at `their`; this deck's count is D behind, and
+     * its pulses sit `jit` microseconds off the leader's. */
+    const int64_t their = 5000000000LL;
+    const uint32_t T = 100000;
+    const int32_t cases[] = { 14, 3, 4, 0, -5000, 383, 24 };
+    const int64_t jits[] = { 0, 37, -37, PER / 2 - 1, -(PER / 2 - 1) };
+    int right = 0, total = 0;
+    for (size_t c = 0; c < sizeof cases / sizeof cases[0]; c++) {
+        for (size_t j = 0; j < sizeof jits / sizeof jits[0]; j++) {
+            const uint32_t t = 7;                 /* our next pulse */
+            const int64_t ours = their - (int64_t)(T - cases[c] - t) * PER + jits[j];
+            const int64_t ph = ens_phase(their, ours, PER);
+            right += ens_count_ahead(T, their, t, ours, PER, ph) == cases[c];
+            total++;
+        }
+    }
+    CHECK(right == total, "the count between two decks is exact, %d of %d, "
+          "with the pulse up to half a pulse off", right, total);
+    const int64_t o14 = their - (int64_t)(T - 14 - 7) * PER + 37;
+    const int64_t o38 = their - (int64_t)(T - 38 - 7) * PER + 37;
+    CHECK(ens_phase(their, o14, PER) == ens_phase(their, o38, PER),
+          "and the phase alone - all the ensemble used - cannot tell 14 pulses "
+          "from 38");
+
     if (fails) {
         printf("[FAIL] %d check(s) failed\n", fails);
     } else {
-        printf("[PASS] the ticks follow the grid\n");
+        printf("[PASS] the ticks follow the grid, in the leader's count\n");
     }
     return fails != 0;
 }

@@ -67,6 +67,17 @@ typedef struct {
 static int64_t    s_grid_t0;
 /* When the last tick began - where a new tempo takes over from. */
 static int64_t    s_last_tick_us;
+/* A FOLLOWER PLAYS IN THE LEADER'S COUNT (ens_count.h). The ensemble asks for
+ * a move from its radio callback; the clock makes it at the start of a tick,
+ * keeping that tick's time, so nothing between them races. A follower that has
+ * just pressed play is silent until it knows where the leader is - a second at
+ * most, then it plays alone - so it joins on the leader's step instead of
+ * sounding a downbeat of its own first. */
+static volatile bool     s_follows;
+static volatile bool     s_adopt_pending;
+static volatile int32_t  s_adopt;
+static volatile uint32_t s_await_ticks;
+
 /* s_grid_t0 IS 64 BITS ON A 32-BIT CPU, written by the editor (tempo) and the
  * ensemble (corrections) while the clock reads it on the other core. A torn read
  * used to spoil one statistic sample; now it would schedule the next tick, and a
@@ -804,6 +815,29 @@ static void tick(void *arg)
     }
     s_last_tick_us = now;
 
+    if (s_adopt_pending) {
+        const int32_t d = s_adopt;
+        s_adopt_pending = false;
+        if (d != 0) {
+            /* This tick keeps its time; only its number changes. */
+            s_tick += (uint32_t)d;
+            grid_slide(-(int64_t)d * (int64_t)period_us());
+            /* A counted lane waits for its next downbeat in the new count,
+             * as it does after '>play', so "four times" stays four. */
+            for (int i = 0; i < SEQ_MAX_LANES; i++) {
+                seq_lane_t *l = &s_lanes[i];
+                if (l->used && l->count != 0 && !l->done && l->route[0] == '\0') {
+                    l->idle = true;
+                }
+            }
+        }
+        s_await_ticks = 0;
+    }
+    const bool awaiting = s_await_ticks > 0;
+    if (awaiting) {
+        s_await_ticks--;
+    }
+
     /* Dispatch deviation from the ideal grid. This is the number the owner
      * is hearing when they say it feels jittery, and it is measured before
      * any note is emitted so the measurement cannot be blamed on the notes. */
@@ -834,6 +868,11 @@ static void tick(void *arg)
         if (d >  1000000) { d =  1000000; }
         if (d < -1000000) { d = -1000000; }
         stat_add(&s_clock_stat, (int32_t)d);
+    }
+    if (awaiting) {
+        s_tick++;
+        arm_next(now);
+        return;
     }
     if (s_sync && (s_tick % SEQ_CLOCK_EVERY) == 0) {
         emit(0xF8, 0, 0);            /* timing clock, no data bytes */
@@ -885,7 +924,10 @@ void seq_timebase(uint32_t *tick, int64_t *tick_due_us, int *bpm)
         /* When the NEXT pulse is due on the ideal grid, not when the last one
          * happened to fire. The grid is the thing the two decks are agreeing
          * about; dispatch jitter is not. */
-        *tick_due_us = grid_get() + (int64_t)s_tick * (int64_t)period_us();
+        /* 0 until the first tick after '>play' has anchored the grid: before
+         * that there is no "when" to report. */
+        const int64_t g = grid_get();
+        *tick_due_us = g != 0 ? g + (int64_t)s_tick * (int64_t)period_us() : 0;
     }
 }
 
@@ -929,6 +971,26 @@ int32_t seq_nudge(uint32_t tick, int64_t due_us, int bpm)
     grid_slide(err / 8);
     return (int32_t)err;
 }
+
+void seq_follow(bool on)
+{
+    s_follows = on;
+    if (!on) {
+        s_await_ticks = 0;
+        s_adopt_pending = false;
+    }
+}
+
+void seq_adopt(int32_t pulses)
+{
+    if (!s_running || s_adopt_pending) {
+        return;
+    }
+    s_adopt = pulses;
+    s_adopt_pending = true;
+}
+
+bool seq_awaiting(void) { return s_await_ticks > 0; }
 
 void seq_nudge_by(int32_t err_us, int bpm)
 {
@@ -1435,6 +1497,9 @@ void seq_play(void)
     s_tick = 0;
     grid_set(0);                 /* anchored on the first tick */
     seq_stats_reset();
+    s_adopt_pending = false;
+    /* A second of pulses: long enough for the first few replies. */
+    s_await_ticks = s_follows ? (uint32_t)(1000000u / period_us()) : 0u;
     s_running = true;
     if (s_sync) {
         /* Song-position-zero then start, which is what a DAW expects and what

@@ -497,6 +497,39 @@ The report changed too: `>jitter` prints the **mean**, and the histogram counts 
 tick's distance from the first sample by size, early or late. It compared the signed
 distance, so an early tick was "<.1" however early.
 
+### And the count: two decks shared a pulse, not a step `[MEASURED]` 2026-09-25
+
+The phase correction folds every disagreement into ±half a pulse — "a whole-pulse
+disagreement is a different bar, not a phase error" — and then nothing dealt with the
+different bar: `(void)ourtick;`. Each deck counts pulses from its own `>play`, and a
+step is 24 of them, so two decks started by two players shared a tempo and a pulse
+within tens of microseconds while their sixteenths fell wherever the second `>play`
+landed. Measured with the count added to `>sync`: **3, 4 and 14 pulses apart** on three
+joins — up to 71 ms — and by the Mac's own clock, stamping each deck's console as its
+kicks arrived, **the kicks were 77 ms apart**. The ensemble had never played together;
+it had played at the same speed.
+
+**Now a follower takes the leader's count** (`ens_count.h`). Each reply says which
+pulse the leader was on; the follower works out how far its own count is behind,
+using only replies back inside 2 ms — a slow reply can put the count a pulse out —
+and when three agree, its clock moves the count at the start of a tick, keeping that
+tick's time. A counted lane then waits for its next downbeat, as it does after
+`>play`. A follower that presses play while the leader is playing is silent until the
+count arrives — a second at most, then it plays alone — so it joins on the leader's
+step rather than sounding a downbeat of its own first.
+
+| on the bench, `>kick x...x...` on both | before | after |
+|---|---|---|
+| three joins at different moments: `>sync` | 3, 4, 14 pulses apart | in the leader's count, all three |
+| the kicks, by the Mac's clock (median) | +77 ms | 0, −5, −1 ms |
+| follower plays first, then the leader starts | — | first kick at once; then 0 ms |
+| the leader restarts under a playing follower | — | back to the top with it, +3 ms |
+
+The Mac's figures carry the console's own delay, ±25 ms a kick, so they resolve steps
+and fractions of steps, not microseconds; the microseconds are the section above.
+`tools/test_clock.c` checks the count arithmetic exact across 35 cases with the pulse
+up to half a pulse off, and that the phase alone cannot tell 14 pulses from 38.
+
 ### Does drawing move the clock? No `[FACT]`
 
 The question this instrument rests on, so it is measured rather than argued. A deck
@@ -561,7 +594,8 @@ than a postponement:
 - **Between decks**, the ESP-NOW ensemble already does what Link would be used for:
   two decks' grids within 35 µs, 32 of 32 samples inside 500 µs across tempo
   changes, no router — measured above; and since 2026-09-25 the ticks follow the
-  grid (*A correction*, above).
+  grid and a follower plays in the leader's count (*A correction* and *And the
+  count*, above).
 - **With a DAW**, MIDI clock already does it over USB: 49.600 clocks a second for a
   requested 124 bpm, measured at the host (docs/OS.md).
 - **The seam is ready.** The ensemble shares Link's *model* — a local timer

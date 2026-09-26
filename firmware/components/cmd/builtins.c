@@ -972,6 +972,20 @@ static cmd_status_t c_sync(cmd_ctx_t *ctx)
                  * other, which is the estimator grading its own work. */
                 cmd_out(ctx, "probes agreed within %d us",
                         (int)ensemble_spread());
+                /* The pulse is shared; is the STEP? A step is 24 pulses. */
+                int32_t cnt = 0;
+                if (ensemble_count_off(&cnt)) {
+                    const int32_t st = ((cnt % 24) + 24) % 24;
+                    const int32_t bar = ((cnt % 384) + 384) % 384;
+                    if (cnt == 0) {
+                        cmd_out(ctx, "in the leader's count");
+                    } else if (st == 0) {
+                        cmd_out(ctx, "steps together, bar %d off",
+                                (int)(bar / 24));
+                    } else {
+                        cmd_out(ctx, "steps %d pulses apart", (int)st);
+                    }
+                }
                 uint32_t rep = 0, stale = 0, lost = 0, dup = 0, win = 0;
                 ensemble_counts(&rep, &stale, &lost, &dup, &win);
                 cmd_out(ctx, "%u replies, %u twice, %u lost ack",

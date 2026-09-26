@@ -376,6 +376,17 @@ int32_t seq_nudge(uint32_t tick, int64_t due_us, int bpm);
  * sample steers the clock into that bias. */
 void seq_nudge_by(int32_t err_us, int bpm);
 
+/* A FOLLOWER TAKES THE LEADER'S COUNT as well as its pulse, or its sixteenths
+ * fall wherever its own '>play' landed (ens_count.h). seq_follow() says this
+ * deck follows a leader that is playing; seq_adopt() moves its count by
+ * `pulses` at the next tick,
+ * keeping that tick's time - callable from a radio callback, and ignored while
+ * one move is still owed. A following deck that presses play is silent until
+ * the first move, or a second, whichever comes first: seq_awaiting(). */
+void seq_follow(bool on);
+void seq_adopt(int32_t pulses);
+bool seq_awaiting(void);
+
 const seq_lane_t *seq_lanes(int *count);
 
 /* WHERE EVENTS GO, AND WHY IT IS A TABLE.

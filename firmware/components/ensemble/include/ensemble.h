@@ -60,6 +60,11 @@ void ensemble_service(void);
 int64_t  ensemble_floor_rtt(void);
 uint32_t ensemble_skipped(void);
 
+/* How many pulses the leader's count is ahead of this deck's, from the last
+ * exchange - the part of being together that the phase cannot see. A step is
+ * 24 pulses and a 4/4 bar 384. False until a reply has been measured. */
+bool ensemble_count_off(int32_t *pulses);
+
 /* HOW FAR THE LAST WINDOW'S BEST PROBES DISAGREED, in microseconds, and the number
  * to watch if the phase is wandering. It is the estimator's own opinion of itself:
  * six lightly-queued exchanges that put the offset within 300 us of one another
