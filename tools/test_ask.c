@@ -127,6 +127,18 @@ int main(void)
           n == strlen(longname) && strlen(w) == 32,
           "a name too long is cut to fit, and its real length reported");
 
+    /* The help's placeholder, typed with its brackets - measured: the deck
+     * looked for a network called "<HomeNet>" and retried for ever. */
+    char nm[40] = "<HomeNet>";
+    CHECK(unbracket(nm) && strcmp(nm, "HomeNet") == 0, "'<HomeNet>' is HomeNet");
+    char plain[40] = "HomeNet";
+    CHECK(!unbracket(plain) && strcmp(plain, "HomeNet") == 0,
+          "a name without them is left alone");
+    char half[40] = "<HomeNet";
+    char tiny[4] = "<>";
+    CHECK(!unbracket(half) && !unbracket(tiny) && strcmp(tiny, "<>") == 0,
+          "half a bracket, or brackets round nothing, are not a placeholder");
+
     /* ---- the fingerprint, as ssh-keygen prints it ------------------------ */
     uint8_t h[32];
     char fp[SSH_FP_TEXT];

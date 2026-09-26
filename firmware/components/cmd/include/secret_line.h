@@ -10,7 +10,9 @@
  */
 #pragma once
 
+#include <stdbool.h>
 #include <stddef.h>
+#include <string.h>
 
 /* The first word of `arg` into `word` (cut to fit), its whole length into
  * *len. Returns the offset in `arg` just past the word when anything follows
@@ -41,3 +43,19 @@ static inline int first_word_rest(const char *arg, char *word, size_t max,
     }
     return arg[j] != '\0' ? (int)i : -1;
 }
+
+/* '<HomeNet>' IS 'HomeNet'. The help writes '>wifi <ssid>' and the brackets
+ * were typed: the deck then looked for a network called "<HomeNet>" and
+ * retried for ever (2026-09-25). A name wrapped in them is unwrapped, and the
+ * caller says so. Returns whether it was. */
+static inline bool unbracket(char *w)
+{
+    const size_t n = strlen(w);
+    if (n >= 3 && w[0] == '<' && w[n - 1] == '>') {
+        memmove(w, w + 1, n - 2);
+        w[n - 2] = '\0';
+        return true;
+    }
+    return false;
+}
+

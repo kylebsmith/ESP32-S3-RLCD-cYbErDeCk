@@ -137,6 +137,14 @@ esp_err_t net_rejoin(void)
     if (!have) {
         return ESP_ERR_NOT_FOUND;
     }
+    /* A name remembered with the help's placeholder brackets round it - see
+     * unbracket() in secret_line.h - is joined, and remembered, without them. */
+    const size_t sl = strlen(ssid);
+    if (sl >= 3 && ssid[0] == '<' && ssid[sl - 1] == '>') {
+        memmove(ssid, ssid + 1, sl - 2);
+        ssid[sl - 2] = '\0';
+        ESP_LOGW(TAG, "the remembered name had <> round it: using %s", ssid);
+    }
     ESP_LOGW(TAG, "rejoining %s", ssid);
     return net_join(ssid, pass);
 }
@@ -176,6 +184,15 @@ esp_err_t net_join(const char *ssid, const char *pass)
      * to do with the credentials being wrong, and losing them on every one of
      * those is how the owner ended up retyping a password repeatedly. */
     remember(ssid, pass);
+    /* ONE JOIN AT A TIME. A station still trying the last network refuses a new
+     * configuration ("still connecting"), and it retries a missing network for
+     * ever - so '>wifi' typed again to correct a name failed, measured
+     * 2026-09-25. Stop the radio first; the retry that the stop provokes
+     * finds it stopped and does nothing. */
+    if (s_on) {
+        esp_wifi_stop();
+        s_on = s_joined = s_hosting = false;
+    }
     ESP_RETURN_ON_ERROR(esp_wifi_set_mode(WIFI_MODE_STA), TAG, "mode");
     ESP_RETURN_ON_ERROR(esp_wifi_set_config(WIFI_IF_STA, &wc), TAG, "cfg");
     ESP_RETURN_ON_ERROR(esp_wifi_start(), TAG, "start");
@@ -208,6 +225,10 @@ esp_err_t net_host(const char *ssid, const char *pass)
         }
     }
     snprintf(s_ssid, sizeof s_ssid, "%.32s", ssid);
+    if (s_on) {
+        esp_wifi_stop();               /* one mode at a time - see net_join */
+        s_on = s_joined = s_hosting = false;
+    }
     ESP_RETURN_ON_ERROR(esp_wifi_set_mode(WIFI_MODE_AP), TAG, "mode");
     ESP_RETURN_ON_ERROR(esp_wifi_set_config(WIFI_IF_AP, &wc), TAG, "cfg");
     ESP_RETURN_ON_ERROR(esp_wifi_start(), TAG, "start");

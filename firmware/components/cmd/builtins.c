@@ -1895,6 +1895,9 @@ static bool net_name(cmd_ctx_t *ctx, const char *usage)
         snprintf(ctx->msg, sizeof ctx->msg, "%s", usage);
         return false;
     }
+    /* The placeholder's brackets, typed: the question that follows names the
+     * network without them, which says what happened. */
+    (void)unbracket(s_net_ssid);
     return true;
 }
 
