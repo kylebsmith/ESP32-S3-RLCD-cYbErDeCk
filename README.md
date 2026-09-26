@@ -106,6 +106,7 @@ the other:
 | `>usb on` | USB MIDI, measured at **0.03 ms** of jitter at the host |
 | `>send ble on` | BLE MIDI, off by default — the radio is the keyboard's |
 | `>osc <ip> <port>` | OSC as `/deck/<lane>`, for visuals and other machines |
+| `>osc in 9000` | OSC in: `/deck/knob1` sets `>knob1 = knob`, and `>route cut knob1` follows it |
 | `>frame` | the current document, as ASCII, to whatever is rendering |
 | `>host deck` | the deck becomes the Wi-Fi network (it asks for a password) |
 | `>ssh you@host <cmd>` | run something elsewhere, read the reply here (it asks for the password) |
@@ -300,6 +301,7 @@ counted among the audited rows.
 | **[CONCRETE.md](docs/CONCRETE.md)** | the cast concrete jacket, its mould, and the mix |
 | **[HANDOFF.md](HANDOFF.md)** | briefing for a session with the hardware in front of it |
 | **[OS.md](docs/OS.md)** | the firmware design: what it runs, why, and what it deliberately will not do |
+| **[THESIS.md](docs/THESIS.md)** | the running note for the paper: each decision made for legibility, as it was made |
 | **[DESIGN.md](docs/DESIGN.md)** | form language, why it is shaped this way, material and finish |
 | **[METHODOLOGY.md](docs/METHODOLOGY.md)** | how the numbers were obtained and how to reproduce them |
 | **[MEASURE.md](docs/MEASURE.md)** | caliper checklist for someone holding the actual hardware |
