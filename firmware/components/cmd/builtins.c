@@ -1838,8 +1838,12 @@ static cmd_status_t c_ssh(cmd_ctx_t *ctx)
             port = (int)pn;
         }
         const esp_err_t e = ssh_forget(host, port);
-        snprintf(ctx->msg, sizeof ctx->msg, "%s %.20s",
-                 e == ESP_OK ? "key forgotten:" : "no key kept for", host);
+        /* A line, not only the status bar: forgetting a key is a decision
+         * about trust, and it should leave a record where the owner reads. */
+        cmd_out(ctx, "%s %.20s:%d", e == ESP_OK ? "key forgotten:"
+                                                : "no key kept for", host, port);
+        snprintf(ctx->msg, sizeof ctx->msg, "%s", e == ESP_OK ? "key forgotten"
+                                                              : "no key kept");
         return CMD_DONE;
     }
 

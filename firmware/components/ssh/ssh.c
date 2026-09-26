@@ -270,6 +270,13 @@ static void session(ssh_job_t *j)
         ssh_fp_text((const uint8_t *)fp, fpt, sizeof fpt);
         say(key_type(ktype));
         say(fpt);
+        /* The key and the verdict also go to the console - public facts about
+         * the host, and the only way to check the deck saw what ssh-keygen
+         * sees. What the command prints stays in '+out' alone. */
+        ESP_LOGI(TAG, "%s %s%s", key_type(ktype), fpt,
+                 !j->kept ? " - first time, keeping it"
+                 : memcmp(j->key, fp, 32) == 0 ? " - the key it had last time"
+                                               : " - CHANGED, refused");
         if (j->kept && memcmp(j->key, fp, 32) != 0) {
             say("THE HOST KEY HAS CHANGED.");
             say("refused - no password sent.");

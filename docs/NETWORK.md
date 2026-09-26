@@ -200,14 +200,29 @@ turns a second; a closed port says `connection refused`.
 **4. The reply went to `+ssh`, which nothing ever showed.** It goes to `+out` now,
 shown when the session ends, and Ctrl-O comes back like any other command's output.
 
-**Unverified: a session against a real server** - handshake, authentication, the
-command's output, the key kept and a changed one refused. No sshd was reachable
-from the decks without changing the network of the owner's Mac. Also unverified:
-whether the handshake's crypto fits, since this project configures mbedTLS to take
-**only internal RAM** (`CONFIG_MBEDTLS_INTERNAL_MEM_ALLOC`) and about 16 KB is left
-with the radio up. If it does not fit, the session says `handshake failed`; the
-remedy is mbedTLS allocating from PSRAM, which touches the Wi-Fi stack's crypto too
-and wants its own test.
+**Against a real server, the same day, everything up to the login.** The deck on the
+owner's home network, and on the laptop an OpenSSH 9.9 server started unprivileged on
+a spare port with a throwaway host key and a configuration under which no login can
+succeed — it admits only a user the laptop does not have, with no PAM and no keys. The
+deck sent a dummy password to be refused. Measured:
+
+- **The handshake fits.** Key exchange completed about a second after Enter, with
+  mbedTLS on internal RAM only and about 14 KB of it free. Internal RAM settled 300 to
+  400 bytes lower after the first session of a boot — allocations made once — and did
+  not move across the other five sessions of the two boots.
+- **The fingerprint is `ssh-keygen`'s**, character for character, key type included
+  (`ecdsa-sha2-nistp256`).
+- **The key's life:** kept the first time; recognised the second; after the server's
+  key was replaced, **refused before authentication** — the server logged a connection
+  and a disconnect, and no user name and no password; and after `>ssh forget`, the new
+  key kept. `>ssh forget` now also says so on a line.
+- The dummy password reached the server and was refused, and the deck reported
+  `auth failed` and closed the session.
+
+**Still unverified: a login that succeeds, and a command's reply in `+out`.** That
+needs a server that accepts a login, which the owner's own account is not to be used
+for — a throwaway account, a container with its own sshd, or key authentication
+(proposed below, not built).
 
 **Proposed, not built: key authentication.** The deck makes its own key pair,
 keeps the private half in NVS and shows the public half, which is not a secret; the
