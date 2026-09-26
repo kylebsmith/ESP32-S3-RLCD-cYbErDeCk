@@ -19,6 +19,8 @@
 #include "dinmidi.h"
 #include "ensemble.h"
 #include "vitals.h"
+#include "view.h"
+#include "ssh.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -115,6 +117,62 @@ static void orient_save(uint8_t v)
     }
 }
 
+/* WHAT A CELL COSTS TO DRAW, with nothing else running - both ways, in the
+ * same boot, so the before and the after are one board's numbers. The editor's
+ * heartbeat reports render time by the wall clock, which counts every
+ * preemption by the radio and the keyboard scan as drawing; this holds the
+ * scheduler. A full grid of mixed glyphs, a third of them inverted, drawn into
+ * the framebuffer (no panel push). */
+static void bench_render(void)
+{
+    const int cols = tg_cols(), rows = tg_rows();
+    for (int r = 0; r < rows; r++) {
+        for (int c = 0; c < cols; c++) {
+            tg_put(c, r, (char)(32 + (r * cols + c) % 124),
+                   ((c + r) % 3 == 0) ? TG_INVERSE : TG_NORMAL);
+        }
+    }
+    const int runs = 4;
+    int64_t per[2] = { 0, 0 }, first = 0;
+    int cells = 0;
+    for (int turned = 0; turned < 2; turned++) {
+        tg_set_turned(turned != 0);
+        vTaskSuspendAll();
+        /* The first turned frame turns every glyph it meets, once. */
+        int64_t t0 = esp_timer_get_time();
+        tg_invalidate();
+        cells = tg_render();
+        if (turned) {
+            first = esp_timer_get_time() - t0;
+        }
+        t0 = esp_timer_get_time();
+        for (int i = 0; i < runs; i++) {
+            tg_invalidate();
+            tg_render();
+        }
+        per[turned] = (esp_timer_get_time() - t0) * 1000 / (runs * cells);
+        xTaskResumeAll();
+    }
+    /* and what damage bookkeeping alone costs a cell, which the turned path
+     * still pays in full */
+    vTaskSuspendAll();
+    const int64_t t2 = esp_timer_get_time();
+    for (int i = 0; i < runs; i++) {
+        for (int r = 0; r < rows; r++) {
+            for (int c = 0; c < cols; c++) {
+                st7305_damage(20 + c * 12, 12 + r * 24, 12, 24);
+            }
+        }
+    }
+    const int64_t dmg = (esp_timer_get_time() - t2) * 1000 / (runs * cells);
+    xTaskResumeAll();
+    ESP_LOGI(TAG, "BENCH cell render: per-row %lld ns, turned %lld ns a cell "
+             "(%d cells, scheduler held)", per[0], per[1], cells);
+    ESP_LOGI(TAG, "BENCH   first turned frame %lld us, damage %lld ns a cell",
+             first, dmg);
+    tg_clear();
+}
+
 static void bench(void)
 {
     const int runs = 20;
@@ -165,12 +223,22 @@ static void dest_usb(const char *lane, uint8_t status, uint8_t d1, uint8_t d2,
 static void dest_mon(const char *lane, uint8_t status, uint8_t d1, uint8_t d2,
                      uint32_t when_us)
 {
-    (void)when_us;
-    (void)lane;
-    /* Note-ons only. Clock is 48 messages a second and would bury the thing
-     * the player is actually looking for. */
-    if ((status & 0xF0) == 0x90 && d2 > 0) {
-        ESP_LOGI("midi", "note %3u vel %3u ch %u", d1, d2, (status & 0x0F) + 1);
+    /* Notes on AND off, and controllers, each with its lane and the moment the
+     * clock decided it. Offs are here because a tie is a note that ends later,
+     * and nothing else on the device can show how long a note was. Clock and
+     * the step marker stay out: they are fifty messages a second and would bury
+     * the thing the player is looking for. */
+    const unsigned ms = (unsigned)(when_us / 1000u);
+    const uint8_t kind = status & 0xF0;
+    if (kind == 0x90 && d2 > 0) {
+        ESP_LOGI("midi", "%-5s on  %3u v%-3u ch%-2u t%u", lane, d1, d2,
+                 (status & 0x0F) + 1, ms);
+    } else if (kind == 0x80 || (kind == 0x90 && d2 == 0)) {
+        ESP_LOGI("midi", "%-5s off %3u      ch%-2u t%u", lane, d1,
+                 (status & 0x0F) + 1, ms);
+    } else if (kind == 0xB0 && d1 != 123) {
+        ESP_LOGI("midi", "%-5s cc%-3u = %3u   ch%-2u t%u", lane, d1, d2,
+                 (status & 0x0F) + 1, ms);
     }
 }
 
@@ -214,6 +282,28 @@ static void run_boot_document(void)
         doc_buf_select(was);
         return;
     }
+    /* A BOOT DOCUMENT FROM BEFORE THE NAMES WERE LINES has no names in it, and
+     * without them '>kick' means nothing. So the names go in at the TOP - they
+     * must exist before any lane line below them runs - and everything the owner
+     * wrote stays exactly as it was, underneath. The mark is the first line of
+     * the block; a document that has it is left alone. */
+    {
+        const size_t mlen = sizeof BOOT_MARK - 1;
+        bool marked = false;
+        for (size_t i = 0; i + mlen <= doc_len() && !marked; i++) {
+            size_t j = 0;
+            while (j < mlen && doc_at(i + j) == BOOT_MARK[j]) { j++; }
+            marked = (j == mlen);
+        }
+        if (!marked) {
+            doc_move_to(0);
+            for (const char *q = BOOT_NAMES; *q != '\0'; q++) {
+                doc_insert(*q);
+            }
+            doc_save();
+            ESP_LOGW(TAG, "boot document: the lane names were added at its top");
+        }
+    }
     char line[128];
     size_t k = 0;
     const size_t n = doc_len();
@@ -252,15 +342,24 @@ static void ensure_guide_buffer(void)
              * interface - so firmware that overwrites it destroys exactly the
              * thing the design is for. The new track goes on top, where it is
              * read first, and whatever was there stays underneath. */
-            bool has_play = false;
+            bool has_play = false, has_mark = false;
+            const size_t mlen = sizeof GUIDE_MARK - 1;
             for (size_t k = 0; k + 5 <= doc_len(); k++) {
                 if (doc_at(k) == '>' && doc_at(k+1) == 'p' && doc_at(k+2) == 'l' &&
                     doc_at(k+3) == 'a' && doc_at(k+4) == 'y') {
                     has_play = true;
-                    break;
+                }
+                if (k + mlen <= doc_len()) {
+                    size_t j = 0;
+                    while (j < mlen && doc_at(k + j) == GUIDE_MARK[j]) { j++; }
+                    if (j == mlen) { has_mark = true; }
                 }
             }
-            if (!has_play) {
+            /* AND HAS IT SEEN THIS GRAMMAR? A guide from before docs/MANIFESTO.md
+             * §3.6 teaches 'X...' and 'x,x?' - lines that are now refused - so it
+             * gets the new text too, on top, with everything the owner wrote kept
+             * underneath. */
+            if (!has_play || !has_mark) {
                 const size_t had = doc_len();
                 char *keep = malloc(had + 1);
                 if (keep != NULL) {
@@ -419,6 +518,7 @@ void app_main(void)
 
     /* Show the card briefly so a boot is visibly a boot, then get out of the
      * way. If the text reads mirrored, KEY cycles the orientation. */
+    bench_render();
     testcard_draw(BUILD_ID);
     bench();
     vTaskDelay(pdMS_TO_TICKS(2500));
@@ -451,6 +551,9 @@ void app_main(void)
      * visual half of the same lane grammar: one pattern, and whether it is a
      * drum or a frame trigger is the destination's business. */
     seq_dest_add("osc", net_osc_send, net_osc_flush, "OSC /deck/<lane>");
+    /* THE PICTURE, to an HDMI node - docs/VIEW.md. A destination like the rest,
+     * off until '>send view on'. */
+    view_init();
     /* BLE MIDI is OFF by default. It is quantised to the connection interval
      * and shares one radio with the keyboard link, so typing contends with
      * the notes - which is exactly when the owner heard the timing go loose.
@@ -560,7 +663,9 @@ void app_main(void)
      * comes up it owns the USB peripheral, so the USB-Serial-JTAG keyboard
      * must NOT also be started - the console moves to the CDC interface and
      * reaches the editor through the same key mapper. */
-    if (usbdev_boot()) {
+    const bool usb_midi = usbdev_boot();
+    vitals_started(usb_midi);
+    if (usb_midi) {
         if (seq_dest_add("usb", dest_usb, usbdev_midi_flush,
                          "USB MIDI (native)") != ESP_OK) {
             /* The deck is in USB MIDI mode with a host attached and cannot
@@ -640,10 +745,18 @@ void app_main(void)
              wdt ? "armed on the editor loop"
                  : "UNAVAILABLE - hangs will be silent");
 
+    /* WHERE THE LOOP'S TIME GOES, by the wall clock, reported and zeroed with
+     * each heartbeat. docs/NEXT.md 9: no optimization without a number, and
+     * profile first - the render time alone once said the drawing was the
+     * budget, and was right, and after it was fixed nothing said what was. */
+    int64_t prof_viz = 0, prof_view = 0, prof_draw = 0, prof_push = 0;
+    uint32_t prof_loops = 0;
+
     while (1) {
         if (wdt) {
             esp_task_wdt_reset();
         }
+        prof_loops++;
 
         kbd_event_t ev;
         bool acted = false;
@@ -749,15 +862,43 @@ void app_main(void)
         /* The ensemble broadcast, from the main loop and never the clock
          * callback: a radio send is exactly what docs/OS.md keeps out of there. */
         ensemble_service();
+        /* The keyboard scan gives up most of the radio while Wi-Fi or ESP-NOW
+         * needs it - see kbd_share_radio(). */
+        kbd_share_radio(net_radio_on() || ensemble_role() != ENSEMBLE_OFF);
 
-        if (viz_service()) {
+        int64_t prof_t = esp_timer_get_time();
+        const bool frame = viz_service();
+        prof_viz += esp_timer_get_time() - prof_t;
+        if (frame) {
             need_draw = true;
+            prof_t = esp_timer_get_time();
+            view_frame();
+            prof_view += esp_timer_get_time() - prof_t;
+        }
+
+        /* An ssh session runs in a task of its own (ssh.c); what it says is
+         * moved into '+out' here, in the task that owns the documents. */
+        {
+            size_t from = 0;
+            const int sv = ssh_service(&from);
+            if (sv != SSH_QUIET) {
+                need_draw = true;
+            }
+            if (sv == SSH_FINISHED) {
+                char st[40];
+                ssh_status(st, sizeof st);
+                editor_show_output(from, st);
+            }
         }
 
         if (need_draw) {
+            prof_t = esp_timer_get_time();
             editor_draw();
+            prof_draw += esp_timer_get_time() - prof_t;
             const uint32_t before = editor_cells_drawn();
+            prof_t = esp_timer_get_time();
             editor_present(&bytes);
+            prof_push += esp_timer_get_time() - prof_t;
             /* An exact invariant, not a threshold: if cells were rendered into
              * the framebuffer and nothing went out on the wire, the panel is
              * showing something other than the document. That is precisely
@@ -804,6 +945,15 @@ void app_main(void)
             char ust[48];
             usbdev_status(ust, sizeof ust);
             ESP_LOGI(TAG, "usb: %s", ust);
+            /* The 5 ms kbd_poll wait is the loop's idle time, and is in none
+             * of these. */
+            ESP_LOGI(TAG, "loop: %u/s; us in 10 s: pictures %lld, view %lld "
+                          "(%u sent, %u dropped), draw %lld, push %lld",
+                     (unsigned)(prof_loops / 10), prof_viz, prof_view,
+                     (unsigned)view_frames, (unsigned)view_dropped,
+                     prof_draw, prof_push);
+            prof_viz = prof_view = prof_draw = prof_push = 0;
+            prof_loops = 0;
         }
 
         /* Autosave: on newline, or once typing has paused. Never per

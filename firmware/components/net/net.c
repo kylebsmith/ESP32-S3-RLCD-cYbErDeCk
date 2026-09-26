@@ -15,6 +15,10 @@ static const char *TAG = "net";
 #define NVS_NS "deck"
 
 static bool           s_started;      /* the Wi-Fi driver is up            */
+/* ...and the radio is on. Not the same thing: '>wifi off' stops the radio and
+ * keeps the driver, and the status said "join <ssid> -" after it - on a deck
+ * that had been HOSTING, too - because it asked only whether the driver was up. */
+static bool           s_on;
 static bool           s_joined;       /* a station link has an address     */
 static bool           s_hosting;
 static char           s_ssid[33];
@@ -24,9 +28,18 @@ static esp_netif_t   *s_ap;
 
 bool net_up(void) { return s_joined || s_hosting; }
 
+bool net_radio_on(void) { return s_on; }
+
+void net_power_save(bool on)
+{
+    if (s_started) {
+        (void)esp_wifi_set_ps(on ? WIFI_PS_MIN_MODEM : WIFI_PS_NONE);
+    }
+}
+
 void net_status(char *out, size_t max)
 {
-    if (!s_started) {
+    if (!s_started || !s_on) {
         snprintf(out, max, "wifi off");
         return;
     }
@@ -131,6 +144,14 @@ esp_err_t net_rejoin(void)
     if (!have) {
         return ESP_ERR_NOT_FOUND;
     }
+    /* A name remembered with the help's placeholder brackets round it - see
+     * unbracket() in secret_line.h - is joined, and remembered, without them. */
+    const size_t sl = strlen(ssid);
+    if (sl >= 3 && ssid[0] == '<' && ssid[sl - 1] == '>') {
+        memmove(ssid, ssid + 1, sl - 2);
+        ssid[sl - 2] = '\0';
+        ESP_LOGW(TAG, "the remembered name had <> round it: using %s", ssid);
+    }
     ESP_LOGW(TAG, "rejoining %s", ssid);
     return net_join(ssid, pass);
 }
@@ -170,9 +191,19 @@ esp_err_t net_join(const char *ssid, const char *pass)
      * to do with the credentials being wrong, and losing them on every one of
      * those is how the owner ended up retyping a password repeatedly. */
     remember(ssid, pass);
+    /* ONE JOIN AT A TIME. A station still trying the last network refuses a new
+     * configuration ("still connecting"), and it retries a missing network for
+     * ever - so '>wifi' typed again to correct a name failed, measured
+     * 2026-09-25. Stop the radio first; the retry that the stop provokes
+     * finds it stopped and does nothing. */
+    if (s_on) {
+        esp_wifi_stop();
+        s_on = s_joined = s_hosting = false;
+    }
     ESP_RETURN_ON_ERROR(esp_wifi_set_mode(WIFI_MODE_STA), TAG, "mode");
     ESP_RETURN_ON_ERROR(esp_wifi_set_config(WIFI_IF_STA, &wc), TAG, "cfg");
     ESP_RETURN_ON_ERROR(esp_wifi_start(), TAG, "start");
+    s_on = true;
     return esp_wifi_connect();
 }
 
@@ -201,9 +232,14 @@ esp_err_t net_host(const char *ssid, const char *pass)
         }
     }
     snprintf(s_ssid, sizeof s_ssid, "%.32s", ssid);
+    if (s_on) {
+        esp_wifi_stop();               /* one mode at a time - see net_join */
+        s_on = s_joined = s_hosting = false;
+    }
     ESP_RETURN_ON_ERROR(esp_wifi_set_mode(WIFI_MODE_AP), TAG, "mode");
     ESP_RETURN_ON_ERROR(esp_wifi_set_config(WIFI_IF_AP, &wc), TAG, "cfg");
     ESP_RETURN_ON_ERROR(esp_wifi_start(), TAG, "start");
+    s_on = true;
     s_hosting = true;
     s_joined  = false;
     snprintf(s_ip, sizeof s_ip, "192.168.4.1");
@@ -218,7 +254,7 @@ void net_stop(void)
         return;
     }
     esp_wifi_stop();
-    s_joined = s_hosting = false;
+    s_on = s_joined = s_hosting = false;
     snprintf(s_ip, sizeof s_ip, "-");
     ESP_LOGW(TAG, "radio off - the airtime is the keyboard's again");
 }

@@ -128,6 +128,12 @@ overwrites the deck, so it is the owner's call.
 
 Until then: feasible on strong evidence, unproven on this board.
 
+**Measured since, 2026-09-25, in this firmware** (the heartbeat's free internal
+heap): about **98 KB free before Wi-Fi, 15-16.5 KB with the station up, 14.2 KB
+with the access point up**. The radio costs about 82 KB of internal RAM here, and
+what is left is the budget an SSH session's crypto has to fit in - see *SSH, as
+built* below.
+
 ## Build order, when this is picked up
 
 1. **Measure first.** Bring up Wi-Fi in *this* firmware and log free internal
@@ -148,6 +154,143 @@ assessment on 2026-09-20, against ESP-IDF v5.5.4 (`dfe53e20`),
 xtensa-esp32s3-elf-gcc 14.2.0, libssh2 1.11.2_DEV, wolfSSH master, wolfSSL
 v5.9.1-stable and OpenSSH 9.9p2. Raspberry Pi OS sshd defaults were read from
 the Debian trixie `sshd_config(5)` for OpenSSH 1:10.0p1.
+
+---
+
+## SSH, as built — what was wrong, what was decided `[BUILT]` `[OPEN]`
+
+*2026-09-25, docs/NEXT.md §10: "test it, and fix the defect it has". The defect the
+brief named was real, and there were three more.*
+
+**1. The password was a word of the line.** `>ssh user@host pass ls` put it in a
+document line, and a document is journalled, mirrored to the SD card and copied to
+the owner's DGX - ground rule 6. `>wifi <ssid> <pass>` and `>host deck 12345678`,
+both taught by the guide, did the same. **Now no command takes a password on its
+line.** A command that needs one asks on the status line; the keys go to a buffer
+shown as stars (`firmware/main/ask.h`), are handed to the command on Enter and wiped
+on Enter and on Esc, and the document never sees them. `wifi` and `host` take one
+word, and a second word is the old password: refused, and cut from the line before
+autosave can keep it. `ssh` sends nothing when the answer appears in its command.
+Checked on the deck: `>wifi TESTNET notreal-1` left `>wifi TESTNET` and a 20-byte
+save; a passphrase typed at the prompt reached the radio and not the document.
+
+**2. The host key was shown, not checked. Decision: keep it on first use, refuse a
+change before any password is sent.** With password authentication an unchecked
+key is not a cosmetic gap: whoever answers in the host's place is handed the
+password - encrypted, but to them. Keeping the first key (in NVS, never a document)
+is what ssh(1) does for a new host, and the alternative - typing a 43-character
+fingerprint into the deck before the first connection - is a ritual nobody would
+perform. The first connection is still taken on trust, so the deck prints the
+fingerprint exactly as `ssh-keygen -lf` prints it, with the key's type: libssh2's
+mbedTLS backend cannot use ed25519 host keys (*the four things* above), so it is
+the host's ECDSA or RSA key to compare. `>ssh forget <host>` is for a key the owner
+changed. The format is checked against a real key's `ssh-keygen` output in
+`tools/test_ask.c`; **the check against a live server is unverified**.
+
+**3. The session ran on the editor's task,** which a task watchdog panics after 10
+seconds without a turn, while `connect()` waited out twelve SYN retries. By reading
+the code, `>ssh` to an address nobody answers would have rebooted the deck
+mid-set; **that was not reproduced on hardware**. Now the session is its own task,
+with its stack in PSRAM because the radio leaves about 16 KB internal, `connect()`
+is bounded at 5 seconds, and what the session says comes back through a message
+buffer to `+out`. Measured on two decks, one hosting a test network: an address
+nobody answers says `no answer in 5 seconds` at 5.0 s while the editor keeps 194
+turns a second; a closed port says `connection refused`.
+
+**4. The reply went to `+ssh`, which nothing ever showed.** It goes to `+out` now,
+shown when the session ends, and Ctrl-O comes back like any other command's output.
+
+**Against a real server, the same day, everything up to the login.** The deck on the
+owner's home network, and on the laptop an OpenSSH 9.9 server started unprivileged on
+a spare port with a throwaway host key and a configuration under which no login can
+succeed — it admits only a user the laptop does not have, with no PAM and no keys. The
+deck sent a dummy password to be refused. Measured:
+
+- **The handshake fits.** Key exchange completed about a second after Enter, with
+  mbedTLS on internal RAM only and about 14 KB of it free. Internal RAM settled 300 to
+  400 bytes lower after the first session of a boot — allocations made once — and did
+  not move across the other five sessions of the two boots.
+- **The fingerprint is `ssh-keygen`'s**, character for character, key type included
+  (`ecdsa-sha2-nistp256`).
+- **The key's life:** kept the first time; recognised the second; after the server's
+  key was replaced, **refused before authentication** — the server logged a connection
+  and a disconnect, and no user name and no password; and after `>ssh forget`, the new
+  key kept. `>ssh forget` now also says so on a line.
+- The dummy password reached the server and was refused, and the deck reported
+  `auth failed` and closed the session.
+
+**Then through the login**, against OpenSSH 10.3 in a throwaway container on the
+laptop — a user and a random password that existed only inside it, the password kept
+out of the repository and deleted with the container afterwards:
+
+- The login succeeded, and `uname -a` came back as one line in `+out`; a `printf` of
+  three lines came back as three; `seq 1 250` stopped at the 200-line bound.
+- A wrong password: `auth failed`. The old habit — the answer typed at the prompt
+  also written on the line — sent nothing: the server saw no connection at all.
+- The password was in none of the 29 lines of the document the commands were typed
+  in.
+
+**And it found a fifth defect: a session hung after the reply, for good.** The first
+real login ran its command, received the whole reply, and never showed it — the deck
+kept working, but its one ssh slot stayed taken until a reboot. The build never told
+libssh2 how to make a socket non-blocking (`HAVE_O_NONBLOCK`), and in that case its
+`session_nonblock()` does nothing and reports success: libssh2 believed a read would
+return when there was nothing more to read, and on the blocking socket it waited
+instead, past its own timeout, which only runs when a read says it would block. Found
+by logging each step of the session: the reply's 112 bytes and the end of the reply
+were both there, and each read returned only when a socket timeout added for the
+purpose expired. Now the build defines it, CI checks that it does, and the firmware
+warns at run time if the socket is ever blocking after the handshake.
+
+**Proposed, not built: key authentication.** The deck makes its own key pair,
+keeps the private half in NVS and shows the public half, which is not a secret; the
+owner adds it to `authorized_keys` once, and no password is typed at all. That is
+the right end state for "control Claude Code on my laptop from the deck", and it
+needs a reachable sshd to test before it is worth building.
+
+**Observed once:** a deck joining another deck's open network took 44 seconds to
+get an address by DHCP after associating.
+
+---
+
+## OSC in, and the keyboard scan that deafened the radio `[BUILT]` `[MEASURED]` 2026-09-25
+
+**OSC in is a lane source** ([NEXT.md](NEXT.md) §8, [MAP.md](MAP.md) §9.8):
+`>osc in 9000` listens, and `/deck/<name>` sets the input called `<name>` —
+`>knob1 = knob`, `>pad1 = pad` — whose routes follow it. The reader
+(`osc_parse.h`) takes a message, a bundle, or messages end to end, which is what this
+deck's own `>osc` sends; it checks every length against the datagram, because the
+datagram is from anyone, and refuses a malformed one whole.
+
+**The first test found something bigger than OSC.** Two decks, one hosting a test
+network and listening, the other sending its lanes to it: in the first thirteen
+seconds 119 messages arrived; then 137 in the next 38; then **5 in 23 seconds**,
+while the sender's own count said 280 went out. Neither deck's heap moved and neither
+link dropped. Both decks were **scanning for a keyboard** — neither had one — and the
+scan used NimBLE's defaults, a 30 ms window every 30 ms: *all* of the radio's time,
+for as long as no keyboard is connected, on the radio Wi-Fi shares.
+
+With a 30 ms window every 160 ms, the same test delivered **280 of 280** in each of
+two twenty-second windows. So the scan now takes the radio only when nothing else
+needs it: full time while Wi-Fi and ESP-NOW are off, the 30-in-160 ms window while
+either is on (`kbd_share_radio`). This is not only OSC — it is every use of the radio
+while no keyboard is paired, and the 44 seconds a deck once took to get an address
+from another deck's network (*SSH, as built*) may be the same thing; that is
+unverified. **Also unverified:** how much longer a keyboard now takes to reconnect
+while Wi-Fi is on — no keyboard was here to time it.
+
+**From a laptop, on a home network** (the owner's, the same day): the deck joined it,
+listened, and a script on the laptop (`tools/osc_send.py`) moved `knob1`. A phone's
+fader values — 0, 0.25, 0.5, 1.0 — became 0, 32, 64 and 127 on the filter, a plain
+93 stayed 93, and a pad press played a kick exactly one step after a hat. But
+**sending to the filter moving took 62 to 265 ms**: the deck's Wi-Fi was in power
+save, dozing between the router's beacons with a listen interval of 307 ms, and the
+router held every message until it woke. Pings said the same — 78 ms on average,
+301 at worst, against 6 ms to the router. The ensemble already turned power save off
+for this reason; OSC in did not. **Now listening turns it off**, and the same test,
+twenty moves from one process: **20 of 20 with the right value, 4 ms at best, 22 ms
+median, 55 ms at worst** — pings 29 ms on average. What remains above the router's 6 ms
+is unexplained; the keyboard's Bluetooth link shares the radio, and that is a guess.
 
 ---
 
@@ -379,6 +522,88 @@ the gain dropped, and the local clock coasted at 4 µs until the air cleared —
 congested band is a real condition and 500 µs is not guaranteed through one. What is
 guaranteed is that a bad room degrades the phase and cannot degrade the clock.
 
+### A correction: the ticks did not follow the grid `[MEASURED]` 2026-09-25
+
+**Every figure above measures the two decks' grids** — where each deck says its
+ticks belong — and they were true. But a follower's ticks never moved. The timer was
+periodic, and every correction moved only the grid: `seq_nudge` slid `s_grid_t0`
+toward the ensemble while the ticks went on firing at the timer's own phase, on the
+follower's own crystal. `seq.h` described the follower "trimming its own period";
+nothing did.
+
+It was found through the report [NEXT.md](NEXT.md) §2 asked to have fixed — a
+following deck's `>jitter` sd of 231 µs beside a histogram that put every tick inside
+100 µs. The brief read that as the sd counting deliberate grid slides, and said to fix
+the reporting and not the clock. The sd *was* counting the slides — because the ticks
+never made them. A mean, added to the report, showed it. Leader and follower on the
+bench, `>kick x...x...` on both:
+
+| | before | after |
+|---|---|---|
+| follower's ticks against its own grid, three 30 s windows | mean **−281, −212, −146 µs**, sd 19–24 | mean **+29, +29, +29 µs**, sd 4 |
+| the ensemble's figure for the two grids | off by 3 µs | off by −41 µs |
+| leader's ticks against its grid | mean −2 µs | mean +28 µs |
+| leader after `>bpm 130` | mean **+4821 µs** | mean +28 µs |
+
+So the follower drifted 2 µs a second against the leader — crystal against crystal,
+about 7 ms an hour — and started wherever its `>play` happened to fall, anywhere
+within half a pulse by the arithmetic of the fold in `seq_nudge` (not measured). The audible phase between two decks was that, not 35 µs. And a
+tempo change put a deck's ticks a whole pulse behind the grid it broadcast, because
+`seq_bpm` anchored the next tick "due now" and restarted a periodic timer that fired it
+a period later: a follower that had followed its grid would have landed a pulse off
+the leader after every tempo change.
+
+**Now each tick is armed at the grid's due time** (`seq_clock.h`): a grid that never
+moves makes that the periodic timer it replaced, and a grid that moves takes the ticks
+with it, a fraction of an error at a time. A new tempo re-anchors on the last tick
+that fired, so the only interval that changes is the one the tempo change is. The
++28 µs on both decks is the timer's own dispatch latency — the same on each, so it
+cancels between them. `tools/test_clock.c` runs the scheduling arithmetic through an
+hour with a 2 ppm crystal: the periodic clock's grids agree within 8.3 µs while its
+ticks end the hour 6.0 ms apart; ticks armed on the grid stay within 8.3 µs.
+
+**The phase between the two decks' ticks is now derived, not observed:** the ensemble's
+grid figure plus each deck's measured mean against its own grid, three measured terms.
+Nothing outside the decks — no scope, no audio capture — has timed the two outputs
+against each other. That is unverified.
+
+The report changed too: `>jitter` prints the **mean**, and the histogram counts a
+tick's distance from the first sample by size, early or late. It compared the signed
+distance, so an early tick was "<.1" however early.
+
+### And the count: two decks shared a pulse, not a step `[MEASURED]` 2026-09-25
+
+The phase correction folds every disagreement into ±half a pulse — "a whole-pulse
+disagreement is a different bar, not a phase error" — and then nothing dealt with the
+different bar: `(void)ourtick;`. Each deck counts pulses from its own `>play`, and a
+step is 24 of them, so two decks started by two players shared a tempo and a pulse
+within tens of microseconds while their sixteenths fell wherever the second `>play`
+landed. Measured with the count added to `>sync`: **3, 4 and 14 pulses apart** on three
+joins — up to 71 ms — and by the Mac's own clock, stamping each deck's console as its
+kicks arrived, **the kicks were 77 ms apart**. The ensemble had never played together;
+it had played at the same speed.
+
+**Now a follower takes the leader's count** (`ens_count.h`). Each reply says which
+pulse the leader was on; the follower works out how far its own count is behind,
+using only replies back inside 2 ms — a slow reply can put the count a pulse out —
+and when three agree, its clock moves the count at the start of a tick, keeping that
+tick's time. A counted lane then waits for its next downbeat, as it does after
+`>play`. A follower that presses play while the leader is playing is silent until the
+count arrives — a second at most, then it plays alone — so it joins on the leader's
+step rather than sounding a downbeat of its own first.
+
+| on the bench, `>kick x...x...` on both | before | after |
+|---|---|---|
+| three joins at different moments: `>sync` | 3, 4, 14 pulses apart | in the leader's count, all three |
+| the kicks, by the Mac's clock (median) | +77 ms | 0, −5, −1 ms |
+| follower plays first, then the leader starts | — | first kick at once; then 0 ms |
+| the leader restarts under a playing follower | — | back to the top with it, +3 ms |
+
+The Mac's figures carry the console's own delay, ±25 ms a kick, so they resolve steps
+and fractions of steps, not microseconds; the microseconds are the section above.
+`tools/test_clock.c` checks the count arithmetic exact across 35 cases with the pulse
+up to half a pulse off, and that the phase alone cannot tell 14 pulses from 38.
+
 ### Does drawing move the clock? No `[FACT]`
 
 The question this instrument rests on, so it is measured rather than argued. A deck
@@ -389,7 +614,11 @@ running six visual lanes that all fire every other step, with the preview split 
 | local clock, standard deviation | **4 µs** | **5 µs** |
 | ticks later than 100 µs | 0 of 5919 | 2 of 10013 |
 | ticks later than 250 µs | 0 | 0 |
-| phase against the other deck, worst | 35 µs | 25 µs |
+| phase against the other deck, worst (the grids — see the correction above) | 35 µs | 25 µs |
+
+Re-measured with the clock that arms each tick on the grid (2026-09-25), under a
+heavier load — five picture lanes, `echo`, `move` and the view streaming to HDMI:
+**sd 4 µs, spread 96 µs, 6175 of 6175 ticks inside 100 µs**.
 
 The two-core split is doing its job: the frame is generated in the main loop and the
 clock dispatches on the other core, so the drawing cannot reach it. The phase figure is
@@ -424,11 +653,31 @@ Two things that came out of measuring rather than reasoning, both fixed:
   count flickered between none and one until the follower's probe rate went up and
   the staleness window widened.
 
-### Ableton Link is still not implemented `[OPEN]`
+### Ableton Link: not in this push, and why `[DECIDED]` 2026-09-25
 
-Nothing here is Link, and nothing is stubbed. What this does share is Link's
-*model* — a local timer corrected slowly from round-trip measurements — so if the
-licence question (GPLv2+ or commercial from Ableton) is ever settled, Link replaces
-the transport underneath `seq_timebase()` and `seq_nudge_by()` and nothing above
-them changes.
+**Not integrated.** [NEXT.md](NEXT.md) §7 made the licence the gate and asked for the
+decision to be written here if the answer was no. It is no, for now, and the reason
+is the licence rather than the engineering: Link is GPLv2+ or commercial from
+Ableton, this repository is MIT, and taking the GPL makes the whole firmware GPL.
+That is a decision about the project that belongs to its owner, and this push did
+not make it on their behalf.
+
+**Nothing is lost by waiting**, which is what makes "not now" the right answer rather
+than a postponement:
+
+- **Between decks**, the ESP-NOW ensemble already does what Link would be used for:
+  two decks' grids within 35 µs, 32 of 32 samples inside 500 µs across tempo
+  changes, no router — measured above; and since 2026-09-25 the ticks follow the
+  grid and a follower plays in the leader's count (*A correction* and *And the
+  count*, above).
+- **With a DAW**, MIDI clock already does it over USB: 49.600 clocks a second for a
+  requested 124 bpm, measured at the host (docs/OS.md).
+- **The seam is ready.** The ensemble shares Link's *model* — a local timer
+  corrected slowly from round trips — so if the licence question is ever settled,
+  Link replaces the transport under `seq_timebase()` and `seq_nudge_by()` and nothing
+  above them changes. Nothing is stubbed to look like Link, and nothing should be.
+
+**What would reopen it:** the owner choosing GPLv2+ for the firmware, or a
+commercial licence from Ableton; or a performance that needs a phone or a laptop
+app that speaks only Link, which neither ESP-NOW nor MIDI clock reaches.
 

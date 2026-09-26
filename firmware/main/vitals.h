@@ -42,6 +42,10 @@ typedef struct {
  * after nvs_flash_init(). */
 void vitals_begin(void);
 
+/* Mark that this run began, once the USB mode is known - vitals_verdict.h
+ * explains why a run that writes nothing else still has to. */
+void vitals_started(bool usb_mode);
+
 /* The previous run's last words, or a record with valid == 0. */
 const vitals_t *vitals_previous(void);
 

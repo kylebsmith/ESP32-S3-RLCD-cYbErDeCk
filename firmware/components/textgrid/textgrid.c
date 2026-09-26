@@ -16,6 +16,19 @@ static char    s_txt[TG_MAX_ROWS][TG_MAX_COLS];
 static uint8_t s_att[TG_MAX_ROWS][TG_MAX_COLS];
 static uint8_t s_dirty[(TG_MAX_ROWS * TG_MAX_COLS + 7) / 8];
 
+/* THE FACE, PRE-TURNED - see draw_cell_turned. Every glyph of the face in the
+ * framebuffer's own byte order for one orientation, built the first time each
+ * is drawn. 12x24 is 124 glyphs of 36 bytes; a face that does not fit here
+ * draws by the per-row path instead. */
+#define TURN_CELL_MAX 36
+static uint8_t s_turned[124 * TURN_CELL_MAX];
+static uint8_t s_turned_have[(124 + 7) / 8];
+static uint8_t s_turn_mask[8][TURN_CELL_MAX];   /* by attribute, TG_* bits */
+static int  s_turn_orient = -1;     /* what s_turned was built for; -1 = nothing */
+static int  s_turn_rows, s_turn_cols, s_turn_bytes;
+static bool s_turn_fits;
+static bool s_turn_on = true;
+
 static inline void mark(int col, int row)
 {
     const int i = row * TG_MAX_COLS + col;
@@ -58,6 +71,15 @@ esp_err_t tg_set_layout(const tg_font_t *font, int scale,
     s_font = font; s_scale = scale;
     s_cw = cw; s_ch = ch; s_cols = cols; s_rows = rows;
     s_ox = origin_x; s_oy = origin_y;
+
+    /* A cell is ch/4 bytes along native x by cw/2 rows along native y. */
+    s_turn_cols  = ch / 4;
+    s_turn_rows  = cw / 2;
+    s_turn_bytes = s_turn_cols * s_turn_rows;
+    s_turn_fits  = scale == 1 && s_turn_bytes <= TURN_CELL_MAX &&
+                   (size_t)(font->last - font->first + 1) * (size_t)s_turn_bytes
+                       <= sizeof s_turned;
+    s_turn_orient = -1;
 
     for (int r = 0; r < TG_MAX_ROWS; r++) {
         for (int c = 0; c < TG_MAX_COLS; c++) {
@@ -190,18 +212,37 @@ static int under_px(void)
     return n < 2 ? 2 : n;
 }
 
+/* One row of a cell as the panel shows it: the glyph's bits, then the inverse,
+ * then the bars. MSB = leftmost. Both ways of drawing a cell come through
+ * here, so they cannot disagree about what a cell looks like. */
+static uint32_t row_bits(const uint8_t *g, int gy, uint8_t att)
+{
+    const bool inv   = (att & TG_INVERSE) != 0;
+    const bool under = (att & TG_UNDER) != 0;
+    const bool over  = (att & TG_OVER) != 0;
+    /* The bar is applied AFTER the inverse, so it flips back out of a solid
+     * block. That is what makes cursor-on-playhead readable as both rather
+     * than as a slightly different block. */
+    const bool bar = (under && gy >= s_font->h - under_px()) ||
+                     (over && gy < under_px());
+    const uint8_t *rowbits = &g[(size_t)gy * s_font->stride];
+
+    uint32_t bits = 0;
+    for (int gx = 0; gx < s_font->w; gx++) {
+        bool on = tg_font_bit(s_font, rowbits, gx) != 0;
+        if (inv) { on = !on; }
+        if (bar) { on = !on; }
+        if (on)  { bits |= 1u << (31 - gx); }
+    }
+    return bits;
+}
+
 static void draw_cell(int col, int row)
 {
     const uint8_t *g = tg_font_glyph(s_font, (unsigned char)s_txt[row][col]);
     const uint8_t att = s_att[row][col];
-    const bool inv   = (att & TG_INVERSE) != 0;
-    const bool under = (att & TG_UNDER) != 0;
-    const bool over  = (att & TG_OVER) != 0;
-    const int  ubar  = s_font->h - under_px();
-    const int  obar  = under_px();
     const int x0 = s_ox + col * s_cw;
     const int y0 = s_oy + row * s_ch;
-    const int stride = s_font->stride;
 
     /* ONE BLIT PER GLYPH ROW, NOT ONE CALL PER PIXEL.
      *
@@ -211,27 +252,12 @@ static void draw_cell(int col, int row)
      * logical row in every orientation (see st7305_row_start), so all of that
      * hoists out and a row becomes one tight loop over its twelve bits.
      *
-     * This is the path everything pays: typing, the playhead, the splash and
-     * the visual preview all arrive here. The visuals made it matter - a
-     * picture where most cells change every frame redraws the whole pane,
-     * where a page of text redraws one cell - but the saving is not theirs
-     * alone. */
+     * This was the path everything paid; draw_cell_turned below now takes
+     * every cell it can, and this is what is left for the rest - a scaled face
+     * - and the reference the turned face is checked against. */
     const int w = s_font->w;
     for (int gy = 0; gy < s_font->h; gy++) {
-        const uint8_t *rowbits = &g[(size_t)gy * stride];
-        /* The bar is applied AFTER the inverse, so it flips back out of a
-         * solid block. That is what makes cursor-on-playhead readable as
-         * both rather than as a slightly different block. */
-        const bool bar = (under && gy >= ubar) || (over && gy < obar);
-
-        uint32_t bits = 0;
-        for (int gx = 0; gx < w; gx++) {
-            bool on = tg_font_bit(s_font, rowbits, gx) != 0;
-            if (inv) { on = !on; }
-            if (bar) { on = !on; }
-            if (on)  { bits |= 1u << (31 - gx); }
-        }
-
+        const uint32_t bits = row_bits(g, gy, att);
         if (s_scale == 1) {
             st7305_row_bits_raw(x0, y0 + gy, w, bits);
         } else {
@@ -245,13 +271,132 @@ static void draw_cell(int col, int row)
     st7305_damage(x0, y0, s_cw, s_ch);
 }
 
+/* ---- THE FACE, PRE-TURNED --------------------------------------------------
+ *
+ * A CELL IS ALWAYS WHOLE FRAMEBUFFER BYTES. A framebuffer byte is 4 native-x
+ * by 2 native-y pixels, and a logical row is a native column (st7305_addr.h),
+ * so a cell's height runs along native x and its width along native y.
+ * tg_set_layout holds the cell height and origin y to multiples of 12 and the
+ * cell width and origin x to even numbers - so a cell covers whole bytes, in
+ * every orientation, because the mirrored ones count from 299 and 399 and 300
+ * and 400 are multiples of 4 and 2 as well. A 12x24 cell is 6 rows of 6 bytes,
+ * a 6x12 cell 3 of 3; and where a pixel lands inside its cell's bytes does not
+ * depend on where the cell is.
+ *
+ * So each glyph is turned into its bytes once, the first time it is drawn in
+ * this orientation, and drawing a cell is 36 stores - where the per-row path
+ * gathered 24 rows of bits and set 288 pixels one read-modify-write at a time.
+ * The attributes are XOR masks over the same bytes, one for each of the
+ * eight combinations, and the masks are not written down anywhere: each is the
+ * per-row path's own cell with the attributes XORed against the same cell
+ * without them, so the two paths cannot disagree about where a bar is, or
+ * about what a bar does to an inverted cell.
+ *
+ * tools/test_textgrid.c compiles this file and draws every glyph with every
+ * attribute, in both faces and all four orientations, both ways, and demands
+ * the same framebuffer byte for byte. */
+
+/* A cell's framebuffer origin: the smallest native x and y of its pixels. */
+static void cell_base(int orient, int x0, int y0, int *bnx, int *bny)
+{
+    int ax, ay, bx, by;
+    st7305_to_native(orient, x0, y0, &ax, &ay);
+    st7305_to_native(orient, x0 + s_cw - 1, y0 + s_ch - 1, &bx, &by);
+    *bnx = ax < bx ? ax : bx;
+    *bny = ay < by ? ay : by;
+}
+
+/* The per-row path's cell, as bytes: row_bits placed pixel by pixel through
+ * st7305_to_native, for a cell at the origin. */
+static void turn(const uint8_t *g, uint8_t att, int orient, uint8_t *out)
+{
+    int bnx, bny;
+    cell_base(orient, 0, 0, &bnx, &bny);
+    memset(out, 0, (size_t)s_turn_bytes);
+    for (int gy = 0; gy < s_ch; gy++) {
+        const uint32_t bits = row_bits(g, gy, att);
+        for (int gx = 0; gx < s_cw; gx++) {
+            if ((bits >> (31 - gx)) & 1u) {
+                int nx, ny;
+                st7305_to_native(orient, gx, gy, &nx, &ny);
+                out[((ny - bny) >> 1) * s_turn_cols + ((nx - bnx) >> 2)] |=
+                    st7305_fb_mask_n(nx, ny);
+            }
+        }
+    }
+}
+
+/* Ready to draw turned cells in this orientation? Builds the masks, and
+ * forgets every turned glyph, whenever the orientation is not the one they
+ * were turned for - KEY cycles it at any time. */
+static bool turn_ready(int orient)
+{
+    if (!s_turn_on || !s_turn_fits) {
+        return false;
+    }
+    if (orient != s_turn_orient) {
+        /* One mask for each of the eight attribute combinations, so a cell
+         * costs one XOR a byte whatever it carries. */
+        uint8_t plain[TURN_CELL_MAX];
+        const uint8_t *g = tg_font_glyph(s_font, ' ');
+        turn(g, TG_NORMAL, orient, plain);
+        for (int att = 0; att < 8; att++) {
+            turn(g, (uint8_t)att, orient, s_turn_mask[att]);
+            for (int i = 0; i < s_turn_bytes; i++) {
+                s_turn_mask[att][i] ^= plain[i];
+            }
+        }
+        memset(s_turned_have, 0, sizeof s_turned_have);
+        s_turn_orient = orient;
+    }
+    return true;
+}
+
+static void draw_cell_turned(int col, int row, int orient)
+{
+    const uint8_t *g = tg_font_glyph(s_font, (unsigned char)s_txt[row][col]);
+    const size_t gi = (size_t)(g - s_font->data) /
+                      ((size_t)s_font->h * s_font->stride);
+    uint8_t *src = &s_turned[gi * (size_t)s_turn_bytes];
+    if ((s_turned_have[gi >> 3] & (1u << (gi & 7))) == 0) {
+        turn(g, TG_NORMAL, orient, src);
+        s_turned_have[gi >> 3] |= (uint8_t)(1u << (gi & 7));
+    }
+
+    const uint8_t *m = s_turn_mask[s_att[row][col] & 7];
+
+    const int x0 = s_ox + col * s_cw;
+    const int y0 = s_oy + row * s_ch;
+    int bnx, bny;
+    cell_base(orient, x0, y0, &bnx, &bny);
+    uint8_t *dst = st7305_framebuffer() +
+                   (size_t)(bny >> 1) * ST7305_ROW_BYTES + (size_t)(bnx >> 2);
+    for (int r = 0; r < s_turn_rows; r++, dst += ST7305_ROW_BYTES) {
+        for (int c = 0; c < s_turn_cols; c++) {
+            dst[c] = (uint8_t)(*src++ ^ *m++);
+        }
+    }
+    st7305_damage(x0, y0, s_cw, s_ch);
+}
+
+void tg_set_turned(bool on)
+{
+    s_turn_on = on;
+}
+
 int tg_render(void)
 {
+    const int orient = (int)st7305_orientation();
+    const bool turned = turn_ready(orient);
     int redrawn = 0;
     for (int r = 0; r < s_rows; r++) {
         for (int c = 0; c < s_cols; c++) {
             if (is_dirty(c, r)) {
-                draw_cell(c, r);
+                if (turned) {
+                    draw_cell_turned(c, r, orient);
+                } else {
+                    draw_cell(c, r);
+                }
                 redrawn++;
             }
         }

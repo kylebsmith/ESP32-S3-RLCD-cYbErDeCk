@@ -171,6 +171,66 @@ overhead, not bandwidth** — which is where to look if latency ever matters.
 under this firmware. Contrast, the LC response ceiling and whether the image
 is even the right way round are open below.
 
+### The drawing was the budget, not the push `[MEASURED]`
+
+*2026-09-25. `docs/NEXT.md` §9 expected the opposite - "the panel push is almost
+certainly the budget, not the drawing" - and said to profile first. The profile
+disagreed.*
+
+`bench_render()` in `firmware/main/main.c` draws a full grid of mixed glyphs, a third
+of them inverted, into the framebuffer with the scheduler held, by both paths in
+the same boot, and prints both at every boot:
+
+| One 12 x 24 cell into the framebuffer | **Measured** |
+|---|---|
+| Per-row path: 24 row blits, a read-modify-write per pixel | **86.3 us** |
+| Pre-turned face, three attribute masks | 5.8 us |
+| **Pre-turned face, one mask per attribute combination** | **3.8 us** |
+| of which damage bookkeeping (`st7305_damage`) | 0.67 us |
+| First frame after a layout or orientation change, turning 124 glyphs | 9.8 ms |
+
+So a full 33 x 12 grid cost **34 ms to draw against 4.75 ms to push** - seven times
+the push - and now costs 1.5 ms. The editor's heartbeat, which times by the wall
+clock and so counts preemption, said 94 us a cell before; with five picture lanes,
+`echo` and `move` running and the view streaming, it says **4.3 us**.
+
+**Why it works.** A framebuffer byte is 4 native-x by 2 native-y pixels, and
+`tg_set_layout` already holds cells and origins to multiples of 12 and 2. So every
+cell is whole bytes in every orientation - 6 rows of 6 for 12 x 24, 3 of 3 for
+6 x 12 - and where a pixel lands inside its cell's bytes does not depend on where
+the cell is. Each glyph is turned into its 36 bytes once, the first time it is drawn
+in an orientation; a cell is then 36 XORed stores. The eight attribute masks are the
+per-row path's own output XORed against itself, not a second description of where a
+bar is. `tools/test_textgrid.c` compiles `textgrid.c` and demands identical
+framebuffers from both paths for every glyph, attribute, face and orientation, and
+shows it can tell a stale orientation and one wrong bit apart. Cost: 4.8 KB of
+internal RAM.
+
+**The editor loop, profiled by stage** (`loop:` in the heartbeat, microseconds of
+wall clock in 10 s, the heaviest scene above):
+
+| | pictures | view out | draw | push | turns a second |
+|---|---|---|---|---|---|
+| idle | 3 ms | - | - | - | 199 |
+| heavy scene, before the view fix | 52 ms | **2,570 ms** | 117 ms | 189 ms | 142 |
+| heavy scene, after | 52 ms | 40 ms | 150 ms | 189 ms | 192 |
+
+The second budget the profile found was the view's console output, 31 ms a frame -
+`docs/VIEW.md` has it. With both fixed, **the push is now the largest term**, as the
+brief expected: the brief was right about where the budget should be, and wrong
+about where it was. Under the heaviest scene the editor loop is busy about 4 per cent
+of the time. Draw rose from 117 to 150 ms when the view stopped blocking - most
+likely the USB interrupts that used to land inside the 31 ms wait now landing inside
+everything else. That explanation is unverified.
+
+**Not done, on the same numbers.** §9 also lists a table for the tone ramp and the
+Bayer dither, and hoisting the fields' row terms out of their inner loops. Under the
+heaviest scene the pictures cost 52 ms in 10 s - about 0.6 ms a frame for seven
+lanes over 1,060 cells - so neither can buy a number anyone would notice, and the
+rule cuts both ways: no optimization without a number, and none where the number
+says it cannot matter. The push is the term to watch now, and at about 2.3 ms for
+6.5 KB it is already close to its wire time.
+
 ### The 6 x 12 recommendation did not survive contact `[MEASURED]`
 
 *Character-cell geometry* above recommends 6 x 12 giving 66 x 25, on the

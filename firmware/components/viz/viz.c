@@ -86,7 +86,7 @@ typedef struct {
 /* ONE SLOT PER LANE, NOT PER PRIMITIVE.
  *
  * It was one slot per primitive, which silently collapsed instances: '>disc' and
- * '>disc2' both marked the same slot and the second overwrote the first, so two
+ * '>disc:2' both marked the same slot and the second overwrote the first, so two
  * circles drew one. A mark belongs to the lane that made it.
  *
  * Replayed in PRIMITIVE order regardless of arrival order - see viz_service - so
@@ -119,6 +119,7 @@ typedef struct {
 static pmark_t s_pmark[MARK_MAX];
 static volatile uint8_t s_npmark;
 static volatile uint32_t s_mark_tick;
+static uint32_t s_frame_tick;      /* the tick the frame on show was drawn for */
 static volatile bool     s_pending;
 
 static char    s_fb[VIZ_H][VIZ_W + 1];
@@ -172,7 +173,41 @@ static int s_w = 28, s_h = 10;
 int viz_cols(void) { return s_w; }
 int viz_rows(void) { return s_h; }
 
+static int s_out_w, s_out_h;        /* the output's size, 0 = the pane's */
+
+static void resize(int w, int h);
+
+void viz_out_size(int w, int h)
+{
+    s_out_w = (w > 0 && h > 0) ? w : 0;
+    s_out_h = (w > 0 && h > 0) ? h : 0;
+    if (s_out_w > 0) {
+        resize(s_out_w, s_out_h);
+    }
+}
+
+char viz_cell_fit(int x, int y, int pw, int ph)
+{
+    if (pw <= 0 || ph <= 0 || s_w <= 0 || s_h <= 0) {
+        return ' ';
+    }
+    const int sx = (pw == s_w) ? x : x * s_w / pw;
+    const int sy = (ph == s_h) ? y : y * s_h / ph;
+    if (sx < 0 || sy < 0 || sx >= s_w || sy >= s_h) {
+        return ' ';
+    }
+    return s_fb[sy][sx];
+}
+
 void viz_size(int w, int h)
+{
+    if (s_out_w > 0) {
+        return;                     /* the output decides, not the pane */
+    }
+    resize(w, h);
+}
+
+static void resize(int w, int h)
 {
     if (w < 4)     { w = 4; }
     if (h < 2)     { h = 2; }
@@ -192,20 +227,13 @@ static inline uint32_t rng(void)
 
 static int gen_index(const char *g)
 {
+    /* EXACTLY THE NAME. A trailing digit used to be stripped here, because
+     * 'disc2' was the second circle; an instance is 'disc:2' now
+     * (docs/MANIFESTO.md §3.3), the command layer takes the address apart, and a
+     * primitive is only ever asked for by its own name. Stripping here as well
+     * would let '>disc2' quietly go on working as a lane nobody could route. */
     for (int i = 0; i < NGEN; i++) {
         if (strcmp(s_names[i], g) == 0) { return i; }
-    }
-    /* A TRAILING DIGIT IS AN INSTANCE, NOT A DIFFERENT PRIMITIVE. 'disc2' draws a
-     * circle; what differs is the lane, not the shape. Same rule as cmd.c's
-     * dispatch, and it has to agree with it or '>disc2' would find a command and
-     * then fail to find a primitive. */
-    size_t n = strlen(g);
-    while (n > 1 && g[n - 1] >= '0' && g[n - 1] <= '9') { n--; }
-    if (n == strlen(g)) { return -1; }
-    for (int i = 0; i < NGEN; i++) {
-        if (strlen(s_names[i]) == n && strncmp(s_names[i], g, n) == 0) {
-            return i;
-        }
     }
     return -1;
 }
@@ -864,6 +892,16 @@ int viz_prim_index(const char *name)
     return gen_index(name);
 }
 
+bool viz_prim_turns(int prim)
+{
+    if (prim < 0 || prim >= NGEN) {
+        return false;
+    }
+    const char *n = s_names[prim];
+    return strcmp(n, "move") == 0 || strcmp(n, "warp") == 0 ||
+           strcmp(n, "ramp") == 0 || strcmp(n, "turn") == 0;
+}
+
 int viz_param_index(const char *name)
 {
     if (name == NULL) { return VIZ_PARAM_NONE; }
@@ -931,17 +969,26 @@ static void chain_ranks(int *rank)
     int n = 0;
     const seq_lane_t *lanes = seq_lanes(&n);
     if (lanes == NULL) { return; }
-    for (int i = 0; i < n; i++) {
+    /* THE WHOLE TABLE, TESTING `used`. `n` is how many lanes are in use, not an
+     * index bound: forgetting a lane empties its slot in place, so after one '>disc'
+     * the table has a hole and a loop to `n` stopped short of the last lane - which
+     * then drew at rank 0, first, and a close became a despeckle. seq.c's own
+     * lane_find() carries the same warning; this loop had not read it. */
+    for (int i = 0; i < SEQ_MAX_LANES; i++) {
+        if (!lanes[i].used) { continue; }
         if (lanes[i].bind != SEQ_BIND_VIZ || lanes[i].param != 0) { continue; }
         const int prim = lanes[i].prim;
         if (prim < 0 || prim >= NGEN) { continue; }
         /* Walk up this lane's route chain, counting hops. */
         int hops = 0;
         const char *up = lanes[i].route;
-        while (up != NULL && up[0] != '\0' && hops < n + 1) {
+        while (up != NULL && up[0] != '\0' && hops < SEQ_MAX_LANES + 1) {
             int next = -1;
-            for (int j = 0; j < n; j++) {
-                if (strcmp(lanes[j].name, up) == 0) { next = j; break; }
+            for (int j = 0; j < SEQ_MAX_LANES; j++) {
+                if (lanes[j].used && strcmp(lanes[j].name, up) == 0) {
+                    next = j;
+                    break;
+                }
             }
             if (next < 0) { break; }            /* follows a lane that is gone */
             hops++;
@@ -960,6 +1007,7 @@ bool viz_service(void)
     }
     s_pending = false;
     const uint32_t tick = s_mark_tick;
+    s_frame_tick = tick;
 
     /* Keep this frame before it is wiped: echo needs the one before it, and a
      * copy taken here is the only place it is guaranteed to be complete. */
@@ -973,7 +1021,7 @@ bool viz_service(void)
      * repeat what is there. Replaying in the order the lanes happened to fire
      * would make the same three lines mean something different depending on
      * which order they were typed in. */
-    /* POSITIONS FIRST. A '>disc[x]' lane and a '>disc' lane are two lanes in one
+    /* POSITIONS FIRST. A '>disc:x' lane and a '>disc' lane are two lanes in one
      * table, and which comes first there is whichever the player typed first -
      * so the position is applied before anything draws, and the typing order
      * cannot change the picture. */
@@ -1012,6 +1060,20 @@ bool viz_service(void)
     return true;
 }
 
+int viz_frame(uint8_t *cells, int max, int *w, int *h, uint32_t *tick)
+{
+    if (w != NULL)    { *w = s_w; }
+    if (h != NULL)    { *h = s_h; }
+    if (tick != NULL) { *tick = s_frame_tick; }
+    int n = 0;
+    for (int y = 0; y < s_h; y++) {
+        for (int x = 0; x < s_w && n < max; x++) {
+            cells[n++] = (uint8_t)s_fb[y][x];
+        }
+    }
+    return n;
+}
+
 int viz_text(char *out, int max)
 {
     /* THE WIRE GETS ASCII, THE GLASS GETS THE TILES.
@@ -1022,10 +1084,9 @@ int viz_text(char *out, int max)
      * " .:*#@", each sparkle to '*', an arc to '#'. That is a downsample and is
      * stated as one; the panel is not affected.
      *
-     * When there is a receiver that wants the real thing - the RP2040 with the
-     * HDMI output - the format to send it is the glyph bytes, and this is the
-     * function to add that to. It is not guessed at now, because a wire format
-     * invented before its reader is a wire format nobody implements. */
+     * The receiver that wants the real thing now exists - the RP2040 with the
+     * HDMI output - and it gets the glyph bytes from viz_frame(), in the format
+     * docs/VIEW.md describes. This stays the ASCII for everything else. */
     int n = 0;
     for (int y = 0; y < s_h && n < max - 1; y++) {
         char line[VIZ_W + 2];

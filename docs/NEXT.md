@@ -11,6 +11,25 @@ a circle, a eurorack module and a knob on somebody else's desk.
 
 ---
 
+> **Where this brief stands — 2026-09-25, after the push it describes.** The brief
+> below is left as it was written; this block says what became of it.
+>
+> - **Done, on both boards:** §3 (the step, errors, addressing, names), §4 (`!4`),
+>   §11 (the corpus, 51 of 51), §6 (the HDMI node — the deck-to-node cable is still a
+>   relay on the laptop), §8 (OSC in, as §5's mechanism: `>knob1 = knob`), §7 (Link
+>   not integrated, for the licence), §9, §10 (the defect, and three more).
+> - **Waiting on hardware:** §5's satellites, the direct deck-to-node link, MIDI in.
+> - **Two claims in this brief did not survive measurement.** §2's "two decks in
+>   phase within 35 µs" was the grids, not the notes: a follower's ticks drifted 2 ppm
+>   and two decks' steps fell up to 71 ms apart — both fixed ([NETWORK.md](NETWORK.md),
+>   *A correction* and *And the count*). §9's "the panel push is almost certainly the
+>   budget" was the drawing, at seven times the push — fixed
+>   ([HARDWARE.md](HARDWARE.md), *The drawing was the budget*).
+> - **Still open:** `>flash now` from USB MIDI mode, and the unverified items listed
+>   in [the pull request for this push](https://github.com/kylebsmith/ESP32-S3-RLCD-cYbErDeCk/pull/1).
+
+---
+
 ## 1. Ground rules — non-negotiable, carried from previous sessions
 
 1. **Never claim something is tested when it is not.** Say "unverified" in those words.

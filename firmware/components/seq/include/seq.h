@@ -49,7 +49,10 @@
  * That is eight bytes a lane more, and the realtime core reads them exactly as
  * before. */
 #define SEQ_MAX_STEPS 64
-#define SEQ_NAME_MAX  12
+/* TWENTY, because a name is an address now: 'crash:12:vel' is a base of up to
+ * eight letters, an instance and a part - lane_name.h's LANE_NAME_MAX, which
+ * builtins.c asserts fits. It was twelve when a name was a word and a digit. */
+#define SEQ_NAME_MAX  20
 
 /* The clock runs at 24 pulses per quarter note and a step is six of them.
  *
@@ -85,28 +88,64 @@
  * compile loops over the same pattern walk, two mute mechanisms, two budgets
  * and two listings. Every bug in that area was found twice, or found in one
  * half and left standing in the other for days. */
+/* The parts of a sound lane (seq_lane_t.param on SEQ_BIND_NOTE). */
+#define SEQ_PART_NONE 0
+#define SEQ_PART_VEL  1      /* how hard: 'x' is 100, a digit as on a drum     */
+#define SEQ_PART_OCT  2      /* which octave, 0-8: 'x' is the name's own       */
+
 typedef enum {
     SEQ_BIND_NOTE = 0,   /* a MIDI note: drums and the melodic voices */
     SEQ_BIND_CC,         /* a controller number: digits are values    */
     SEQ_BIND_VIZ,        /* a drawing primitive: digits are amounts   */
 } seq_bind_t;
 
+/* ONE EVENT OF A COMPILED LANE: something happens on a slot of the cycle.
+ *
+ * This replaced four bitmasks and three per-slot tables (accent, ghost, chance,
+ * odds, degree, the step character) when a step stopped being one character -
+ * docs/MANIFESTO.md §3.6. A chord is several events on one slot; a tie is
+ * `hold`; alternation is the cycle class (per, ph) rather than extra slots, so
+ * '<a b>' no longer doubles a lane's length. See seq_pattern.h for how the text
+ * becomes these. */
+typedef struct {
+    uint8_t slot;           /* within one cycle                               */
+    uint8_t val;            /* 0-9, or SEQ_VAL_X for 'x' - the lane's level   */
+    uint8_t hold;           /* extra slots a tie keeps it sounding            */
+    uint8_t prob;           /* 0-100, or SEQ_PROB_ALWAYS                      */
+    uint8_t per, ph;        /* plays on cycles where cycle % per == ph        */
+    char    dir;            /* 'u' 'd' 'l' 'r' written as the step, or 0      */
+    uint8_t spare;
+} seq_ev_t;
+
+/* NINETY-SIX EVENTS A LANE. A full sixty-four slot bar is 64; a sixteen-step
+ * pad of three-note chords is 48; a four-way alternation of sixteen steps is 64.
+ * More than that is refused with the number, like every other limit here. */
+#define SEQ_MAX_EVENTS 96
+/* The pattern as typed, so '>lanes' prints what the player wrote. With a step
+ * that is more than one character, rebuilding the text from the compiled form
+ * would print something they did not type - the thing docs/COMMANDS.md forbids. */
+#define SEQ_TEXT_MAX   100
+
 typedef struct {
     char     name[SEQ_NAME_MAX];
-    uint64_t mask;          /* one bit per slot; the realtime core reads this */
-    uint64_t accent;        /* 'X' - louder                                   */
-    uint64_t ghost;         /* ',' - quieter                                  */
-    uint64_t chance;        /* '?' - maybe                                    */
-    uint8_t  prob[SEQ_MAX_STEPS];  /* per-step chance %, 0 = use the default  */
-    uint8_t  deg[SEQ_MAX_STEPS];  /* scale degree per step, 0xFF = fixed note */
-    uint8_t  steps;         /* how many of them are in play                   */
-    /* THIS LANE'S OWN TIME BASE, in internal ticks per step.
+    /* THE COMPILED LANE. Events sorted by slot, and where each slot's run of
+     * them starts, so the clock looks at exactly the events of the slot it is
+     * on and nothing else. */
+    seq_ev_t ev[SEQ_MAX_EVENTS];
+    uint8_t  first[SEQ_MAX_STEPS + 1];
+    uint8_t  nev;
+    uint8_t  slots;         /* per cycle; 0 means not in play                 */
+    uint8_t  div;           /* slots per step                                 */
+    uint8_t  steps;         /* top-level steps: its length in sixteenths      */
+    /* THIS LANE'S OWN TIME BASE: '*rnum' and '/rden'.
      *
-     * Default SEQ_TICKS_PER_STEP. '/2' doubles it, '*2' halves it. Every lane
-     * keeping its own clock is what makes polyrhythm, half-time and ratchets
-     * the same mechanism rather than three features - and it is why the rate
-     * lives on the lane and not on the transport. */
-    uint16_t tps;
+     * Every lane keeping its own clock is what makes polyrhythm, half-time and
+     * ratchets the same mechanism rather than three features - and it is why
+     * the rate lives on the lane and not on the transport. The slot a tick falls
+     * on is computed exactly from these by seq_pattern_slot_at(); it used to be
+     * an integer ticks-per-slot, which a five-way split cannot be. */
+    uint8_t  rnum, rden;
+    char     text[SEQ_TEXT_MAX];
     uint8_t  note;          /* MIDI note number, for a fixed-pitch lane       */
     uint8_t  chan;          /* 0-15                                           */
     uint8_t  vel;
@@ -122,14 +161,17 @@ typedef struct {
     /* ---- the binding, and what only some bindings need ---- */
     seq_bind_t bind;
     uint8_t  prim;          /* SEQ_BIND_VIZ: which drawing primitive           */
-    /* WHICH PART OF IT. Zero means the primitive itself - how much of it to draw.
-     * Anything else is a parameter of that primitive, and the value goes there
-     * instead: '>disc[x] 0..9..' is a lane whose events are positions.
+    /* WHICH PART OF IT. Zero means the lane itself. On a picture anything else
+     * is a parameter of the primitive and the value goes there instead -
+     * '>disc:x 0..9..' is a lane whose events are positions - and seq does not
+     * know what it means, exactly as it does not know what a primitive is.
      *
-     * seq does not know what a parameter means, exactly as it does not know what
-     * a primitive is. It carries a number and hands it over. */
+     * On a SOUND lane a part is SEQ_PART_VEL or SEQ_PART_OCT, and that one seq
+     * does act on: '>bass:vel 9..3' sets the level of the lane called 'bass' and
+     * '>bass:oct <2 3>' its octave, each until the next event. A parameter is a
+     * lane, for sound as it already was for pictures. */
     uint8_t  param;
-    char     chr[SEQ_MAX_STEPS]; /* the step's own character, verbatim         */
+    int8_t   oct0;          /* the octave the NAME defines, which 'x' restores */
     char     dir;           /* 'u','d','l','r' - a direction written in front  */
 
     /* ---- routing: a lane may read another lane's output ---- */
@@ -140,38 +182,59 @@ typedef struct {
     char     route[SEQ_NAME_MAX];  /* driven by this lane, or empty            */
     uint8_t  last_val;      /* what this lane last played, 0-9                 */
     volatile bool    trig;  /* the source fired; set in the clock callback      */
-    volatile uint8_t trig_val;
+    volatile uint8_t trig_val;   /* the source's level, 0-127: what a routed lane plays at */
+    /* HOW MANY ROUTE HOPS from a lane that follows nothing. The clock fires
+     * lower ranks first, so a routed lane hears its source on the same tick
+     * whatever order the lines were typed in. */
+    uint8_t  rank;
+
+    /* ---- a count: play n passes, then stop (docs/NEXT.md §4) ---- */
+    uint8_t  count;         /* '!n', 0 = for ever                              */
+    bool     idle;          /* counted, and not started: waits for its own
+                             * downbeat, or - routed - for its source           */
+    bool     done;          /* finished; muted by that, and '>play' re-arms it */
+    uint32_t origin;        /* the global slot its first pass began on         */
 } seq_lane_t;
 
 esp_err_t seq_init(void);
 
-/* Compile one lane. `steps` is a string where '.', '-' and '_' are rests and
- * anything else is a hit, so "x...x...x...x..." and "o---o---o---o---" both
- * work and nobody has to remember which character is correct.
+/* Compile one lane. The grammar is seq_pattern.h's, in one place:
  *
- * Three characters mean more than "a hit", and they were chosen so that the
- * pattern still reads as a picture of itself:
+ *   x      a hit at the lane's own level
+ *   0-9    a hit with an amount - velocity on a drum, degree on a voice, value
+ *          on a controller, how much on a picture. ONE meaning per binding,
+ *          where a digit on a drum used to be compiled and never read.
+ *   .      rest       _   tie: the note before keeps sounding
+ *   [ab]   subdivide  [0,4,7]  a chord   <ab>  one per cycle   x%15  odds
+ *   /2 *2  rate, !4 play four cycles then stop - at the end, after a space
  *
- *   X   accent - louder. One shift key, and it stands up off the line.
- *   ,   ghost  - quieter. Small on the page, small in the mix.
- *   ?   maybe  - plays about half the time. A question mark is what it is.
+ * It used to be "'.', '-' and '_' are rests and anything else is a hit, so
+ * nobody has to remember which character is correct" - a kindness that also
+ * made every typo a note and every unclosed bracket a septuplet. A pattern that
+ * is not the grammar is REFUSED now: ESP_ERR_INVALID_ARG, with the reason and
+ * the character from seq_lane_error(). Nothing is changed when it is refused,
+ * so a typo mid-performance leaves the lane playing what it played before.
  *
- * And ONE optional parameter, in brackets, attached to the step before it:
- *
- *   ?[15]  this step plays fifteen per cent of the time
- *
- * A bracket is not a step. It occupies no column in the step count, so the
- * playhead still lands on the character that is sounding. There are no nested
- * brackets and there never will be: a bracket may follow a step and contain a
- * number, and that is the whole of it.
- *
- *   0-9 on a MELODIC lane, the scale degree. 0 is the root.
- *
- * A digit on a drum lane is just a hit; a lane knows which kind it is. This
- * matters because it means there is ONE pattern grammar, not two: the same
- * line of text, the same length, the same rests, whether it is a kick or a
- * bassline. */
+ * `steps` is kept verbatim for '>lanes'. ESP_ERR_NO_MEM means no lane is free. */
 esp_err_t seq_lane(const char *name, const char *steps);
+
+/* Why the last seq_lane() refused its pattern, in at most thirty columns, and
+ * the offset of the character it is about (-1 if none). */
+const char *seq_lane_error(int *at);
+
+/* Which slot of a lane is sounding now, and in which of its cycles - for the
+ * playhead. The lane's own clock, not the global sixteenth: a '/2' lane moves at
+ * half speed and a nested one at its subdivision. Returns false when stopped. */
+bool seq_lane_now(const seq_lane_t *l, int *slot, uint32_t *cycle);
+
+/* WHERE A COUNTED LANE IS: its pass, 0-based, while it plays; SEQ_PASS_WAITS
+ * before it starts; SEQ_PASS_DONE when it has finished. -3 for a lane with no
+ * count. For '>lanes', which says so rather than leaving a silent lane to be
+ * guessed at. */
+#define SEQ_PASS_WAITS (-1)
+#define SEQ_PASS_DONE  (-2)
+#define SEQ_PASS_NONE  (-3)
+int seq_lane_pass(const seq_lane_t *l);
 
 /* The key. One word: a root, optionally '#' or 'b', then a mode -
  * "dmin", "c", "f#mix", "apent", "ebblues", "chrom".
@@ -186,20 +249,35 @@ esp_err_t seq_lane(const char *name, const char *steps);
 esp_err_t   seq_scale(const char *spec);
 const char *seq_scale_name(void);
 
-/* A melodic lane reads its pattern as scale degrees. Octave is in the usual
- * convention where middle C is C4 = 60. */
-esp_err_t seq_lane_melodic(const char *name, int octave, int chan,
-                           int gate_ms);
+/* WHERE A LANE GOES, all of it at once.
+ *
+ *   SEQ_BIND_NOTE, melodic false   a fixed pitch - a drum. `note`, `chan`.
+ *   SEQ_BIND_NOTE, melodic true    scale degrees. `octave` in the convention
+ *                                  where middle C is C4 = 60; `chan`, `gate_ms`.
+ *   SEQ_BIND_CC                    a controller: 0 is 0 and 9 is 127. `cc`.
+ *   SEQ_BIND_VIZ                   a picture. `prim` is an index into viz's own
+ *                                  table and `param` a part of it; seq never
+ *                                  learns what either means.
+ *
+ * ONE CALL, NOT FOUR. There were four - note, melodic, controller, picture -
+ * and each set only its own fields. That was harmless while a name's binding
+ * was compiled in and could never change; once a name is DEFINED
+ * (lane_name.h), '>kick = voice 2' turns a drum into a voice, and a lane that
+ * kept `melodic` from one binding and `ctrl` from another would play something
+ * nobody asked for. This sets every field the binding owns and clears the rest. */
+typedef struct {
+    seq_bind_t bind;
+    bool       melodic;
+    uint8_t    note;        /* NOTE, fixed pitch                */
+    int8_t     octave;      /* NOTE, melodic                    */
+    uint8_t    chan;        /* 0-15                             */
+    uint16_t   gate_ms;     /* NOTE                             */
+    uint8_t    cc;          /* CC                               */
+    uint8_t    prim;        /* VIZ                              */
+    uint8_t    param;       /* 0, a part of the picture, or SEQ_PART_* */
+} seq_binding_t;
 
-/* Make a lane a CONTROLLER lane. Its pattern digits become CC values rather
- * than scale degrees: 0 is 0 and 9 is 127, so '0..4..8..4..' is a sweep up and
- * back. Same grammar as every other lane - same rests, same '?' probability,
- * same playhead - which is the point. */
-esp_err_t seq_lane_ctrl(const char *name, int cc, int chan);
-
-/* Bind a lane to a drawing primitive. `prim` is an index into viz's own table;
- * seq does not know what a primitive is, only that it has a number. */
-esp_err_t seq_lane_viz(const char *name, int prim, int param);
+esp_err_t seq_lane_bind(const char *name, const seq_binding_t *b);
 
 /* ROUTING, FOR ANY PAIR OF LANES.
  *
@@ -234,8 +312,6 @@ bool seq_get_sync(void);
  */
 const seq_lane_t *seq_lane_find(const char *name, int len);
 
-/* A lane's destination. Names are remembered from the drum table. */
-esp_err_t seq_lane_note(const char *name, int note, int chan);
 esp_err_t seq_mute(const char *name, bool mute);
 
 /* FORGET A LANE, WHICH IS NOT THE SAME AS MUTING ONE.
@@ -259,9 +335,11 @@ int  seq_get_bpm(void);
 void seq_play(void);
 void seq_stop(void);
 bool seq_running(void);
-/* The global step counter since play. UNMASKED: a lane finds its own step
- * with `seq_position() % lane->steps`, and any mask that is not a multiple of
- * every possible lane length introduces a phase jump when it rolls. */
+/* The global sixteenth counter since play. UNMASKED: any mask that is not a
+ * multiple of every possible lane length introduces a phase jump when it rolls.
+ * NOT a lane's own position - a '/2' or nested lane moves at its own speed, and
+ * the playhead used to take this modulo the lane's length and run at the wrong
+ * one. Use seq_lane_now() for that. */
 uint32_t seq_position(void);
 
 /* ---- sharing time with another deck ------------------------------------- *
@@ -271,6 +349,9 @@ uint32_t seq_position(void);
  * So each deck runs its own timer and is told, a few times a second, where the
  * ensemble thinks it should be; it then corrects SLOWLY by trimming its own
  * period rather than jumping. A jump is a glitch; a trim is a drift nobody hears.
+ * The trim is the grid: each tick is armed at the grid's due time
+ * (seq_clock.h), so a correction to the grid is a correction to the ticks. Until
+ * 2026-09-25 it was not - the timer was periodic and only the grid moved.
  *
  * This is the same model Ableton Link uses, which is deliberate: if Link is ever
  * licensed and ported, it replaces the transport under these two functions and
@@ -295,7 +376,55 @@ int32_t seq_nudge(uint32_t tick, int64_t due_us, int bpm);
  * sample steers the clock into that bias. */
 void seq_nudge_by(int32_t err_us, int bpm);
 
+/* A FOLLOWER TAKES THE LEADER'S COUNT as well as its pulse, or its sixteenths
+ * fall wherever its own '>play' landed (ens_count.h). seq_follow() says this
+ * deck follows a leader that is playing; seq_adopt() moves its count by
+ * `pulses` at the next tick,
+ * keeping that tick's time - callable from a radio callback, and ignored while
+ * one move is still owed. A following deck that presses play is silent until
+ * the first move, or a second, whichever comes first: seq_awaiting(). */
+void seq_follow(bool on);
+void seq_adopt(int32_t pulses);
+bool seq_awaiting(void);
+
 const seq_lane_t *seq_lanes(int *count);
+
+/* ---- inputs: lanes whose events come from outside (docs/NEXT.md §5, §8) ----
+ *
+ * AN INPUT IS A NAME WITH A VALUE, and whatever is routed from it follows it -
+ * '>route cut knob1' - through the route mechanism every lane already uses. A
+ * knob holds a value 0-127 and fires its routes on the next tick after it
+ * changes: a gesture, for which a tick is nothing. A pad fires its routes on the
+ * next STEP after a press, swing included, because a button that triggers a
+ * note must land on the grid and not on the moment the packet arrived.
+ *
+ * The value lives here, on the deck, so a source going away loses nothing and
+ * two sources can share a name. An OSC message to /deck/<name> sets it today;
+ * a satellite's encoder will set the same thing. Inputs act while the clock
+ * runs, like every lane. */
+typedef enum {
+    SEQ_INPUT_NONE = 0,
+    SEQ_INPUT_KNOB,
+    SEQ_INPUT_PAD,
+} seq_input_kind_t;
+
+#define SEQ_MAX_INPUTS 16
+
+typedef struct {
+    char              name[SEQ_NAME_MAX];
+    volatile uint8_t  kind;          /* seq_input_kind_t; NONE = a free slot  */
+    volatile uint8_t  value;         /* 0-127, the last one set               */
+    volatile bool     pending;       /* set, and not yet published            */
+    volatile uint32_t from;          /* who set it: an IPv4 address, or 0     */
+    volatile uint32_t count;         /* how many times it has been set        */
+} seq_input_t;
+
+esp_err_t seq_input_define(const char *name, seq_input_kind_t kind);
+void      seq_input_remove(const char *name);
+/* From any task - a network receive, a radio callback. False when no input has
+ * that name. A pad pressed with 0 is a release, and does nothing. */
+bool      seq_input_set(const char *name, uint8_t value, uint32_t from);
+const seq_input_t *seq_inputs(int *count);
 
 /* WHERE EVENTS GO, AND WHY IT IS A TABLE.
  *

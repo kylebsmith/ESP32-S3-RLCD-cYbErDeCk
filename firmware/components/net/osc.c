@@ -25,8 +25,11 @@
 
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "lwip/sockets.h"
 #include "osc_pack.h"
+#include "osc_parse.h"
 #include "lwip/inet.h"
 
 static const char *TAG = "osc";
@@ -164,4 +167,108 @@ void net_osc_flush(void)
                (struct sockaddr *)&s_to, sizeof s_to) > 0) {
         s_packets++;
     }
+}
+
+/* ---- OSC IN ----------------------------------------------------------------
+ *
+ * docs/NEXT.md §8: an OSC endpoint is a lane source. '/deck/<name>' sets the
+ * input called <name> - a knob or a pad, defined like any name - and whatever
+ * is routed from it follows. The listener only reads datagrams and hands on a
+ * name and a number; what an input IS belongs to the sequencer, which is why
+ * this takes a function rather than knowing about lanes.
+ *
+ * Its own task, blocking in recvfrom with a timeout so it can be told to stop.
+ * Everything that arrives is from anyone on the network, so it is parsed with
+ * every length checked (osc_parse.h), and a name nobody defined is counted and
+ * dropped - a message cannot create anything. */
+static volatile int  s_in_port;
+static volatile bool s_in_stop;
+static net_osc_in_fn s_in_fn;
+static uint32_t      s_in_msgs, s_in_used, s_in_refused;
+
+static void in_msg(const osc_msg_t *m, void *arg)
+{
+    const uint32_t from = *(const uint32_t *)arg;
+    s_in_msgs++;
+    if (strncmp(m->addr, "/deck/", 6) != 0 || m->addr[6] == '\0') {
+        return;
+    }
+    if (s_in_fn != NULL && s_in_fn(m->addr + 6, (uint8_t)osc_value_127(m), from)) {
+        s_in_used++;
+    }
+}
+
+static void in_task(void *arg)
+{
+    const int sock = (int)(intptr_t)arg;
+    static uint8_t buf[512];
+    while (!s_in_stop) {
+        struct sockaddr_in src;
+        socklen_t sl = sizeof src;
+        const int n = recvfrom(sock, buf, sizeof buf, 0, (struct sockaddr *)&src, &sl);
+        if (n <= 0) {
+            continue;                   /* the timeout: look at s_in_stop */
+        }
+        uint32_t from = src.sin_addr.s_addr;
+        if (osc_parse(buf, n, in_msg, &from) < 0) {
+            s_in_refused++;
+        }
+    }
+    close(sock);
+    s_in_port = 0;
+    vTaskDelete(NULL);
+}
+
+esp_err_t net_osc_listen(int port, net_osc_in_fn fn)
+{
+    if (s_in_port != 0) {
+        s_in_stop = true;
+        for (int i = 0; i < 30 && s_in_port != 0; i++) {
+            vTaskDelay(pdMS_TO_TICKS(50));   /* the task wakes every 500 ms */
+        }
+        if (s_in_port != 0) {
+            return ESP_ERR_TIMEOUT;
+        }
+    }
+    if (port <= 0) {
+        ESP_LOGW(TAG, "osc in off");
+        return ESP_OK;
+    }
+    if (port > 65535 || fn == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    const int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (sock < 0) {
+        return ESP_FAIL;
+    }
+    struct sockaddr_in me = { 0 };
+    me.sin_family = AF_INET;
+    me.sin_port = htons((uint16_t)port);
+    me.sin_addr.s_addr = htonl(INADDR_ANY);
+    if (bind(sock, (struct sockaddr *)&me, sizeof me) != 0) {
+        close(sock);
+        return ESP_FAIL;
+    }
+    struct timeval tv = { .tv_sec = 0, .tv_usec = 500000 };
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
+    s_in_fn = fn;
+    s_in_stop = false;
+    s_in_port = port;
+    if (xTaskCreatePinnedToCore(in_task, "oscin", 3072, (void *)(intptr_t)sock,
+                                3, NULL, 0) != pdPASS) {
+        close(sock);
+        s_in_port = 0;
+        return ESP_ERR_NO_MEM;
+    }
+    ESP_LOGW(TAG, "osc in on port %d", port);
+    return ESP_OK;
+}
+
+int net_osc_listening(void) { return s_in_port; }
+
+void net_osc_in_counts(uint32_t *msgs, uint32_t *used, uint32_t *refused)
+{
+    if (msgs != NULL)    { *msgs = s_in_msgs; }
+    if (used != NULL)    { *used = s_in_used; }
+    if (refused != NULL) { *refused = s_in_refused; }
 }

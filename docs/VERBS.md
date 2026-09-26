@@ -1,11 +1,13 @@
 # Every verb, on one page
 
-*The whole language. Sixty-nine names, generated from the command table itself —
+*The whole language. Thirty-four verbs, counted from the command table itself —
 if this page and the firmware disagree, the firmware is right and this page is
-stale. [MAP.md](MAP.md) §0 has the snippet that counts them.*
+stale. [MAP.md](MAP.md) §0 has the snippet that counts them. The lane names are not
+verbs: they are yours, defined in the boot document.*
 
-*For what is wrong with this language and what should replace it, see
-[MANIFESTO.md](MANIFESTO.md) — two adversarial reviews, unimplemented on purpose.*
+*For what was wrong with this language and what replaced it, see
+[MANIFESTO.md](MANIFESTO.md) — two adversarial reviews, and which of their
+proposals have been decided. Coming from Strudel: [STRUDEL.md](STRUDEL.md).*
 
 A performer cannot search. That is the entire reason this page has to fit on one:
 if it does not, the language is too big, and that is a design failure rather than
@@ -17,19 +19,26 @@ a documentation one.
 
 ```
 >name pattern                 a LANE: when, how much, and where it goes
->name argument                everything else
+>name = note 36               what a NAME means - yours to change or add
+>verb argument                everything else
 ```
 
 ```
-  x  hit          X  loud         ,  quiet        ?  maybe (half)
-  .  rest         -  rest         _  rest
-  0-9             a scale degree, a controller value, or an amount
-  x%15            fifteen per cent chance on that step
+  x  hit          .  rest         _  hold the note before it
+  0-9             HOW MUCH: velocity on a drum, degree on a voice,
+                  value on a controller, amount on a picture
+  x%15            fifteen per cent chance on that step, or group
   [xx]            a group: SUBDIVIDES the step it occupies, any depth
+  [0,4,7]         a chord: every member at once
   <a b>           ALTERNATES: a different member each bar
   /2  *2          this lane's own rate, at the end of the line
-  u d l r         which way, in front of the pattern or as a step
+  !4              four passes, then it stops - and 'name:end' fires
+  u d l r         which way - move warp ramp turn only; a step's own wins
 ```
+
+A step is one character and what is attached to it; the playhead lights all of
+it. **Anything else is refused** — the bar says why and the character is boxed —
+rather than played as a hit.
 
 `Ctrl+Enter` runs the line. `Enter` always makes a line. Run a line unchanged to
 mute that lane; run it again to bring it back. Type a lane's name alone to delete
@@ -37,38 +46,46 @@ it.
 
 ---
 
-## Lanes — 33 names, one behaviour
+## Lanes — the names are yours
 
 The whole point: **a drum and a circle are the same sentence.** A lane compiles
-text into *when* and *how much*; its name says *where*.
+text into *when* and *how much*; its name says *where*. The boot document names
+sixteen sounds; the sixteen pictures answer to their own names.
 
-| sound | | | pictures — **fields** | | pictures — **operators** | |
-|---|---|---|---|---|---|---|
-| `kick` | drum, note 36 | | `disc` | round — distance from a point | `mask` | keep what is this bright — a **level** |
-| `snare` | drum | | `box` | square — the corners disc lacks | `edge` | keep where it changes — a **contour** |
-| `hat` | drum | | `turn` | the **angle** around the point | `echo` | keep the last frame — trails |
-| `ohat` | drum | | `ramp` | linear, along an axis | `move` | shift, wrapping |
-| `clap` | drum | | `grid` | periodic — a lattice | `spin` | quarter turns |
-| `tom` | drum | | `noise` | no geometry — the entropy | `warp` | bend lines on an axis |
-| `rim` | drum | | | | `grow` | dilate — marks bloom |
-| `crash` | drum | | | | `thin` | erode — edges eat inward |
-| `bass` | voice, low | | | | `flip` | invert the frame |
-| `lead` | voice | | | | `fold` | mirror, 1–3 folds |
-| `pad` | voice, long | | | | | |
-| `arp` | voice, short high | | | | | |
-| `cut` | CC 74, filter | | | | | |
-| `res` | CC 71 | | | | | |
-| `mod` | CC 1 | | | | | |
-| `rev` | CC 91 | | | | | |
-| `cc` | any controller | `cc 74 0..9..` | | | | |
+| sound — defined in the boot document | | pictures — **fields** | | pictures — **operators** | |
+|---|---|---|---|---|---|
+| `kick` `snare` `hat` `ohat` | `= note 36` … a drum on ch 10 | `disc` | round — distance from a point | `mask` | keep what is this bright — a **level** |
+| `clap` `tom` `rim` `crash` | drums | `box` | square — the corners disc lacks | `edge` | keep where it changes — a **contour** |
+| `bass` | `= voice 2 ch 1 gate 180` | `turn` | the **angle** around the point | `echo` | keep the last frame — trails |
+| `lead` `pad` `arp` | voices: degrees in the key | `ramp` | linear, along an axis | `move` | shift, wrapping |
+| `cut` | `= cc 74`, filter | `grid` | periodic — a lattice | `spin` | quarter turns |
+| `res` `mod` `rev` | CC 71, 1, 91 | `noise` | no geometry — the entropy | `warp` | bend lines on an axis |
+| | | | | `grow` `thin` | dilate, erode |
+| | | | | `flip` `fold` | invert; mirror 1–3 folds |
+
+**Your own, with a line:** `>conga = note 63`, `>fx = cc 20 ch 2`,
+`>strings = voice 3 ch 5 gate 600`, `>circle = disc`. `>kick = note 35` retunes the
+kick that is already playing; `>conga =` forgets the name and its lanes. A name is
+up to eight letters and cannot be a verb or a picture.
+
+**Inputs are names too.** `>knob1 = knob` holds a value, `>pad1 = pad` fires on a
+press, and `>route cut knob1` makes the filter follow it. With `>osc in 9000`, OSC to
+`/deck/knob1` sets it — a phone, a laptop, another deck. A pad lands on the next
+step; a knob on the next tick. [MAP.md](MAP.md) §9.8.
 
 **Sixteen lanes at once**, any mix. `route` connects any two.
 
-**A trailing digit makes another one.** `disc2`, `disc3`, `kick2` — a different
-name is a different lane on the same binding, so you can route them apart:
-`>route disc2 kick2`. It is a naming rule, and it applies **to lanes only**: a
-trailing digit on anything else is not a command, so `>bpm140` is refused rather
-than quietly reporting the tempo it did not set.
+**A count ends a lane, and an end starts another.** `>intro x.x.x.x. !2` plays two
+passes and stops — typed mid-song it waits for its own downbeat. `>route crash
+intro:end` is a crash as it ends; `>route verse intro:end` with `>verse ... !8` *starts*
+the verse there: a routed lane with a count is a **cue**, one without is a sidechain.
+`>play` starts the arrangement from the top.
+
+**An address picks one.** `disc:2` is a second circle, `disc:x` a circle's position,
+`disc:2:x` the second one's — `x` and `y` are a picture's parts; `vel` is a sound's
+level and `oct` a voice's octave: `>bass:oct <2 3>...`. A part is a lane like any
+other. `>route disc:2 kick` routes them apart. (`disc2` and `disc[x]` were the old spellings; the deck tells you
+the new one.)
 
 ### A shape is a field through a threshold
 
@@ -114,11 +131,12 @@ routes draws in table order, whatever order the lines were typed.
 |---|---|
 | `route disc kick` | the circle fires on the kick, at its velocity. Any two lanes. Chains. |
 | `send` | list destinations; `send mon on` |
+| `send view on` | **the picture on HDMI**, from an RP2040 DVI node — `send view 40x12` for a size. [VIEW.md](VIEW.md) |
 | `usb on` | be a USB MIDI device — needs a computer. Reboots. |
 | `din 17` | **MIDI on a wire — needs no computer.** Drives an SP404, a eurorack brain, anything with MIDI IN. Wire it first: [HARDWARE.md](HARDWARE.md) |
-| `osc 10.0.0.5 9000` | `/deck/<lane>` over the network |
-| `wifi <ssid> <pass>` | join; `wifi off`, `wifi forget` |
-| `host deck 12345678` | *be* the network |
+| `osc 10.0.0.5 9000` | `/deck/<lane>` over the network; `osc in 9000` listens for inputs |
+| `wifi <ssid>` | join - it asks for the password; `wifi off`, `wifi forget` |
+| `host deck` | *be* the network - it asks for a password |
 
 ## Looking — 6
 
@@ -131,7 +149,7 @@ routes draws in table order, whatever order the lines were typed.
 | `dump` | a document to the console |
 | `frame` | the picture over OSC |
 
-## Documents — 10
+## Documents — 8
 
 | | |
 |---|---|
@@ -140,7 +158,6 @@ routes draws in table order, whatever order the lines were typed.
 | `open lullaby` `list` `close` | |
 | `run lullaby` | run every line, without leaving this page |
 | `save` | write now |
-| `guide` `prose` | mark what a buffer is |
 | `help` | all of this, on the deck |
 
 `Ctrl-L` / `Ctrl-J` walk documents. `Ctrl-O` returns from output. `Ctrl-G` the guide.
@@ -154,7 +171,7 @@ routes draws in table order, whatever order the lines were typed.
 | `solo kick` | |
 | `kbd` | what is typing; `kbd forget` to pair a different keyboard |
 | `battery` | find the sense pin |
-| `ssh me@host pass ls` | a terminal, from the deck |
+| `ssh me@host ls` | a command, run elsewhere - it asks for the password |
 | `flash now` | reboot to the ROM loader |
 
 ---

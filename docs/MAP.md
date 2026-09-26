@@ -27,7 +27,7 @@ almost anything is useful — it is:
 
 If neither, it is refused, however good it is.
 
-**Sixty-nine verbs `[FACT]`**, counted from the command table itself:
+**Thirty-four verbs `[FACT]`**, counted from the command table itself:
 
 ```
     python3 - <<'EOF'
@@ -46,8 +46,20 @@ features on the strength of a count has to be able to show its arithmetic.
 `star`, `spin` and `cc` were added, the snippet was not re-run, and three sections
 of this document went on saying sixty-five while the firmware said sixty-nine — a
 review found it, not the author. A snippet only helps a document that is run against
-it, so §0, §2 and §8.5 all take their number from the same place now: sixty-nine.
-The primitive rework in §9.5 traded three names for three and did not change it.
+it, so §0, §2 and §8.5 all take their number from the same place now. The
+primitive rework in §9.5 traded three names for three and did not change it.
+
+**Sixty-nine became thirty-six on 2026-09-25, by the snippet, and none were added.**
+The thirty-three lane names stopped being verbs: a sound name is a line in the boot
+document — `>kick = note 36` — and a picture answers to its own name, so the one lane
+command serves all of them ([MANIFESTO.md](MANIFESTO.md) §3.8). That is criterion 5
+of §8 honoured by thirty-three, where [NEXT.md](NEXT.md) guessed thirty-one.
+
+**Thirty-six became thirty-four the same day: `guide` and `prose` are gone.** They set
+a buffer's *kind*, and nothing has read a kind since Enter stopped running lines in a
+guide buffer and `>` began marking what a command is (the note at Enter in
+`firmware/main/editor.c`). A verb that changes nothing anyone can see is a lie on the
+help page. An old line that still runs one is told `guide is gone: > marks a line`.
 
 ---
 
@@ -85,30 +97,36 @@ wrong. Teach the *binding* about the output.
 
 ## 2. The surface, as it stands `[FACT]`
 
-Sixty-nine names, grouped by what they actually touch:
+Thirty-four verbs, grouped by what they actually touch — and the names, which are not
+verbs.
 
-### Lanes that make sound — 17 names, one behaviour
-```
-kick snare hat ohat clap tom rim crash      bound to a drum note on ch 10
-bass lead pad arp                           bound to a note + octave + gate
-cut res mod rev                             bound to a CC number
-cc                                          bound to any CC number
-```
-All seventeen call the same two functions: `seq_lane_note`/`seq_lane_melodic`/
-`seq_lane_ctrl` to set the binding, then `seq_lane()` to compile the pattern.
-The names are *presets*, not features.
+### Lanes — no verbs, one command, and the names are yours
 
-### Lanes that make pictures — 16 names, one behaviour
+A line whose first word is a **name** is a lane. A name is defined, and the boot
+document defines these sixteen at startup:
+
+```
+kick snare hat ohat clap tom rim crash      >kick = note 36      a drum on ch 10
+bass lead pad arp                           >bass = voice 2 ...  degrees, octave, gate
+cut res mod rev                             >cut = cc 74         a controller
+```
+
+and the sixteen pictures answer to their own names:
+
 ```
 disc box turn ramp grid noise    FIELDS: distance from a thing, as a tone
 mask edge                        THRESHOLDS: a level through a field, a contour of it
 echo move spin warp              memory and motion
 grow thin flip fold              shaping
 ```
+
 Not shapes — see §9.5 for why that distinction is the whole of the third design.
-Peers of the drums. Each is a name bound to a primitive exactly as `kick` is a
-name bound to note 36, and they go through the same `seq_lane()` as everything
-else. There is no `viz` keyword.
+Every lane, sound or picture, goes through `cmd_lane()`: resolve the name to a
+binding, `seq_lane_bind()`, then `seq_lane()` to compile. A player adds a name with
+a line — `>conga = note 63` — and can move one: `>kick = note 35` retunes the kick
+that is already playing. An address picks a second one or a part of one: `disc:2`,
+`disc:x`, `disc:2:x` (§9.3). There is no `viz` keyword and no `cc` verb; a
+controller without a name gets one: `>fx = cc 20`.
 
 ### The clock — 6
 ```
@@ -129,15 +147,17 @@ wifi host join a network, or be one
 lanes jitter dump density split frame
 ```
 
-### Documents — 10
+### Documents — 8
 ```
-help list new name open run save close guide prose
+help list new name open run save close
 ```
 
-### Escape hatches and the rest — 7
+### Escape hatches and the rest — 8
 ```
-panic flash battery mute solo route ssh
+panic flash battery kbd mute solo route ssh
 ```
+
+(`kbd` was in the table and missing from this list, which added up to thirty-five.)
 
 ---
 
@@ -298,35 +318,62 @@ and it is how a bar is already read on paper:
     x.[x[xx]].       the second of a pair splits again
 ```
 
-**Probability moved to `%`.** `x%15` is a fifteen-per-cent chance on that step;
-`?` alone is still a half. The bracket is the only punctuation a player already
-reads as grouping, and a group — a step that *contains* steps — has a better
-claim on it than a parameter *of* a step. Recommendation (1) from the previous
-version of this section, taken.
+**Probability moved to `%`.** `x%15` is a fifteen-per-cent chance on that step
+or group. The bracket is the only punctuation a player already reads as grouping,
+and a group — a step that *contains* steps — has a better claim on it than a
+parameter *of* a step. Recommendation (1) from the previous version of this
+section, taken. (`?` was kept as "a half" until 2026-09-25, when it went —
+[MANIFESTO.md](MANIFESTO.md) §3.5.)
 
 **It is a compile-time transform, and that is the important part.** The clock
-reads a flat bitmask at a uniform rate and knows nothing else
-([SUBSTRATE.md](SUBSTRATE.md): the realtime core never parses text), so nesting
-is resolved in `seq_pattern_walk()` by **flattening the tree onto that same
-grid**. `x..[xx]` becomes eight slots at half the step length with hits at 0, 6
-and 7. There is no second code path for a nested lane and nothing new that can
-be late — the sequencer is byte-for-byte as unaware of nesting as it was of
-`/2`.
+never parses text ([SUBSTRATE.md](SUBSTRATE.md)), so nesting is resolved in
+`seq_pattern_compile()` by **laying the tree onto a uniform grid of slots**.
+`x..[xx]` is eight slots at half the step length with hits at 0, 6 and 7. There is
+no second code path for a nested lane — the sequencer is as unaware of nesting as
+it is of `/2`.
+
+What the clock reads changed on 2026-09-25, when a step stopped being one character
+([MANIFESTO.md](MANIFESTO.md) §3.6): it was four bitmasks and three per-slot tables,
+and it is now a list of **events** sorted by slot, each with its amount, its odds, the
+slots a tie holds it, and a cycle class for alternation. A chord is several events on
+one slot. The compiled lane is **handed to the clock** rather than written under it —
+the clock runs on the other core, and a list read through an index cannot be torn
+safely the way a bitmask could.
 
 Each top-level step is given `div` slots, where `div` is the least common
 multiple of what its members need, so every leaf lands exactly on a slot
 boundary. `[xx][xxx]` needs 6 per step and 12 in total.
 
+**A slot's tick was wrong for any split that does not divide 24, and it drifted.**
+The clock has 24 ticks to a sixteenth, and a slot was `24 / div` ticks in integer
+arithmetic — so a five-way split got 4 ticks where it needed 4.8, and `[xxxxx]...`
+looped in 80 ticks instead of 96 — sixteen ticks, 81 ms at 124 bpm, early every
+bar against everything else. That figure is **arithmetic, not measured**: the old
+firmware was never run with a quintuplet on the deck; the host check shows the
+80-tick loop, and the fix below was measured. Slot *g* now starts on the tick
+nearest `g × 24 × rden / (div × rnum)`, computed from the global tick — so every bar
+is exactly a bar (484 ms at 124 bpm, six bars running) and each note is within half
+a tick of where it belongs: the five onsets measured 0, 25, 50, 71, 96 ms against an
+ideal 0, 24.2, 48.4, 72.6, 96.8. A split so fine that two slots would share a tick
+is refused.
+
 **What does not fit is refused, not truncated** — `[xxxxx][xxxx][xxx]` would need
-180 slots. A flat pattern is still *clamped* at 32, and the difference is not a
-compromise: truncating a flat line loses the tail and nothing else, one
-character one step, while a nested bar's subdivision is a property of the whole
-bar, so dropping the end changes the meaning of everything before it.
+180 slots, and is refused with that number.
+
+**Reversed 2026-09-25: a flat pattern is no longer clamped either.** This section
+argued that truncating a flat line "loses the tail and nothing else", so a line of
+seventy steps played its first sixty-four. The fact that changed is that every other
+malformed pattern is now refused with its reason (MANIFESTO §3.2), which left the
+clamp as the one place in the language where typed steps silently did nothing — the
+failure [MANIFESTO.md](MANIFESTO.md) §1 calls undebuggable. It says *needs 70 slots,
+64 fit* now.
 
 The walk also collapsed the last duplicated traversal in the system. `seq_lane()`
 used to walk the characters itself and the editor walked them backwards to place
-the playhead; both call `seq_pattern_walk()` now, so they cannot disagree about
-which characters are steps.
+the playhead; both call `seq_pattern_compile()` now, so they cannot disagree about
+which characters are steps. The editor then asks the lane where it is —
+`seq_lane_now()` — because it used to take the global sixteenth modulo the lane's
+length, and a `/2` lane's playhead ran at twice the speed of its sound.
 
 ## 6. Two decks `[OPEN]`
 
@@ -397,11 +444,14 @@ argue against later:
    at compile time.
 3. **One shared clock mechanism** that covers both a second deck and a laptop.
 4. **MIDI in and out on a wire**, so the deck needs no computer at all.
-5. **Sixty-nine verbs down, not up**, and counted with the snippet in §0 rather
+5. **Thirty-four verbs down, not up**, and counted with the snippet in §0 rather
    than by eye — *by running it*, which is the part that failed. The collapse spent
    twelve of them buying one lane system; nothing else may spend any without deleting
-   its own. §9.5 is the first change to honour that literally: `turn`, `mask` and
-   `edge` in, `star`, `shake` and `tile` out, same number either side.
+   its own. §9.5 was the first change to honour that literally: `turn`, `mask` and
+   `edge` in, `star`, `shake` and `tile` out, same number either side. The names
+   becoming definitions (§2) was the second, and it went from sixty-nine to
+   thirty-six with nothing added; `guide` and `prose`, which did nothing, took it
+   to thirty-four.
 6. **Every verb in one printed page**, because a performer cannot search.
 7. **No verb that exists only to work around another verb.**
 
@@ -438,6 +488,11 @@ losing move and an uninteresting one.
 So: anything expressible as a **mark in a pattern** is fair game. Anything needing
 a **function applied to a pattern** is refused.
 
+*Measured 2026-09-25* ([STRUDEL.md](STRUDEL.md)): of the 216 distinct patterns in
+Strudel's own example tunes, 145 are notation this deck has, and the deck plays all
+145 in Strudel's rhythm exactly, checked note by note against Strudel itself. The
+largest things it does not have are Euclid (§9.2) and a note spread over passes.
+
 ### 9.1 Per-cycle alternation — `<a b>` `[FACT]` — done
 
 A step that takes a different value each bar:
@@ -472,6 +527,21 @@ Composes with everything, verified on hardware: `[x<x .>]`, `<[xx] x>`,
 alternative), and `>disc <9 3>` — a drawing lane alternating, because a drawing
 lane is a lane.
 
+**Superseded 2026-09-25: alternation is a cycle class now, not slots.** The
+flattening above was right about runtime state and wrong about its cost — it spent
+`lcm` slots, and [MANIFESTO.md](MANIFESTO.md) §3.9 named the cliff: a sixteen-step
+lane with a two-way and a three-way alternation needed ninety-six slots and was
+refused at sixty-four. Each note now carries the class of cycles it plays on
+(`cycle % per == ph`), and the cycle is the global tick divided by the lane's length
+— so the "one byte of cycle counter" the manifesto proposed turned out to be none.
+Alternation costs no slots at all.
+
+And the flattening had a second fault nobody had found, because nothing compared it
+with anything: it passed the cycle number down unchanged, so `<0 <1 2>>` played
+0 2 0 2 — the inner group advancing on every bar rather than every time it was
+chosen. Strudel plays 0 1 0 2; so does the deck now. The comparison is what §11 of
+[NEXT.md](NEXT.md) proposes a corpus for, and this is the first thing one found.
+
 One bug worth recording: `<[xx] x>` first compiled with the group given a single
 slot, silently dropping half of it. The rule "how wide is one item" had been
 written twice — once in `seq_pattern_span` and once in `seq_pattern_walk` — and
@@ -497,7 +567,7 @@ plainly, on a device whose whole premise is that the text *is* the score. `(3,8)
 is a rhythm you cannot see. That is a real objection and it is why this is second
 rather than first.
 
-### 9.3 Addressable parameters — `disc[x]` `[FACT]` — done
+### 9.3 Addressable parameters — `disc:x` `[FACT]` — done
 
 The visuals have no positioning: every source draws centred or full-frame, and
 the only movement is `move`, which translates the whole frame.
@@ -506,6 +576,14 @@ The wrong fixes, and why:
 
 - **`disc 5,3`** — two numbers in a step. Breaks one-character-per-step, which is
   what keeps the playhead on the character that is sounding.
+
+  *Re-argued 2026-09-25.* That rule is gone ([MANIFESTO.md](MANIFESTO.md) §3.6), so
+  this refusal needs a reason that survives it, and it has one: `,` now means
+  **simultaneous** — `[5,3]` on a disc lane is two circles at once, amounts 5 and 3,
+  exactly as `[0,4,7]` is three notes at once. Spending the same mark on
+  "coordinates" would give one character two meanings depending on the lane. A
+  position is a parameter, and a parameter is a lane (below). The refusal stands;
+  its old reason does not.
 - **A `>at 3,7` verb** — pairs lanes by convention. Fragile, and a new verb that
   deletes nothing.
 - **More primitives with position baked in** — `discleft`, `discright`. This is how
@@ -549,6 +627,19 @@ becomes the flag grammar [COMMANDS.md](COMMANDS.md) exists to refuse.
 
 `>box[z]` is refused with "no part called that" rather than ignored, because a
 part that silently does nothing is a lane that silently does nothing.
+
+**Respelled 2026-09-25: a part is `disc:x`, an instance is `disc:2`, and `[]` only
+groups** ([MANIFESTO.md](MANIFESTO.md) §3.3). The bracket was chosen here as "the
+referential mark", and that was the mistake: inside a pattern `[]` means *contains*,
+and a part is a property *of* the lane, not a lane inside it — the same argument that
+had already moved probability off the bracket. A trailing digit was a third notation
+for the same idea and reserved every name's last character. `:` is what
+[SUBSTRATE.md](SUBSTRATE.md) already uses for "a part of" (`lullaby.md:27`, `din:1`),
+it never meets the pattern grammar, and it is legal in an OSC address, where `[` and
+`]` are pattern characters. The objection to `.` above still stands; the objection
+to *every* separator did not. On the deck: `>disc[x] 0..9..` answers *disc[x] is
+disc:x now*, `>disc2 x...` answers *disc2 is disc:2 now*, and `>route disc:y kick`
+routes. The listing above now reads `disc:x`, `disc:y`, `disc:2:x`.
 
 ### 9.3b More primitives, and two refusals `[FACT]`
 
@@ -658,3 +749,106 @@ follows nothing, and within a rank the table still decides — which keeps the p
 `tools/test_viz.c` checks, that a document of unrouted lanes draws the same whatever
 order its lines were typed in. Order became something a performer can state and could
 not state before, and nothing that worked before behaves differently.
+
+### 9.7 Finite repetition — `!4`, and what an ending is for `[FACT]` — done
+
+**A lane that plays n times and then stops** ([NEXT.md](NEXT.md) §4). The spelling
+was the owner's to choose, 2026-09-25, from four with real collisions: `!4`, because
+`!` already means *repeat* to anyone arriving from Tidal or Strudel and only the scope
+differs — the whole lane, over time, rather than one step squeezed into its space.
+`@4` read as "at" and is Strudel's note length, which `_` now is here; a bare `4`
+would change what `>bass 0... 4` means, since patterns may be spaced; `#4` is a
+comment. A Strudel-style `x!3` inside a pattern is refused and told where `!` goes.
+
+**What a count counts** is passes of the lane's own length. Typed mid-song it waits
+for its own downbeat, so the first pass is a whole one and "four times" is four; at
+`>play` every lane's downbeat is tick 0. With `/2` a pass is twice as long, and with
+`<a b>` the alternation restarts with the count.
+
+**What happens at the end was designed with the count**, because an ending is only
+worth having if it can start something:
+
+- A lane on its own goes quiet and says `done` in `>lanes`. Running its line again
+  restarts it — it is silent, so the toggle brings it back — and `>play` re-arms
+  every finished lane, so a stopped arrangement plays from the top.
+- It is a **source** from then on: `name:end`. `>route crash intro:end` is a crash on
+  the downbeat after the intro.
+- **A routed lane with a count is a cue.** Its source *starts* it, and it plays its
+  own pattern for its count — where a routed lane with no count is a sidechain and
+  plays one step per event. So `>route verse intro:end` with `>verse x.x.x.x. !8`
+  sequences two sections with no new verb, and `>route fill snare` with
+  `>fill [xx]x !1` is a fill after every snare. The count is the whole difference.
+
+Measured on the deck: `>intro x.x. !2` played two passes and read `done`; on its last
+downbeat a verse cued from `intro:end` and a crash routed from it both went out on the
+same timestamp as the kick; the verse played its two passes and went back to `waits`.
+Typed 1.1 s into a bar, `>intro [xx]... !1` waited for its own downbeat.
+
+**To make that same timestamp possible, lanes now fire in route order.** A routed lane
+hears its source when the source fires, so the source must fire first; the table used
+to decide, and a sidechain typed before its source heard it one tick — 5 ms — late,
+by the structure of the code (not measured on the old firmware). Ranks are route
+hops, recomputed on every edit, never per tick; on the deck a rim routed from a kick
+and typed before it sounded on the kick's own timestamp.
+
+**A routed lane plays at its source's level, on every binding.** The source decides
+*how much* as well as *when*: the trigger carries its whole value, 0-127, and a
+controller sends it as it is, a note plays at it, a picture and a part scale it to
+their nine steps. Before 2026-09-25 that was true only of pictures. On the deck, with
+`>kick 9...3...`, `>route cut kick` sent no controller message in a bar of kicks —
+a controller read its own first step, which a routed lane fills with `x`, meaning
+hold — and `>route rim kick` hit at 100 while the kick went 127 and 42. After, the
+cut followed the kick and the rim hit at the kick's velocity.
+
+**Open, and recorded rather than guessed at:** a *loop* of sections — verse after
+chorus after verse — needs a lane with two sources, and a lane has one. The
+arrangement that exists today is linear, with the last section looping by having no
+count.
+
+### 9.8 Inputs — `>knob1 = knob`, and an OSC endpoint is a lane source `[FACT]` — done
+
+[NEXT.md](NEXT.md) §5 set the rule before any satellite existed: *an encoder is a
+lane whose events come from hardware instead of a pattern, and a button is a lane
+that fires on press* — read through `route`, or a second routing system gets built
+beside the one that works. §8 added that OSC must be the same mechanism. So an
+input is **a name with a value**, defined like any other name, and it adds no verb:
+
+```
+>knob1 = knob             a value 0-127, held on the deck
+>pad1 = pad               fires on a press
+>route cut knob1          the filter follows the knob
+>route kick pad1          the kick plays when the pad is pressed
+>osc in 9000              /deck/<name> sets the input of that name
+```
+
+The decisions, each for a stated reason:
+
+- **The value lives on the deck**, as §5 asked, so a phone that drops off loses
+  nothing and two senders can share a name.
+- **A knob fires its routes on the next tick** after it changes — a gesture, for
+  which 5 ms is nothing. **A pad fires on the next step**, swing included, because a
+  button that triggers a note must land on the grid, not on the packet.
+- **The address is the name.** `/deck/knob1` feeds `knob1`; nothing else goes on the
+  definition line. A message to a name nobody defined is counted and dropped: a
+  packet cannot create anything.
+- **The number is the message's last numeric argument** — a phone's fader sends a
+  float from 0 to 1, another deck's `>osc` sends the controller then the value, a
+  bare message is a press at full value (`osc_parse.h`).
+- **Listening is off until asked.** `>osc in <port>` is a subcommand of the verb
+  that already configures OSC, not a verb of its own.
+- **Inputs act while the clock runs**, like every lane.
+
+`>lanes` lists each input with its value and the last two parts of whoever set it —
+`knob1 knob 84 .4.2` — which is how a dead phone is told from a bad route (§5: *a
+source must be able to say what it is*).
+
+Measured on two decks, one hosting a test network and listening, the other sending
+its own lanes named `knob1` and `pad1` to it: 280 of 280 messages arrived in each of
+two twenty-second windows; the listener's `cut` followed every step of the sender's
+`0..3..6..9..` — 0, 42, 84, 127 in order — at 308-429 ms intervals where the pattern's
+step is 363; and every kick the pad fired landed exactly one step after a hat, on the
+listener's grid. From a laptop on a home network the fader values 0, 0.25, 0.5 and
+1.0 arrived as 0, 32, 64 and 127, twenty of twenty, 22 ms from sending to the filter
+moving once listening turned the Wi-Fi's power save off ([NETWORK.md](NETWORK.md)).
+**Unverified:** a phone as the sender.
+

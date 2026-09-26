@@ -32,10 +32,11 @@ If the screen stays blank, a button is held down: every reset reports
 ## 2. The guide plays
 
 Ctrl-L until the status bar reads `guide`. Run each `>` line from the top.
-By `>play` you should have a kick, a hat with ghost notes, a bassline in D
-minor, and a filter sweep.
+By `>play` you should have an accented kick, a soft hat whose last hit comes and
+goes, a tied bassline in D minor, two held chords on the pad, and a filter sweep.
 
-An inverted bar should sweep along each pattern line in time with the sound.
+An inverted bar should sweep along each pattern line in time with the sound,
+covering the whole step that is sounding — all of `x%50`, all of a chord.
 
 ## 3. Editing while it runs
 
@@ -48,12 +49,39 @@ silent. Again — it comes back.
 ## 4. Probability
 
 ```
->hat ?%3?%3?%3?%3
->hat ?%97?%97?%97?%97
+>hat x%3x%3x%3x%3
+>hat x%97x%97x%97x%97
 ```
 
-Near-silence, then near-constant. `>lanes` prints an `odds` line showing the
-percentages it read.
+Near-silence, then near-constant. `>lanes` prints each line exactly as it was
+compiled.
+
+## 4b. How much, how long, all at once
+
+```
+>send mon on
+>kick 9...5...
+>bass 0__.3...
+>pad [0,2,4]...
+>play
+```
+
+The console shows each note with its velocity and the time it went out. The kick
+alternates 127 and 71. The bass's first note is held two extra sixteenths — its
+off comes about 420 ms after its on at 124 bpm, where the next is about 180. The
+pad plays three notes on one timestamp. `>send mon off` to stop the log.
+
+## 4c. Mistakes are refused
+
+```
+>hat x...x...x;..
+>kick X...x...
+>hat [x.x.
+```
+
+Each is refused in one line on the status bar — *';' is not a step*, *X is gone: 9
+is loud*, *'[' is never closed* — and the character is boxed in the document until
+you edit. Whatever was playing keeps playing.
 
 ## 5. Time ratios
 
@@ -101,21 +129,29 @@ input, set the transport to External.
 ## 9. Network
 
 ```
->host deck 12345678
+>host deck
 ```
 
-The deck becomes a Wi-Fi network at `192.168.4.1`. Join it from a laptop.
+The status line asks for a password: type it and press Enter. It shows a star
+for each character and **never enters the document** - a password on a line would
+be journalled, mirrored to the card and copied to the DGX. Under eight characters,
+or none, and the deck hosts an open network and says so. Esc stops without
+starting anything. The deck becomes a Wi-Fi network at `192.168.4.1`. Join it from
+a laptop.
 
 Or join an existing one:
 
 ```
->wifi <ssid> <password>
+>wifi <ssid>
 >wifi
 ```
 
-The second command shows the address once it has one. Credentials are
-remembered **as soon as they are typed**, and re-joined at every boot.
-`>wifi forget` clears them.
+It asks for the password the same way. The second command shows the address once
+it has one. Credentials are remembered **as soon as Enter is pressed**, in NVS and
+never in a document, and re-joined at every boot. `>wifi forget` clears them.
+
+A password still typed on the line the old way - `>wifi home hunter2` - is
+refused, and cut from the line before autosave can keep it.
 
 ## 10. OSC out
 
@@ -135,10 +171,39 @@ On the deck:
 You should see `/deck/step` with the bar position and `/deck/<lane>` for every
 hit, by lane name.
 
+## 10b. OSC in
+
+On the deck, with it on the same network as the laptop:
+
+```
+>osc in 9000
+>knob1 = knob
+>pad1 = pad
+>route cut knob1
+>route kick pad1
+>play
+```
+
+On the laptop:
+
+```bash
+python3 tools/osc_send.py <the deck's ip> 9000 /deck/knob1 0.5
+```
+
+```bash
+python3 tools/osc_send.py <the deck's ip> 9000 /deck/pad1
+```
+
+`>lanes` shows `knob1 knob  64` and the last two parts of the laptop's address; the
+filter moves, and the kick plays on the next step after the pad. A phone app that
+sends OSC works the same way: a fader from 0 to 1 on `/deck/knob1`. **A phone has not
+been tried** — two decks have, and this script from a laptop on a home network: every
+value right, 22 ms median from sending to the filter moving.
+
 ## 11. Visuals, in the same document
 
 ```
->kick X...x...X...x...
+>kick 9...x...9...x...
 >bass 0...5...3...7...
 >echo 8
 >noise 2.4.2.4.
@@ -203,25 +268,30 @@ since the tiles mean nothing to a receiver.
 
 ```
 >kick x...<x .>...     a hit on the two, every other bar
->hat  <x.x. xxxx>      swap a whole group, bar to bar
+>hat  x.x.x.x.<[xxxx] x>...  a roll on the 9th step, every other bar
 >bass 0...<3 5>...     the value changes
 >snare <x%15 x%90>     and so do the odds
 >disc  <9 3>           pictures alternate too
 ```
 
-Angle brackets pick one; square brackets subdivide. They compose in either order:
+A lane's bar is its own length — one character at the top is one sixteenth — so
+`<>` swaps once per pass of the line it is in, not once per four beats. Angle
+brackets pick one; square brackets subdivide. They compose in either order:
 `[x<x .>]` is a doubled step whose second half comes and goes, and `<[xx] x>` is
 two hits one bar and one the next. Groups of different length run their own
-cycles — `<a b><c d e>` takes six bars to repeat.
+cycles — `<0 1><2 3 4>` takes six bars to repeat — and a group inside a group
+advances only when it is chosen: `<0 <1 2>>` plays 0 1 0 2.
 
-Probability is `%`: `x%15` is a fifteen-per-cent chance on that step, `?` alone is
-still a half, and they combine as `?%15`. Odds travel with the alternative, so
-`x%15<3%20 5%80>` keeps each one's own. The bracket was spent on the parameter
-before; a group had the better claim on it.
+Probability is `%`: `x%15` is a fifteen-per-cent chance on that step, and `[..]%50`
+puts odds on a whole group, multiplying with any inside it. Notes that start
+together share one roll, so a chord with odds plays whole or not at all. Odds
+travel with the alternative, so `x%15<3%20 5%80>` keeps each one's own. The
+bracket was spent on the parameter before; a group had the better claim on it.
 
 Nesting is resolved when the line compiles, so a nested lane costs the clock
-nothing. What cannot fit is refused rather than shortened — a nested bar's
-subdivision is a property of the whole bar.
+nothing. What cannot fit is refused rather than shortened. A five- or seven-way
+split keeps exact time — `>hat [xxxxx]...` lands its bar on the kick's, every
+bar.
 
 **A digit is always how much: 0 none, 9 full.** In every primitive. A `u`, `d`,
 `l` or `r` is which way, either in front of the pattern (`>ramp u 4.6.9.6.`)
@@ -240,17 +310,69 @@ outright and takes its routing with it.
 `>route disc kick` makes the disc **fire on every kick**, at the size of that
 hit's velocity. Routing is *when* as well as *how much*: a routed lane ignores
 its own pattern and follows its source. Put `>echo 8` above it and the pulse
-gets a tail. **A part of a primitive is a lane too.** `disc[x]` is the circle's position
+gets a tail. **A part of a primitive is a lane too.** `disc:x` is the circle's position
 across the frame, and it is a lane like any other — it has a pattern, it
 alternates, it nests, and it can be routed:
 
 ```
 >disc      4                   a small circle
->disc[x]   0..3..6..9..        swept across
->disc[y]   <2 7>               and up and down, bar to bar
->route disc[x] bass            or driven by the bass note
->disc2[x]  9...0...            the second circle, its own path
+>disc:x    0..3..6..9..        swept across
+>disc:y    <2 7>               and up and down, bar to bar
+>route disc:x bass             or driven by the bass note
+>disc:2:x  9...0...            the second circle, its own path
 ```
+
+The old spellings — `disc[x]`, `disc2` — are answered with the new ones rather than
+played.
+
+## 11b. The names are yours
+
+```
+>conga = note 63
+>conga x..x..x.
+>kick = note 35
+>conga =
+```
+
+The first two play note 63 on channel 10. The third moves the kick that is already
+playing to note 35 — the next hit is 35. The last forgets the name and silences its
+lane. `>help` lists every name there is. `>bpm = note 3` and `>disc = note 3` are
+refused: a name cannot be a command or a picture.
+
+```
+>send mon on
+>bass 0...
+>bass:oct <2 4>...
+>bass:vel 9...3...
+>play
+```
+
+The bass alternates D2 and D4 bar by bar, at 127 then 42. `>bass:oct` alone drops
+the part and the bass goes back to octave 2. A lone `<2 4>` would change every
+sixteenth — a lane's bar is its own length — and under a four-step bass it reads 2
+every time.
+
+`>kick x..u` is refused and the `u` boxed: only `move`, `warp`, `ramp` and `turn`
+have a way.
+
+## 11c. Counts, ends and cues
+
+```
+>send mon on
+>kick x...
+>intro = note 60
+>verse = note 62
+>intro x.x. !2
+>verse 9... !2
+>route verse intro:end
+>route crash intro:end
+>play
+```
+
+The intro plays two passes — four hits — and `>lanes` then reads `done`. On the next
+kick the verse starts and the crash hits, all three on one timestamp; the verse plays
+its two passes and reads `waits`. `>stop` then `>play` plays the intro again from the
+top. Typed while playing, a counted line waits for its own downbeat.
 
 `x` and `y` are the only parts for now — deliberately short, or it becomes a flag
 grammar. 0 is the left or top edge, 9 the right or bottom, and the shape's centre
@@ -287,18 +409,33 @@ running `>frame` again is the whole of visual coding on this device.
 
 ## 13. SSH
 
-Turn on Remote Login (macOS: Settings → General → Sharing). Then with the deck
-on the same network:
+**Tested against real OpenSSH servers, through the login and a command's reply** -
+see [NETWORK.md](NETWORK.md), *SSH, as built*. Use a throwaway account on the laptop,
+never a real password, as docs/NEXT.md §10 asks. Turn on Remote Login (macOS: Settings → General → Sharing). Then with the
+deck on the same network:
 
 ```
->ssh you@192.168.1.42 yourpassword ls
+>ssh you@192.168.1.42 ls
 ```
 
-The reply arrives in `+ssh`. Ctrl-O comes back.
+The status line asks for the password; it never goes on the line. The session
+runs beside the editor - you can keep typing - and when it ends the reply is shown
+in `+out`. Ctrl-O comes back.
 
-The host key is **shown, not verified** — the fingerprint is printed so you can
-see it change. The password is on the line, which is why `+ssh` is transient
-and never reaches the journal, the SD card or a backup.
+**The host's key is kept the first time** and printed as `ssh-keygen -lf` prints
+it. Check it by eye against the laptop's own, from the key type the deck names:
+the deck cannot use ed25519 host keys, so it will be the ECDSA or RSA one:
+
+```
+ssh-keygen -lf /etc/ssh/ssh_host_ecdsa_key.pub
+```
+
+From then on a different key is **refused before any password is sent**. If you
+changed the key yourself, `>ssh forget 192.168.1.42` and connect again.
+
+What was exercised, 2026-09-25, on two decks with one hosting a test network: an
+address nobody answers reports `no answer in 5 seconds` at 5.0 s while the editor
+keeps its 194 turns a second; a closed port reports `connection refused`.
 
 ## 14. Battery
 
@@ -413,4 +550,5 @@ power it down.
   BOOT button to reflash from there.
 - `>lanes` shows a pattern from its compiled form, so spacing you typed for
   readability isn't echoed back.
-- No SSH key auth yet — password only.
+- No SSH key auth yet — password only, asked for and never on a line.
+- An SSH session has never been run against a real server: see §13.

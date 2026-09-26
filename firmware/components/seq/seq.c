@@ -1,4 +1,5 @@
 #include "seq.h"
+#include "seq_clock.h"
 #include "seq_pattern.h"
 
 #include <ctype.h>
@@ -24,7 +25,12 @@ static bool       s_running;
  * task to place the playhead. Aligned 32-bit does not tear on Xtensa, so this
  * is about the compiler not hoisting the read out of the draw loop. */
 static volatile uint32_t s_pos;
-static uint32_t   s_tick;            /* 24 PPQN pulses since play */
+static uint32_t   s_tick;            /* 96 PPQN pulses since play */
+
+_Static_assert(SEQ_MAX_STEPS == SEQ_PATTERN_MAX_SLOTS,
+               "a lane holds exactly the slots the compiler can produce");
+_Static_assert(SEQ_TICKS_PER_STEP == SEQ_PATTERN_TICKS_PER_STEP,
+               "the compiler and the clock agree on the sixteenth");
 static int        s_swing = 50;      /* per cent; 50 is straight   */
 static bool       s_sync;            /* send MIDI clock            */
 static esp_timer_handle_t s_clock;
@@ -56,8 +62,52 @@ typedef struct {
 
 /* The ideal grid. Re-anchored on play and on any tempo change, so the
  * statistic measures dispatch jitter and never accumulated tempo error -
- * those are different problems with different fixes. */
+ * those are different problems with different fixes. It is also WHEN THE
+ * TICKS FIRE: each tick arms the next at the grid's due time (seq_clock.h). */
 static int64_t    s_grid_t0;
+/* When the last tick began - where a new tempo takes over from. */
+static int64_t    s_last_tick_us;
+/* A FOLLOWER PLAYS IN THE LEADER'S COUNT (ens_count.h). The ensemble asks for
+ * a move from its radio callback; the clock makes it at the start of a tick,
+ * keeping that tick's time, so nothing between them races. A follower that has
+ * just pressed play is silent until it knows where the leader is - a second at
+ * most, then it plays alone - so it joins on the leader's step instead of
+ * sounding a downbeat of its own first. */
+static volatile bool     s_follows;
+static volatile bool     s_adopt_pending;
+static volatile int32_t  s_adopt;
+static volatile uint32_t s_await_ticks;
+
+/* s_grid_t0 IS 64 BITS ON A 32-BIT CPU, written by the editor (tempo) and the
+ * ensemble (corrections) while the clock reads it on the other core. A torn read
+ * used to spoil one statistic sample; now it would schedule the next tick, and a
+ * garbage anchor can put that tick an hour away. Every access takes this. */
+static portMUX_TYPE s_grid_mux = portMUX_INITIALIZER_UNLOCKED;
+
+static int64_t grid_get(void)
+{
+    portENTER_CRITICAL(&s_grid_mux);
+    const int64_t g = s_grid_t0;
+    portEXIT_CRITICAL(&s_grid_mux);
+    return g;
+}
+
+static void grid_set(int64_t g)
+{
+    portENTER_CRITICAL(&s_grid_mux);
+    s_grid_t0 = g;
+    portEXIT_CRITICAL(&s_grid_mux);
+}
+
+/* Slide an anchored grid; a grid not yet anchored stays unanchored. */
+static void grid_slide(int64_t by)
+{
+    portENTER_CRITICAL(&s_grid_mux);
+    if (s_grid_t0 != 0) {
+        s_grid_t0 += by;
+    }
+    portEXIT_CRITICAL(&s_grid_mux);
+}
 
 /* Ticks skipped by the spread statistic after the grid is anchored. Forty
  * milliseconds at any tempo this device runs - long enough for one autosave to
@@ -93,10 +143,15 @@ static void stat_add(seq_stat_t *s, int32_t v)
     if (rel > SEQ_LATE_US) {
         s->late++;
     }
+    /* BY SIZE, EARLY OR LATE. The buckets compared the signed distance, so
+     * every early tick was "<.1" however early it was: a following deck whose
+     * ticks sat 388 us before its grid reported all 13,886 of them inside
+     * 100 us, beside an sd of 72. Late stays late - that is what 'late' means. */
+    const int32_t mag = rel < 0 ? -rel : rel;
     static const int32_t edge[SEQ_NBUCKETS - 1] = { 100, 250, 500, 1000, 2000, 5000 };
     int b = SEQ_NBUCKETS - 1;
     for (int i = 0; i < SEQ_NBUCKETS - 1; i++) {
-        if (rel < edge[i]) { b = i; break; }
+        if (mag < edge[i]) { b = i; break; }
     }
     s->bucket[b]++;
     s->n++;
@@ -280,9 +335,10 @@ static uint8_t degree_note(uint8_t deg, int octave)
  * docs/OS.md's own warning about stuck notes is that midi.on/midi.off as a
  * PAIR manufactures the problem that panic then exists to clean up. */
 typedef struct {
-    int64_t due_us;
-    uint8_t status, d1;
-    bool    armed;
+    int64_t     due_us;
+    const char *lane;       /* who scheduled it, for whatever reads the event */
+    uint8_t     status, d1;
+    bool        armed;
 } pending_off_t;
 static pending_off_t s_offs[SEQ_MAX_LANES * 4];
 
@@ -320,13 +376,14 @@ static void emit(uint8_t status, uint8_t d1, uint8_t d2)
     }
 }
 
-static void schedule_off(uint8_t chan, uint8_t note, uint16_t ms)
+static void schedule_off(uint8_t chan, uint8_t note, uint32_t us)
 {
-    const int64_t due = esp_timer_get_time() + (int64_t)ms * 1000;
+    const int64_t due = esp_timer_get_time() + (int64_t)us;
     for (size_t i = 0; i < sizeof s_offs / sizeof s_offs[0]; i++) {
         if (!s_offs[i].armed) {
             s_offs[i].armed  = true;
             s_offs[i].due_us = due;
+            s_offs[i].lane   = s_emitting;
             s_offs[i].status = (uint8_t)(0x80 | (chan & 0x0F));
             s_offs[i].d1     = note;
             return;
@@ -342,9 +399,13 @@ static void service_offs(int64_t now)
     for (size_t i = 0; i < sizeof s_offs / sizeof s_offs[0]; i++) {
         if (s_offs[i].armed && now >= s_offs[i].due_us) {
             s_offs[i].armed = false;
+            /* An off belongs to the lane that played the note, not to whichever
+             * lane the clock served last - which is who it was labelled with. */
+            s_emitting = s_offs[i].lane;
             emit(s_offs[i].status, s_offs[i].d1, 0);
         }
     }
+    s_emitting = NULL;
 }
 
 /* Swing, in ticks. A sixteenth is six ticks, so an eighth is twelve; a
@@ -383,26 +444,6 @@ static inline uint32_t rng_next(void)
     return s_rng;
 }
 
-/* Does this lane fire on this tick, and if so on which of ITS steps?
- *
- * Each lane divides the global tick counter by its own ticks-per-step, so a
- * lane at '/2' advances half as often and one at '*2' twice as often. Swing
- * still delays odd steps, measured in that lane's own ticks - so a half-time
- * lane swings at half-time, which is what a musician means by it. */
-static int lane_step_now(const seq_lane_t *l, uint32_t tick, int *out_step)
-{
-    const uint32_t tps = l->tps ? l->tps : SEQ_TICKS_PER_STEP;
-    const uint32_t step = tick / tps;
-    const uint32_t phase = tick % tps;
-    const uint32_t want = (step & 1u)
-        ? (uint32_t)((int)swing_ticks() * (int)tps / SEQ_TICKS_PER_STEP) : 0u;
-    if (phase != want) {
-        return 0;
-    }
-    *out_step = (int)(step % (uint32_t)l->steps);
-    return 1;
-}
-
 /* A LANE PLAYED. Tell anything routed from it.
  *
  * This is the whole of routing, and it is four lines because there is one lane
@@ -416,7 +457,10 @@ static void published(seq_lane_t *src, uint8_t value)
         seq_lane_t *d = &s_lanes[j];
         if (d->route[0] != '\0' && strcmp(d->route, src->name) == 0) {
             d->trig = true;
-            d->trig_val = src->last_val;
+            /* THE WHOLE VALUE, 0-127, not the 0-9 it rounds to: a controller
+             * routed from a kick carries the kick's velocity to the wire as it
+             * was, and only a picture needs the nine steps. */
+            d->trig_val = value;
         }
     }
     if (s_on_play != NULL) {
@@ -424,17 +468,195 @@ static void published(seq_lane_t *src, uint8_t value)
     }
 }
 
+/* A DIGIT ON A DRUM IS HOW HARD IT IS HIT: 9 is 127 and 1 is 14. It used to be
+ * compiled and never read - '>kick 0...9...' was two identical hits - while
+ * loudness was a three-value enum spelled 'X x ,'. One meaning per binding now
+ * (docs/MANIFESTO.md §3.7).
+ *
+ * 0 is the quietest hit there is, not silence: a rest is '.', and a digit is
+ * always an event, on every binding. MIDI would read velocity 0 as a note-off,
+ * so it is 1. 'x' is the lane's own level - 100 unless something set it. */
+static int vel_of(const seq_lane_t *l, uint8_t val)
+{
+    if (val == SEQ_VAL_X) {
+        return l->vel;
+    }
+    const int v = (val * 127 + 4) / 9;
+    return v < 1 ? 1 : v;
+}
+
+/* How long a note sounds: the voice's own gate, plus every slot a tie holds it.
+ * A bass is 180 ms whether or not it is tied, and '0__' is that plus two
+ * sixteenths - the tie ADDS the steps it spans rather than replacing the
+ * voice's character with a different one. */
+static uint32_t gate_us(const seq_lane_t *l, uint8_t hold)
+{
+    uint64_t us = (uint64_t)l->gate_ms * 1000u;
+    if (hold > 0 && l->div > 0 && l->rnum > 0) {
+        us += (uint64_t)hold * period_us() * SEQ_TICKS_PER_STEP * l->rden /
+              ((uint64_t)l->div * l->rnum);
+    }
+    return us > 60000000u ? 60000000u : (uint32_t)us;
+}
+
+/* The lane a part belongs to: 'bass:vel' -> 'bass', 'bass:2:oct' -> 'bass:2'.
+ * Looked up by name when the part fires rather than cached, because a lane can
+ * be dropped and written again between two events and a cached slot would then
+ * be somebody else's. Sixteen short compares, and only on a part's events. */
+static seq_lane_t *parent_of(const seq_lane_t *part)
+{
+    const char *colon = strrchr(part->name, ':');
+    if (colon == NULL) {
+        return NULL;
+    }
+    const size_t n = (size_t)(colon - part->name);
+    for (int i = 0; i < SEQ_MAX_LANES; i++) {
+        seq_lane_t *l = &s_lanes[i];
+        if (l->used && l != part && strncmp(l->name, part->name, n) == 0 &&
+            l->name[n] == '\0') {
+            return l;
+        }
+    }
+    return NULL;
+}
+
+/* ONE EVENT, to wherever the lane is bound. `routed` means the source's value
+ * decides how much, which is what routing has always meant. */
+static void fire_event(seq_lane_t *l, const seq_ev_t *e, bool routed,
+                       uint32_t tick)
+{
+    /* A PART OF A SOUND. It plays nothing; it sets how hard, or which octave,
+     * the lane it belongs to plays from here on. It fires before the notes of
+     * the same tick (fire_lanes), so '>bass:vel 9...' and '>bass 0...' agree on
+     * the first step whichever was typed first. */
+    if (l->bind == SEQ_BIND_NOTE && l->param != SEQ_PART_NONE) {
+        int amt = routed ? ((int)l->trig_val * 9 + 63) / 127
+                         : (e->val == SEQ_VAL_X ? -1 : (int)e->val);
+        seq_lane_t *p = parent_of(l);
+        if (p != NULL) {
+            if (l->param == SEQ_PART_VEL) {
+                p->vel = (uint8_t)((amt < 0) ? 100 : vel_of(p, (uint8_t)amt));
+            } else if (l->param == SEQ_PART_OCT) {
+                p->octave = (int8_t)((amt < 0) ? p->oct0 : (amt > 8 ? 8 : amt));
+            }
+        }
+        published(l, (uint8_t)((amt < 0 ? 9 : amt) * 127 / 9));
+        return;
+    }
+    /* A DRAWING LANE. The value is an amount 0-9 and the destination is a
+     * primitive; nothing about MIDI applies. Marked rather than drawn,
+     * because generating a frame is a pass over the whole picture and this
+     * is an esp_timer callback - docs/OS.md forbids acting here. The main
+     * loop replays the marks in primitive order. */
+    if (l->bind == SEQ_BIND_VIZ) {
+        int amt = routed ? ((int)l->trig_val * 9 + 63) / 127
+                         : (e->val == SEQ_VAL_X ? 9 : (int)e->val);
+        if (amt < 0) { amt = 0; }
+        if (amt > 9) { amt = 9; }
+        const char dir = e->dir ? e->dir : l->dir;
+        /* A PARAMETER LANE CARRIES A VALUE, NOT A SHAPE. It does not draw;
+         * it says where the shape will. Same events, same clock, same
+         * grammar - a different part of the destination. */
+        if (l->param != 0) {
+            if (s_on_param != NULL) {
+                s_on_param((int)l->prim, (int)l->param, amt);
+            }
+        } else if (s_on_draw != NULL) {
+            s_on_draw((int)l->prim, amt, dir, tick);
+        }
+        published(l, (uint8_t)(amt * 127 / 9));
+        return;
+    }
+    if (l->ctrl) {
+        /* A step with no digit HOLDS: nothing is sent. A controller that
+         * snaps to zero between steps is a stutter, not a sweep, and holding
+         * is also one fewer message on the wire.
+         *
+         * ROUTED, THE SOURCE SAYS HOW MUCH. This read the lane's own first step
+         * whether routed or not, and a routed lane's own step is 'x' - a hold -
+         * so '>route cut kick' sent nothing at all: measured on the deck, no
+         * controller message in a bar of kicks. */
+        if (!routed && e->val == SEQ_VAL_X) {
+            return;
+        }
+        const uint8_t v = routed ? (uint8_t)(l->trig_val & 0x7F)
+                                 : (uint8_t)((e->val * 127) / 9);
+        emit((uint8_t)(0xB0 | (l->chan & 0x0F)), l->cc, v);
+        published(l, v);
+        return;
+    }
+    /* On a melodic lane an 'x' is the ROOT, not MIDI note 0 - which would emit
+     * C-1 at the bottom of the range, inaudible on most synths and a thump on
+     * a few. On a voice the digit is the degree, so its velocity is the lane's
+     * own; a per-step velocity for a voice is a parameter lane, the way a
+     * circle's position is. */
+    const uint8_t note = l->melodic
+        ? degree_note(e->val == SEQ_VAL_X ? 0 : e->val, l->octave)
+        : l->note;
+    /* Routed, the source's level is the velocity - "fires on the kick, at its
+     * velocity" - where this used the lane's own, so a rim routed from a kick
+     * that alternated 127 and 42 hit at 100 every time (measured). */
+    int vel = routed ? (int)l->trig_val
+                     : (l->melodic ? l->vel : vel_of(l, e->val));
+    if (vel < 1)   { vel = 1; }
+    if (vel > 127) { vel = 127; }
+    emit((uint8_t)(0x90 | (l->chan & 0x0F)), note, (uint8_t)vel);
+    published(l, (uint8_t)vel);
+    schedule_off(l->chan, note, gate_us(l, e->hold));
+}
+
+/* A COUNTED LANE HAS FINISHED: say so to anything routed from 'name:end'.
+ *
+ * This is what makes a count worth having (docs/NEXT.md §4): a lane that ends
+ * is a SOURCE, so '>route crash intro:end' is a crash on the last beat of the
+ * intro, and '>route verse intro:end' - with the verse counted - starts the
+ * verse, which is a sequence of sections without a single new verb. */
+static void publish_end(seq_lane_t *src)
+{
+    const size_t n = strlen(src->name);
+    for (int j = 0; j < SEQ_MAX_LANES; j++) {
+        seq_lane_t *d = &s_lanes[j];
+        if (d->used && strncmp(d->route, src->name, n) == 0 &&
+            strcmp(d->route + n, ":end") == 0) {
+            d->trig = true;
+            d->trig_val = 127;
+        }
+    }
+}
+
+static uint8_t s_maxrank;
+
+static void fire_inputs(uint32_t tick, int sw);
+
 static void fire_lanes(uint32_t tick)
 {
     s_emitting = NULL;
+    const int sw = swing_ticks();
+    fire_inputs(tick, sw);
+    /* IN ROUTE ORDER, AND PARTS FIRST.
+     *
+     * A routed lane hears its source when the source fires, so the source has to
+     * go first or the routed lane hears it a tick late - 5 ms, a flam on a
+     * crash routed from a kick - and whether it was late depended on which line
+     * had been typed first. Ranks are route hops (rerank()), lowest first.
+     *
+     * Within a rank, a PART goes before a lane: a part sets something a lane
+     * then plays with, so on a tick where both fire the part must go first or
+     * the first note takes the old value. With no routes this is two passes over
+     * sixteen lanes, as it was. */
+    const int passes = ((int)s_maxrank + 1) * 2;
+    for (int pass = 0; pass < passes; pass++)
     for (int i = 0; i < SEQ_MAX_LANES; i++) {
         /* NOT const: a routed lane clears its own trigger here. */
         seq_lane_t *l = &s_lanes[i];
-        if (!l->used || l->muted || l->steps == 0) {
+        if (!l->used || l->muted || l->slots == 0 || l->nev == 0) {
             continue;
         }
-        int s = 0;
-        if (l->route[0] != '\0') {
+        if (pass != (int)l->rank * 2 + (l->param != 0 ? 0 : 1)) {
+            continue;
+        }
+        const bool routed = (l->route[0] != '\0');
+        if (routed && l->count == 0) {
             /* ROUTED: the source decides both when and how much, and this
              * lane's own steps are not consulted. A routed lane that also had
              * to agree with its own pattern fired only where the two happened
@@ -443,131 +665,297 @@ static void fire_lanes(uint32_t tick)
                 continue;
             }
             l->trig = false;
-            s = 0;
             s_emitting = l->name;
-        } else {
-            if (!lane_step_now(l, tick, &s)) {
-                continue;
-            }
-            s_emitting = l->name;
-            if (!(l->mask & (1ull << s))) {
-                continue;
-            }
+            fire_event(l, &l->ev[0], true, tick);
+            continue;
         }
-        /* '?' - maybe. Half, because half is the only ratio that needs no
-         * number after it, and a number after it would be the start of the
-         * syntax this instrument is trying not to have. */
-        if (l->route[0] == '\0' && (l->chance & (1ull << s))) {
-            /* '?' alone is half; '?[15]' is fifteen per cent. Half is the
-             * default because it is the only ratio that needs no number, and
-             * the bracket is there for when the player wants a different one
-             * rather than a different character. */
-            /* 255 means the step carried no bracket, so use the default of
-             * a half. Everything else is taken literally, including zero. */
-            const uint32_t pct = (l->prob[s] == 255u) ? 50u : l->prob[s];
-            if ((rng_next() % 100u) >= pct) {
-                continue;
-            }
+        /* Every lane is asked whether THIS tick starts one of its slots, from
+         * its own subdivision and rate, exactly - see seq_pattern_slot_at. */
+        int s = 0;
+        uint32_t cy = 0;
+        if (!seq_pattern_slot_at(tick, l->slots, l->div, l->rnum, l->rden, sw,
+                                 &s, &cy)) {
+            continue;
         }
-        /* Accent and ghost are a ratio of the lane's own velocity, not fixed
-         * numbers, so setting a lane quiet keeps its accents in proportion
-         * instead of flattening the whole pattern against a ceiling. */
-        int vel = l->vel;
-        if (l->accent & (1ull << s)) { vel = vel + (127 - vel) * 3 / 4; }
-        if (l->ghost  & (1ull << s)) { vel = vel / 3; }
-        if (vel < 1)   { vel = 1; }
-        if (vel > 127) { vel = 127; }
-
-        /* On a melodic lane an 'x' - or an 'X', or a ',' - is the ROOT, not
-         * MIDI note 0. Falling through to l->note here would emit C-1 at the
-         * bottom of the range, which on most synths is inaudible and on a few
-         * is a thump nobody asked for, and the player would reasonably
-         * conclude the lane was broken. */
-        /* A DRAWING LANE. The value is an amount 0-9 and the destination is a
-         * primitive; nothing about MIDI applies. Marked rather than drawn,
-         * because generating a frame is a pass over the whole picture and this
-         * is an esp_timer callback - docs/OS.md forbids acting here. The main
-         * loop replays the marks in primitive order. */
-        if (l->bind == SEQ_BIND_VIZ) {
-            int amt;
-            if (l->route[0] != '\0') {
-                amt = (int)l->trig_val;
-            } else {
-                amt = (l->deg[s] == 0xFF) ? 9 : (int)l->deg[s];
-            }
-            if (amt < 0) { amt = 0; }
-            if (amt > 9) { amt = 9; }
-            const char ch = l->chr[s];
-            const char dir = (ch == 'u' || ch == 'd' || ch == 'l' || ch == 'r')
-                             ? ch : l->dir;
-            /* A PARAMETER LANE CARRIES A VALUE, NOT A SHAPE. It does not draw;
-             * it says where the shape will. Same events, same clock, same
-             * grammar - a different part of the destination. */
-            if (l->param != 0) {
-                if (s_on_param != NULL) {
-                    s_on_param((int)l->prim, (int)l->param, amt);
+        if (l->count != 0) {
+            /* A COUNT. Its passes are its own: numbered from the slot it began
+             * on, so an alternation restarts with the section and pass one is a
+             * whole pass. */
+            const uint32_t g = cy * l->slots + (uint32_t)s;
+            if (routed) {
+                /* A CUE: a counted lane that is routed is STARTED by its source -
+                 * every time - and plays its own pattern for its count. The count
+                 * is what tells a cue from a sidechain. */
+                if (l->trig) {
+                    l->trig = false;
+                    l->idle = false;
+                    l->origin = g;
                 }
-            } else if (s_on_draw != NULL) {
-                s_on_draw((int)l->prim, amt, dir, tick);
+            } else if (l->idle) {
+                /* Typed mid-song, it waits for its own downbeat, so the first
+                 * pass is a whole one and "four times" is four. */
+                if (s != 0) {
+                    continue;
+                }
+                l->idle = false;
+                l->origin = g;
             }
-            published(l, (uint8_t)(amt * 127 / 9));
-            continue;
-        }
-
-        if (l->ctrl) {
-            /* Digits are values: 0 is 0 and 9 is 127. A step with no digit
-             * holds the last value rather than jumping to zero, because a
-             * controller that snaps to silence on every unmarked step is a
-             * stutter, not a sweep. */
-            /* A step with no digit HOLDS, it does not emit zero. The code
-             * here sent 0 while the comment beside it claimed otherwise - a
-             * controller that snaps to silence between steps is a stutter,
-             * and the comment was describing the intention rather than the
-             * behaviour. Nothing is sent at all on a hold, which is also one
-             * fewer message on the wire. */
-            if (l->deg[s] == 0xFF) {
+            if (l->idle) {
                 continue;
             }
-            const uint8_t v = (uint8_t)((l->deg[s] * 127) / 9);
-            emit((uint8_t)(0xB0 | (l->chan & 0x0F)), l->cc, v);
-            published(l, v);
-            continue;
+            const uint32_t local = g - l->origin;
+            cy = local / l->slots;
+            s = (int)(local % l->slots);
+            if (cy >= l->count) {
+                /* FINISHED, on the downbeat its next pass would have taken. A
+                 * cue goes back to waiting for its source; a lane on its own
+                 * goes quiet and says so in '>lanes'. Either way it is a source
+                 * now: 'name:end'. */
+                l->idle = true;
+                if (!routed) {
+                    l->done = true;
+                    l->muted = true;
+                }
+                publish_end(l);
+                continue;
+            }
         }
-        const uint8_t note = l->melodic
-            ? degree_note(l->deg[s] == 0xFF ? 0 : l->deg[s], l->octave)
-            : l->note;
-        emit((uint8_t)(0x90 | (l->chan & 0x0F)), note, (uint8_t)vel);
-        published(l, (uint8_t)vel);
-        schedule_off(l->chan, note, l->gate_ms);
+        s_emitting = l->name;
+        /* ONE ROLL PER SLOT. Everything that starts together shares it, so a
+         * chord with odds plays whole or not at all - Strudel's randomness is a
+         * function of time, which gives the same result - and '[0%30,4%60]'
+         * plays the 4 whenever it plays the 0, because one number is compared
+         * against both. Deterministic from the seed, cheap, never blocking. */
+        int roll = -1;
+        for (int k = l->first[s]; k < l->first[s + 1]; k++) {
+            const seq_ev_t *e = &l->ev[k];
+            if (e->per > 1 && (cy % e->per) != e->ph) {
+                continue;               /* not this alternative's cycle */
+            }
+            if (e->prob != SEQ_PROB_ALWAYS) {
+                if (roll < 0) {
+                    roll = (int)(rng_next() % 100u);
+                }
+                if (roll >= e->prob) {
+                    continue;
+                }
+            }
+            fire_event(l, e, false, tick);
+        }
     }
+}
+
+/* A COMPILED LANE IS HANDED TO THE CLOCK, NOT WRITTEN UNDER IT.
+ *
+ * The clock runs on CPU1 and the editor on CPU0, so the two genuinely overlap.
+ * The old bitmasks were rewritten in place while the timer read them, and a
+ * torn read cost at most one wrong step. An event list read through an index
+ * cannot be torn safely, so the command layer compiles into this stage and the
+ * clock copies it in at the top of a tick - the clock is then the only writer of
+ * everything it reads. One stage, because one command runs at a time. */
+static struct {
+    seq_ev_t ev[SEQ_MAX_EVENTS];
+    uint8_t  first[SEQ_MAX_STEPS + 1];
+    uint8_t  nev, slots, div, steps, rnum, rden, count;
+} s_stage;
+static volatile int s_stage_for = -1;    /* the lane waiting for it, or -1 */
+
+static void stage_apply(void)
+{
+    const int i = s_stage_for;
+    if (i < 0 || i >= SEQ_MAX_LANES) {
+        return;
+    }
+    __sync_synchronize();
+    seq_lane_t *l = &s_lanes[i];
+    memcpy(l->ev, s_stage.ev, sizeof l->ev);
+    memcpy(l->first, s_stage.first, sizeof l->first);
+    l->nev   = s_stage.nev;
+    l->div   = s_stage.div;
+    l->steps = s_stage.steps;
+    l->rnum  = s_stage.rnum;
+    l->rden  = s_stage.rden;
+    /* A lane written again starts its count again: it waits for its downbeat,
+     * or for its source, and is no longer finished. */
+    l->count = s_stage.count;
+    l->idle  = true;
+    l->done  = false;
+    l->slots = s_stage.slots;
+    __sync_synchronize();
+    s_stage_for = -1;
 }
 
 /* The clock. A hardware timer, never a task delay - docs/OS.md: "Never
  * sequence from a task delay. Use a hardware timer."
  *
- * It ticks at 24 PPQN, not at the step rate, because that is the rate MIDI
- * clock is defined at: sync costs one message on a tick that already exists.
- * At 120 bpm a tick is 20,833 us and a sixteenth is six of them, 125,000 us
- * exactly. */
+ * It ticks at 96 PPQN, a multiple of the 24 MIDI clock is defined at, so sync
+ * costs one message on every fourth tick that already exists. At 120 bpm a tick
+ * is 5,208 us and a sixteenth is twenty-four of them, 125,000 us exactly. */
+static seq_input_t s_inputs[SEQ_MAX_INPUTS];
+
+static seq_input_t *input_find(const char *name)
+{
+    for (int i = 0; i < SEQ_MAX_INPUTS; i++) {
+        if (s_inputs[i].kind != SEQ_INPUT_NONE &&
+            strcmp(s_inputs[i].name, name) == 0) {
+            return &s_inputs[i];
+        }
+    }
+    return NULL;
+}
+
+esp_err_t seq_input_define(const char *name, seq_input_kind_t kind)
+{
+    if (name == NULL || name[0] == '\0' || strlen(name) >= SEQ_NAME_MAX ||
+        kind == SEQ_INPUT_NONE) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    seq_input_t *in = input_find(name);
+    if (in == NULL) {
+        for (int i = 0; i < SEQ_MAX_INPUTS && in == NULL; i++) {
+            if (s_inputs[i].kind == SEQ_INPUT_NONE) {
+                in = &s_inputs[i];
+            }
+        }
+        if (in == NULL) {
+            return ESP_ERR_NO_MEM;
+        }
+        in->pending = false;
+        in->value = 0;
+        in->from = 0;
+        in->count = 0;
+        snprintf(in->name, sizeof in->name, "%s", name);
+    }
+    in->kind = (uint8_t)kind;       /* last: it is what marks the slot used */
+    return ESP_OK;
+}
+
+void seq_input_remove(const char *name)
+{
+    seq_input_t *in = input_find(name);
+    if (in != NULL) {
+        in->kind = SEQ_INPUT_NONE;
+        in->pending = false;
+    }
+}
+
+bool seq_input_set(const char *name, uint8_t value, uint32_t from)
+{
+    seq_input_t *in = input_find(name);
+    if (in == NULL) {
+        return false;
+    }
+    in->count++;
+    in->from = from;
+    if (in->kind == SEQ_INPUT_PAD && value == 0) {
+        return true;                  /* a release */
+    }
+    in->value = value > 127 ? 127 : value;
+    in->pending = true;
+    return true;
+}
+
+const seq_input_t *seq_inputs(int *count)
+{
+    if (count != NULL) {
+        *count = SEQ_MAX_INPUTS;
+    }
+    return s_inputs;
+}
+
+/* Hand an input's value to every lane routed from it - published(), for a
+ * source that is a name and not a lane. */
+static void publish_input(const char *name, uint8_t value)
+{
+    for (int j = 0; j < SEQ_MAX_LANES; j++) {
+        seq_lane_t *d = &s_lanes[j];
+        if (d->used && d->route[0] != '\0' && strcmp(d->route, name) == 0) {
+            d->trig = true;
+            d->trig_val = value;
+        }
+    }
+}
+
+/* Before the lanes, so a lane routed from an input hears it on this tick. */
+static void fire_inputs(uint32_t tick, int sw)
+{
+    for (int i = 0; i < SEQ_MAX_INPUTS; i++) {
+        seq_input_t *in = &s_inputs[i];
+        if (in->kind == SEQ_INPUT_NONE || !in->pending) {
+            continue;
+        }
+        if (in->kind == SEQ_INPUT_PAD) {
+            /* On the next step, swung as a lane's steps are swung. */
+            int st = 0;
+            uint32_t cy = 0;
+            if (!seq_pattern_slot_at(tick, 1, 1, 1, 1, sw, &st, &cy)) {
+                continue;
+            }
+        }
+        in->pending = false;
+        publish_input(in->name, in->value);
+    }
+}
+
+/* Arm the one-shot for the next tick - see seq_clock.h. */
+static void arm_next(int64_t tick_began)
+{
+    const int64_t g = grid_get();
+    const bool on_grid = s_running && g != 0;
+    const int64_t wait = seq_clock_wait(esp_timer_get_time(), tick_began,
+                                        on_grid, g, s_tick,
+                                        (int64_t)period_us());
+    (void)esp_timer_start_once(s_clock, (uint64_t)wait);
+}
+
 static void tick(void *arg)
 {
     (void)arg;
     const int64_t now = esp_timer_get_time();
     service_offs(now);
+    /* A lane compiled since the last tick takes effect HERE, stopped or not, so
+     * a lane written before '>play' is in place when play starts. `now` is
+     * already taken, so the copy cannot show up in the jitter statistic. */
+    stage_apply();
 
     if (!s_running) {
+        arm_next(now);
         return;
+    }
+    s_last_tick_us = now;
+
+    if (s_adopt_pending) {
+        const int32_t d = s_adopt;
+        s_adopt_pending = false;
+        if (d != 0) {
+            /* This tick keeps its time; only its number changes. */
+            s_tick += (uint32_t)d;
+            grid_slide(-(int64_t)d * (int64_t)period_us());
+            /* A counted lane waits for its next downbeat in the new count,
+             * as it does after '>play', so "four times" stays four. */
+            for (int i = 0; i < SEQ_MAX_LANES; i++) {
+                seq_lane_t *l = &s_lanes[i];
+                if (l->used && l->count != 0 && !l->done && l->route[0] == '\0') {
+                    l->idle = true;
+                }
+            }
+        }
+        s_await_ticks = 0;
+    }
+    const bool awaiting = s_await_ticks > 0;
+    if (awaiting) {
+        s_await_ticks--;
     }
 
     /* Dispatch deviation from the ideal grid. This is the number the owner
      * is hearing when they say it feels jittery, and it is measured before
      * any note is emitted so the measurement cannot be blamed on the notes. */
-    if (s_grid_t0 == 0) {
+    if (grid_get() == 0) {
         /* Anchor on the first tick after play, not on the press. The timer is
          * free-running, so the gap between the two is an arbitrary constant
          * phase - real, but not jitter, and reporting it as jitter buries the
          * signal under a 6 ms offset. */
-        s_grid_t0 = now - (int64_t)s_tick * (int64_t)period_us();
+        grid_set(now - (int64_t)s_tick * (int64_t)period_us());
         s_settle  = SEQ_SETTLE_TICKS;
     }
     if (s_settle > 0) {
@@ -584,11 +972,16 @@ static void tick(void *arg)
          * event. What is thrown away is only its contribution to the spread. */
         s_settle--;
     } else {
-        const int64_t ideal = s_grid_t0 + (int64_t)s_tick * (int64_t)period_us();
+        const int64_t ideal = grid_get() + (int64_t)s_tick * (int64_t)period_us();
         int64_t d = now - ideal;
         if (d >  1000000) { d =  1000000; }
         if (d < -1000000) { d = -1000000; }
         stat_add(&s_clock_stat, (int32_t)d);
+    }
+    if (awaiting) {
+        s_tick++;
+        arm_next(now);
+        return;
     }
     if (s_sync && (s_tick % SEQ_CLOCK_EVERY) == 0) {
         emit(0xF8, 0, 0);            /* timing clock, no data bytes */
@@ -622,6 +1015,7 @@ static void tick(void *arg)
         emit(0xF9, (uint8_t)(s_pos & 0x7F), 0);
     }
     s_tick++;
+    arm_next(now);
 }
 
 static uint64_t period_us(void)
@@ -639,7 +1033,10 @@ void seq_timebase(uint32_t *tick, int64_t *tick_due_us, int *bpm)
         /* When the NEXT pulse is due on the ideal grid, not when the last one
          * happened to fire. The grid is the thing the two decks are agreeing
          * about; dispatch jitter is not. */
-        *tick_due_us = s_grid_t0 + (int64_t)s_tick * (int64_t)period_us();
+        /* 0 until the first tick after '>play' has anchored the grid: before
+         * that there is no "when" to report. */
+        const int64_t g = grid_get();
+        *tick_due_us = g != 0 ? g + (int64_t)s_tick * (int64_t)period_us() : 0;
     }
 }
 
@@ -658,7 +1055,7 @@ void seq_timebase(uint32_t *tick, int64_t *tick_due_us, int *bpm)
  * clock. */
 int32_t seq_nudge(uint32_t tick, int64_t due_us, int bpm)
 {
-    if (!s_running || s_grid_t0 == 0) {
+    if (!s_running || grid_get() == 0) {
         return 0;
     }
     if (bpm > 0 && bpm != s_bpm) {
@@ -668,7 +1065,7 @@ int32_t seq_nudge(uint32_t tick, int64_t due_us, int bpm)
         seq_bpm(bpm);
     }
     /* Where WE think that pulse was due, against where the ensemble says. */
-    const int64_t ours = s_grid_t0 + (int64_t)tick * (int64_t)period_us();
+    const int64_t ours = grid_get() + (int64_t)tick * (int64_t)period_us();
     int64_t err = due_us - ours;
 
     /* A whole-pulse disagreement is not a phase error, it is a different bar -
@@ -680,20 +1077,40 @@ int32_t seq_nudge(uint32_t tick, int64_t due_us, int bpm)
         while (err >  per / 2) { err -= per; }
         while (err < -per / 2) { err += per; }
     }
-    s_grid_t0 += err / 8;
+    grid_slide(err / 8);
     return (int32_t)err;
 }
 
+void seq_follow(bool on)
+{
+    s_follows = on;
+    if (!on) {
+        s_await_ticks = 0;
+        s_adopt_pending = false;
+    }
+}
+
+void seq_adopt(int32_t pulses)
+{
+    if (!s_running || s_adopt_pending) {
+        return;
+    }
+    s_adopt = pulses;
+    s_adopt_pending = true;
+}
+
+bool seq_awaiting(void) { return s_await_ticks > 0; }
+
 void seq_nudge_by(int32_t err_us, int bpm)
 {
-    if (!s_running || s_grid_t0 == 0) {
+    if (!s_running || grid_get() == 0) {
         return;
     }
     if (bpm > 0 && bpm != s_bpm) {
         seq_bpm(bpm);
         return;              /* seq_bpm re-anchors; let the next one align it */
     }
-    s_grid_t0 += err_us;
+    grid_slide(err_us);
 }
 
 esp_err_t seq_init(void)
@@ -727,8 +1144,9 @@ esp_err_t seq_init(void)
         return err;
     }
     /* The timer runs even when stopped, so scheduled note-offs still drain
-     * after a stop and nothing is left sounding. */
-    return esp_timer_start_periodic(s_clock, period_us());
+     * after a stop and nothing is left sounding. One-shot, re-armed by every
+     * tick: seq_clock.h. */
+    return esp_timer_start_once(s_clock, period_us());
 }
 
 static seq_lane_t *lane_find(const char *name, int len)
@@ -784,6 +1202,43 @@ static seq_lane_t *find(const char *name, bool create)
     return NULL;
 }
 
+/* ROUTE RANKS: how many hops each lane is from one that follows nothing - the
+ * route's source, with a trailing ':end' meaning the lane it names. Recomputed
+ * whenever a route or a lane comes or goes, which is an edit, never a tick. A
+ * chain that loops back on itself is bounded by the lane count rather than
+ * followed for ever. */
+static void rerank(void)
+{
+    uint8_t maxr = 0;
+    for (int i = 0; i < SEQ_MAX_LANES; i++) {
+        seq_lane_t *l = &s_lanes[i];
+        if (!l->used) {
+            continue;
+        }
+        int hops = 0;
+        const char *up = l->route;
+        while (up[0] != '\0' && hops <= SEQ_MAX_LANES) {
+            char src[SEQ_NAME_MAX];
+            snprintf(src, sizeof src, "%s", up);
+            const size_t n = strlen(src);
+            if (n > 4 && strcmp(src + n - 4, ":end") == 0) {
+                src[n - 4] = '\0';
+            }
+            const seq_lane_t *s = lane_find(src, -1);
+            if (s == NULL) {
+                break;
+            }
+            hops++;
+            up = s->route;
+        }
+        l->rank = (uint8_t)hops;
+        if (l->rank > maxr) {
+            maxr = l->rank;
+        }
+    }
+    s_maxrank = maxr;
+}
+
 esp_err_t seq_forget(const char *name)
 {
     seq_lane_t *l = find(name, false);
@@ -799,154 +1254,221 @@ esp_err_t seq_forget(const char *name)
      * the next name, by which point the queue has long drained. */
     /* Gone means gone, including its route: keeping it meant turning a lane off
      * and on again brought the old routing back with it. */
-    l->mask = 0;
-    l->steps = 0;
+    l->slots = 0;
     l->route[0] = '\0';
     l->trig = false;
+    /* A PART THAT GOES TAKES ITS SETTING WITH IT. Dropping '>bass:oct' and
+     * leaving the bass two octaves up would be a change nobody can see the
+     * cause of any more; the name's own octave and the default level return. */
+    if (l->bind == SEQ_BIND_NOTE && l->param != SEQ_PART_NONE) {
+        seq_lane_t *p = parent_of(l);
+        if (p != NULL) {
+            if (l->param == SEQ_PART_VEL) { p->vel = 100; }
+            if (l->param == SEQ_PART_OCT) { p->octave = p->oct0; }
+        }
+    }
     l->used = false;
+    rerank();
     return ESP_OK;
 }
 
 void seq_forget_all(void)
 {
     for (int i = 0; i < SEQ_MAX_LANES; i++) {
-        s_lanes[i].mask = 0;
-        s_lanes[i].steps = 0;
+        s_lanes[i].slots = 0;
         s_lanes[i].route[0] = '\0';
         s_lanes[i].trig = false;
         s_lanes[i].used = false;
     }
+    rerank();
+}
+
+/* Hand a compiled pattern to the clock and wait until it has taken it. The
+ * clock takes it at the top of its next tick - at most one tick, five
+ * milliseconds at 124 bpm and thirty at the slowest tempo - so this waits a
+ * little over the slowest tick before deciding the clock is not there at all,
+ * which is only true before seq_init(), and writing directly is then safe. */
+static void stage_wait(void)
+{
+    for (int i = 0; i < 40 && s_stage_for >= 0; i++) {
+        vTaskDelay(1);
+    }
+    if (s_stage_for >= 0) {
+        stage_apply();
+    }
+}
+
+static void stage(int lane, const seq_comp_t *c)
+{
+    stage_wait();
+    /* Rests and ties are the playhead's business; the clock gets the hits,
+     * sorted by slot, and where each slot's run of them begins. */
+    int n = 0;
+    for (int s = 0; s < c->slots; s++) {
+        s_stage.first[s] = (uint8_t)n;
+        for (int i = 0; i < c->n; i++) {
+            const seq_leaf_t *L = &c->leaf[i];
+            if (L->kind != SEQ_LEAF_HIT || L->slot != s) {
+                continue;
+            }
+            seq_ev_t *e = &s_stage.ev[n++];
+            e->slot  = L->slot;
+            e->val   = L->val;
+            e->hold  = (uint8_t)(L->len - L->width);
+            e->prob  = L->prob;
+            e->per   = L->per ? L->per : 1;
+            e->ph    = L->ph;
+            e->dir   = L->dir;
+            e->spare = 0;
+        }
+    }
+    for (int s = c->slots; s <= SEQ_MAX_STEPS; s++) {
+        s_stage.first[s] = (uint8_t)n;
+    }
+    s_stage.nev   = (uint8_t)n;
+    s_stage.slots = (uint8_t)c->slots;
+    s_stage.div   = (uint8_t)c->div;
+    s_stage.steps = (uint8_t)c->steps;
+    s_stage.rnum  = (uint8_t)c->rnum;
+    s_stage.rden  = (uint8_t)c->rden;
+    s_stage.count = (uint8_t)c->count;
+    __sync_synchronize();
+    s_stage_for = lane;
+    stage_wait();
+}
+
+/* One compile at a time - the command layer is the only caller - so the
+ * compiler's working space is static rather than 1.8 KB on a task stack. */
+static seq_comp_t s_comp;
+static char       s_err[40];
+static int        s_err_at = -1;
+
+const char *seq_lane_error(int *at)
+{
+    if (at != NULL) {
+        *at = s_err_at;
+    }
+    return s_err;
 }
 
 esp_err_t seq_lane(const char *name, const char *steps)
 {
-    seq_lane_t *l = find(name, true);
+    /* COMPILE FIRST, AND TOUCH NOTHING UNTIL IT IS GOOD. A typo mid-performance
+     * must leave the lane playing what it played, not silence it and not play
+     * the typo. */
+    const int err = seq_pattern_compile(steps, &s_comp);
+    seq_lane_t *l = find(name, err != SEQ_PAT_EMPTY);
+    if (err == SEQ_PAT_EMPTY) {
+        /* an empty pattern removes the lane */
+        if (l != NULL) {
+            l->slots = 0;
+            l->used = false;
+        }
+        return ESP_OK;
+    }
     if (l == NULL) {
         return ESP_ERR_NO_MEM;
     }
-    /* A DIRECTION IN FRONT OF THE PATTERN, BECAUSE A STEP CANNOT SAY BOTH.
-     *
-     * One character per step means a step holds a value or a direction, and the
-     * bindings that point somewhere need both at once: '>ramp 4' cannot say
-     * which way and '>ramp u' cannot say how far. So a lone u, d, l or r before
-     * the pattern sets the lane's direction and is not a step. Harmless on a
-     * note lane, which never reads it. */
-    char dir = 'd';
-    if ((steps[0] == 'u' || steps[0] == 'd' ||
-         steps[0] == 'l' || steps[0] == 'r') &&
-        (steps[1] == ' ' || steps[1] == '\t')) {
-        dir = steps[0];
-        steps++;
-        while (*steps == ' ' || *steps == '\t') { steps++; }
-        if (*steps == '\0') { steps = "9"; }
+    int hits = 0;
+    for (int i = 0; i < s_comp.n; i++) {
+        hits += (s_comp.leaf[i].kind == SEQ_LEAF_HIT);
     }
-
-    int rnum = 1, rden = 1;
-    (void)seq_pattern_rate(steps, &rnum, &rden);
-
-    /* ONE WALK, AND IT FLATTENS THE NESTING.
-     *
-     * seq_pattern_walk resolves '[xx]' into slots on the same uniform grid the
-     * clock already reads, so a nested pattern and a flat one compile to the
-     * same shape and there is no second code path that could be late. The walk
-     * hands back, per slot, the offset of the character that starts there - or
-     * -1 where a longer step is still sounding.
-     *
-     * This loop used to walk the characters itself, which is why the editor had
-     * to walk them too, backwards, and why the two could disagree about which
-     * characters were steps. Now both call the same function. */
-    seq_walk_t w;
-    const int slots = seq_pattern_walk(steps, &w);
-    if (slots < 0) {
-        /* REFUSED, NOT TRUNCATED. A pattern whose flattened form needs more
-         * than 32 slots - '[xxxxx][xxxx][xxx]' needs 180 - would otherwise
-         * compile to a silently shortened bar, which is a bug that sounds like
-         * a composition choice. */
-        return ESP_ERR_INVALID_SIZE;
-    }
-
-    uint64_t mask = 0, accent = 0, ghost = 0, chance = 0;
-    char chr[SEQ_MAX_STEPS];
-    uint8_t deg[SEQ_MAX_STEPS];
-    uint8_t prob[SEQ_MAX_STEPS];
-    memset(chr, 0, sizeof chr);
-    memset(deg, 0xFF, sizeof deg);
-    memset(prob, 255, sizeof prob);   /* 255 = no parameter on this slot */
-
-    int n = slots;
-    if (n > SEQ_MAX_STEPS) { n = SEQ_MAX_STEPS; }
-    for (int i = 0; i < n; i++) {
-        const int off = w.at[i];
-        if (off < 0) {
-            continue;                 /* nothing starts here */
+    const bool fresh = (l->slots == 0 && l->route[0] == '\0');
+    if (err != SEQ_PAT_OK || hits > SEQ_MAX_EVENTS) {
+        if (err != SEQ_PAT_OK) {
+            seq_pattern_error_text(&s_comp, steps, s_err, sizeof s_err);
+            s_err_at = s_comp.err_at;
+        } else {
+            snprintf(s_err, sizeof s_err, "%d notes: %d fit a lane", hits,
+                     SEQ_MAX_EVENTS);
+            s_err_at = -1;
         }
-        const char ch = steps[off];
-        /* Anything that is not a rest is a hit. Nobody should have to remember
-         * whether the hit character is x, o or *. */
-        if (ch == '.' || ch == '-' || ch == '_') {
-            continue;
+        /* A lane the binding call created a moment ago for this very line has
+         * never played; do not leave it holding one of the sixteen slots. */
+        if (fresh) {
+            l->used = false;
         }
-        mask |= (1ull << i);
-        chr[i] = ch;
-        if (ch == 'X') { accent |= (1ull << i); }
-        if (ch == ',') { ghost  |= (1ull << i); }
-        if (ch == '?') { chance |= (1ull << i); }
-        if (ch >= '0' && ch <= '9') { deg[i] = (uint8_t)(ch - '0'); }
+        return (err != SEQ_PAT_OK) ? ESP_ERR_INVALID_ARG : ESP_ERR_INVALID_SIZE;
+    }
+    s_err[0] = '\0';
+    s_err_at = -1;
 
-        /* '%NN' is a parameter on this step, and it implies maybe. 0 means
-         * NEVER: it used to be clamped to 1%, which made the one value whose
-         * meaning is obvious the one value that lied. */
-        const int v = seq_pattern_param(steps + off + 1);
-        if (v >= 0 && v <= 100) {
-            prob[i] = (uint8_t)v;
-            chance |= (1ull << i);
-        }
-    }
-
-    if (n == 0) {
-        l->used = false;             /* an empty pattern removes the lane */
-        return ESP_OK;
-    }
-    /* Compiled. The clock callback never sees this string again. */
-    l->mask   = mask;
-    l->accent = accent;
-    l->ghost  = ghost;
-    l->chance = chance;
-    memcpy(l->prob, prob, sizeof l->prob);
-    memcpy(l->deg, deg, sizeof l->deg);
-    memcpy(l->chr, chr, sizeof l->chr);
-    l->dir    = dir;
-    l->steps  = (uint8_t)n;
-    {
-        /* Ticks per step for this lane. Clamped so a nonsense rate cannot
-         * make a lane fire every tick or never at all. */
-        /* DIVIDED BY THE SUBDIVISION, which is the whole of nesting as far as
-         * the clock is concerned: 'x..[xx]' is eight slots at half the step
-         * length, not four steps one of which is special. */
-        long t = (long)SEQ_TICKS_PER_STEP * rden / (rnum > 0 ? rnum : 1);
-        t /= (w.div > 0 ? w.div : 1);
-        if (t < 1)     { t = 1; }
-        if (t > 32767) { t = 32767; }
-        l->tps = (uint16_t)t;
-    }
+    stage((int)(l - s_lanes), &s_comp);
+    /* A DIRECTION IN FRONT OF THE PATTERN - '>ramp u 4' - is the lane's way;
+     * a step can still say its own with u d l r. */
+    l->dir = s_comp.dir ? s_comp.dir : 'd';
+    snprintf(l->text, sizeof l->text, "%s", steps);
     /* The text this lane was compiled from, so a later press can tell "run
-     * this again unchanged" from "I edited it". After the empty-pattern early
-     * return above, so a removed lane carries no source. */
-    l->src    = seq_pattern_hash(steps);
+     * this again unchanged" from "I edited it". The WHOLE argument, direction
+     * included: it hashed the text after the direction, while the command layer
+     * hashed all of it, so '>ramp u 4' could never be silenced by running it
+     * again. */
+    l->src = seq_pattern_hash(steps);
+    rerank();
     return ESP_OK;
 }
 
-esp_err_t seq_lane_viz(const char *name, int prim, int param)
+bool seq_lane_now(const seq_lane_t *l, int *slot, uint32_t *cycle)
+{
+    if (!s_running || l == NULL || l->slots == 0) {
+        return false;
+    }
+    seq_pattern_slot_now(s_tick, l->slots, l->div, l->rnum, l->rden, slot, cycle);
+    if (l->count != 0) {
+        /* A COUNTED LANE'S OWN PASSES, and no mark at all while it waits or
+         * after it has finished - a playhead on a lane that is not sounding is
+         * the one lie the playhead exists not to tell. */
+        if (l->idle || l->done) {
+            return false;
+        }
+        const uint32_t g = *cycle * l->slots + (uint32_t)*slot;
+        const uint32_t local = g - l->origin;
+        *slot  = (int)(local % l->slots);
+        *cycle = local / l->slots;
+        if (*cycle >= l->count) {
+            return false;
+        }
+    }
+    return true;
+}
+
+int seq_lane_pass(const seq_lane_t *l)
+{
+    if (l == NULL || l->count == 0) {
+        return SEQ_PASS_NONE;
+    }
+    if (l->done) {
+        return SEQ_PASS_DONE;
+    }
+    if (l->idle || !s_running) {
+        return SEQ_PASS_WAITS;
+    }
+    int slot = 0;
+    uint32_t cy = 0;
+    seq_pattern_slot_now(s_tick, l->slots, l->div, l->rnum, l->rden, &slot, &cy);
+    const uint32_t local = cy * l->slots + (uint32_t)slot - l->origin;
+    const uint32_t pass = local / l->slots;
+    return (pass >= l->count) ? SEQ_PASS_DONE : (int)pass;
+}
+
+
+esp_err_t seq_lane_bind(const char *name, const seq_binding_t *b)
 {
     seq_lane_t *l = find(name, true);
     if (l == NULL) {
         return ESP_ERR_NO_MEM;
     }
-    l->bind    = SEQ_BIND_VIZ;
-    l->prim    = (uint8_t)prim;
-    l->param   = (uint8_t)param;
-    l->melodic = false;
-    l->ctrl    = false;
+    l->bind    = b->bind;
+    l->melodic = (b->bind == SEQ_BIND_NOTE) && b->melodic;
+    l->ctrl    = (b->bind == SEQ_BIND_CC);
+    l->note    = b->note & 0x7F;
+    l->octave  = b->octave;
+    l->chan    = b->chan & 0x0F;
+    l->gate_ms = b->gate_ms ? b->gate_ms : 40;
+    l->cc      = b->cc & 0x7F;
+    l->prim    = (b->bind == SEQ_BIND_VIZ) ? b->prim : 0;
+    l->param   = (b->bind == SEQ_BIND_CC) ? 0 : b->param;
+    l->oct0    = b->octave;
     return ESP_OK;
 }
 
@@ -966,19 +1488,20 @@ esp_err_t seq_route(const char *name, const char *src)
     }
     snprintf(l->route, sizeof l->route, "%s", src ? src : "");
     l->trig = false;    /* no stale trigger from whatever it used to follow */
+    /* A counted lane that is now routed is a cue, and waits for its source; one
+     * that is unrouted waits for its own downbeat. Either way, not mid-pass. */
+    l->idle = true;
+    rerank();
 
     /* A ROUTE IS A PATTERN. Making a lane live should not need a pattern
      * written first - and a routed lane ignores the one you write, so writing
      * it was a step that only made sense to whoever wrote the code. One step at
      * full value, which the source overrides on every hit. */
-    if (l->route[0] != '\0' && l->steps == 0) {
-        l->mask  = 1u;
-        l->steps = 1;
-        l->chance = 0;
-        memset(l->prob, 255, sizeof l->prob);
-        memset(l->deg, 0xFF, sizeof l->deg);
-        memset(l->chr, 0, sizeof l->chr);
-        l->tps = SEQ_TICKS_PER_STEP;
+    if (l->route[0] != '\0' && l->slots == 0) {
+        seq_comp_t *c = &s_comp;
+        seq_pattern_compile("x", c);
+        stage((int)(l - s_lanes), c);
+        l->text[0] = '\0';
         l->src = 0;
         l->muted = false;
         l->used = true;
@@ -986,32 +1509,7 @@ esp_err_t seq_route(const char *name, const char *src)
     return ESP_OK;
 }
 
-esp_err_t seq_lane_ctrl(const char *name, int cc, int chan)
-{
-    seq_lane_t *l = find(name, true);
-    if (l == NULL) {
-        return ESP_ERR_NO_MEM;
-    }
-    l->ctrl    = true;
-    l->melodic = false;
-    l->bind    = SEQ_BIND_CC;
-    if (cc >= 0 && cc < 128)   { l->cc = (uint8_t)cc; }
-    if (chan >= 0 && chan < 16) { l->chan = (uint8_t)chan; }
-    return ESP_OK;
-}
 
-esp_err_t seq_lane_melodic(const char *name, int octave, int chan, int gate_ms)
-{
-    seq_lane_t *l = find(name, true);
-    if (l == NULL) {
-        return ESP_ERR_NO_MEM;
-    }
-    l->melodic = true;
-    l->octave  = (int8_t)octave;
-    if (chan >= 0 && chan < 16) { l->chan = (uint8_t)chan; }
-    if (gate_ms > 0)            { l->gate_ms = (uint16_t)gate_ms; }
-    return ESP_OK;
-}
 
 void seq_swing(int percent)
 {
@@ -1031,16 +1529,6 @@ void seq_sync(bool on)
 }
 bool seq_get_sync(void) { return s_sync; }
 
-esp_err_t seq_lane_note(const char *name, int note, int chan)
-{
-    seq_lane_t *l = find(name, true);
-    if (l == NULL) {
-        return ESP_ERR_NO_MEM;
-    }
-    if (note >= 0 && note < 128) { l->note = (uint8_t)note; }
-    if (chan >= 0 && chan < 16)  { l->chan = (uint8_t)chan; }
-    return ESP_OK;
-}
 
 esp_err_t seq_mute(const char *name, bool mute)
 {
@@ -1057,10 +1545,6 @@ void seq_bpm(int bpm)
     if (bpm < 20)  { bpm = 20; }
     if (bpm > 300) { bpm = 300; }
     s_bpm = bpm;
-    if (s_clock != NULL) {
-        esp_timer_stop(s_clock);
-        esp_timer_start_periodic(s_clock, period_us());
-    }
     /* RE-ANCHOR THE GRID, BUT KEEP THE POSITION.
      *
      * The grid has to move: it is a different grid now, and measuring the new
@@ -1074,13 +1558,24 @@ void seq_bpm(int bpm)
      * the measurements - about 2 ms, right after every tempo change, where the
      * steady state is under 600 us.
      *
-     * Anchoring so that the CURRENT tick is due now preserves both: the bar
-     * carries on where it was and the statistic measures the new grid. */
-    if (s_running) {
-        s_grid_t0 = esp_timer_get_time() - (int64_t)s_tick * (int64_t)period_us();
-    } else {
-        s_grid_t0 = 0;
-        s_tick    = 0;
+     * Anchoring so that the NEXT tick is due one NEW period after the last one
+     * fired preserves both: the bar carries on where it was, and the interval
+     * that changes is the one the tempo change is. The anchor before this put
+     * the next tick "due now" and restarted a periodic timer, which fired it a
+     * period later - so after every tempo change the ticks sat a whole pulse
+     * behind the grid the deck reports and broadcasts: +4821 us at 130 bpm,
+     * measured 2026-09-25, while sd said 5 us. Now the grid is the ticks
+     * (seq_clock.h), and the tick already armed is armed again. */
+    if (s_running && grid_get() != 0) {
+        grid_set(seq_clock_reanchor(s_last_tick_us, s_tick,
+                                    (int64_t)period_us()));
+    } else if (!s_running) {
+        grid_set(0);
+        s_tick = 0;
+    }
+    if (s_clock != NULL) {
+        (void)esp_timer_stop(s_clock);
+        arm_next(esp_timer_get_time());
     }
     seq_stats_reset();
 }
@@ -1091,10 +1586,29 @@ uint32_t seq_position(void) { return s_pos; }
 
 void seq_play(void)
 {
+    /* PLAY IS FROM THE TOP, counts included. Every counted lane waits again -
+     * a lane on its own for tick 0, which is everybody's downbeat, and a cue
+     * for its source - and one that finished and went quiet is back, so a
+     * stopped arrangement plays from its first section. A lane the performer
+     * muted by hand stays muted: `done` is only ever set by finishing. */
+    for (int i = 0; i < SEQ_MAX_LANES; i++) {
+        seq_lane_t *l = &s_lanes[i];
+        if (l->used && l->count != 0) {
+            l->idle = true;
+            l->trig = false;
+            if (l->done) {
+                l->done = false;
+                l->muted = false;
+            }
+        }
+    }
     s_pos  = 0;
     s_tick = 0;
-    s_grid_t0 = 0;               /* anchored on the first tick */
+    grid_set(0);                 /* anchored on the first tick */
     seq_stats_reset();
+    s_adopt_pending = false;
+    /* A second of pulses: long enough for the first few replies. */
+    s_await_ticks = s_follows ? (uint32_t)(1000000u / period_us()) : 0u;
     s_running = true;
     if (s_sync) {
         /* Song-position-zero then start, which is what a DAW expects and what

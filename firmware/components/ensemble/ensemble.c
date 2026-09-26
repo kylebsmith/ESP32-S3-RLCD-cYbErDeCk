@@ -1,4 +1,5 @@
 #include "ensemble.h"
+#include "ens_count.h"
 
 #include <string.h>
 
@@ -235,6 +236,10 @@ static struct { int64_t rtt; int32_t off; } s_keep[KEEP];
 static int     s_nkeep;
 static int     s_nsample;
 static int32_t s_spread;               /* how far the kept six disagreed    */
+static volatile int32_t s_count_off;   /* leader's pulse count minus ours   */
+static volatile bool    s_count_known;
+static int32_t          s_count_last;
+static int              s_count_same;
 static int64_t s_last_probe;
 static uint8_t s_leader[6];
 static bool    s_have_leader;
@@ -271,7 +276,9 @@ typedef struct {
     bool     lost;                 /* the send was not acknowledged            */
     int32_t  resid_us;             /* what the leader reported, with the reply */
     int32_t  ahead_us;
+    uint32_t tick;                 /* the leader's pulse count, with the reply */
     uint16_t bpm;
+    bool     running;              /* and whether the leader is playing       */
 } exch_t;
 static volatile exch_t s_exch[AIRRING];
 static uint32_t s_tag;                 /* next tag to hand out              */
@@ -418,7 +425,7 @@ static void settle(volatile exch_t *e)
         /* Where WE have that pulse. */
         uint32_t ourtick = 0; int64_t ourdue = 0; int ourbpm = 0;
         seq_timebase(&ourtick, &ourdue, &ourbpm);
-        if (ourbpm <= 0) { return; }
+        if (ourbpm <= 0 || ourdue == 0) { return; }
         const int64_t per = 60000000LL / ourbpm / 96;
         if (per <= 0) { return; }
         /* PHASE IS THE SUB-PULSE PART, AND ONE MODULO IS THE WHOLE OF IT.
@@ -431,10 +438,36 @@ static void settle(volatile exch_t *e)
          * two decks that started playing minutes apart differ by a hundred thousand
          * ticks, so the loop it fed ran a hundred thousand times, inside a radio
          * callback. A modulo is the same answer in constant time. */
-        int64_t off = (due_here - ourdue) % per;
-        if (off >  per / 2) { off -= per; }
-        if (off < -per / 2) { off += per; }
-        (void)ourtick;
+        const int64_t off = ens_phase(due_here, ourdue, per);
+
+        /* AND THE WHOLE PULSES, WHICH THE PHASE DOES NOT SEE - ens_count.h. Only
+         * while both decks are playing: a stopped deck's count describes nothing.
+         * Three replies in a row must agree before the count moves, so one
+         * mistimed reply cannot move it; then three fresh ones before it can move
+         * again, so a reply measured before the move landed cannot repeat it. */
+        /* A SLOW REPLY CAN MISCOUNT. Half its extra round trip lands in the
+         * leader's due time, and past half a pulse - a round trip about 5 ms
+         * late - the count comes out a pulse off. The phase correction has its
+         * own filter; the count takes only replies back inside 2 ms, where the
+         * whole error is under a fifth of a pulse. Typical here is 0.1 ms. */
+        if (e->running && seq_running() && rtt < 2000) {
+            const int32_t d = ens_count_ahead(e->tick, due_here, ourtick, ourdue,
+                                              per, off);
+            if (d == s_count_last) {
+                s_count_same++;
+            } else {
+                s_count_last = d;
+                s_count_same = 1;
+            }
+            if (s_count_same >= 3) {
+                s_count_off = d;          /* what '>sync' reports: agreed */
+                s_count_known = true;
+                if (d != 0 || seq_awaiting()) {
+                    seq_adopt(d);
+                    s_count_same = -3;
+                }
+            }
+        }
 
         if (s_floor_rtt == 0 || rtt < s_floor_rtt) {
             s_floor_rtt = rtt;
@@ -501,6 +534,13 @@ static void on_recv(const esp_now_recv_info_t *info, const uint8_t *data, int le
     }
     note_peer(info->src_addr);
     s_heard++;
+
+    /* Whether there is a count to join: a follower's '>play' waits for it only
+     * while the leader says it is playing. */
+    if (s_role == ENSEMBLE_FOLLOW &&
+        (p.kind == ENS_BEACON || p.kind == ENS_REPLY)) {
+        seq_follow(p.running != 0);
+    }
 
     if (s_role == ENSEMBLE_FOLLOW && p.running && p.bpm > 0) {
         if (s_seen_bpm != 0 && p.bpm != s_seen_bpm) {
@@ -576,6 +616,8 @@ static void on_recv(const esp_now_recv_info_t *info, const uint8_t *data, int le
         e->rx       = now;
         e->resid_us = p.resid_us;
         e->ahead_us = p.ahead_us;
+        e->tick     = p.tick;
+        e->running  = p.running != 0;
         e->bpm      = p.bpm;
         settle(e);
         break;
@@ -637,6 +679,8 @@ esp_err_t ensemble_set(ensemble_role_t role)
             s_up = false;
         }
         s_role = ENSEMBLE_OFF;
+        seq_follow(false);
+        s_count_known = false;
         memset(s_peer, 0, sizeof s_peer);
         return ESP_OK;
     }
@@ -701,6 +745,9 @@ esp_err_t ensemble_set(ensemble_role_t role)
         s_up = true;
     }
     s_role   = role;
+    seq_follow(false);            /* until the leader says it is playing */
+    s_count_known = false;
+    s_count_same = 0;
     s_heard  = 0;
     s_err_us = 0;
     s_nkeep  = 0;
@@ -719,6 +766,15 @@ ensemble_role_t ensemble_role(void) { return s_role; }
 
 int64_t ensemble_floor_rtt(void) { return s_floor_rtt; }
 uint32_t ensemble_skipped(void)   { return s_skipped; }
+
+bool ensemble_count_off(int32_t *pulses)
+{
+    if (!s_count_known) {
+        return false;
+    }
+    *pulses = s_count_off;
+    return true;
+}
 int32_t ensemble_spread(void)     { return s_spread; }
 void ensemble_counts(uint32_t *replies, uint32_t *stale, uint32_t *lost,
                      uint32_t *dup, uint32_t *windows)
@@ -753,7 +809,8 @@ static void stamp(ens_pkt_t *p, uint8_t kind)
     p->kind     = kind;
     p->tick     = tick;
     p->bpm      = (uint16_t)bpm;
-    p->running  = seq_running() ? 1u : 0u;
+    /* Playing, and anchored: a count with no grid under it is not one yet. */
+    p->running  = (seq_running() && due != 0) ? 1u : 0u;
     p->role     = (uint8_t)s_role;
     /* Last, so it is as close to the send as it can be. The receiver subtracts
      * it, so what matters is that it is measured against the same clock as the

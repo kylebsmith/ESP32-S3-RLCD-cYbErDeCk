@@ -46,19 +46,6 @@ typedef enum {
 #define CMD_CAP_STORE   0x04u   /* writes flash or the card            */
 #define CMD_CAP_NET     0x08u   /* reaches off the device              */
 #define CMD_CAP_SYSTEM  0x10u   /* changes device state: pairing, power */
-/* A LANE, AND THEREFORE A NAME THAT MAY CARRY AN INSTANCE OR A PART.
- *
- * '>disc2' is a second circle and '>disc2[x]' is its position, which the recogniser
- * reaches by stripping a trailing '[part]' and then trailing digits. That stripping
- * used to apply to EVERY verb in the table, and the consequence was four silent
- * no-ops that looked correct on the glass: '>bpm140' matched 'bpm' with an empty
- * argument and cheerfully REPORTED the tempo instead of setting it, and '>din17',
- * '>swing58' and '>split8' did the same. A performer typing fast and missing one
- * space got a command that appeared to work.
- *
- * So the rule is scoped to the names it was invented for. Only a lane may wear an
- * instance digit; everything else must be spelled exactly. */
-#define CMD_CAP_LANE    0x20u   /* a lane: 'disc2', 'disc[x]' resolve here */
 
 /* Who is asking. The owner's hands may do anything; a guide line is still the
  * owner, one step removed; an agent is not the owner and is bounded here
@@ -84,6 +71,17 @@ struct cmd_ctx {
     const char  *arg;        /* rest of the line, unparsed, never NULL */
     cmd_caller_t caller;
     char         msg[96];    /* short human-readable result            */
+    /* WHICH CHARACTER IS WRONG, as an offset into `arg`, or -1. Set by a
+     * command that refuses its argument because of one character, so the
+     * editor can mark that character in the document instead of leaving the
+     * performer to count columns against a message. */
+    int          err_at;
+    /* WHERE A SECRET STARTS, as an offset into `arg`, or -1. Set by a command
+     * that found a password on its own line - which no command takes any more
+     * (firmware/main/ask.h). The editor deletes the line from there to its end
+     * at once, so what was typed there reaches no journal, card or backup that
+     * had not already caught it. */
+    int          secret_at;
 };
 
 /* Run one line. Returns CMD_ERROR for an unknown name or a refused
@@ -98,6 +96,10 @@ void cmd_out(cmd_ctx_t *ctx, const char *fmt, ...);
 /* How many lines the last command wrote. A result worth reading should show
  * itself rather than waiting to be found. */
 int cmd_last_output_lines(void);
+
+/* The column, in the line the last command was run from, of the character it
+ * refused - or -1. See cmd_ctx.err_at. */
+int cmd_last_error_col(void);
 
 /* Is this line a command the table actually knows?
  *
@@ -115,7 +117,31 @@ const cmd_t *cmd_recognise(const char *line, int *word_at, int *word_len);
 const cmd_t *cmd_table(int *count);
 
 /* Register the built-in commands. Called once at start-up. */
+/* The column, in the line last run, from which it held a secret; -1 if none. */
+int cmd_last_secret_col(void);
+
+/* ASKING FOR A SECRET. Ground rule 6: nothing secret ever enters a document -
+ * and a command line is a document line, journalled, mirrored to the card and
+ * copied to the owner's DGX. So a command that needs a password never reads it
+ * from its line. It asks here and returns; whoever holds the keyboard shows the
+ * question, takes the next line typed as stars, and calls `fn` with it - in the
+ * task commands run in - then wipes it (firmware/main/ask.h). `fn` writes its
+ * result, one line, into msg. False when there is nobody to ask. */
+typedef void (*cmd_secret_fn)(const char *secret, char *msg, size_t max);
+typedef bool (*cmd_asker_t)(const char *question, cmd_secret_fn fn);
+void cmd_set_asker(cmd_asker_t fn);
+bool cmd_ask_secret(const char *question, cmd_secret_fn fn);
+
 void cmd_init(void);
+
+/* LANES AND NAMES ARE NOT ROWS OF THE TABLE (docs/MANIFESTO.md §3.8). A lane's
+ * first word is an address - 'kick', 'disc:2:x' - whose name is DEFINED
+ * ('>kick = note 36') or is a picture's own. The dispatcher asks whether a word
+ * is one, and hands the line to the one lane command or to a definition. The
+ * grammar is lane_name.h. */
+bool         cmd_lane_known(const char *word, size_t n);
+cmd_status_t cmd_lane(cmd_ctx_t *ctx, const char *word, size_t n);
+cmd_status_t cmd_define(cmd_ctx_t *ctx, const char *word, size_t n);
 
 /* The app supplies this. A component cannot reach into main/editor.h, and
  * should not: '>flash' needs the panel to say what is about to happen before

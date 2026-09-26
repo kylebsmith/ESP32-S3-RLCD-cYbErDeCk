@@ -79,18 +79,23 @@ differs is only which destination interprets it.
 ```
 >bpm 124
 >scale dmin
->kick X...x...X...x...
->hat  x?x?x.x. /2
->bass 0...3...5...3...
->cc cut 0..3..6..9..6.
+>kick 9...x...9...x...
+>hat  x%50x%50x.x. /2
+>bass 0__.3...5_..3...
+>pad  [0,2,4]___[3,5,7]___
+>cut 0..3..6..9..6.
 >play
 ```
 
-`x` is a hit, `X` an accent, `,` a ghost, `?` a maybe, `?[15]` a fifteen per
-cent maybe, `.` a rest. Digits are scale degrees on a melodic lane and values on
-a controller lane. A trailing `/2` or `*2` sets that lane's own speed. An
-inverted bar sweeps the line in time with the sound, so you can see what is
-playing in the document you are editing.
+`x` is a hit and `.` a rest. A digit is **how much** — velocity on a drum, the
+scale degree on a voice, the value on a controller lane. `_` holds the note before
+it, `[0,2,4]` is a chord, `x%15` plays fifteen per cent of the time, `[xx]`
+subdivides a step and `<a b>` alternates bars. A trailing `/2` or `*2` sets that
+lane's own speed. The names are yours: the boot document defines them with lines
+like `>kick = note 36`, and `>conga = note 63` adds one. Anything else is refused, with the character boxed, rather than
+played. An inverted bar sweeps each line in time with the sound, lighting the whole
+step that is sounding, so you can see what is playing in the document you are
+editing.
 
 Output goes to named destinations rather than a compiled-in sink, which is why
 the same pattern can drive a synth and a projector without either knowing about
@@ -101,9 +106,10 @@ the other:
 | `>usb on` | USB MIDI, measured at **0.03 ms** of jitter at the host |
 | `>send ble on` | BLE MIDI, off by default — the radio is the keyboard's |
 | `>osc <ip> <port>` | OSC as `/deck/<lane>`, for visuals and other machines |
+| `>osc in 9000` | OSC in: `/deck/knob1` sets `>knob1 = knob`, and `>route cut knob1` follows it |
 | `>frame` | the current document, as ASCII, to whatever is rendering |
-| `>host deck <pass>` | the deck becomes the Wi-Fi network |
-| `>ssh you@host <pass> <cmd>` | run something elsewhere, read the reply here |
+| `>host deck` | the deck becomes the Wi-Fi network (it asks for a password) |
+| `>ssh you@host <cmd>` | run something elsewhere, read the reply here (it asks for the password) |
 
 There is no command mode and no menu. Commands are lines of text beginning with
 `>`, in any document, run with Ctrl+Enter — so a document is a piece of music, a
@@ -295,6 +301,7 @@ counted among the audited rows.
 | **[CONCRETE.md](docs/CONCRETE.md)** | the cast concrete jacket, its mould, and the mix |
 | **[HANDOFF.md](HANDOFF.md)** | briefing for a session with the hardware in front of it |
 | **[OS.md](docs/OS.md)** | the firmware design: what it runs, why, and what it deliberately will not do |
+| **[THESIS.md](docs/THESIS.md)** | the running note for the paper: each decision made for legibility, as it was made |
 | **[DESIGN.md](docs/DESIGN.md)** | form language, why it is shaped this way, material and finish |
 | **[METHODOLOGY.md](docs/METHODOLOGY.md)** | how the numbers were obtained and how to reproduce them |
 | **[MEASURE.md](docs/MEASURE.md)** | caliper checklist for someone holding the actual hardware |

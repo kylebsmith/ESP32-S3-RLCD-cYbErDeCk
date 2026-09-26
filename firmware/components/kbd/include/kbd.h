@@ -79,6 +79,11 @@ bool kbd_poll(kbd_event_t *ev, uint32_t timeout_ms);
 
 bool kbd_connected(void);
 
+/* Whether Wi-Fi or ESP-NOW is using the radio. While it is, looking for a
+ * keyboard takes a 30 ms window every 160 ms instead of all of the radio's
+ * time - which left an access point receiving 10 datagrams in 280. */
+void kbd_share_radio(bool shared);
+
 /* Modifiers held right now, for a visible indicator. docs/OS.md: sticky or
  * invisible modifier state is a bug generator. */
 uint8_t kbd_mods(void);

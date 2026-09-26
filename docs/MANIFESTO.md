@@ -2,9 +2,9 @@
 
 *The language first, in as few words as it can be said. Then what is wrong with it,
 from two adversarial readings that were told to be harsh and given no power to change
-anything. **Nothing in §3 is implemented.** It is a list of what to do next and why,
-kept in one place so the next decision is made against the whole of it rather than
-against whichever complaint is loudest that day.*
+anything. §3 was left unimplemented on purpose until the owner had played it; the
+first decision against it was made on 2026-09-25, and each entry now says whether it
+is **decided**, with what was measured, or still **open**.*
 
 ---
 
@@ -22,9 +22,10 @@ nothing else in the language.
 table, not two subsystems. Everything that works on one works on the other, and the
 day a third output arrives — a wire, a screen, a light — it is a row in that table.
 
-**One character is one step.** The playhead can sit on the character that is
-sounding. This is the constraint that keeps a pattern readable at thirty columns on a
-screen with one ink and no backlight, and it is the constraint most of §3 is about.
+**A step is one character and what is attached to it.** The playhead lights the
+whole of it, so you can always see what is sounding. It used to be *one character
+is one step*, which was the constraint most of §3 was about; the goal was kept and
+the mechanism dropped (§3.6).
 
 **Symbolic, direct, never an acronym.** `%` is a percentage. `[]` groups. `<>`
 alternates. A performer under stage light reads shapes, not words.
@@ -40,25 +41,30 @@ is not: 3 µs standard deviation on the local grid, and under 100 µs of phase b
 two decks. Cross-modal work that is not tight is not cross-modal, it is two things
 happening near each other.
 
-**Refuse, do not truncate.** A pattern too long to hold is rejected with a number.
-Silence is the one failure a performer cannot debug.
+**Refuse, do not truncate — and do not guess.** A pattern too long to hold is
+rejected with a number; a character that is not a step is rejected with its position,
+boxed in the document. Silence is the one failure a performer cannot debug, and a
+typo that plays is the one they cannot hear.
 
 ### The whole of it
 
 ```
-  x  hit          X  loud         ,  quiet        ?  maybe (half)
-  .  rest         -  rest         _  rest
-  0-9             a scale degree, a controller value, or an amount
-  x%15            fifteen per cent chance on that step
+  x  hit          .  rest         _  hold the note before it
+  0-9             how much: velocity, degree, value, or amount
+  x%15            fifteen per cent chance on that step or group
   [xx]            a group: subdivides the step it occupies, any depth
+  [0,4,7]         a chord: every member at once
   <a b>           alternates: a different member each bar
   /2  *2          this lane's own rate, at the end of the line
+  !4              four passes, then stop; name:end is when it did
   u d l r         which way — in front of the pattern, or as a step
-  name2           a second lane on the same binding
-  name[x]         a parameter of that lane, not the lane itself
+  name:2          a second lane on the same binding
+  name:x          a part of that lane, not the lane itself
+  >name = note 36 what a name means - the names are yours
 ```
 
-Sixty-nine verbs, all of them on [VERBS.md](VERBS.md).
+Thirty-four verbs, all of them on [VERBS.md](VERBS.md). The lane names are not
+among them: they are definitions, and the boot document holds sixteen.
 
 ---
 
@@ -82,9 +88,12 @@ should have been stated by `route`**. See §4.
 
 ---
 
-## 3. What is wrong — not implemented, on purpose
+## 3. What is wrong — and what has been decided
 
-Ordered by how much damage each does. Each entry: the complaint, then the proposal.
+Ordered by how much damage each does. Each entry: the complaint, then the proposal,
+then — where it has been acted on — **Decided**, with the date and what the deck
+measured. The complaints are left as they were written; a finding that turned out
+to be wrong is corrected underneath it, not erased.
 
 **1. `,` is spent on a ghost note, and chords are therefore inexpressible.**
 `,` is a hit at a third velocity. It is also, in every Tidal and Strudel document ever
@@ -92,6 +101,14 @@ written, the character for a chord — `[0,4,7]`. Two costs for one decision: `p
 ("voice, long") cannot play a triad, and at thirty columns `,` and `.` differ by one
 or two lit pixels at the baseline while one is a note and the other is silence.
 → *`,` becomes stack. The ghost note goes to `o`, or goes away — see 5.*
+
+**Decided 2026-09-25 — `,` is stack, and the ghost note went away.** `[0,4,7]` is a
+chord: every member starts together and the playhead lights from its first note to
+its last. A stack's members are sequences, so `[02,45]` moves inside its step. On
+the deck, `>pad [0,2,4]...` in D minor played D3 F3 A3 on one timestamp. The ghost
+did not move to `o`: a digit is velocity now (§3.7), so `3` is a ghost and `o`
+would have been a second spelling of it. `,` outside brackets is refused with
+"a chord goes in []".
 
 **2. A pattern has no syntax errors.** Anything that is not a rest is a hit, so
 `>hat x...x...x...x;..` plays the semicolon and the deck says nothing. Unbalanced
@@ -101,6 +118,21 @@ loudly refused. Same language, opposite philosophies, and the loud half guards t
 mistake nobody makes.
 → *Reject an unknown step character and an unbalanced bracket, the way overflow is
 already rejected.*
+
+**Decided 2026-09-25 — refused, with the character.** Every malformed pattern is now
+refused in one line that fits the status bar, and the offending character is
+**boxed in the document** (a bar above and below — nothing else on the panel draws
+that) until the next edit. On the deck: `x...x...x;..` → *';' is not a step - x
+hits*; `[x.x.` → *'[' is never closed*; `X...` → *X is gone: 9 is loud*. A refusal
+changes nothing, so a typo mid-song leaves the lane playing what it played. The
+characters people bring from elsewhere are told where they went — `?`, `-`, `~`,
+`*`, `/`, `!`, `@` each have their own sentence.
+
+It also found something. The shipped guide had been **playing its own comments**:
+`>echo 8    then add:` compiled "then add:" as nine more hits, and the cheat-sheet
+lines — `>sync on    MIDI clock out` — failed when run, because the comment became
+part of the argument. `tools/test_ui_text.c` now compiles every lane line in the
+guide against the shipping compiler and refuses a comment inside a command line.
 
 **3. `[]` means two things.** It groups inside a pattern and it selects a part of a
 name. The argument that moved probability off the bracket — *"a probability is a
@@ -113,9 +145,20 @@ every name for ever.
 is a rest was over-applied — the pattern parser never sees the name, so the two
 grammars are lexically disjoint.
 
+**Decided 2026-09-25 — done as proposed.** `disc:2` is the second circle, `disc:x`
+its position, `disc:2:x` the second one's; `disc:1` is `disc`, so one lane has one
+spelling. `[]` only groups. The old spellings are told their new ones rather than
+refused blankly — `>disc2` answers *disc2 is disc:2 now* — because the documents on
+the owner's boards use them. One thing nobody had noticed: `[` and `]` are pattern
+characters in an OSC address, so `disc[x]` had never been a valid `/deck/` path;
+`:` is.
+
 **4. `>disc 2` and `>disc2` are one space apart and one of them deletes a lane.**
 A small circle, or the destruction of the second circle.
 → *Falls out of 3.*
+
+**Decided with 3.** `>disc2` is not a name any more, so it cannot silently become
+one: it says what it is now, and deletes nothing.
 
 **5. Marks that are provably the same mark.** `?` is exactly `%50` — and `?%15` sets
 the same bits as `x%15`, teaching a distinction that does not exist. `.` `-` `_` are
@@ -123,6 +166,14 @@ three spellings of one rest.
 → *Delete `?`. Keep one rest, and give `_` its universal tracker meaning — **tie** —
 because nothing in this language can express note length. A performer reaches for
 that inside the first hour.*
+
+**Decided 2026-09-25 — done as proposed.** `?` is gone (`x%50`), `-` is gone, `.` is
+the rest, and `_` holds the note before it. A tie adds the steps it spans to the
+voice's own gate rather than replacing it, so a bass stays a bass: on the deck
+`>bass 0__.` sounded 423 ms against a predicted 180 + 2 × 121. A tie after a chord
+holds the chord; inside one member of a stack it holds only that member; a tie that
+would hold a note on only some of the bars it plays — `0<_ .>` — is refused, because
+one note has one length.
 
 **6. `%NN` already broke the invariant used to refuse everything else.** Multi-step
 proposals were refused on the grounds that one character per step is what keeps the
@@ -132,6 +183,13 @@ refusals it justified are void.
 length and velocity together — or `%` goes. Half of each is the worst outcome and is
 the current state.*
 
+**Decided by the owner, 2026-09-25: a step is one character plus optional
+modifiers, and the playhead lights the whole span.** The evidence it was decided
+on: of the 258 mini-notation strings in Strudel's own example tunes, parsed by
+Strudel itself, 42 % put a modifier on a step and 23 % stack a chord. `x%15` now
+lights all four characters. The refusals the old rule justified are void, and the
+one in [MAP.md](MAP.md) §9.3 is re-argued there.
+
 **7. A digit means three things, and on a drum lane it means nothing at all.**
 `>kick 0...9...` is two identical full-velocity hits: the degree is compiled and never
 read. Velocity is a three-value enum spelled `x X ,` instead. In the pictures, "0
@@ -139,6 +197,13 @@ none, 9 full" fails in four places — `flip 0` is maximum, `spin 1` and `spin 2
 nothing, `fold` maps ten digits onto three states.
 → *Make the digit the step's scalar on every binding, velocity included. `X` and `,`
 then go.*
+
+**Decided 2026-09-25 — done for velocity.** On a drum `9` is 127 and `1` is 14, and
+`0` is the quietest hit rather than silence — a rest is `.`, and a digit is always
+an event. `x` is the lane's own level, 100. Measured on the deck: `>kick 9...5...`
+sent 127 and 71. On a voice the digit stays the degree; a voice's per-step velocity
+is a part, `>bass:vel 9...3...` (§3.11), the way a circle's position is. The picture half — `flip 0`,
+`spin 1`, `fold` — is untouched here and still open.
 
 **8. The seventeen sound names are data; the sixteen picture names are code.**
 `kick` is a row — `(note, channel 10, 36)`. `disc` is a function pointer. So a player
@@ -149,19 +214,74 @@ boot document as a region. Sixty-nine names become roughly thirty-eight, and
 expressive power rises, because the vocabulary becomes editable text.* This is the
 largest single change available and the one most likely to be right.
 
+**Decided 2026-09-25 — done, as lines rather than a region.** A name is defined by a
+line like any other: `>kick = note 36`, `>bass = voice 2 ch 1 gate 180`,
+`>cut = cc 74`, `>circle = disc`. The boot document ships sixteen of them, and a
+boot document written before this gets them added at its top, the owner's lines
+kept below. A *region* — a `:::table` fenced block — was the proposal, and it was
+not followed, for the reason the boot document itself gives: it is "a guide that
+happens to run by itself — no config format, no parser, no second syntax". A
+definition is a line; Ctrl+Enter on it takes effect at once; `>kick = note 35`
+retunes the kick that is playing (verified on the deck: 36, then 35 on the next
+hit). The picture names stay the primitives' own, since a primitive is code, and
+an alias to one is allowed.
+
+The count, by the snippet: **sixty-nine verbs became thirty-six**, with none added
+— the proposal guessed thirty-eight. And it was not a vocabulary cut: a player can
+now add a conga, point a spare controller at their synth (`>fx = cc 20`), and move
+the kick to the note their drum machine wants, none of which was possible.
+
 **9. `<>` has an invisible arithmetic cliff.** Alternation is flattened at compile
 time, which costs no runtime state and costs `lcm` slots instead: a sixteen-step lane
 with a two-way and a three-way alternation needs ninety-six slots and is refused at
 sixty-four. One byte of cycle counter in the fire path makes it unbounded.
 → *Spend the byte.*
 
+**Decided 2026-09-25 — and it cost nothing.** Alternation is no longer flattened.
+Each note carries a cycle class — it plays when `cycle % per == ph` — and the cycle
+comes from the global tick, so there is no counter at all. A long lane may alternate
+(`x...` × 8 then `<3 5>` was refused at 66 slots and is 33 now), alternation costs no
+slots, and nested alternation advances only when it is chosen: `<0 <1 2>>` plays
+0 1 0 2, as Strudel does, where the flattening played 0 2 0 2. The byte bought
+something else while it was being spent: the clock computes each slot's tick exactly,
+so a quintuplet no longer drifts (see [MAP.md](MAP.md) §5).
+
 **10. Direction is a parameter wearing four hit characters.** `u d l r` attach to a
 line or to a step, with an unwritten shadowing rule between them. An axis and a sign
 is a parameter lane, which would delete four letters from the hit alphabet and three
 pieces of machinery.
 
+**Decided 2026-09-25 — the proposal is refused, and the fault under it fixed.** A
+way as a parameter lane has to be spelled somehow. As a digit it breaks the one
+rule this document fought hardest for — *a digit is always how much* (§3.7) — and
+as letters in a special kind of lane it moves the four letters rather than deleting
+them. `>move d...u...` is the legible form of "down, then up", and legibility on a
+held screen is what this device is for. The shadowing rule is stated now rather than
+unwritten: a step's own way wins over the one in front of the line.
+
+What the complaint actually caught was a hole in §3.2. The four letters were valid
+steps on every lane, and only `move`, `warp`, `ramp` and `turn` read them — so
+`>kick x..u` played a hit on a character the performer had not meant as one. A way
+on anything that does not turn is refused now, with the character boxed. On the
+deck: `>kick x..u` and `>disc u 4` refused, `>move d...u...` accepted.
+
 **11. Degrees stop at 9.** About an octave and a half, no octave verb, no accidental
 outside the scale, no reverse. All first-hour reaches.
+
+**Decided 2026-09-25 — the octave is a part, not a verb.** `>bass:oct <2 3>...`
+is a lane whose events are the bass's octave, exactly as `>disc:x` is a lane whose
+events are the circle's position — so it alternates, nests, takes odds and can be
+routed, and it cost no verb. With it came `:vel`, the per-step level §3.7 promised a
+voice: `>bass:vel 9...3...`. Parts fire before notes on the same tick, so which line
+was typed first cannot change the first note, and dropping a part gives back the
+name's own octave and the default level. On the deck: `>bass 0...` with
+`>bass:oct <2 4>...` played D2 then D4, bar by bar; `:vel` alternated 127 and 42.
+Accidentals and reverse are still open.
+
+One trap, recorded because it caught the author: a lane's bar is its own length, so
+a lone `<2 4>` is a *one-step* lane and changes every sixteenth. Under a four-step
+bass it was sampled on even steps only and read 2 every time. `<2 4>...` is the
+bar-long one.
 
 **12. The instance rule was not scoped, and `cc` printed a name it refused.**
 Both were bugs rather than design, and both are fixed — §4.

@@ -1,0 +1,85 @@
+# Hand-written Strudel patterns, one per line, covering each piece of the notation
+# alone and in combination. tools/corpus/gen.mjs turns each into an entry of
+# strudel.txt. Digits and 'x' are compared as values; '~' and '-' are rests.
+
+# sequences
+x ~ x ~
+x x x x x
+x ~ ~ x ~ ~ x ~
+0 3 5 7
+0 ~ 2 ~ 4
+- x - x
+x ~ - x
+
+# groups subdivide
+x [x x]
+[x x x] ~ x
+x [x [x x]]
+[x ~ x] [~ x]
+x [x [x [x x]]]
+[x x] [x x x]
+[0 1] [2 3 4] [5 6 7 8]
+
+# alternation, one per cycle
+x <3 5>
+<x ~>
+0 <3 5> ~ <7 9 2>
+<[x x] x>
+[x <x ~>]
+<0 1> <2 3 4>
+<0 1 2 3>
+<0 <1 2>>
+<0 <1 <2 3>>>
+<[0 1] <2 [3 4]>>
+
+# stacks: chords, and sequences at once
+[0,4,7]
+[0,4,7] ~ [3,5,7] ~
+[0 2, 4 5]
+<[0,4] [2,5]>
+[0,<4 5>]
+0, 4
+[x x, x x x]
+[0,2,4] [1,3,5] [2,4,6] [3,5,7]
+
+# length: _ and @ on a note
+0 _ _ 3
+x@3 x
+0@2 3 5
+[0 _ 2] 4
+0 _ 3 _ _ 5
+
+# replicate and fast
+x!3 ~
+0!2 3!2
+x ~ x!
+x*2 x
+[x ~]*2
+0*3 ~
+x*4
+[0 1]*2 2
+
+# odds
+x? x x? x
+x?0.3 x
+[x x]? x
+[0,4]? 7
+
+# feet
+x x . x x x
+0 . 1 2 . 3
+
+# out of scope, on purpose - each says why
+x(3,8)
+x | ~
+{x x x, x x}
+x:3
+x/2
+<0 3>/2
+<x ~>*2
+[x x]@2 x
+0 .. 3
+x*<2 3>
+<x@2 ~>
+bd sd
+12 3

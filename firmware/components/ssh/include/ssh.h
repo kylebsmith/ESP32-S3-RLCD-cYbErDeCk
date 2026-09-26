@@ -26,16 +26,29 @@
 #include <stddef.h>
 #include "esp_err.h"
 
-/* Run one command on `host` as `user` and put its output in a document named
- * '+ssh'. Transient, so it is never journalled and never reaches the SD
- * mirror - a command's output is not the owner's writing, and a password
- * prompt or a directory listing has no business in the corpus that gets copied
- * to their DGX.
+/* Run one command on `host` as `user`, in a task of its own, and put what it
+ * says into '+out' - transient, so it is never journalled and never reaches the
+ * SD mirror: a command's output is not the owner's writing, and a directory
+ * listing has no business in the corpus that gets copied to their DGX.
  *
- * Blocking, and called from the editor task rather than any timer - see the
- * note in ssh.c about why that matters on this device. */
-esp_err_t ssh_run(const char *user, const char *host, int port,
-                  const char *pass, const char *cmd);
+ * Returns at once. ESP_ERR_INVALID_STATE while a session is already running.
+ * `pass` is never read from a document: it comes from the deck asking for it
+ * (firmware/main/ask.h). It is copied, used once, and wiped; the caller wipes
+ * its own copy. */
+esp_err_t ssh_start(const char *user, const char *host, int port,
+                    const char *pass, const char *cmd);
+
+/* From the editor's loop, every pass: moves what the session has said into
+ * '+out' - docstore belongs to that task. SSH_SAID when lines arrived,
+ * SSH_FINISHED once when the session has ended and everything it said is in;
+ * *reply_from is where this session's lines begin in '+out'. */
+enum { SSH_QUIET = 0, SSH_SAID, SSH_FINISHED };
+int  ssh_service(size_t *reply_from);
+bool ssh_busy(void);
 
 /* One line for the status bar. */
 void ssh_status(char *out, size_t max);
+
+/* Forget the key kept for `host` (port 0 = 22), so the next session keeps
+ * whatever key it shows - for when the owner changed it themselves. */
+esp_err_t ssh_forget(const char *host, int port);

@@ -28,6 +28,7 @@
 #include "ui_text.h"
 #include "seq.h"
 #include "seq_pattern.h"
+#include "lane_name.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -39,6 +40,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "textgrid.h"
+#include "ask.h"
 
 int64_t editor_now_ms(void);
 static void line_at(size_t from, char *out, size_t max);
@@ -93,6 +95,10 @@ static char s_cur_ch  = ' ';
  * know, or it erases the bar every time it repaints that one cell. */
 static bool s_cur_under = false;
 static bool s_cur_over  = false;
+/* Document offset of the character the last run was refused for, or -1. Set
+ * by run_current_line, cleared by the next key that is not pure motion - an
+ * edit, a document switch, another run - so it never points at the wrong text. */
+static int  s_err_off = -1;
 /* When set and in the future, the status bar shows the way out of the output
  * buffer after the command's own message has had its moment. */
 static int64_t s_msg2_until = 0;
@@ -183,8 +189,22 @@ esp_err_t editor_set_density(int level)
     return ESP_OK;
 }
 
+/* A SECRET BEING TYPED (ask.h). While one is open every key goes to it and
+ * none reaches the document. */
+static ask_t s_ask;
+static cmd_secret_fn s_ask_fn;
+
+static bool editor_ask(const char *question, cmd_secret_fn fn)
+{
+    ask_start(&s_ask, question);
+    s_ask_fn = fn;
+    editor_invalidate();
+    return true;
+}
+
 esp_err_t editor_init(void)
 {
+    cmd_set_asker(editor_ask);
     return editor_set_density(0);
 }
 
@@ -280,7 +300,9 @@ static void status_bar(void)
     char wide[96];
     char s[STATUS_MAX + 1];
 
-    if (s_msg[0] != '\0' && editor_now_ms() < s_msg_until) {
+    if (s_ask.active) {
+        ask_render(&s_ask, wide, sizeof wide);
+    } else if (s_msg[0] != '\0' && editor_now_ms() < s_msg_until) {
         snprintf(wide, sizeof wide, "%s", s_msg);
     } else if (editor_now_ms() < s_msg2_until && doc_current_is_transient()) {
         snprintf(wide, sizeof wide, "%s", UI_OUT_BACK);
@@ -341,48 +363,77 @@ static void status_bar(void)
     }
 }
 
-/* Document offset of the step that is sounding on a lane line, or -1.
+/* The span of the step that is sounding on a lane line, in document offsets:
+ * [*from, *to). Returns false when nothing on this line is sounding.
  *
- * WHY AN OFFSET AND NOT A COLUMN. A 32-step lane written out is 38 characters
+ * WHY OFFSETS AND NOT COLUMNS. A 32-step lane written out is 38 characters
  * against a 30-column grid, so it wraps - and a mark derived from a display
  * row's column would land on the wrong row the moment it did. That is exactly
  * the bug that was fixed once already in current_line(), which read the wrap
  * table instead of the document. Compute in document space, project through
  * the wrap table, never the other way round.
  *
- * THE PLAYHEAD MARKS THE STEP, NOT THE HIT. Three reasons. It reads as one
- * transport sweeping the document rather than four lamps blinking
- * independently; it shows where you are in the bar even on a lane that is
- * resting; and it stays truthful under editing, because changing 'x...' to
- * '..x.' changes which steps sound but not the step-to-column mapping. */
-static int playhead_offset(int line_off, const char *lbuf, int at, int len)
+ * THE PLAYHEAD MARKS THE STEP, NOT THE HIT. It reads as one transport sweeping
+ * the document rather than lamps blinking independently; it shows where you are
+ * in the bar even on a lane that is resting; and it stays truthful under
+ * editing, because changing 'x...' to '..x.' changes which steps sound but not
+ * where they are.
+ *
+ * AND A STEP IS A SPAN (docs/MANIFESTO.md §3.6): 'x%15' lights all four
+ * characters, a chord lights from its first note to its last. The owner kept the
+ * goal - you can always see what is sounding - and dropped the one-character
+ * mechanism that was refusing chords. */
+static bool playhead_span(int line_off, const char *lbuf, int at, int len,
+                          int *from, int *to)
 {
     if (!seq_running()) {
-        return -1;
+        return false;
     }
-    const seq_lane_t *l = seq_lane_find(lbuf + at, len);
-    /* Exactly fire_step's skip test. If it would not sound, it must not be
+    /* The lane's name is its CANONICAL address - 'disc:1' is 'disc' - exactly as
+     * the lane command stored it, or the mark would miss a lane it is playing. */
+    lane_name_t ln;
+    if (lane_name_parse(lbuf + at, (size_t)len, &ln) != LN_OK) {
+        return false;
+    }
+    const seq_lane_t *l = seq_lane_find(ln.canon, -1);
+    /* Exactly the clock's skip test. If it would not sound, it must not be
      * marked - that makes "the playhead is sweeping this line" and "this lane
      * is sounding" the same statement, which is what the toggle relies on. */
-    if (l == NULL || l->muted || l->steps == 0) {
-        return -1;
+    if (l == NULL || l->muted || l->slots == 0) {
+        return false;
     }
     /* The argument, delimited the way the dispatcher delimits it. */
     int a = at + len;
     while (lbuf[a] == ' ' || lbuf[a] == '\t') {
         a++;
     }
-    /* A lane compiled from text that has since been edited would put the mark
-     * on a character that is not the one sounding. The step COUNT is the whole
-     * of what the mapping depends on, so it is the whole of the test. */
-    if (seq_pattern_steps(lbuf + a, SEQ_MAX_STEPS) != l->steps) {
-        return -1;
+    /* A LANE COMPILED FROM TEXT THAT HAS SINCE BEEN EDITED would put the mark on
+     * characters that are not the ones sounding. This compared step COUNTS,
+     * which an edit that keeps the count - 'x...' to '..x.' - passed; the hash
+     * of the text is what the toggle already uses to tell "unchanged" from
+     * "edited", so it is exactly the right test here too. */
+    if (seq_pattern_hash(lbuf + a) != l->src) {
+        return false;
     }
-    /* The global step is not the lane's step the moment one lane is not the
-     * same length as another - which is the point of having lanes. */
-    const int off = seq_pattern_offset(lbuf + a, (int)(seq_position() % (uint32_t)l->steps),
-                                       SEQ_MAX_STEPS);
-    return (off < 0) ? -1 : line_off + a + off;
+    /* THE LANE'S OWN POSITION, not the global sixteenth. This took
+     * seq_position() % steps, so a '/2' lane's mark ran at twice the speed of
+     * its sound and a nested lane's at the wrong one entirely. */
+    int slot = 0;
+    uint32_t cycle = 0;
+    if (!seq_lane_now(l, &slot, &cycle)) {
+        return false;
+    }
+    static seq_comp_t comp;             /* the editor task only */
+    if (seq_pattern_compile(lbuf + a, &comp) != SEQ_PAT_OK) {
+        return false;
+    }
+    int f = 0, t = 0;
+    if (!seq_pattern_mark(&comp, slot, cycle, &f, &t)) {
+        return false;
+    }
+    *from = line_off + a + f;
+    *to   = line_off + a + t;
+    return true;
 }
 
 /* WHAT THE TEXT KEEPS WHEN THE PREVIEW IS UP.
@@ -439,8 +490,12 @@ static void draw_pane(const viz_pane_t *p)
             } else if (cc == 0 || cc == p->w - 1) {
                 ch = '|';
             } else {
+                /* The frame SAMPLED to the pane: the same cell when the two are
+                 * one size, the nearest when an output bigger than the panel
+                 * is setting the size (viz_out_size). */
                 const int vx = cc - 1;
-                ch = (row != NULL && vx < iw && row[vx] != '\0') ? row[vx] : ' ';
+                (void)row;
+                ch = viz_cell_fit(vx, r - 1, iw, ih);
             }
             tg_put(p->x + cc, p->y + r, ch, TG_NORMAL);
         }
@@ -481,7 +536,7 @@ void editor_draw(void)
     /* Declared outside the row loop ON PURPOSE: it is computed once per
      * LOGICAL line and must survive across that line's continuation rows, so
      * a wrapped lane keeps its playhead. Every logical-line start resets it. */
-    int ph_off = -1;
+    int ph_from = -1, ph_to = -1;
 
     for (int r = 0; r < trows; r++) {
         const int li = s_top_line + r;
@@ -502,11 +557,12 @@ void editor_draw(void)
             (start == 0 || doc_at((size_t)start - 1) == '\n')) {
             char lbuf[128];
             line_at((size_t)start, lbuf, sizeof lbuf);
+            ph_from = ph_to = -1;
             if (cmd_recognise(lbuf, &mark_at, &mark_len) == NULL) {
                 mark_at = -1;
-                ph_off  = -1;
-            } else {
-                ph_off = playhead_offset(start, lbuf, mark_at, mark_len);
+            } else if (!playhead_span(start, lbuf, mark_at, mark_len,
+                                      &ph_from, &ph_to)) {
+                ph_from = ph_to = -1;
             }
         } else if (r == 0 && li < s_line_count) {
             /* The top row can be the CONTINUATION of a line that begins above
@@ -519,8 +575,11 @@ void editor_draw(void)
             char lbuf[128];
             int a, n;
             line_at(s, lbuf, sizeof lbuf);
-            ph_off = (cmd_recognise(lbuf, &a, &n) != NULL)
-                     ? playhead_offset((int)s, lbuf, a, n) : -1;
+            ph_from = ph_to = -1;
+            if (cmd_recognise(lbuf, &a, &n) == NULL ||
+                !playhead_span((int)s, lbuf, a, n, &ph_from, &ph_to)) {
+                ph_from = ph_to = -1;
+            }
         }
 
         const int tc = text_cols_now();
@@ -541,20 +600,32 @@ void editor_draw(void)
              *
              * Computed BEFORE the cursor capture, because the blink needs to
              * know whether the playhead is passing through the cursor cell. */
-            const bool playing = ph_off >= 0 && li < s_line_count &&
-                                 (start + c) == ph_off && (start + c) < end;
-            const bool marked = mark_at >= 0 &&
-                                c >= mark_at && c < mark_at + mark_len;
+            const bool playing = ph_from >= 0 && li < s_line_count &&
+                                 (start + c) >= ph_from && (start + c) < ph_to &&
+                                 (start + c) < end;
+            bool marked = mark_at >= 0 &&
+                          c >= mark_at && c < mark_at + mark_len;
+            /* THE CHARACTER A PATTERN WAS REFUSED FOR, boxed - a bar above and a
+             * bar below, which nothing else on the panel draws - until the next
+             * edit. The status bar says why; this says where, so nobody has to
+             * count columns at 2 a.m. */
+            const bool refused = s_err_off >= 0 && li < s_line_count &&
+                                 (start + c) == s_err_off;
+            bool under = playing;
+            if (refused) {
+                under = true;
+                marked = true;
+            }
             const bool is_cursor = (li == s_cursor_line && c == s_cursor_col);
             if (is_cursor) {
                 s_cur_col = c; s_cur_row = r; s_cur_ch = ch;
-                s_cur_under = playing;
+                s_cur_under = under;
                 s_cur_over  = marked;
             }
             /* The cursor keeps the solid block to itself. A recognised
              * command word gets a bar on top instead of sharing it. */
             const bool inv = is_cursor && s_cursor_on;
-            tg_put(c, r, ch, cell_attr(inv, playing, marked));
+            tg_put(c, r, ch, cell_attr(inv, under, marked));
         }
 
         /* Any column the text does not reach is blanked, so a narrower text
@@ -584,10 +655,10 @@ void editor_draw(void)
      * RENDERS but does not PUSH: the caller pushes once, with editor_present,
      * after the chrome is in the framebuffer too. */
     status_bar();
-    /* The CPU side has never been measured - only the bytes on the wire.
-     * Drawing a 12x24 cell is 288 pixel writes, each of which is a coordinate
-     * transform; that is the cost that competes with live coding, not the
-     * SPI. */
+    /* The CPU side, timed for the heartbeat. It was the budget: 86 us a
+     * 12x24 cell with the scheduler held, 94 by this wall clock, 34 ms for a
+     * full grid against a 4.75 ms push. The face is pre-turned now (textgrid.c)
+     * and a cell is 3.8 us - main.c's bench_render prints both at boot. */
     const int64_t t0 = esp_timer_get_time();
     { const uint32_t n = (uint32_t)tg_render(); s_cells += n; s_cells_total += n; }
     s_render_us += (uint32_t)(esp_timer_get_time() - t0);
@@ -899,6 +970,71 @@ static void cycle_buffer(int dir)
     s_msg_until = editor_now_ms() + 1500;
 }
 
+/* Cut the line under the cursor - the whole line, not the display line -
+ * from column `col` to its end. */
+static void cut_line_from(int col)
+{
+    const size_t len = doc_len();
+    size_t s = doc_cursor();
+    if (s > len) {
+        s = len;
+    }
+    while (s > 0 && doc_at(s - 1) != '\n') {
+        s--;
+    }
+    size_t e = s;
+    while (e < len && doc_at(e) != '\n') {
+        e++;
+    }
+    const size_t from = s + (size_t)col;
+    if (from >= e) {
+        return;
+    }
+    doc_move_to(e);
+    for (size_t i = e; i > from; i--) {
+        doc_backspace();
+    }
+}
+
+/* Move the view to '+out' at `from`, where a command's lines begin. False
+ * when there is no '+out' or the view is already there. */
+static bool show_output(size_t from, const char *msg)
+{
+    const int out = doc_buf_find("+out");
+    const int here = doc_buf_current();
+    if (out < 0 || out == here || doc_buf_select(out) != ESP_OK) {
+        return false;
+    }
+    s_prev_buf = here;
+    doc_move_to(from);
+    s_top_offset = (int)from;
+    s_goal_col = -1;
+    /* SAY HOW TO GET BACK, AND SAY IT LAST.
+     *
+     * The command's own result is shown first, then the way out, so
+     * the owner reads the answer and then learns the exit. The owner
+     * ran a command, was moved here, and "had no idea how to get
+     * back" - so they ran another command, which piled onto the same
+     * page. Ctrl-O was always the answer and nothing ever said so.
+     *
+     * Longer than a normal message because it is teaching, not
+     * reporting, and it only appears when the view actually moved. */
+    snprintf(s_msg, sizeof s_msg, "%s", msg[0] ? msg : "output");
+    s_msg_until = editor_now_ms() + 2200;
+    s_msg2_until = editor_now_ms() + 5200;
+    editor_invalidate();
+    tg_invalidate();
+    return true;
+}
+
+void editor_show_output(size_t from, const char *msg)
+{
+    if (!show_output(from, msg)) {
+        editor_message(msg);
+        editor_invalidate();
+    }
+}
+
 static void run_current_line(void)
 {
     char line[128];
@@ -923,36 +1059,30 @@ static void run_current_line(void)
 
     char msg[96] = "";
     cmd_run_line(line, CMD_BY_HANDS, msg, sizeof msg);
+    /* A PASSWORD TYPED ON THE LINE, the old way, is cut before anything can
+     * save it: the command refused it and said where it starts. */
+    if (cmd_last_secret_col() >= 0) {
+        cut_line_from(cmd_last_secret_col());
+    }
     const int lines = cmd_last_output_lines();
+    {
+        /* Only when the view stays here: a result long enough to move to
+         * '+out' would otherwise box a character of the output page. */
+        const int col = (lines > 1) ? -1 : cmd_last_error_col();
+        if (col >= 0) {
+            size_t ls = doc_cursor();
+            while (ls > 0 && doc_at(ls - 1) != '\n') {
+                ls--;
+            }
+            s_err_off = (int)ls + col;
+        }
+    }
 
     /* A result of more than one line shows itself. Reporting "10 commands" at
      * the bottom of the screen and leaving the actual answer somewhere the
      * owner has to know to look for is not minimalism, it is hiding. */
-    if (lines > 1) {
-        const int out = doc_buf_find("+out");
-        const int here = doc_buf_current();
-        if (out >= 0 && out != here && doc_buf_select(out) == ESP_OK) {
-            s_prev_buf = here;
-            doc_move_to(out_was);
-            s_top_offset = (int)out_was;
-            s_goal_col = -1;
-            /* SAY HOW TO GET BACK, AND SAY IT LAST.
-             *
-             * The command's own result is shown first, then the way out, so
-             * the owner reads the answer and then learns the exit. The owner
-             * ran a command, was moved here, and "had no idea how to get
-             * back" - so they ran another command, which piled onto the same
-             * page. Ctrl-O was always the answer and nothing ever said so.
-             *
-             * Longer than a normal message because it is teaching, not
-             * reporting, and it only appears when the view actually moved. */
-            snprintf(s_msg, sizeof s_msg, "%s", msg[0] ? msg : "output");
-            s_msg_until = editor_now_ms() + 2200;
-            s_msg2_until = editor_now_ms() + 5200;
-            editor_invalidate();
-            tg_invalidate();
-            return;
-        }
+    if (lines > 1 && show_output(out_was, msg)) {
+        return;
     }
     snprintf(s_msg, sizeof s_msg, "%s", msg[0] ? msg : "ok");
     s_msg_until = editor_now_ms() + 4000;
@@ -966,6 +1096,26 @@ void editor_handle(const kbd_event_t *ev)
      * rebuilds it. */
     wrap(text_cols_now());
 
+    /* A SECRET BEING TYPED TAKES EVERY KEY - ask.h. Enter hands it to the
+     * command that asked, Esc takes it back, and either way it is wiped. */
+    if (s_ask.active) {
+        const int r = ask_feed(&s_ask, ev);
+        if (r != ASK_KEEP) {
+            const cmd_secret_fn fn = s_ask_fn;
+            s_ask_fn = NULL;
+            char msg[64] = "";
+            if (r == ASK_SUBMIT && fn != NULL) {
+                fn(s_ask.buf, msg, sizeof msg);
+            }
+            ask_end(&s_ask);
+            snprintf(s_msg, sizeof s_msg, "%s", r != ASK_SUBMIT
+                     ? "stopped - nothing sent" : msg[0] ? msg : "ok");
+            s_msg_until = editor_now_ms() + 4000;
+        }
+        editor_invalidate();
+        return;
+    }
+
     /* Any motion that is not vertical, and any edit, drops the goal column. */
     switch (ev->type) {
     case KBD_EV_UP:
@@ -974,6 +1124,23 @@ void editor_handle(const kbd_event_t *ev)
     default:
         s_goal_col = -1;
         break;
+    }
+
+    /* Anything but pure motion forgets the refused-character mark: an edit may
+     * have fixed it or moved it, a switch leaves its document, and a run sets
+     * its own. Motion keeps it, so the cursor can be walked onto it. */
+    {
+        const bool motion =
+            ev->type == KBD_EV_LEFT || ev->type == KBD_EV_RIGHT ||
+            ev->type == KBD_EV_UP || ev->type == KBD_EV_DOWN ||
+            ev->type == KBD_EV_HOME || ev->type == KBD_EV_END ||
+            (ev->type == KBD_EV_CHAR && (ev->mods & KBD_COMMAND_MODS) &&
+             (ev->ch == 'a' || ev->ch == 'e' || ev->ch == 'b' || ev->ch == 'f' ||
+              ev->ch == 'p' || ev->ch == 'n'));
+        if (!motion && s_err_off >= 0) {
+            s_err_off = -1;
+            editor_invalidate();
+        }
     }
 
     if (ev->type == KBD_EV_ENTER && (ev->mods & KBD_COMMAND_MODS)) {

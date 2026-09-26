@@ -105,13 +105,26 @@ static void mark(const char *prim, int amt, char dir)
 static seq_lane_t g_lanes[SEQ_MAX_LANES];
 static int        g_nlanes;
 
+/* EXACTLY WHAT THE REAL ONE RETURNS: the whole array, and the count of lanes in
+ * USE. The array is sparse - forgetting a lane clears `used` in place - so the
+ * count is not a bound on the index. This shim used to return a dense table and
+ * its length, which is the one shape in which a loop bounded by the count is
+ * correct; that is how chain_ranks() got away with one. */
 const seq_lane_t *seq_lanes(int *count)
 {
-    if (count != NULL) { *count = g_nlanes; }
+    if (count != NULL) {
+        int n = 0;
+        for (int i = 0; i < SEQ_MAX_LANES; i++) { n += g_lanes[i].used; }
+        *count = n;
+    }
     return g_lanes;
 }
 
-static void no_lanes(void) { g_nlanes = 0; }
+static void no_lanes(void)
+{
+    memset(g_lanes, 0, sizeof g_lanes);
+    g_nlanes = 0;
+}
 
 /* One drawing lane on `prim`, optionally following `follows`. */
 static void lane(const char *prim, const char *follows)
@@ -120,10 +133,22 @@ static void lane(const char *prim, const char *follows)
     seq_lane_t *l = &g_lanes[g_nlanes++];
     memset(l, 0, sizeof *l);
     snprintf(l->name, sizeof l->name, "%s", prim);
+    l->used  = true;
     l->bind  = SEQ_BIND_VIZ;
     l->prim  = (uint8_t)viz_prim_index(prim);
     l->param = 0;
     if (follows != NULL) { snprintf(l->route, sizeof l->route, "%s", follows); }
+}
+
+/* A slot a forgotten lane left behind: not in use, and whatever it held. */
+static void hole(const char *was)
+{
+    if (g_nlanes >= SEQ_MAX_LANES) { return; }
+    seq_lane_t *l = &g_lanes[g_nlanes++];
+    memset(l, 0, sizeof *l);
+    snprintf(l->name, sizeof l->name, "%s", was);
+    l->bind = SEQ_BIND_VIZ;
+    l->prim = (uint8_t)viz_prim_index(was);
 }
 
 int main(void)
@@ -146,13 +171,15 @@ int main(void)
     }
     CHECK(viz_prim_index("sparkle") < 0, "an unknown name is refused");
 
-    /* A TRAILING DIGIT IS AN INSTANCE. 'disc2' is a second circle, not a second
-     * primitive, so it resolves to the same index - and two instances must not
-     * collapse into one mark, which is what a per-primitive mark table did. */
-    CHECK(viz_prim_index("disc2") == viz_prim_index("disc"),
-          "disc2 is an instance of disc");
-    CHECK(viz_prim_index("echo9") == viz_prim_index("echo"),
-          "echo9 is an instance of echo");
+    /* A PRIMITIVE ANSWERS TO ITS OWN NAME AND NOTHING ELSE. A trailing digit
+     * used to be an instance - 'disc2' resolved to disc - and that was REVERSED
+     * on 2026-09-25 (docs/MANIFESTO.md §3.3): an instance is 'disc:2', the
+     * command layer takes the address apart, and resolving 'disc2' here as well
+     * would let the old spelling go on working as a lane nobody could route
+     * rather than being told its new one. Two instances still must not collapse
+     * into one mark; that is checked below, two marks on one primitive. */
+    CHECK(viz_prim_index("disc2") < 0, "disc2 is not a primitive now - disc:2 is");
+    CHECK(viz_prim_index("echo9") < 0, "echo9 is not a primitive now");
     CHECK(viz_prim_index("2") < 0, "a bare number is not a primitive");
 
     /* The index a name resolves to must be the slot that name occupies, or the
@@ -406,6 +433,50 @@ int main(void)
     CHECK(rows_differ > 0,
           "grow-then-thin and thin-then-grow differ (%d rows, %d vs %d cells)",
           rows_differ, closed_ink, opened_ink);
+
+    /* TWO LANES ON ONE PRIMITIVE BOTH DRAW. A mark belongs to the lane that
+     * made it: a per-primitive slot kept only the last one, so 'disc 9' then a
+     * second circle at 3 drew the small circle alone. Both marks in one frame
+     * must give their union - here, as much ink as the big one by itself. */
+    blank();
+    no_lanes();
+    mark("disc", 9, 'd');
+    viz_service(); snap();
+    const int big_alone = frame_ink();
+    blank();
+    mark("disc", 3, 'd');
+    viz_service(); snap();
+    const int small_alone = frame_ink();
+    CHECK(small_alone < big_alone,
+          "the check can see a collapse: the small one alone is %d < %d",
+          small_alone, big_alone);
+    blank();
+    mark("disc", 9, 'd'); mark("disc", 3, 'd');
+    viz_service(); snap();
+    CHECK(frame_ink() == big_alone,
+          "two instances both draw: %d cells, the big one alone is %d",
+          frame_ink(), big_alone);
+
+    /* AND A HOLE IN THE TABLE MUST NOT CHANGE IT. After a lane is forgotten its
+     * slot is empty and the table is sparse. chain_ranks() walked lanes[0..count)
+     * where count is the lanes IN USE, so with a hole at the front it never
+     * reached the last lane - 'thin' fell to rank 0 and drew first, and the close
+     * became a despeckle. The same three routes, one hole: the same picture. */
+    blank();
+    no_lanes();
+    hole("flip");
+    lane("noise", NULL);
+    lane("grow", "noise");
+    lane("thin", "grow");
+    mark("grid", 2, 'd'); mark("grow", 9, 'd'); mark("thin", 9, 'd');
+    viz_service(); snap();
+    int holed_differ = 0;
+    for (int y = 0; y < viz_rows(); y++) {
+        if (strcmp(closed[y], row_at(y)) != 0) { holed_differ++; }
+    }
+    CHECK(holed_differ == 0,
+          "a forgotten lane's hole does not change the draw order (%d rows off)",
+          holed_differ);
 
     /* AND AN UNROUTED DOCUMENT IS STILL ORDER-INDEPENDENT. Promise 3 at the top of
      * this file, which the route ranking must not have cost: with no routes every

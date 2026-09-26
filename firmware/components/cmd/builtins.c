@@ -17,6 +17,8 @@
 #include "seq.h"
 #include "blemidi.h"
 #include "seq_pattern.h"
+#include "lane_name.h"
+#include "secret_line.h"
 
 #include "esp_system.h"
 #include "esp_timer.h"
@@ -35,6 +37,8 @@
 #include "usbdev.h"
 #include "usbmux.h"
 
+static void list_names(cmd_ctx_t *ctx);
+
 static cmd_status_t c_help(cmd_ctx_t *ctx)
 {
     int n = 0;
@@ -42,6 +46,9 @@ static cmd_status_t c_help(cmd_ctx_t *ctx)
     for (int i = 0; i < n; i++) {
         cmd_out(ctx, "%-8s %s", t[i].name, t[i].help);
     }
+    /* THE NAMES ARE NOT COMMANDS ANY MORE, so they get their own lines: the
+     * defined ones and the pictures, and how to make another. */
+    list_names(ctx);
     snprintf(ctx->msg, sizeof ctx->msg, "%d commands", n);
     return CMD_DONE;
 }
@@ -373,20 +380,6 @@ static cmd_status_t c_close(cmd_ctx_t *ctx)
  * a command and Ctrl+Enter runs it, in any buffer. The kind is kept because
  * it still has to decide prose-versus-grid reflow for Orca patches, which is
  * the distinction docs/SUBSTRATE.md actually cares about. */
-static cmd_status_t c_guide(cmd_ctx_t *ctx)
-{
-    doc_buf_set_kind(DOC_KIND_GUIDE);
-    snprintf(ctx->msg, sizeof ctx->msg, "kind: guide");
-    return CMD_DONE;
-}
-
-static cmd_status_t c_prose(cmd_ctx_t *ctx)
-{
-    doc_buf_set_kind(DOC_KIND_PROSE);
-    snprintf(ctx->msg, sizeof ctx->msg, "kind: prose");
-    return CMD_DONE;
-}
-
 static cmd_status_t c_out(cmd_ctx_t *ctx) __attribute__((unused));
 static cmd_status_t c_out(cmd_ctx_t *ctx)
 {
@@ -444,17 +437,159 @@ static cmd_status_t c_density(cmd_ctx_t *ctx)
     return CMD_DONE;
 }
 
-/* ------------------------------------------------------------------ music
+/* ------------------------------------------------------------------ names
  *
- * A drum IS a command. "kick x...x...x...x..." is twenty-two keystrokes for a
- * four-on-the-floor, and nothing has to be declared, named or wired up first.
- * That is the whole design brief for a thumb keyboard: the shortest path from
- * a musical idea to a sound, with no ceremony in between.
+ * A LANE IS A NAME AND A PATTERN, AND THE NAME IS DEFINED, NOT BUILT IN.
+ *
+ * "kick x...x...x...x..." is still twenty-two keystrokes for a four-on-the-floor
+ * with nothing declared first - the boot document declares it, at startup:
+ *
+ *     >kick = note 36
+ *     >bass = voice 2 ch 1 gate 180
+ *     >cut = cc 74
+ *
+ * The seventeen sound names used to be verbs with their numbers compiled in, so
+ * a player could add neither a conga nor a second controller without a
+ * firmware build, and could not move a kick to the note their drum machine
+ * wants. The picture names were verbs too, sixteen more. Now there is ONE lane
+ * command for all of them, a table of defined names, and the pictures by their
+ * own names - and thirty-three verbs are gone. docs/MANIFESTO.md §3.8; the
+ * grammar of the name and the definition is lane_name.h.
  */
-static const struct { const char *name; uint8_t note; } s_drums[] = {
-    { "kick",  36 }, { "snare", 38 }, { "hat",   42 }, { "ohat",  46 },
-    { "clap",  39 }, { "tom",   45 }, { "rim",   37 }, { "crash", 49 },
-};
+typedef struct {
+    char     name[LANE_BASE_MAX + 1];
+    uint8_t  kind;          /* LD_NOTE, LD_VOICE, LD_CC, LD_DRAW, or an
+                             * input: LD_KNOB, LD_PAD                        */
+    uint8_t  num;           /* note, octave, controller, or picture index   */
+    uint8_t  chan;          /* 0-15                                         */
+    uint16_t gate;          /* ms                                           */
+} alias_t;
+
+/* THIRTY-TWO NAMES. Sixteen come in the boot document, which leaves room for a
+ * player's own twice over; a definition past that is refused with the number,
+ * not dropped. */
+#define ALIAS_MAX 32
+static alias_t s_alias[ALIAS_MAX];
+
+_Static_assert(LANE_NAME_MAX <= SEQ_NAME_MAX, "a lane's address fits its name");
+
+static alias_t *alias_find(const char *name)
+{
+    for (int i = 0; i < ALIAS_MAX; i++) {
+        if (s_alias[i].name[0] != '\0' && strcmp(s_alias[i].name, name) == 0) {
+            return &s_alias[i];
+        }
+    }
+    return NULL;
+}
+
+/* Is this word the exact name of a command? */
+static bool is_verb(const char *w)
+{
+    int n = 0;
+    const cmd_t *t = cmd_table(&n);
+    for (int i = 0; i < n; i++) {
+        if (strcmp(t[i].name, w) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool cmd_lane_known(const char *word, size_t n)
+{
+    char base[LANE_BASE_MAX + 1];
+    size_t k = 0;
+    while (k < n && word[k] != ':' && k < LANE_BASE_MAX) {
+        base[k] = word[k];
+        k++;
+    }
+    if (k < n && word[k] != ':') {
+        return false;                  /* longer than a name can be */
+    }
+    base[k] = '\0';
+    return alias_find(base) != NULL || viz_prim_index(base) >= 0;
+}
+
+/* WHAT A NAME IS BOUND TO: a defined name, or a picture by its own name, plus
+ * the part the address selects. False, with the reason, when it is neither -
+ * or when it names a part the binding does not have. */
+static bool binding_of(const lane_name_t *ln, seq_binding_t *b, char *why,
+                       size_t wn)
+{
+    memset(b, 0, sizeof *b);
+    const alias_t *a = alias_find(ln->base);
+    int prim = -1;
+    if (a != NULL) {
+        switch (a->kind) {
+        case LD_NOTE:
+            b->bind = SEQ_BIND_NOTE;
+            b->note = a->num;
+            b->chan = a->chan;
+            b->gate_ms = a->gate;
+            break;
+        case LD_VOICE:
+            b->bind = SEQ_BIND_NOTE;
+            b->melodic = true;
+            b->octave = (int8_t)a->num;
+            b->chan = a->chan;
+            b->gate_ms = a->gate;
+            break;
+        case LD_CC:
+            b->bind = SEQ_BIND_CC;
+            b->cc = a->num;
+            b->chan = a->chan;
+            break;
+        case LD_KNOB:
+        case LD_PAD:
+            /* An input plays nothing of its own: it is a source. */
+            snprintf(why, wn, "%s is a %s: route from it", ln->base,
+                     a->kind == LD_KNOB ? "knob" : "pad");
+            return false;
+        default:
+            prim = a->num;
+            break;
+        }
+    } else {
+        prim = viz_prim_index(ln->base);
+        if (prim < 0) {
+            snprintf(why, wn, "%s? try: help", ln->base);
+            return false;
+        }
+    }
+    if (prim >= 0) {
+        b->bind  = SEQ_BIND_VIZ;
+        b->prim  = (uint8_t)prim;
+        b->param = (uint8_t)viz_param_index(ln->part);
+        /* A part that does nothing is a lane that silently does nothing, so it
+         * is refused - the rule '>box[z]' was the one loud case of, before. */
+        if (ln->part[0] != '\0' && b->param == VIZ_PARAM_NONE) {
+            snprintf(why, wn, "no :%s - a picture has x, y", ln->part);
+            return false;
+        }
+        return true;
+    }
+    /* A SOUND'S PARTS: how hard, and - on a voice - which octave. The same
+     * sentence as a circle's position, pointed at a sound: '>bass:vel 9..3' and
+     * '>bass:oct <2 3>' are lanes like any other (docs/MANIFESTO.md §3.7,
+     * §3.11). A controller has none; its digit already is its value. */
+    if (ln->part[0] != '\0') {
+        if (b->bind == SEQ_BIND_NOTE && strcmp(ln->part, "vel") == 0) {
+            b->param = SEQ_PART_VEL;
+        } else if (b->bind == SEQ_BIND_NOTE && b->melodic &&
+                   strcmp(ln->part, "oct") == 0) {
+            b->param = SEQ_PART_OCT;
+        } else if (b->bind == SEQ_BIND_NOTE) {
+            snprintf(why, wn, b->melodic ? "a voice has :vel and :oct"
+                                         : "a drum has :vel");
+            return false;
+        } else {
+            snprintf(why, wn, "%s has no parts", ln->base);
+            return false;
+        }
+    }
+    return true;
+}
 
 /* RE-RUNNING A LINE YOU HAVE NOT TOUCHED SILENCES THE LANE.
  *
@@ -500,205 +635,267 @@ static bool rerun_silences(const cmd_ctx_t *ctx)
     return rerun_silences_named(ctx->name, ctx->arg);
 }
 
-static cmd_status_t c_drum(cmd_ctx_t *ctx)
+/* A LANE THAT WAS NOT COMPILED, AND WHY.
+ *
+ * This printed "16 lanes is all there is" for every refusal - including a
+ * pattern too long to hold, which then read as a full lane table to a performer
+ * with three lanes playing. Now each reason is its own sentence, and a pattern
+ * refused because of one character says which, marks it in the document
+ * (cmd_ctx.err_at), and fits the status bar in ONE line - so a typo does not
+ * throw the performer into the output page mid-song. */
+static cmd_status_t lane_refused(cmd_ctx_t *ctx, esp_err_t e)
 {
-    uint8_t note = 36;
-    for (size_t i = 0; i < sizeof s_drums / sizeof s_drums[0]; i++) {
-        if (strcmp(s_drums[i].name, ctx->name) == 0) {
-            note = s_drums[i].note;
-            break;
-        }
-    }
-    /* A BARE LANE NAME MEANS THE LANE IS GONE, not muted.
-     *
-     * Muting already has a word - '>mute kick' - and it leaves the slot
-     * allocated, which is how a session filled all eight lanes with names the
-     * document no longer mentioned and then refused a ninth. Re-running the
-     * same line still silences, because that is a performance gesture on a
-     * lane that is still part of the piece. */
-    if (ctx->arg[0] == '\0') {
-        const bool had = seq_forget(ctx->name) == ESP_OK;
-        snprintf(ctx->msg, sizeof ctx->msg, had ? "%s gone" : "no %s", ctx->name);
-        return CMD_DONE;
-    }
-    if (rerun_silences(ctx)) {
-        seq_mute(ctx->name, true);
-        snprintf(ctx->msg, sizeof ctx->msg, "%s silent", ctx->name);
-        return CMD_DONE;
-    }
-    seq_lane_note(ctx->name, note, 9);
-    if (seq_lane(ctx->name, ctx->arg) != ESP_OK) {
+    if (e == ESP_ERR_NO_MEM) {
         cmd_out(ctx, "%d lanes is all there is.", SEQ_MAX_LANES);
         cmd_out(ctx, "free one: type its name alone");
         return CMD_ERROR;
     }
-    seq_mute(ctx->name, false);
-    snprintf(ctx->msg, sizeof ctx->msg, "%s %s", ctx->name, ctx->arg);
-    return CMD_DONE;
+    int at = -1;
+    const char *why = seq_lane_error(&at);
+    ctx->err_at = at;
+    cmd_out(ctx, "%s", why[0] ? why : "not a pattern");
+    return CMD_ERROR;
 }
 
-/* The melodic lanes. Four names, because four is how many parts a person can
- * actually hold in their head while performing, and because each one carries
- * a default octave and gate that make it sound like what it is called before
- * anything is configured. A bass that arrives an octave too high is a bass
- * nobody uses. */
-static const struct {
-    const char *name; int8_t oct; uint8_t chan; uint16_t gate;
-} s_voices[] = {
-    { "bass", 2, 0, 180 },
-    { "lead", 4, 1, 120 },
-    { "pad",  3, 2, 420 },
-    { "arp",  5, 3,  90 },
-};
-
-static cmd_status_t c_voice(cmd_ctx_t *ctx)
+/* ONE COMMAND FOR EVERY LANE - a drum, a voice, a controller, a picture - because
+ * a lane is a lane and the name only says where it goes. `word` is the address
+ * as typed: 'kick', 'disc:2', 'disc:2:x'. */
+cmd_status_t cmd_lane(cmd_ctx_t *ctx, const char *word, size_t n)
 {
-    const int8_t *oct = NULL;
-    size_t v = 0;
-    for (; v < sizeof s_voices / sizeof s_voices[0]; v++) {
-        if (strcmp(s_voices[v].name, ctx->name) == 0) {
-            oct = &s_voices[v].oct;
-            break;
-        }
-    }
-    if (oct == NULL) {
+    lane_name_t ln;
+    char why[40];
+    const int e = lane_name_parse(word, n, &ln);
+    if (e != LN_OK) {
+        lane_name_error_text(e, why, sizeof why);
+        cmd_out(ctx, "%s", why);
         return CMD_ERROR;
     }
-    if (ctx->arg[0] == '\0') {            /* bare name forgets - see c_drum */
-        const bool had = seq_forget(ctx->name) == ESP_OK;
-        snprintf(ctx->msg, sizeof ctx->msg, had ? "%s gone" : "no %s", ctx->name);
-        return CMD_DONE;
-    }
-    if (rerun_silences(ctx)) {
-        seq_mute(ctx->name, true);
-        snprintf(ctx->msg, sizeof ctx->msg, "%s silent", ctx->name);
-        return CMD_DONE;
-    }
-    seq_lane_melodic(ctx->name, s_voices[v].oct, s_voices[v].chan,
-                     s_voices[v].gate);
-    if (seq_lane(ctx->name, ctx->arg) != ESP_OK) {
-        cmd_out(ctx, "%d lanes is all there is.", SEQ_MAX_LANES);
-        cmd_out(ctx, "free one: type its name alone");
+    seq_binding_t b;
+    if (!binding_of(&ln, &b, why, sizeof why)) {
+        cmd_out(ctx, "%s", why);
         return CMD_ERROR;
     }
-    seq_mute(ctx->name, false);
-    snprintf(ctx->msg, sizeof ctx->msg, "%s %s in %s", ctx->name, ctx->arg,
-             seq_scale_name());
-    return CMD_DONE;
-}
-
-/* MODULATION IS A LANE, NOT A NEW CONCEPT.
- *
- * An LFO here is a pattern whose digits are values and whose destination is a
- * controller instead of a note. '>cut 0..4..8..4..' is a filter sweep, and it
- * is the same grammar, the same rests, the same probability marks and the same
- * playhead as a drum line. One idea covering drums, melody and modulation is
- * the difference between an instrument that feels designed and a pile of
- * features.
- *
- * Named, not numbered. '>cut' beats '>cc 74' for the same reason a synth's
- * front panel says CUTOFF: the number is an implementation detail of MIDI and
- * nobody is composing with it. These are the General MIDI / de-facto
- * assignments every DAW and synth already maps. */
-static const struct { const char *name; uint8_t cc; } s_ctrls[] = {
-    { "cut",  74 },   /* brightness / filter cutoff */
-    { "res",  71 },   /* resonance / timbre         */
-    { "mod",   1 },   /* modulation wheel           */
-    { "rev",  91 },   /* reverb send                */
-};
-
-/* ONE command, not four. '>cut', '>res', '>mod' and '>rev' were four names for
- * one idea, and one of them collided with the destinations command and was
- * silently unreachable. '>cc cut 0..9..' says exactly what it is, takes a NAME
- * or a NUMBER, and reaches every controller rather than the four somebody
- * happened to think of. The LANE is still named for the control, so the
- * playhead and '>lanes' read the same as any other line. */
-/* THE CONTROL LANES, AND A BUG THAT ATE THE LANE BUDGET.
- *
- * This runs under five names. '>cut', '>res', '>mod' and '>rev' each ARE a
- * controller, so the whole argument is the pattern. '>cc' is the escape hatch
- * for the other 124, so there the first word names the controller and the rest
- * is the pattern.
- *
- * It used to parse the first word as a controller name in every case, so
- * '>cut 0..3..6..9..6..3' resolved the CONTROLLER from "0..3..6..9..6..3" -
- * which begins with a digit, so atoi made it CC 0 - and then compiled an EMPTY
- * pattern into a lane named after the pattern. The filter never swept, the
- * listing showed a lane with no name anybody typed, and every attempt spent
- * one of the eight lane slots on garbage. Then the ninth real lane was refused
- * and the message blamed the ceiling.
- *
- * '>cc' was also never registered, so the help printed here offered a command
- * that did not exist. Both halves of that are fixed: the four names take a
- * pattern, and 'cc' is real. */
-static cmd_status_t c_ctrl(cmd_ctx_t *ctx)
-{
-    char what[16] = {0};
+    /* THE LANE'S NAME IS ITS CANONICAL ADDRESS - 'disc:1' is 'disc' - so two
+     * spellings of one lane are one lane. */
+    static char name[SEQ_NAME_MAX];
+    snprintf(name, sizeof name, "%s", ln.canon);
+    ctx->name = name;
     const char *pat = ctx->arg;
-    if (strcmp(ctx->name, "cc") == 0) {
-        size_t w = 0;
-        while (*pat != '\0' && *pat != ' ' && w < sizeof what - 1) {
-            what[w++] = *pat++;
+
+    /* A BARE NAME MEANS THE LANE IS GONE, not muted. Muting has a word -
+     * '>mute kick' - and leaves the slot allocated, which is how a session once
+     * filled every lane with names the document no longer mentioned. Re-running
+     * the same line still silences, because that is a performance gesture on a
+     * lane that is still part of the piece. */
+    if (pat[0] == '\0') {
+        const bool had = seq_forget(name) == ESP_OK;
+        snprintf(ctx->msg, sizeof ctx->msg, had ? "%s gone" : "no %s", name);
+        return CMD_DONE;
+    }
+    if (rerun_silences(ctx)) {
+        seq_mute(name, true);
+        snprintf(ctx->msg, sizeof ctx->msg, "%s silent", name);
+        return CMD_DONE;
+    }
+    /* A WAY WHERE NOTHING TURNS IS REFUSED (docs/MANIFESTO.md §3.10). 'u d l r'
+     * are steps for move, warp, ramp and turn; on a drum, a controller or a
+     * circle they did nothing, so '>kick x..u' played a hit where the performer
+     * had typed something else - exactly the silent kind of typo §3.2 closed. */
+    {
+        static seq_comp_t c;
+        const bool turns = (b.bind == SEQ_BIND_VIZ && b.param == VIZ_PARAM_NONE &&
+                            viz_prim_turns(b.prim));
+        if (!turns && seq_pattern_compile(pat, &c) == SEQ_PAT_OK) {
+            int at = -1;
+            if (c.dir != 0) {
+                const char *q = pat;
+                while (*q == ' ') { q++; }
+                at = (int)(q - pat);
+            }
+            for (int i = 0; i < c.n && at < 0; i++) {
+                if (c.leaf[i].dir != 0) { at = c.leaf[i].at; }
+            }
+            if (at >= 0) {
+                ctx->err_at = at;
+                cmd_out(ctx, "u d l r: move warp ramp turn");
+                return CMD_ERROR;
+            }
         }
-        while (*pat == ' ') { pat++; }
-    } else if (ctx->name[0] == 'c' && ctx->name[1] == 'c' &&
-               ctx->name[2] >= '0' && ctx->name[2] <= '9') {
-        /* A NAME THE LISTING PRINTS HAS TO BE A NAME THE LANGUAGE ACCEPTS.
-         *
-         * '>cc 74' names its lane 'cc74', because a controller with no friendly
-         * name still needs one that says which controller it is. '>lanes' then
-         * printed 'cc74' - and typing it back was refused with "no controller
-         * 'cc74'", because this function only knew the bare verb and the sixteen
-         * named controllers. The deck was showing a name it would not take. */
-        snprintf(what, sizeof what, "%s", ctx->name + 2);
+    }
+    if (seq_lane_bind(name, &b) != ESP_OK) {
+        return lane_refused(ctx, ESP_ERR_NO_MEM);
+    }
+    const esp_err_t le = seq_lane(name, pat);
+    if (le != ESP_OK) {
+        return lane_refused(ctx, le);
+    }
+    seq_mute(name, false);
+    if (b.bind == SEQ_BIND_VIZ) {
+        viz_split(true);
+    }
+    if (b.melodic) {
+        snprintf(ctx->msg, sizeof ctx->msg, "%s %s in %s", name, pat,
+                 seq_scale_name());
     } else {
-        snprintf(what, sizeof what, "%s", ctx->name);
+        snprintf(ctx->msg, sizeof ctx->msg, "%s %s", name, pat);
     }
-    if (what[0] == '\0') {
-        for (size_t i = 0; i < sizeof s_ctrls / sizeof s_ctrls[0]; i++) {
-            cmd_out(ctx, "cc %-5s %u", s_ctrls[i].name, (unsigned)s_ctrls[i].cc);
-        }
-        cmd_out(ctx, "cc <name|0-127> <pattern>");
-        snprintf(ctx->msg, sizeof ctx->msg, "cc cut 0..4..8..4..");
-        return CMD_DONE;
-    }
-    int cc = -1;
-    for (size_t i = 0; i < sizeof s_ctrls / sizeof s_ctrls[0]; i++) {
-        if (strcmp(s_ctrls[i].name, what) == 0) { cc = s_ctrls[i].cc; break; }
-    }
-    if (cc < 0 && what[0] >= '0' && what[0] <= '9') { cc = atoi(what); }
-    if (cc < 0 || cc > 127) {
-        cmd_out(ctx, "no controller '%s'. try: cc", what);
-        return CMD_ERROR;
-    }
-    /* Name the lane after the CONTROLLER. '>cc 74' and '>cut' are the same
-     * thing, so they have to be the same lane - otherwise one piece holds two
-     * lanes fighting over one CC and the budget pays for both. */
-    for (size_t i = 0; i < sizeof s_ctrls / sizeof s_ctrls[0]; i++) {
-        if (s_ctrls[i].cc == (uint8_t)cc) {
-            snprintf(what, sizeof what, "%s", s_ctrls[i].name);
-            break;
-        }
-    }
-    if (what[0] >= '0' && what[0] <= '9') {
-        snprintf(what, sizeof what, "cc%d", cc);
-    }
-    ctx->name = what;
-    ctx->arg  = pat;
-    if (ctx->arg[0] == '\0') {            /* bare name forgets - see c_drum */
-        const bool had = seq_forget(ctx->name) == ESP_OK;
-        snprintf(ctx->msg, sizeof ctx->msg, had ? "%s gone" : "no %s", ctx->name);
-        return CMD_DONE;
-    }
-    seq_lane_ctrl(ctx->name, cc, 0);
-    if (seq_lane(ctx->name, ctx->arg) != ESP_OK) {
-        cmd_out(ctx, "%d lanes is all there is.", SEQ_MAX_LANES);
-        cmd_out(ctx, "free one: type its name alone");
-        return CMD_ERROR;
-    }
-    seq_mute(ctx->name, false);
-    snprintf(ctx->msg, sizeof ctx->msg, "%s cc%u", ctx->name, (unsigned)cc);
     return CMD_DONE;
+}
+
+/* Rebind every live lane of this name, so redefining a name changes what is
+ * already playing: '>kick = note 35' moves the running kick, which is the whole
+ * reason to redefine it mid-set. */
+static void rebind_lanes(const char *base)
+{
+    int n = 0;
+    const seq_lane_t *l = seq_lanes(&n);
+    for (int i = 0; i < SEQ_MAX_LANES; i++) {
+        if (!l[i].used) {
+            continue;
+        }
+        lane_name_t ln;
+        char why[40];
+        seq_binding_t b;
+        if (lane_name_parse(l[i].name, strlen(l[i].name), &ln) == LN_OK &&
+            strcmp(ln.base, base) == 0 && binding_of(&ln, &b, why, sizeof why)) {
+            seq_lane_bind(l[i].name, &b);
+        }
+    }
+}
+
+/* '>conga = note 63' - DEFINE A NAME. See lane_name.h for the grammar. */
+cmd_status_t cmd_define(cmd_ctx_t *ctx, const char *word, size_t n)
+{
+    lane_name_t ln;
+    char why[40];
+    const int e = lane_name_parse(word, n, &ln);
+    if (e != LN_OK) {
+        lane_name_error_text(e, why, sizeof why);
+        cmd_out(ctx, "%s", why);
+        return CMD_ERROR;
+    }
+    if (ln.inst != 1 || ln.part[0] != '\0') {
+        cmd_out(ctx, "define the plain name: %s", ln.base);
+        return CMD_ERROR;
+    }
+    /* A name may not shadow a command or a picture. Shadowing 'play' would make
+     * a line in some document mean something different from the page it came
+     * from; shadowing 'disc' would leave no way back to the circle. An alias to a
+     * picture is fine - '>circle = disc' - it is a second name, not a replacement. */
+    if (is_verb(ln.base)) {
+        cmd_out(ctx, "%s is a command", ln.base);
+        return CMD_ERROR;
+    }
+    if (viz_prim_index(ln.base) >= 0) {
+        cmd_out(ctx, "%s is a picture already", ln.base);
+        return CMD_ERROR;
+    }
+    const char *arg = ctx->arg;
+    if (*arg == '=') {
+        arg++;
+    }
+    lane_def_t d;
+    lane_def_parse(arg, &d);
+    if (d.kind == LD_ERROR) {
+        cmd_out(ctx, "%s", d.why);
+        return CMD_ERROR;
+    }
+    alias_t *a = alias_find(ln.base);
+    /* An input stops being one whatever it becomes, and a name that becomes an
+     * input takes its lanes with it: an input has no pattern to play. */
+    if (a != NULL && (a->kind == LD_KNOB || a->kind == LD_PAD) &&
+        d.kind != a->kind) {
+        seq_input_remove(ln.base);
+    }
+    if (d.kind == LD_REMOVE) {
+        if (a == NULL) {
+            snprintf(ctx->msg, sizeof ctx->msg, "no name %s", ln.base);
+            return CMD_DONE;
+        }
+        /* A NAME THAT GOES TAKES ITS LANES WITH IT. Leaving them playing would
+         * leave lanes nothing can name - not to change, not to drop - which is a
+         * stuck note with extra steps. */
+        int n2 = 0;
+        const seq_lane_t *l = seq_lanes(&n2);
+        for (int i = 0; i < SEQ_MAX_LANES; i++) {
+            lane_name_t o;
+            if (l[i].used &&
+                lane_name_parse(l[i].name, strlen(l[i].name), &o) == LN_OK &&
+                strcmp(o.base, ln.base) == 0) {
+                seq_forget(l[i].name);
+            }
+        }
+        a->name[0] = '\0';
+        snprintf(ctx->msg, sizeof ctx->msg, "%s is not a name now", ln.base);
+        return CMD_DONE;
+    }
+    if (d.kind == LD_KNOB || d.kind == LD_PAD) {
+        if (seq_input_define(ln.base, d.kind == LD_KNOB ? SEQ_INPUT_KNOB
+                                                        : SEQ_INPUT_PAD) != ESP_OK) {
+            cmd_out(ctx, "%d inputs is all there is", SEQ_MAX_INPUTS);
+            return CMD_ERROR;
+        }
+        int n2 = 0;
+        const seq_lane_t *l = seq_lanes(&n2);
+        for (int i = 0; i < SEQ_MAX_LANES; i++) {
+            lane_name_t o;
+            if (l[i].used &&
+                lane_name_parse(l[i].name, strlen(l[i].name), &o) == LN_OK &&
+                strcmp(o.base, ln.base) == 0) {
+                seq_forget(l[i].name);
+            }
+        }
+    }
+    int prim = -1;
+    if (d.kind == LD_DRAW) {
+        prim = viz_prim_index(d.draw);
+        if (prim < 0) {
+            cmd_out(ctx, "no picture called %s", d.draw);
+            return CMD_ERROR;
+        }
+    }
+    if (a == NULL) {
+        for (int i = 0; i < ALIAS_MAX && a == NULL; i++) {
+            if (s_alias[i].name[0] == '\0') {
+                a = &s_alias[i];
+            }
+        }
+        if (a == NULL) {
+            cmd_out(ctx, "%d names is all there is", ALIAS_MAX);
+            return CMD_ERROR;
+        }
+    }
+    snprintf(a->name, sizeof a->name, "%s", ln.base);
+    a->kind = (uint8_t)d.kind;
+    a->num  = (uint8_t)(d.kind == LD_DRAW ? prim : d.num);
+    a->chan = (uint8_t)((d.chan > 0 ? d.chan : 1) - 1);
+    a->gate = (uint16_t)d.gate;
+    rebind_lanes(ln.base);
+    snprintf(ctx->msg, sizeof ctx->msg, "%s =%s", ln.base, arg);
+    return CMD_DONE;
+}
+
+/* Every name there is, for '>help': the defined ones, then the pictures. */
+static void list_names(cmd_ctx_t *ctx)
+{
+    char line[40] = "names:";
+    for (int pass = 0; pass < 2; pass++) {
+        const int count = (pass == 0) ? ALIAS_MAX : viz_prim_count();
+        for (int i = 0; i < count; i++) {
+            const char *w = (pass == 0) ? s_alias[i].name : viz_prim_name(i);
+            if (w == NULL || w[0] == '\0') {
+                continue;
+            }
+            if (strlen(line) + 1 + strlen(w) > 29) {
+                cmd_out(ctx, "%s", line);
+                snprintf(line, sizeof line, "      ");
+            }
+            strncat(line, " ", sizeof line - strlen(line) - 1);
+            strncat(line, w, sizeof line - strlen(line) - 1);
+        }
+    }
+    cmd_out(ctx, "%s", line);
+    cmd_out(ctx, "your own: >conga = note 63");
 }
 
 static cmd_status_t c_scale(cmd_ctx_t *ctx)
@@ -714,10 +911,33 @@ static cmd_status_t c_scale(cmd_ctx_t *ctx)
     return CMD_DONE;
 }
 
+/* A whole number in [lo, hi] and nothing after it, or false. The performance
+ * parameters used atoi(), which reads '>swing fast' as 0 and lets the clamp make
+ * it 50 - a change nobody asked for, reported back as though they had. */
+static bool whole_number(const char *s, long lo, long hi, long *out)
+{
+    char *end = NULL;
+    const long v = strtol(s, &end, 10);
+    if (end == s || end == NULL) {
+        return false;
+    }
+    while (*end == ' ' || *end == '\t') { end++; }
+    if (*end != '\0' || v < lo || v > hi) {
+        return false;
+    }
+    *out = v;
+    return true;
+}
+
 static cmd_status_t c_swing(cmd_ctx_t *ctx)
 {
     if (ctx->arg[0] != '\0') {
-        seq_swing(atoi(ctx->arg));
+        long v = 0;
+        if (!whole_number(ctx->arg, 50, 75, &v)) {
+            cmd_out(ctx, "swing is 50-75: 67 is triplet");
+            return CMD_ERROR;
+        }
+        seq_swing((int)v);
     }
     const int s = seq_get_swing();
     snprintf(ctx->msg, sizeof ctx->msg, "swing %d%s", s,
@@ -782,6 +1002,20 @@ static cmd_status_t c_sync(cmd_ctx_t *ctx)
                  * other, which is the estimator grading its own work. */
                 cmd_out(ctx, "probes agreed within %d us",
                         (int)ensemble_spread());
+                /* The pulse is shared; is the STEP? A step is 24 pulses. */
+                int32_t cnt = 0;
+                if (ensemble_count_off(&cnt)) {
+                    const int32_t st = ((cnt % 24) + 24) % 24;
+                    const int32_t bar = ((cnt % 384) + 384) % 384;
+                    if (cnt == 0) {
+                        cmd_out(ctx, "in the leader's count");
+                    } else if (st == 0) {
+                        cmd_out(ctx, "steps together, bar %d off",
+                                (int)(bar / 24));
+                    } else {
+                        cmd_out(ctx, "steps %d pulses apart", (int)st);
+                    }
+                }
                 uint32_t rep = 0, stale = 0, lost = 0, dup = 0, win = 0;
                 ensemble_counts(&rep, &stale, &lost, &dup, &win);
                 cmd_out(ctx, "%u replies, %u twice, %u lost ack",
@@ -1097,6 +1331,11 @@ static void jitter_line(cmd_ctx_t *ctx, const char *what, const seq_stat_t *s)
      * A number nobody can parse is worse than no number, because it is
      * indistinguishable from a disaster. */
     cmd_out(ctx, "      spread %d us", (int)(s->max - s->min));
+    /* WHERE THE TICKS SIT, not only how much they wander. On a following deck
+     * this is the distance between when its ticks fire and where the ensemble
+     * says they belong - which sd and spread cannot show, because a constant
+     * offset has neither. */
+    cmd_out(ctx, "      mean %+d us", (int)mean);
     cmd_out(ctx, "      widest one at t+%us",
             (unsigned)(s->worst_ms / 1000));
     /* The shape, not just the extremes. A single bad tick in two thousand is
@@ -1138,6 +1377,7 @@ static cmd_status_t c_jitter(cmd_ctx_t *ctx)
     }
     cmd_out(ctx, "clock = tick vs the ideal grid");
     cmd_out(ctx, "xport = queue wait before sending");
+    cmd_out(ctx, "mean = where ticks sit on it");
     cmd_out(ctx, "sd/spread are MICROseconds.");
     cmd_out(ctx, "t+ is when, not how long.");
     cmd_out(ctx, "first 8 ticks after play skipped");
@@ -1313,97 +1553,6 @@ static cmd_status_t c_battery(cmd_ctx_t *ctx)
  * With no argument it sends the current document, so an ASCII drawing IS a
  * frame and editing it live IS visual coding - the same Ctrl+Enter, the same
  * buffer, no second environment. */
-/* A DRAWING LANE, WHICH IS JUST A LANE.
- *
- *     >disc 0..3..6..9..     exactly the shape of '>kick x...x...'
- *
- * There was a '>viz disc ...' spelling during the collapse, kept while saved
- * documents still used it. It is gone: one name, one way to write it. Two
- * spellings for one thing is the redundancy docs/MAP.md exists to refuse, and
- * an alias that survives to the freeze is an alias that survives for ever.
- *
- * This does the same two things a drum lane does - bind, then compile - because
- * there is one lane table and a drawing lane differs from a kick only in where
- * its events go. */
-/* SPLIT A LANE NAME INTO ITS BINDING AND ITS PART.
- *
- * 'disc' -> disc, no part.  'disc2' -> disc, no part.  'disc[x]' -> disc, x.
- * 'disc2[y]' -> disc, y.
- *
- * One function because two callers need it - c_prim to compile a lane and c_route
- * to bind one that does not exist yet - and writing it twice is how '<>' ended up
- * understood in one half of seq_pattern.h and not the other. Returns the primitive
- * index or -1, and sets *param to a VIZ_PARAM_* value or NONE.
- *
- * Returns -2 when the name has a part this primitive does not have, which is a
- * different error from "no such primitive" and deserves a different message. */
-static int prim_and_param(const char *name, int *param)
-{
-    char base[SEQ_NAME_MAX];
-    char part[8] = {0};
-    const size_t n = strlen(name);
-    snprintf(base, sizeof base, "%s", name);
-    if (n > 2 && name[n - 1] == ']') {
-        size_t k = n - 1;
-        while (k > 0 && name[k] != '[') { k--; }
-        if (k > 0) {
-            snprintf(part, sizeof part, "%.*s", (int)(n - 1 - k - 1),
-                     name + k + 1);
-            snprintf(base, sizeof base, "%.*s", (int)k, name);
-        }
-    }
-    *param = viz_param_index(part);
-    if (part[0] != '\0' && *param == VIZ_PARAM_NONE) {
-        return -2;
-    }
-    return viz_prim_index(base);
-}
-
-static cmd_status_t c_prim(cmd_ctx_t *ctx)
-{
-    const char *name = ctx->name;
-    const char *pat  = ctx->arg;
-
-    int param = VIZ_PARAM_NONE;
-    const int prim = prim_and_param(name, &param);
-    if (prim == -2) {
-        cmd_out(ctx, "no part called that");
-        cmd_out(ctx, "x and y - e.g. disc[x]");
-        return CMD_ERROR;
-    }
-    if (prim < 0) {
-        cmd_out(ctx, "no primitive '%.12s'", name);
-        cmd_out(ctx, "noise disc box star ramp grid");
-        cmd_out(ctx, "echo move spin warp shake");
-        cmd_out(ctx, "grow thin flip tile fold");
-        return CMD_ERROR;
-    }
-
-    /* A bare name drops the lane, and a re-run of an unchanged line mutes it -
-     * both identical to a drum lane, because it IS a drum lane with a different
-     * destination. Neither behaviour is written here twice any more. */
-    if (pat[0] == '\0') {
-        const bool had = seq_forget(name) == ESP_OK;
-        snprintf(ctx->msg, sizeof ctx->msg, had ? "%s gone" : "no %s", name);
-        return CMD_DONE;
-    }
-    if (rerun_silences_named(name, pat)) {
-        seq_mute(name, true);
-        snprintf(ctx->msg, sizeof ctx->msg, "%s silent", name);
-        return CMD_DONE;
-    }
-    seq_lane_viz(name, prim, param);
-    if (seq_lane(name, pat) != ESP_OK) {
-        cmd_out(ctx, "%d lanes is all there is.", SEQ_MAX_LANES);
-        cmd_out(ctx, "free one: type its name alone");
-        return CMD_ERROR;
-    }
-    seq_mute(name, false);
-    viz_split(true);
-    snprintf(ctx->msg, sizeof ctx->msg, "%s %.16s", name, pat);
-    return CMD_DONE;
-}
-
 static cmd_status_t c_split(cmd_ctx_t *ctx)
 {
     /* '>split 20' sets how many columns the visual gets and turns it on. The
@@ -1452,43 +1601,71 @@ static cmd_status_t c_split(cmd_ctx_t *ctx)
  * idea - a lane may read another lane's output - and it works between any two,
  * which is why it is not called sidechaining: the same mechanism sends a kick
  * to a bar height or a filter sweep to a wave amplitude. */
+/* Is `name` a defined input - '>knob1 = knob'? */
+static bool input_named(const char *name)
+{
+    int n = 0;
+    const seq_input_t *in = seq_inputs(&n);
+    for (int i = 0; i < n; i++) {
+        if (in[i].kind != SEQ_INPUT_NONE && strcmp(in[i].name, name) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static cmd_status_t c_route(cmd_ctx_t *ctx)
 {
     if (ctx->arg[0] == '\0') {
-        cmd_out(ctx, "route <primitive> <lane>");
+        cmd_out(ctx, "route <lane> <lane it follows>");
         cmd_out(ctx, "route disc kick");
         cmd_out(ctx, "route grow disc   viz drives viz");
+        cmd_out(ctx, "route disc:x bass a part follows");
         cmd_out(ctx, "route disc       unroutes");
         snprintf(ctx->msg, sizeof ctx->msg, "route disc kick");
         return CMD_DONE;
     }
-    char gen[16], src[16];
-    two_words(ctx->arg, gen, sizeof gen, src, sizeof src);
+    char gw[SEQ_NAME_MAX], sw[SEQ_NAME_MAX];
+    two_words(ctx->arg, gw, sizeof gw, sw, sizeof sw);
+    /* BOTH SIDES ARE ADDRESSES, taken to their canonical spelling, so 'disc:1'
+     * and 'disc' route the same lane - the name is the lane. */
+    lane_name_t g, src;
+    char why[40];
+    int e = lane_name_parse(gw, strlen(gw), &g);
+    if (e == LN_OK && sw[0] != '\0') {
+        e = lane_name_parse(sw, strlen(sw), &src);
+    }
+    if (e != LN_OK) {
+        lane_name_error_text(e, why, sizeof why);
+        cmd_out(ctx, "%s", why);
+        return CMD_ERROR;
+    }
+    const char *gen = g.canon;
+    const char *from = (sw[0] != '\0') ? src.canon : "";
     /* A ROUTE IS A PATTERN, AND THAT HAS TO SURVIVE THE COLLAPSE.
      *
      * seq_route works on a lane that exists, and seq deliberately does not know
-     * what a drawing primitive is - so '>route grow disc' failed on a fresh
-     * document with "no lane 'grow'", which is exactly the trap that was fixed
-     * in the visual half last week and came straight back when the lane table
-     * moved. Binding here is the command layer's job, because this is the only
-     * layer that knows a primitive from a drum. */
+     * what a name is bound to - so '>route grow disc' failed on a fresh
+     * document with "no lane 'grow'". Binding here is the command layer's job,
+     * because this is the only layer that knows a picture from a drum. */
     if (seq_lane_find(gen, -1) == NULL) {
-        int rparam = VIZ_PARAM_NONE;
-        const int prim = prim_and_param(gen, &rparam);
-        if (prim >= 0) {
-            seq_lane_viz(gen, prim, rparam);
+        seq_binding_t b;
+        if (!binding_of(&g, &b, why, sizeof why)) {
+            cmd_out(ctx, "%s", why);
+            return CMD_ERROR;
         }
+        seq_lane_bind(gen, &b);
     }
-    const esp_err_t re = seq_route(gen, src);
+    const esp_err_t re = seq_route(gen, from);
     if (re == ESP_ERR_INVALID_ARG) {
         cmd_out(ctx, "%s cannot follow itself", gen);
         return CMD_ERROR;
     }
     if (re != ESP_OK) {
-        /* ANY LANE, NOT JUST A PRIMITIVE. Routing used to live in the visual
+        /* ANY LANE, NOT JUST A PICTURE. Routing used to live in the visual
          * half only, so a kick could drive a circle and a circle could drive
          * nothing. One table means one mechanism for every pair. */
-        cmd_out(ctx, "no lane '%.12s' to drive", gen);
+        cmd_out(ctx, "no lane '%.18s' to drive", gen);
         cmd_out(ctx, "write it first, then route it");
         return CMD_ERROR;
     }
@@ -1496,15 +1673,28 @@ static cmd_status_t c_route(cmd_ctx_t *ctx)
      * set, the primitive stops drawing because nothing ever triggers it, and
      * nothing anywhere says why. Typing it is still allowed - the lane may be
      * written on the next line - but it says so. */
-    if (src[0] != '\0') {
-        const bool known = seq_lane_find(src, -1) != NULL;
-        if (!known) {
-            cmd_out(ctx, "no lane '%s' yet - it will", src);
+    /* 'intro:end' is the moment the lane called intro finishes; the lane to
+     * look for is intro, and it only ever finishes if it has a count. */
+    if (from[0] != '\0' && strcmp(src.part, "end") == 0) {
+        char base[SEQ_NAME_MAX];
+        snprintf(base, sizeof base, "%.*s", (int)(strlen(from) - 4), from);
+        const seq_lane_t *sl = seq_lane_find(base, -1);
+        if (sl == NULL) {
+            cmd_out(ctx, "no lane '%s' yet - it will", base);
             cmd_out(ctx, "stay silent until there is one");
+        } else if (sl->count == 0) {
+            cmd_out(ctx, "%s never ends - give it !n", base);
         }
+    } else if (from[0] != '\0' && seq_lane_find(from, -1) == NULL &&
+               !input_named(from)) {
+        /* An INPUT is a source with no lane behind it ('>knob1 = knob'), so
+         * this said "no lane 'knob1' yet" about a route that worked - the
+         * owner's first try of OSC in, 2026-09-25. */
+        cmd_out(ctx, "nothing called %s yet -", from);
+        cmd_out(ctx, "silent until a lane or input is");
     }
-    snprintf(ctx->msg, sizeof ctx->msg, src[0] ? "%s <- %s" : "%s unrouted",
-             gen, src);
+    snprintf(ctx->msg, sizeof ctx->msg, from[0] ? "%s <- %s" : "%s unrouted",
+             gen, from);
     return CMD_DONE;
 }
 
@@ -1560,58 +1750,188 @@ static cmd_status_t c_frame(cmd_ctx_t *ctx)
     return CMD_DONE;
 }
 
+/* '>ssh user@host <command>'. THE PASSWORD IS ASKED FOR, NEVER READ FROM THE
+ * LINE: the line is a document line, and ground rule 6 keeps secrets out of
+ * documents. What the command needs to remember until the answer comes is kept
+ * here; the answer itself goes straight to ssh_start and is wiped. */
+static struct {
+    char user[33], host[64], cmd[128];
+    int  port;
+} s_ssh;
+
+static void ssh_answer(const char *secret, char *msg, size_t max)
+{
+    /* THE OLD HABIT, CAUGHT. The syntax was '>ssh me@host hunter2 ls'; typed
+     * now, the old password would be sent to the host as part of the command,
+     * and it is already in the document. So if the answer appears in the
+     * command, nothing is sent at all. */
+    if (secret[0] != '\0' && strstr(s_ssh.cmd, secret) != NULL) {
+        snprintf(msg, max, "that password is on the line");
+        return;
+    }
+    const esp_err_t e = ssh_start(s_ssh.user, s_ssh.host, s_ssh.port, secret,
+                                  s_ssh.cmd);
+    snprintf(msg, max, "%s", e == ESP_OK ? "ssh: connecting" :
+                             e == ESP_ERR_INVALID_STATE ? "one ssh at a time" :
+                                                          "ssh could not start");
+}
+
+/* user@host[:port] into s_ssh. False when it is not that shape. */
+static bool ssh_address(const char *who)
+{
+    const char *at = strchr(who, '@');
+    if (at == NULL || at == who || at[1] == '\0') {
+        return false;
+    }
+    snprintf(s_ssh.user, sizeof s_ssh.user, "%.*s", (int)(at - who), who);
+    snprintf(s_ssh.host, sizeof s_ssh.host, "%s", at + 1);
+    s_ssh.port = 22;
+    char *colon = strchr(s_ssh.host, ':');
+    if (colon != NULL) {
+        *colon = '\0';
+        long pn;
+        if (!whole_number(colon + 1, 1, 65535, &pn)) {
+            return false;
+        }
+        s_ssh.port = (int)pn;
+    }
+    return true;
+}
+
 static cmd_status_t c_ssh(cmd_ctx_t *ctx)
 {
     if (ctx->arg[0] == '\0') {
-        cmd_out(ctx, "ssh user@host pass <command>");
-        cmd_out(ctx, "the reply lands in +ssh.");
-        cmd_out(ctx, "needs wifi. host key is shown,");
-        cmd_out(ctx, "not verified - see the buffer.");
-        snprintf(ctx->msg, sizeof ctx->msg, "ssh user@host pass ls");
+        cmd_out(ctx, "ssh user@host <command>");
+        cmd_out(ctx, "asks for the password: it");
+        cmd_out(ctx, "never goes on the line.");
+        cmd_out(ctx, "the reply lands in +out.");
+        cmd_out(ctx, "a host's key is kept the");
+        cmd_out(ctx, "first time, and a changed");
+        cmd_out(ctx, "key is refused before any");
+        cmd_out(ctx, "password is sent. if you");
+        cmd_out(ctx, "changed it: ssh forget <host>");
+        snprintf(ctx->msg, sizeof ctx->msg, "ssh user@host ls");
         return CMD_DONE;
     }
+
+    char word[80];
+    size_t wl = 0;
+    const int rest = first_word_rest(ctx->arg, word, sizeof word, &wl);
+    if (strcmp(word, "forget") == 0) {
+        char host[64];
+        size_t hl = 0;
+        if (rest < 0 ||
+            first_word_rest(ctx->arg + rest, host, sizeof host, &hl) >= 0 ||
+            hl == 0 || hl >= sizeof host) {
+            snprintf(ctx->msg, sizeof ctx->msg, "ssh forget <host>");
+            return CMD_ERROR;
+        }
+        int port = 22;
+        char *colon = strchr(host, ':');
+        if (colon != NULL) {
+            *colon = '\0';
+            long pn;
+            if (!whole_number(colon + 1, 1, 65535, &pn)) {
+                snprintf(ctx->msg, sizeof ctx->msg, "a port is 1-65535");
+                return CMD_ERROR;
+            }
+            port = (int)pn;
+        }
+        const esp_err_t e = ssh_forget(host, port);
+        /* A line, not only the status bar: forgetting a key is a decision
+         * about trust, and it should leave a record where the owner reads. */
+        cmd_out(ctx, "%s %.20s:%d", e == ESP_OK ? "key forgotten:"
+                                                : "no key kept for", host, port);
+        snprintf(ctx->msg, sizeof ctx->msg, "%s", e == ESP_OK ? "key forgotten"
+                                                              : "no key kept");
+        return CMD_DONE;
+    }
+
     if (!net_up()) {
-        cmd_out(ctx, "no network. try: wifi <ssid> <pass>");
+        cmd_out(ctx, "no network. try: wifi <ssid>");
         snprintf(ctx->msg, sizeof ctx->msg, "ssh needs wifi");
         return CMD_ERROR;
     }
-
-    /* user@host, then the password, then everything else is the command. */
-    char who[64] = {0}, pass[64] = {0};
-    const char *p = ctx->arg;
-    size_t i = 0;
-    while (*p == ' ') { p++; }
-    while (*p && *p != ' ' && i < sizeof who - 1)  { who[i++] = *p++; }
-    who[i] = '\0';
-    while (*p == ' ') { p++; }
-    i = 0;
-    while (*p && *p != ' ' && i < sizeof pass - 1) { pass[i++] = *p++; }
-    pass[i] = '\0';
-    while (*p == ' ') { p++; }
-    if (*p == '\0') {
-        cmd_out(ctx, "ssh user@host pass <command>");
+    if (ssh_busy()) {
+        snprintf(ctx->msg, sizeof ctx->msg, "one ssh at a time");
         return CMD_ERROR;
     }
-
-    char *at = strchr(who, '@');
-    if (at == NULL) {
-        cmd_out(ctx, "needs user@host");
+    if (rest < 0 || wl >= sizeof word || !ssh_address(word)) {
+        snprintf(ctx->msg, sizeof ctx->msg, "ssh user@host <command>");
         return CMD_ERROR;
     }
-    *at = '\0';
-    const char *user = who;
-    char *host = at + 1;
-    int port = 22;
-    char *colon = strchr(host, ':');
-    if (colon != NULL) { *colon = '\0'; port = atoi(colon + 1); }
+    const char *cmd = ctx->arg + rest;
+    while (*cmd == ' ') {
+        cmd++;
+    }
+    snprintf(s_ssh.cmd, sizeof s_ssh.cmd, "%s", cmd);
 
-    const esp_err_t e = ssh_run(user, host, port, pass, p);
-    char st[40];
-    ssh_status(st, sizeof st);
-    snprintf(ctx->msg, sizeof ctx->msg, "%s", st);
-    /* The reply is already in '+ssh'; returning DONE with more than one output
-     * line is what moves the view there. */
-    return (e == ESP_OK) ? CMD_DONE : CMD_ERROR;
+    char q[40];
+    snprintf(q, sizeof q, "%.24s password", s_ssh.host);
+    if (!cmd_ask_secret(q, ssh_answer)) {
+        snprintf(ctx->msg, sizeof ctx->msg, "nothing here can ask");
+        return CMD_ERROR;
+    }
+    snprintf(ctx->msg, sizeof ctx->msg, "type it, Enter. Esc stops");
+    return CMD_PENDING;
+}
+
+/* '>wifi <ssid>' and '>host <ssid>'. ONE WORD, AND THE PASSWORD IS ASKED FOR.
+ * Anything after the name is what used to be the password, so it is treated as
+ * one: refused, and cut from the line before autosave can keep it (secret_at).
+ * The answer goes to the radio, which keeps it in NVS - never a document. */
+static char s_net_ssid[33];
+
+static void wifi_answer(const char *secret, char *msg, size_t max)
+{
+    if (net_join(s_net_ssid, secret) != ESP_OK) {
+        snprintf(msg, max, "could not start the radio");
+        return;
+    }
+    snprintf(msg, max, "joining %.20s", s_net_ssid);
+}
+
+static void host_answer(const char *secret, char *msg, size_t max)
+{
+    if (net_host(s_net_ssid, secret) != ESP_OK) {
+        snprintf(msg, max, "could not start the radio");
+        return;
+    }
+    /* net_host hosts OPEN below eight characters; say so here too. */
+    snprintf(msg, max, strlen(secret) >= 8 ? "hosting %.12s 192.168.4.1"
+                                           : "hosting %.12s OPEN", s_net_ssid);
+}
+
+/* The one word, or a refusal. Returns false with ctx->msg set. */
+static bool net_name(cmd_ctx_t *ctx, const char *usage)
+{
+    size_t n = 0;
+    const int rest = first_word_rest(ctx->arg, s_net_ssid, sizeof s_net_ssid, &n);
+    if (rest >= 0) {
+        ctx->secret_at = rest;
+        snprintf(ctx->msg, sizeof ctx->msg, "no passwords on a line - cut");
+        return false;
+    }
+    if (n == 0 || n >= sizeof s_net_ssid) {
+        snprintf(ctx->msg, sizeof ctx->msg, "%s", usage);
+        return false;
+    }
+    /* The placeholder's brackets, typed: the question that follows names the
+     * network without them, which says what happened. */
+    (void)unbracket(s_net_ssid);
+    return true;
+}
+
+static cmd_status_t ask_for(cmd_ctx_t *ctx, cmd_secret_fn fn)
+{
+    char q[40];
+    snprintf(q, sizeof q, "%.24s password", s_net_ssid);
+    if (!cmd_ask_secret(q, fn)) {
+        snprintf(ctx->msg, sizeof ctx->msg, "nothing here can ask");
+        return CMD_ERROR;
+    }
+    snprintf(ctx->msg, sizeof ctx->msg, "type it, Enter. Esc stops");
+    return CMD_PENDING;
 }
 
 static cmd_status_t c_wifi(cmd_ctx_t *ctx)
@@ -1625,7 +1945,8 @@ static cmd_status_t c_wifi(cmd_ctx_t *ctx)
         if (kn[0] != '\0') {
             cmd_out(ctx, "remembered: %.17s", kn);
         }
-        cmd_out(ctx, "wifi <ssid> <password>");
+        cmd_out(ctx, "wifi <ssid> - then it asks");
+        cmd_out(ctx, "for the password.");
         cmd_out(ctx, "wifi off | wifi forget");
         snprintf(ctx->msg, sizeof ctx->msg, "%s", st);
         return CMD_DONE;
@@ -1640,34 +1961,26 @@ static cmd_status_t c_wifi(cmd_ctx_t *ctx)
         snprintf(ctx->msg, sizeof ctx->msg, "wifi off");
         return CMD_DONE;
     }
-    char ssid[33], pass[65];
-    two_words(ctx->arg, ssid, sizeof ssid, pass, sizeof pass);
-    if (net_join(ssid, pass) != ESP_OK) {
-        cmd_out(ctx, "could not start the radio");
+    if (!net_name(ctx, "wifi <ssid>")) {
         return CMD_ERROR;
     }
-    snprintf(ctx->msg, sizeof ctx->msg, "joining %.20s", ssid);
-    return CMD_DONE;
+    return ask_for(ctx, wifi_answer);
 }
 
 static cmd_status_t c_host(cmd_ctx_t *ctx)
 {
     if (ctx->arg[0] == '\0') {
-        cmd_out(ctx, "host <ssid> <password>");
-        cmd_out(ctx, "the deck becomes the network.");
-        cmd_out(ctx, "password needs 8+ chars or");
-        cmd_out(ctx, "it hosts open, and says so.");
-        snprintf(ctx->msg, sizeof ctx->msg, "host <ssid> <password>");
+        cmd_out(ctx, "host <ssid> - then it asks");
+        cmd_out(ctx, "for a password. under 8");
+        cmd_out(ctx, "chars, or none, and it hosts");
+        cmd_out(ctx, "open, and says so.");
+        snprintf(ctx->msg, sizeof ctx->msg, "host <ssid>");
         return CMD_DONE;
     }
-    char ssid[33], pass[65];
-    two_words(ctx->arg, ssid, sizeof ssid, pass, sizeof pass);
-    if (net_host(ssid, pass) != ESP_OK) {
-        cmd_out(ctx, "could not start the radio");
+    if (!net_name(ctx, "host <ssid>")) {
         return CMD_ERROR;
     }
-    snprintf(ctx->msg, sizeof ctx->msg, "hosting %.14s 192.168.4.1", ssid);
-    return CMD_DONE;
+    return ask_for(ctx, host_answer);
 }
 
 static cmd_status_t c_osc(cmd_ctx_t *ctx)
@@ -1678,18 +1991,66 @@ static cmd_status_t c_osc(cmd_ctx_t *ctx)
         cmd_out(ctx, "osc <ip> <port>");
         cmd_out(ctx, "sends /deck/<lane> i i");
         cmd_out(ctx, "%u msgs in %u packets", (unsigned)m, (unsigned)p);
+        uint32_t im = 0, iu = 0, ir = 0;
+        net_osc_in_counts(&im, &iu, &ir);
+        if (net_osc_listening() != 0) {
+            cmd_out(ctx, "in on %d: %u read, %u used",
+                    net_osc_listening(), (unsigned)im, (unsigned)iu);
+            if (ir > 0) {
+                cmd_out(ctx, "  %u datagrams refused", (unsigned)ir);
+            }
+        } else {
+            cmd_out(ctx, "osc in <port> - /deck/<name>");
+            cmd_out(ctx, "sets a knob or a pad");
+        }
         snprintf(ctx->msg, sizeof ctx->msg, "osc 192.168.4.2 9000");
+        return CMD_DONE;
+    }
+    /* '>osc in 9000' - LISTEN. docs/NEXT.md §8: /deck/<name> sets the input
+     * of that name ('>knob1 = knob'), and what is routed from it follows. */
+    if (strncmp(ctx->arg, "in", 2) == 0 &&
+        (ctx->arg[2] == '\0' || ctx->arg[2] == ' ')) {
+        const char *a = ctx->arg + 2;
+        while (*a == ' ') { a++; }
+        long pn = 0;
+        if (strcmp(a, "off") != 0 && !whole_number(a, 1, 65535, &pn)) {
+            snprintf(ctx->msg, sizeof ctx->msg, "osc in <port> | off");
+            return CMD_ERROR;
+        }
+        if (pn > 0 && !net_up()) {
+            snprintf(ctx->msg, sizeof ctx->msg, "osc in needs wifi");
+            return CMD_ERROR;
+        }
+        if (net_osc_listen((int)pn, seq_input_set) != ESP_OK) {
+            snprintf(ctx->msg, sizeof ctx->msg, "could not listen");
+            return CMD_ERROR;
+        }
+        /* A knob is a gesture: it cannot wait for the radio to wake. With
+         * power save on, a message sat at the router until the deck's next
+         * wake-up - 62 to 265 ms from a laptop to the filter moving. The
+         * ensemble turns it off for the same reason and keeps it off. */
+        if (pn > 0) {
+            net_power_save(false);
+        } else if (ensemble_role() == ENSEMBLE_OFF) {
+            net_power_save(true);
+        }
+        snprintf(ctx->msg, sizeof ctx->msg, pn > 0 ? "osc in on %ld"
+                                                   : "osc in off", pn);
         return CMD_DONE;
     }
     char ip[24], port[8];
     two_words(ctx->arg, ip, sizeof ip, port, sizeof port);
-    const int pn = (port[0] != '\0') ? atoi(port) : 9000;
-    if (net_osc_target(ip, pn) != ESP_OK) {
+    long pn = 9000;
+    if (port[0] != '\0' && !whole_number(port, 1, 65535, &pn)) {
+        cmd_out(ctx, "a port is 1-65535");
+        return CMD_ERROR;
+    }
+    if (net_osc_target(ip, (int)pn) != ESP_OK) {
         cmd_out(ctx, "'%s' is not an address", ip);
         return CMD_ERROR;
     }
     seq_dest_enable("osc", pn > 0);
-    snprintf(ctx->msg, sizeof ctx->msg, "osc -> %.15s:%d", ip, pn);
+    snprintf(ctx->msg, sizeof ctx->msg, "osc -> %.15s:%ld", ip, pn);
     return CMD_DONE;
 }
 
@@ -1729,10 +2090,32 @@ static cmd_status_t c_send(cmd_ctx_t *ctx)
                  seq_dest_is_on(name) ? "on" : "off");
         return CMD_DONE;
     }
+    /* THE VIEW NODE TAKES A SIZE AS WELL: '>send view 53x20' is on, at that
+     * many cells. 'on' alone is 53x20 - the whole 640x480 screen in the deck's
+     * own 12x24 face - and 'off' gives the size back to the preview pane. The
+     * pane keeps its own shape throughout and shows a sample of the output. */
+    int vw = 0, vh = 0;
+    const bool view = (strcmp(name, "view") == 0);
+    if (view && sscanf(state, "%dx%d", &vw, &vh) == 2) {
+        if (vw < 4 || vh < 2 || vw > VIZ_W || vh > VIZ_H) {
+            cmd_out(ctx, "view is 4x2 to %dx%d cells", VIZ_W, VIZ_H);
+            return CMD_ERROR;
+        }
+        snprintf(state, sizeof state, "on");
+    }
     const bool on = strcmp(state, "on") == 0;
     if (!on && strcmp(state, "off") != 0) {
-        cmd_out(ctx, "send <name> on | off");
+        cmd_out(ctx, view ? "send view on | off | 53x20" : "send <name> on | off");
         return CMD_ERROR;
+    }
+    if (view) {
+        if (!on) {
+            viz_out_size(0, 0);
+        } else {
+            viz_out_size(vw ? vw : 53, vh ? vh : 20);
+            viz_split(true);
+        }
+        tg_invalidate();
     }
     if (seq_dest_enable(name, on) != ESP_OK) {
         cmd_out(ctx, "no destination called '%s'. try just: send", name);
@@ -1744,8 +2127,17 @@ static cmd_status_t c_send(cmd_ctx_t *ctx)
 
 static cmd_status_t c_bpm(cmd_ctx_t *ctx)
 {
+    /* A TEMPO OR NOTHING. This was atoi(), so '>bpm fast' - or a stray
+     * character, or a definition that reached here by mistake - was 0, clamped
+     * to 20: the set slowed to a crawl and the deck said "20 bpm" as though it
+     * had been asked to. */
     if (ctx->arg[0] != '\0') {
-        seq_bpm(atoi(ctx->arg));
+        long v = 0;
+        if (!whole_number(ctx->arg, 20, 300, &v)) {
+            cmd_out(ctx, "bpm is a number, 20-300");
+            return CMD_ERROR;
+        }
+        seq_bpm((int)v);
     }
     snprintf(ctx->msg, sizeof ctx->msg, "%d bpm", seq_get_bpm());
     return CMD_DONE;
@@ -1773,57 +2165,62 @@ static cmd_status_t c_lanes(cmd_ctx_t *ctx)
         if (!l[i].used) {
             continue;
         }
-        /* Print what was typed, not a normalised version of it. A listing
-         * that silently rewrites 'X' as 'x' teaches the player that accents
-         * did not register. */
-        char bar[SEQ_MAX_STEPS + 1];
-        int k = 0;
-        for (; k < l[i].steps && k < SEQ_MAX_STEPS; k++) {
-            const uint32_t b = 1u << k;
-            if (!(l[i].mask & b))            { bar[k] = '.'; }
-            else if (l[i].accent & b)        { bar[k] = 'X'; }
-            else if (l[i].ghost & b)         { bar[k] = ','; }
-            else if (l[i].chance & b)        { bar[k] = '?'; }
-            /* A DRAWING LANE'S DIGITS ARE VALUES TOO. This tested melodic or
-             * ctrl, so '>noise 2.4.2.4.' listed back as 'x.x.x.x.' - the
-             * listing claiming the player had typed something they had not,
-             * which docs/COMMANDS.md makes a rule about: print what was typed,
-             * because a listing that rewrites it teaches the player their input
-             * did not register. */
-            else if ((l[i].melodic || l[i].ctrl ||
-                      l[i].bind == SEQ_BIND_VIZ) && l[i].deg[k] != 0xFF) {
-                bar[k] = (char)('0' + l[i].deg[k]);
-            } else                           { bar[k] = 'x'; }
-        }
-        bar[k] = '\0';
-        /* THE BINDING IS A COLUMN. A lane's name no longer tells you where it
+        /* PRINT WHAT WAS TYPED - THE TEXT ITSELF.
+         *
+         * The listing used to rebuild the pattern from the compiled bits, to
+         * prove it had been read. Once a step can be '9%30' or '[0,4,7]', a
+         * rebuild prints something the player did not type, which is exactly
+         * what docs/COMMANDS.md forbids. And a pattern is now either compiled
+         * exactly as written or refused, so the text IS the proof. (The rebuild
+         * also shifted a 32-bit 1 across 64 slots, so a long lane listed wrong
+         * past its thirty-second slot.)
+         *
+         * THE BINDING IS A COLUMN. A lane's name no longer tells you where it
          * goes - '>disc' draws and '>kick' sounds, and both are lanes - so the
          * listing has to say. '<- name' means this lane follows that one and
          * ignores its own steps. */
-        if (l[i].route[0] != '\0') {
-            cmd_out(ctx, "%c%-5s <- %s", l[i].muted ? '-' : ' ',
-                    l[i].name, l[i].route);
-        } else {
-            cmd_out(ctx, "%c%-5s %s", l[i].muted ? '-' : ' ', l[i].name, bar);
+        /* A COUNT SAYS WHERE IT IS - "2/4", "waits", "done" - because a counted
+         * lane that is silent may be waiting, finished, or muted, and those are
+         * three different things to do about it. A cue shows its pattern AND its
+         * source, since both decide what it plays. */
+        char at[16] = "";
+        const int pass = seq_lane_pass(&l[i]);
+        if (pass >= 0) {
+            snprintf(at, sizeof at, " %d/%u", pass + 1, (unsigned)l[i].count);
+        } else if (pass == SEQ_PASS_WAITS) {
+            snprintf(at, sizeof at, " waits");
+        } else if (pass == SEQ_PASS_DONE) {
+            snprintf(at, sizeof at, " done");
         }
-        /* Show the odds the '%' set. The bar can only render '?', so a
-         * listing without this cannot confirm that a '?%15' was read at all -
-         * which is precisely the uncertainty that had the owner unable to tell
-         * whether probability was working. */
-        {
-            char od[32] = {0};
-            int any = 0;
-            for (int q = 0; q < l[i].steps && q < SEQ_MAX_STEPS; q++) {
-                if (l[i].prob[q] != 255) {
-                    char one[8];
-                    snprintf(one, sizeof one, "%s%u", any ? "," : "",
-                             (unsigned)l[i].prob[q]);
-                    strncat(od, one, sizeof od - strlen(od) - 1);
-                    any = 1;
-                }
+        const char mute = (l[i].muted && !l[i].done) ? '-' : ' ';
+        if (l[i].route[0] != '\0' && l[i].count == 0) {
+            cmd_out(ctx, "%c%-5s <- %s", mute, l[i].name, l[i].route);
+        } else if (l[i].route[0] != '\0') {
+            cmd_out(ctx, "%c%-5s %s <- %s%s", mute, l[i].name, l[i].text,
+                    l[i].route, at);
+        } else {
+            cmd_out(ctx, "%c%-5s %s%s", mute, l[i].name, l[i].text, at);
+        }
+    }
+    /* THE INPUTS, with their value and who last set it - which is how a dead
+     * phone is told from a bad route (docs/NEXT.md §5: a source must be able
+     * to say what it is). */
+    {
+        int ni = 0;
+        const seq_input_t *in = seq_inputs(&ni);
+        for (int i = 0; i < ni; i++) {
+            if (in[i].kind == SEQ_INPUT_NONE) {
+                continue;
             }
-            if (any) {
-                cmd_out(ctx, "      odds %.23s", od);
+            const uint32_t f = in[i].from;
+            if (in[i].count == 0) {
+                cmd_out(ctx, " %-5s %s, not heard yet", in[i].name,
+                        in[i].kind == SEQ_INPUT_KNOB ? "knob" : "pad");
+            } else {
+                cmd_out(ctx, " %-5s %s %3u .%u.%u", in[i].name,
+                        in[i].kind == SEQ_INPUT_KNOB ? "knob" : "pad ",
+                        (unsigned)in[i].value, (unsigned)((f >> 16) & 0xFF),
+                        (unsigned)(f >> 24));
             }
         }
     }
@@ -1914,35 +2311,13 @@ static const cmd_t s_builtins[] = {
     { "swing", c_swing, CMD_CAP_EDIT,  "50 straight, 67 triplet" },
     { "sync",  c_sync,  CMD_CAP_EDIT,  "on | off | lead | follow | alone" },
     { "send",  c_send,  CMD_CAP_SYSTEM,"where events go; send mon on" },
-    { "wifi",  c_wifi,  CMD_CAP_NET,   "wifi <ssid> <pass> | off" },
+    { "wifi",  c_wifi,  CMD_CAP_NET,   "wifi <ssid> | off - asks the pass" },
     { "battery", c_battery, CMD_CAP_READ, "find the sense pin" },
     { "kbd",   c_kbd,   CMD_CAP_SYSTEM,"what is typing | kbd forget" },
-    { "host",  c_host,  CMD_CAP_NET,   "host <ssid> <pass> - be the net" },
+    { "host",  c_host,  CMD_CAP_NET,   "host <ssid> - be the net" },
     { "osc",   c_osc,   CMD_CAP_NET,   "osc <ip> <port> - /deck/<lane>" },
-    { "ssh",   c_ssh,   CMD_CAP_NET,   "ssh user@host pass <command>" },
+    { "ssh",   c_ssh,   CMD_CAP_NET,   "ssh user@host <command>" },
     { "frame", c_frame, CMD_CAP_NET,   "send the frame over osc" },
-    /* THE DRAWING LANES, peers of the drums rather than arguments to a
-     * subsystem. Each is a name bound to a primitive, exactly as 'kick' is a
-     * name bound to note 36 - see docs/MAP.md. 'viz' is the old spelling, kept
-     * because documents already use it, and marked for deletion at freeze. */
-    /* THE FIELDS AND THE OPERATORS - see viz.c for why the sources are fields
-     * rather than shapes, and what 'star', 'shake' and 'tile' were traded for. */
-    { "echo",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "keep the last frame - trails" },
-    { "move",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "shift it, wrapping" },
-    { "spin",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "quarter turns - nothing else rotates" },
-    { "warp",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "bend lines along an axis" },
-    { "noise",  c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "a field of sparkles" },
-    { "disc",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "round field - distance from a point" },
-    { "box",    c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "square field - the corners disc lacks" },
-    { "turn",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "angle field - a sweep. spin it" },
-    { "ramp",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "linear field along an axis" },
-    { "grid",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "periodic field - a lattice" },
-    { "mask",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "keep what is this bright - a level" },
-    { "edge",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "keep where it changes - a contour" },
-    { "grow",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "dilate: marks bloom" },
-    { "thin",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "erode: edges eat inward" },
-    { "flip",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "invert the frame" },
-    { "fold",   c_prim,  CMD_CAP_EDIT|CMD_CAP_LANE,  "mirror it, 1-3 folds" },
     { "split", c_split, CMD_CAP_EDIT,  "split on | off | <rows>" },
     { "route", c_route, CMD_CAP_EDIT,  "route disc kick" },
     { "usb",   c_usb,   CMD_CAP_SYSTEM,"usb on | off - MIDI over the cable" },
@@ -1956,23 +2331,6 @@ static const cmd_t s_builtins[] = {
     { "panic", c_panic, CMD_CAP_EDIT,  "silence everything" },
     { "mute",  c_mute,  CMD_CAP_EDIT,  "mute hat bass | mute = all on" },
     { "solo",  c_mute,  CMD_CAP_EDIT,  "solo kick | solo = all on" },
-    { "kick",  c_drum,  CMD_CAP_EDIT|CMD_CAP_LANE,  "x...x...x...x..." },
-    { "snare", c_drum,  CMD_CAP_EDIT|CMD_CAP_LANE,  "....x.......x..." },
-    { "hat",   c_drum,  CMD_CAP_EDIT|CMD_CAP_LANE,  "x.x.x.x.x.x.x.x." },
-    { "ohat",  c_drum,  CMD_CAP_EDIT|CMD_CAP_LANE,  "open hat" },
-    { "clap",  c_drum,  CMD_CAP_EDIT|CMD_CAP_LANE,  "clap" },
-    { "tom",   c_drum,  CMD_CAP_EDIT|CMD_CAP_LANE,  "tom" },
-    { "rim",   c_drum,  CMD_CAP_EDIT|CMD_CAP_LANE,  "rim" },
-    { "crash", c_drum,  CMD_CAP_EDIT|CMD_CAP_LANE,  "crash" },
-    { "bass",  c_voice, CMD_CAP_EDIT|CMD_CAP_LANE,  "0..0..3..0..5..." },
-    { "lead",  c_voice, CMD_CAP_EDIT|CMD_CAP_LANE,  "degrees 0-9, 0 is the root" },
-    { "pad",   c_voice, CMD_CAP_EDIT|CMD_CAP_LANE,  "long notes" },
-    { "arp",   c_voice, CMD_CAP_EDIT|CMD_CAP_LANE,  "short notes, high" },
-    { "cc",    c_ctrl,  CMD_CAP_EDIT|CMD_CAP_LANE,  "cc <name|0-127> <pattern>" },
-    { "cut",   c_ctrl,  CMD_CAP_EDIT|CMD_CAP_LANE,  "filter: 0..4..8..4.." },
-    { "res",   c_ctrl,  CMD_CAP_EDIT|CMD_CAP_LANE,  "resonance, 0-9" },
-    { "mod",   c_ctrl,  CMD_CAP_EDIT|CMD_CAP_LANE,  "mod wheel, 0-9" },
-    { "rev",   c_ctrl,  CMD_CAP_EDIT|CMD_CAP_LANE,  "reverb send, 0-9" },
     { "help",  c_help,  CMD_CAP_READ,                   "list the commands" },
     { "list",  c_list,  CMD_CAP_READ,                   "list open buffers" },
     { "new",   c_new,   CMD_CAP_EDIT,                   "a fresh scratch buffer" },
@@ -1981,8 +2339,6 @@ static const cmd_t s_builtins[] = {
     { "run",   c_run,   CMD_CAP_EDIT,                   "run a document without leaving this one" },
     { "save",  c_save,  CMD_CAP_STORE,                  "write this buffer now" },
     { "close", c_close, CMD_CAP_EDIT,                   "forget this buffer" },
-    { "guide", c_guide, CMD_CAP_EDIT,                   "mark as a guide" },
-    { "prose", c_prose, CMD_CAP_EDIT,                   "mark as prose" },
     { "density", c_density, CMD_CAP_EDIT,               "low | high (use high to split)" },
 };
 

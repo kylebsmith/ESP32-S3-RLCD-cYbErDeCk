@@ -93,6 +93,12 @@ Ctrl+Enter, in any buffer. The kind still decides reflow, which is what the
 two-axes argument above is really about; it no longer decides execution. See
 [COMMANDS.md](COMMANDS.md).
 
+**A second correction, 2026-09-25: the kind decides nothing.** It is journalled with
+every document and restored, and no code reads it — every buffer wraps and reflows
+the same way. So `>guide` and `>prose`, which set it by hand, were deleted
+([MAP.md](MAP.md) §0). The table above is the design; one kind is what shipped, and a
+second one has to arrive with the behaviour that reads it.
+
 `guide` is the one that does the most work, and it is stolen wholesale from
 Plan 9's Acme. A guide is a plain buffer of command lines where Enter runs the
 line under the cursor. That single rule means:
