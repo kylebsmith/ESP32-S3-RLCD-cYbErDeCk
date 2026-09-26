@@ -509,6 +509,10 @@ running six visual lanes that all fire every other step, with the preview split 
 | ticks later than 250 µs | 0 | 0 |
 | phase against the other deck, worst (the grids — see the correction above) | 35 µs | 25 µs |
 
+Re-measured with the clock that arms each tick on the grid (2026-09-25), under a
+heavier load — five picture lanes, `echo`, `move` and the view streaming to HDMI:
+**sd 4 µs, spread 96 µs, 6175 of 6175 ticks inside 100 µs**.
+
 The two-core split is doing its job: the frame is generated in the main loop and the
 clock dispatches on the other core, so the drawing cannot reach it. The phase figure is
 no worse loaded than bare, which was *not* true before fix 4 — a deck under load looked
