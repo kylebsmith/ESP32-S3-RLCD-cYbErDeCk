@@ -1,4 +1,5 @@
 #include "seq.h"
+#include "seq_clock.h"
 #include "seq_pattern.h"
 
 #include <ctype.h>
@@ -61,8 +62,41 @@ typedef struct {
 
 /* The ideal grid. Re-anchored on play and on any tempo change, so the
  * statistic measures dispatch jitter and never accumulated tempo error -
- * those are different problems with different fixes. */
+ * those are different problems with different fixes. It is also WHEN THE
+ * TICKS FIRE: each tick arms the next at the grid's due time (seq_clock.h). */
 static int64_t    s_grid_t0;
+/* When the last tick began - where a new tempo takes over from. */
+static int64_t    s_last_tick_us;
+/* s_grid_t0 IS 64 BITS ON A 32-BIT CPU, written by the editor (tempo) and the
+ * ensemble (corrections) while the clock reads it on the other core. A torn read
+ * used to spoil one statistic sample; now it would schedule the next tick, and a
+ * garbage anchor can put that tick an hour away. Every access takes this. */
+static portMUX_TYPE s_grid_mux = portMUX_INITIALIZER_UNLOCKED;
+
+static int64_t grid_get(void)
+{
+    portENTER_CRITICAL(&s_grid_mux);
+    const int64_t g = s_grid_t0;
+    portEXIT_CRITICAL(&s_grid_mux);
+    return g;
+}
+
+static void grid_set(int64_t g)
+{
+    portENTER_CRITICAL(&s_grid_mux);
+    s_grid_t0 = g;
+    portEXIT_CRITICAL(&s_grid_mux);
+}
+
+/* Slide an anchored grid; a grid not yet anchored stays unanchored. */
+static void grid_slide(int64_t by)
+{
+    portENTER_CRITICAL(&s_grid_mux);
+    if (s_grid_t0 != 0) {
+        s_grid_t0 += by;
+    }
+    portEXIT_CRITICAL(&s_grid_mux);
+}
 
 /* Ticks skipped by the spread statistic after the grid is anchored. Forty
  * milliseconds at any tempo this device runs - long enough for one autosave to
@@ -98,10 +132,15 @@ static void stat_add(seq_stat_t *s, int32_t v)
     if (rel > SEQ_LATE_US) {
         s->late++;
     }
+    /* BY SIZE, EARLY OR LATE. The buckets compared the signed distance, so
+     * every early tick was "<.1" however early it was: a following deck whose
+     * ticks sat 388 us before its grid reported all 13,886 of them inside
+     * 100 us, beside an sd of 72. Late stays late - that is what 'late' means. */
+    const int32_t mag = rel < 0 ? -rel : rel;
     static const int32_t edge[SEQ_NBUCKETS - 1] = { 100, 250, 500, 1000, 2000, 5000 };
     int b = SEQ_NBUCKETS - 1;
     for (int i = 0; i < SEQ_NBUCKETS - 1; i++) {
-        if (rel < edge[i]) { b = i; break; }
+        if (mag < edge[i]) { b = i; break; }
     }
     s->bucket[b]++;
     s->n++;
@@ -738,6 +777,17 @@ static void stage_apply(void)
  * It ticks at 96 PPQN, a multiple of the 24 MIDI clock is defined at, so sync
  * costs one message on every fourth tick that already exists. At 120 bpm a tick
  * is 5,208 us and a sixteenth is twenty-four of them, 125,000 us exactly. */
+/* Arm the one-shot for the next tick - see seq_clock.h. */
+static void arm_next(int64_t tick_began)
+{
+    const int64_t g = grid_get();
+    const bool on_grid = s_running && g != 0;
+    const int64_t wait = seq_clock_wait(esp_timer_get_time(), tick_began,
+                                        on_grid, g, s_tick,
+                                        (int64_t)period_us());
+    (void)esp_timer_start_once(s_clock, (uint64_t)wait);
+}
+
 static void tick(void *arg)
 {
     (void)arg;
@@ -749,18 +799,20 @@ static void tick(void *arg)
     stage_apply();
 
     if (!s_running) {
+        arm_next(now);
         return;
     }
+    s_last_tick_us = now;
 
     /* Dispatch deviation from the ideal grid. This is the number the owner
      * is hearing when they say it feels jittery, and it is measured before
      * any note is emitted so the measurement cannot be blamed on the notes. */
-    if (s_grid_t0 == 0) {
+    if (grid_get() == 0) {
         /* Anchor on the first tick after play, not on the press. The timer is
          * free-running, so the gap between the two is an arbitrary constant
          * phase - real, but not jitter, and reporting it as jitter buries the
          * signal under a 6 ms offset. */
-        s_grid_t0 = now - (int64_t)s_tick * (int64_t)period_us();
+        grid_set(now - (int64_t)s_tick * (int64_t)period_us());
         s_settle  = SEQ_SETTLE_TICKS;
     }
     if (s_settle > 0) {
@@ -777,7 +829,7 @@ static void tick(void *arg)
          * event. What is thrown away is only its contribution to the spread. */
         s_settle--;
     } else {
-        const int64_t ideal = s_grid_t0 + (int64_t)s_tick * (int64_t)period_us();
+        const int64_t ideal = grid_get() + (int64_t)s_tick * (int64_t)period_us();
         int64_t d = now - ideal;
         if (d >  1000000) { d =  1000000; }
         if (d < -1000000) { d = -1000000; }
@@ -815,6 +867,7 @@ static void tick(void *arg)
         emit(0xF9, (uint8_t)(s_pos & 0x7F), 0);
     }
     s_tick++;
+    arm_next(now);
 }
 
 static uint64_t period_us(void)
@@ -832,7 +885,7 @@ void seq_timebase(uint32_t *tick, int64_t *tick_due_us, int *bpm)
         /* When the NEXT pulse is due on the ideal grid, not when the last one
          * happened to fire. The grid is the thing the two decks are agreeing
          * about; dispatch jitter is not. */
-        *tick_due_us = s_grid_t0 + (int64_t)s_tick * (int64_t)period_us();
+        *tick_due_us = grid_get() + (int64_t)s_tick * (int64_t)period_us();
     }
 }
 
@@ -851,7 +904,7 @@ void seq_timebase(uint32_t *tick, int64_t *tick_due_us, int *bpm)
  * clock. */
 int32_t seq_nudge(uint32_t tick, int64_t due_us, int bpm)
 {
-    if (!s_running || s_grid_t0 == 0) {
+    if (!s_running || grid_get() == 0) {
         return 0;
     }
     if (bpm > 0 && bpm != s_bpm) {
@@ -861,7 +914,7 @@ int32_t seq_nudge(uint32_t tick, int64_t due_us, int bpm)
         seq_bpm(bpm);
     }
     /* Where WE think that pulse was due, against where the ensemble says. */
-    const int64_t ours = s_grid_t0 + (int64_t)tick * (int64_t)period_us();
+    const int64_t ours = grid_get() + (int64_t)tick * (int64_t)period_us();
     int64_t err = due_us - ours;
 
     /* A whole-pulse disagreement is not a phase error, it is a different bar -
@@ -873,20 +926,20 @@ int32_t seq_nudge(uint32_t tick, int64_t due_us, int bpm)
         while (err >  per / 2) { err -= per; }
         while (err < -per / 2) { err += per; }
     }
-    s_grid_t0 += err / 8;
+    grid_slide(err / 8);
     return (int32_t)err;
 }
 
 void seq_nudge_by(int32_t err_us, int bpm)
 {
-    if (!s_running || s_grid_t0 == 0) {
+    if (!s_running || grid_get() == 0) {
         return;
     }
     if (bpm > 0 && bpm != s_bpm) {
         seq_bpm(bpm);
         return;              /* seq_bpm re-anchors; let the next one align it */
     }
-    s_grid_t0 += err_us;
+    grid_slide(err_us);
 }
 
 esp_err_t seq_init(void)
@@ -920,8 +973,9 @@ esp_err_t seq_init(void)
         return err;
     }
     /* The timer runs even when stopped, so scheduled note-offs still drain
-     * after a stop and nothing is left sounding. */
-    return esp_timer_start_periodic(s_clock, period_us());
+     * after a stop and nothing is left sounding. One-shot, re-armed by every
+     * tick: seq_clock.h. */
+    return esp_timer_start_once(s_clock, period_us());
 }
 
 static seq_lane_t *lane_find(const char *name, int len)
@@ -1320,10 +1374,6 @@ void seq_bpm(int bpm)
     if (bpm < 20)  { bpm = 20; }
     if (bpm > 300) { bpm = 300; }
     s_bpm = bpm;
-    if (s_clock != NULL) {
-        esp_timer_stop(s_clock);
-        esp_timer_start_periodic(s_clock, period_us());
-    }
     /* RE-ANCHOR THE GRID, BUT KEEP THE POSITION.
      *
      * The grid has to move: it is a different grid now, and measuring the new
@@ -1337,13 +1387,24 @@ void seq_bpm(int bpm)
      * the measurements - about 2 ms, right after every tempo change, where the
      * steady state is under 600 us.
      *
-     * Anchoring so that the CURRENT tick is due now preserves both: the bar
-     * carries on where it was and the statistic measures the new grid. */
-    if (s_running) {
-        s_grid_t0 = esp_timer_get_time() - (int64_t)s_tick * (int64_t)period_us();
-    } else {
-        s_grid_t0 = 0;
-        s_tick    = 0;
+     * Anchoring so that the NEXT tick is due one NEW period after the last one
+     * fired preserves both: the bar carries on where it was, and the interval
+     * that changes is the one the tempo change is. The anchor before this put
+     * the next tick "due now" and restarted a periodic timer, which fired it a
+     * period later - so after every tempo change the ticks sat a whole pulse
+     * behind the grid the deck reports and broadcasts: +4821 us at 130 bpm,
+     * measured 2026-09-25, while sd said 5 us. Now the grid is the ticks
+     * (seq_clock.h), and the tick already armed is armed again. */
+    if (s_running && grid_get() != 0) {
+        grid_set(seq_clock_reanchor(s_last_tick_us, s_tick,
+                                    (int64_t)period_us()));
+    } else if (!s_running) {
+        grid_set(0);
+        s_tick = 0;
+    }
+    if (s_clock != NULL) {
+        (void)esp_timer_stop(s_clock);
+        arm_next(esp_timer_get_time());
     }
     seq_stats_reset();
 }
@@ -1372,7 +1433,7 @@ void seq_play(void)
     }
     s_pos  = 0;
     s_tick = 0;
-    s_grid_t0 = 0;               /* anchored on the first tick */
+    grid_set(0);                 /* anchored on the first tick */
     seq_stats_reset();
     s_running = true;
     if (s_sync) {

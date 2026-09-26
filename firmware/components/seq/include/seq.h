@@ -349,6 +349,9 @@ uint32_t seq_position(void);
  * So each deck runs its own timer and is told, a few times a second, where the
  * ensemble thinks it should be; it then corrects SLOWLY by trimming its own
  * period rather than jumping. A jump is a glitch; a trim is a drift nobody hears.
+ * The trim is the grid: each tick is armed at the grid's due time
+ * (seq_clock.h), so a correction to the grid is a correction to the ticks. Until
+ * 2026-09-25 it was not - the timer was periodic and only the grid moved.
  *
  * This is the same model Ableton Link uses, which is deliberate: if Link is ever
  * licensed and ported, it replaces the transport under these two functions and

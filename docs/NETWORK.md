@@ -448,6 +448,55 @@ the gain dropped, and the local clock coasted at 4 µs until the air cleared —
 congested band is a real condition and 500 µs is not guaranteed through one. What is
 guaranteed is that a bad room degrades the phase and cannot degrade the clock.
 
+### A correction: the ticks did not follow the grid `[MEASURED]` 2026-09-25
+
+**Every figure above measures the two decks' grids** — where each deck says its
+ticks belong — and they were true. But a follower's ticks never moved. The timer was
+periodic, and every correction moved only the grid: `seq_nudge` slid `s_grid_t0`
+toward the ensemble while the ticks went on firing at the timer's own phase, on the
+follower's own crystal. `seq.h` described the follower "trimming its own period";
+nothing did.
+
+It was found through the report [NEXT.md](NEXT.md) §2 asked to have fixed — a
+following deck's `>jitter` sd of 231 µs beside a histogram that put every tick inside
+100 µs. The brief read that as the sd counting deliberate grid slides, and said to fix
+the reporting and not the clock. The sd *was* counting the slides — because the ticks
+never made them. A mean, added to the report, showed it. Leader and follower on the
+bench, `>kick x...x...` on both:
+
+| | before | after |
+|---|---|---|
+| follower's ticks against its own grid, three 30 s windows | mean **−281, −212, −146 µs**, sd 19–24 | mean **+29, +29, +29 µs**, sd 4 |
+| the ensemble's figure for the two grids | off by 3 µs | off by −41 µs |
+| leader's ticks against its grid | mean −2 µs | mean +28 µs |
+| leader after `>bpm 130` | mean **+4821 µs** | mean +28 µs |
+
+So the follower drifted 2 µs a second against the leader — crystal against crystal,
+about 7 ms an hour — and started wherever its `>play` happened to fall, anywhere
+within half a pulse by the arithmetic of the fold in `seq_nudge` (not measured). The audible phase between two decks was that, not 35 µs. And a
+tempo change put a deck's ticks a whole pulse behind the grid it broadcast, because
+`seq_bpm` anchored the next tick "due now" and restarted a periodic timer that fired it
+a period later: a follower that had followed its grid would have landed a pulse off
+the leader after every tempo change.
+
+**Now each tick is armed at the grid's due time** (`seq_clock.h`): a grid that never
+moves makes that the periodic timer it replaced, and a grid that moves takes the ticks
+with it, a fraction of an error at a time. A new tempo re-anchors on the last tick
+that fired, so the only interval that changes is the one the tempo change is. The
++28 µs on both decks is the timer's own dispatch latency — the same on each, so it
+cancels between them. `tools/test_clock.c` runs the scheduling arithmetic through an
+hour with a 2 ppm crystal: the periodic clock's grids agree within 8.3 µs while its
+ticks end the hour 6.0 ms apart; ticks armed on the grid stay within 8.3 µs.
+
+**The phase between the two decks' ticks is now derived, not observed:** the ensemble's
+grid figure plus each deck's measured mean against its own grid, three measured terms.
+Nothing outside the decks — no scope, no audio capture — has timed the two outputs
+against each other. That is unverified.
+
+The report changed too: `>jitter` prints the **mean**, and the histogram counts a
+tick's distance from the first sample by size, early or late. It compared the signed
+distance, so an early tick was "<.1" however early.
+
 ### Does drawing move the clock? No `[FACT]`
 
 The question this instrument rests on, so it is measured rather than argued. A deck
@@ -458,7 +507,7 @@ running six visual lanes that all fire every other step, with the preview split 
 | local clock, standard deviation | **4 µs** | **5 µs** |
 | ticks later than 100 µs | 0 of 5919 | 2 of 10013 |
 | ticks later than 250 µs | 0 | 0 |
-| phase against the other deck, worst | 35 µs | 25 µs |
+| phase against the other deck, worst (the grids — see the correction above) | 35 µs | 25 µs |
 
 The two-core split is doing its job: the frame is generated in the main loop and the
 clock dispatches on the other core, so the drawing cannot reach it. The phase figure is
@@ -506,8 +555,9 @@ not make it on their behalf.
 than a postponement:
 
 - **Between decks**, the ESP-NOW ensemble already does what Link would be used for:
-  two decks in phase within 35 µs, 32 of 32 samples inside 500 µs across tempo
-  changes, no router — measured above.
+  two decks' grids within 35 µs, 32 of 32 samples inside 500 µs across tempo
+  changes, no router — measured above; and since 2026-09-25 the ticks follow the
+  grid (*A correction*, above).
 - **With a DAW**, MIDI clock already does it over USB: 49.600 clocks a second for a
   requested 124 bpm, measured at the host (docs/OS.md).
 - **The seam is ready.** The ensemble shares Link's *model* — a local timer

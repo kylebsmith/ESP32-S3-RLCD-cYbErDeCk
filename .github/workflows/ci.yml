@@ -103,6 +103,19 @@ jobs:
              firmware/components/textgrid/font6x12.c
           /tmp/test_textgrid
 
+      # The clock's ticks follow its grid. They did not: the timer was periodic
+      # and a following deck's corrections moved only the grid, so its ticks
+      # drifted 2 ppm from the leader while the ensemble reported the grids
+      # microseconds apart. This runs seq_clock.h through an hour with a 2 ppm
+      # crystal, shows the old periodic model failing by name, and demands the
+      # new one stay within microseconds.
+      - name: Check that the ticks follow the grid
+        run: |
+          cc -std=c11 -O2 -Wall -Wextra -Werror \
+             -I firmware/components/seq/include \
+             -o /tmp/test_clock tools/test_clock.c -lm
+          /tmp/test_clock
+
       # Ground rule 6: nothing secret ever enters a document, and a command
       # line is a document line. '>wifi', '>host' and '>ssh' took their
       # password as a word of the line. Now a command asks, and ask.h takes the

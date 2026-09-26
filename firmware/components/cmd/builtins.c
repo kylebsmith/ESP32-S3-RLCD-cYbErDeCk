@@ -1301,6 +1301,11 @@ static void jitter_line(cmd_ctx_t *ctx, const char *what, const seq_stat_t *s)
      * A number nobody can parse is worse than no number, because it is
      * indistinguishable from a disaster. */
     cmd_out(ctx, "      spread %d us", (int)(s->max - s->min));
+    /* WHERE THE TICKS SIT, not only how much they wander. On a following deck
+     * this is the distance between when its ticks fire and where the ensemble
+     * says they belong - which sd and spread cannot show, because a constant
+     * offset has neither. */
+    cmd_out(ctx, "      mean %+d us", (int)mean);
     cmd_out(ctx, "      widest one at t+%us",
             (unsigned)(s->worst_ms / 1000));
     /* The shape, not just the extremes. A single bad tick in two thousand is
@@ -1342,6 +1347,7 @@ static cmd_status_t c_jitter(cmd_ctx_t *ctx)
     }
     cmd_out(ctx, "clock = tick vs the ideal grid");
     cmd_out(ctx, "xport = queue wait before sending");
+    cmd_out(ctx, "mean = where ticks sit on it");
     cmd_out(ctx, "sd/spread are MICROseconds.");
     cmd_out(ctx, "t+ is when, not how long.");
     cmd_out(ctx, "first 8 ticks after play skipped");
