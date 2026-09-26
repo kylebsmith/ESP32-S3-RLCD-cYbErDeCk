@@ -703,10 +703,43 @@ static inline int seq_pattern_compile(const char *pat, seq_comp_t *c)
  * within half a tick (2.5 ms at 124 bpm) of where it belongs. Rounding DOWN,
  * the first version of this fix, put the second note a whole tick early.
  *
- * Swing delays odd slots by swing_ticks * Q / (24 * D) - which is exactly the
- * old swing_ticks * tps / 24 wherever tps was a whole number.
+ * SWING BENDS TIME, AND EVERY LANE LIVES IN THE SAME TIME. An eighth is two
+ * sixteenths; swing makes the first longer and the second shorter, so the
+ * second sixteenth of every eighth starts `swing_ticks` late. Whatever is
+ * inside a sixteenth keeps its place WITHIN it - stretched in the first,
+ * squeezed in the second - so a roll moves with the sixteenth it is in, and
+ * the start of every eighth never moves at all.
+ *
+ * It delayed a lane's odd SLOTS instead, which is the same thing only while a
+ * slot is a sixteenth. One '[xx]' made every slot of its lane a thirty-second,
+ * and the whole line went straight: at swing 67 'xxxxxxxxxxxxxxx[xx]' put its
+ * offbeats on ticks 24, 72, 120, 168 where 'xxxxxxxxxxxxxxxx' put them on 32,
+ * 80, 128, 176 - a 42 ms flam at 120 bpm between two lanes playing the same
+ * sixteenths (host, 2026-09-26). And a '/2' lane's slots are eighths, so
+ * 'xxxxxxxx /2' swung its offbeat eighths twice as hard as anything else
+ * could, while 'x.x.x.x.x.x.x.x.' - the same notes - did not swing at all.
+ * A plain sixteenth lane lands exactly where it always did.
  *
  * Returns 1 and sets *slot and *cycle when a slot starts on `tick`. */
+
+/* Where slot g starts once swing has bent it: its unswung start is g*Q/D ticks,
+ * kept as a fraction over D so nothing is rounded twice. With no swing this is
+ * the nearest tick to g*Q/D, exactly as it was. */
+static inline uint64_t seq_pattern_swung(uint64_t g, uint64_t Q, uint64_t D,
+                                         int swing_ticks)
+{
+    const uint64_t T = SEQ_PATTERN_TICKS_PER_STEP;          /* a sixteenth */
+    const uint64_t s = (uint64_t)(swing_ticks < 0 ? 0
+                     : swing_ticks >= (int)T ? (int)T - 1 : swing_ticks);
+    const uint64_t at = g * Q;
+    const uint64_t e = at / (2 * T * D);                    /* which eighth */
+    const uint64_t r = at - e * 2 * T * D;                  /* into it, over D */
+    const uint64_t num = (r < T * D) ? r * (T + s)
+                       : (T + s) * T * D + (r - T * D) * (T - s);
+    const uint64_t den = T * D;
+    return e * 2 * T + (2 * num + den) / (2 * den);         /* the nearest tick */
+}
+
 static inline int seq_pattern_slot_at(uint32_t tick, int slots, int div,
                                       int rnum, int rden, int swing_ticks,
                                       int *slot, uint32_t *cycle)
@@ -714,16 +747,22 @@ static inline int seq_pattern_slot_at(uint32_t tick, int slots, int div,
     if (slots <= 0 || div <= 0 || rnum <= 0 || rden <= 0) { return 0; }
     const uint64_t Q = (uint64_t)SEQ_PATTERN_TICKS_PER_STEP * (uint64_t)rden;
     const uint64_t D = (uint64_t)div * (uint64_t)rnum;
-    /* the last slot whose unswung start is at or before this tick */
-    const uint64_t g = (D * (2 * (uint64_t)tick + 1) - 1) / (2 * Q);
-    const uint64_t base = (2 * g * Q + D) / (2 * D);
-    const uint64_t delay = (g & 1) ? ((uint64_t)swing_ticks * Q) / (24 * D) : 0;
-    if (base + delay != (uint64_t)tick) {
-        return 0;
+    /* The last slot whose unswung start is at or before this tick. Swing only
+     * ever delays, so no later slot can start here; walk back through the ones
+     * it may have delayed onto it - a sixteenth's worth at most. */
+    uint64_t g = (D * (2 * (uint64_t)tick + 1) - 1) / (2 * Q);
+    for (;;) {
+        const uint64_t at = seq_pattern_swung(g, Q, D, swing_ticks);
+        if (at == (uint64_t)tick) {
+            if (slot != NULL)  { *slot = (int)(g % (uint64_t)slots); }
+            if (cycle != NULL) { *cycle = (uint32_t)(g / (uint64_t)slots); }
+            return 1;
+        }
+        if (at < (uint64_t)tick || g == 0) {
+            return 0;
+        }
+        g--;
     }
-    if (slot != NULL)  { *slot = (int)(g % (uint64_t)slots); }
-    if (cycle != NULL) { *cycle = (uint32_t)(g / (uint64_t)slots); }
-    return 1;
 }
 
 /* The slot that is sounding at `tick` - the last one to have started - for the

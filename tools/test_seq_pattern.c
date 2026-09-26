@@ -423,21 +423,160 @@ int main(void)
         }
     }
 
-    /* 14. SWING delays odd slots, by exactly what the old code delayed them
-     *     by wherever the old code could compute it. */
+    /* 14. SWING BENDS TIME, NOT A LANE'S STEPS: the second sixteenth of every
+     *     eighth starts late, and everything inside a sixteenth goes with it.
+     *
+     *     This test used to assert that swing delays a lane's odd SLOTS, which
+     *     is what the code did - and it is why one roll straightened a whole
+     *     line and why 'xxxxxxxx /2' swung where 'x.x.x.x.x.x.x.x.' did not.
+     *     Every half below fails on that arithmetic. */
     {
+        /* a) A plain sixteenth lane lands exactly where it always did. */
         for (int sw = 0; sw <= 22; sw++) {
-            for (int den = 1; den <= 4; den *= 2) {
-                const int tps = 24 * den;
-                const int want = sw * tps / 24;         /* the old formula */
-                int s; uint32_t cy;
-                const int ok = seq_pattern_slot_at((uint32_t)(tps + want), 4, 1, 1,
-                                                   den, sw, &s, &cy);
-                if (!ok || s != 1) {
-                    printf("[FAIL] swing %d at /%d: odd slot not at %d\n",
-                           sw, den, tps + want);
-                    fails++;
+            int s; uint32_t cy;
+            const int ok = seq_pattern_slot_at((uint32_t)(24 + sw), 4, 1, 1, 1,
+                                               sw, &s, &cy);
+            if (!ok || s != 1) {
+                printf("[FAIL] swing %d: the offbeat sixteenth is not at %d\n",
+                       sw, 24 + sw);
+                fails++;
+            }
+        }
+        /* b) One roll does not move the other fifteen steps. */
+        for (int pc = 50; pc <= 75; pc++) {
+            const int sw = (pc * 2 * 24) / 100 - 24;
+            uint32_t plain[16], rolled[16];
+            for (int k = 0; k < 2; k++) {
+                seq_pattern_compile(k ? "xxxxxxxxxxxxxxx[xx]" : "xxxxxxxxxxxxxxxx", &C);
+                uint32_t *at = k ? rolled : plain;
+                for (uint32_t t = 0; t < 16 * 24; t++) {
+                    int s; uint32_t cy;
+                    if (seq_pattern_slot_at(t, C.slots, C.div, C.rnum, C.rden, sw,
+                                            &s, &cy) && s % C.div == 0) {
+                        at[s / C.div] = t;
+                    }
                 }
+            }
+            for (int i = 0; i < 15; i++) {
+                if (plain[i] != rolled[i]) {
+                    printf("[FAIL] swing %d: a roll on step 15 moved step %d "
+                           "from %u to %u\n", pc, i, (unsigned)plain[i],
+                           (unsigned)rolled[i]);
+                    fails++;
+                    break;
+                }
+            }
+            /* ...and the roll is inside its own sixteenth: an odd one, so from
+             * its swung start to the end of the eighth. */
+            seq_pattern_compile("xxxxxxxxxxxxxxx[xx]", &C);
+            int in = 0;
+            for (uint32_t t = 0; t < 16 * 24; t++) {
+                int s; uint32_t cy;
+                if (seq_pattern_slot_at(t, C.slots, C.div, C.rnum, C.rden, sw,
+                                        &s, &cy) && s >= 30) {
+                    in += (t >= (uint32_t)(15 * 24 + sw) && t < 16 * 24);
+                }
+            }
+            eqi("the roll's two notes are inside its sixteenth", in, 2);
+        }
+        /* c) One rhythm, two spellings, one groove: eighths do not swing,
+         *    whether they are written x.x. or at half speed. */
+        {
+            const int sw = 8;                               /* 67: triplet */
+            const char *pats[] = { "x.x.x.x.x.x.x.x.", "xxxxxxxx /2",
+                                   "[xx][xx][xx][xx] /4",
+                                   "x...x...x...x...x...x...x...x... *2" };
+            for (size_t p = 0; p < sizeof pats / sizeof pats[0]; p++) {
+                seq_pattern_compile(pats[p], &C);
+                int hits = 0, off = 0;
+                for (uint32_t t = 0; t < 16 * 24; t++) {
+                    int s; uint32_t cy;
+                    if (!seq_pattern_slot_at(t, C.slots, C.div, C.rnum, C.rden,
+                                             sw, &s, &cy)) {
+                        continue;
+                    }
+                    for (int i = 0; i < C.n; i++) {
+                        if (C.leaf[i].kind == SEQ_LEAF_HIT && C.leaf[i].slot == s) {
+                            hits++;
+                            off += (t % 48 != 0);
+                        }
+                    }
+                }
+                if (hits != 8 || off != 0) {
+                    printf("[FAIL] swing 67: '%s' played %d eighths, %d off the "
+                           "eighth\n", pats[p], hits, off);
+                    fails++;
+                } else {
+                    printf("[ ok ] swing 67: '%s' - eight eighths, none moved\n",
+                           pats[p]);
+                }
+            }
+        }
+        /* d) Every slot of every lane starts exactly once, in order, at every
+         *    swing the verb allows, wherever a slot is two ticks or more. */
+        {
+            const int divs[] = { 1, 2, 3, 4, 5, 6, 7, 8, 12 };
+            int bad = 0;
+            for (int pc = 50; pc <= 75 && !bad; pc++) {
+                const int sw = (pc * 2 * 24) / 100 - 24;
+                for (size_t di = 0; di < sizeof divs / sizeof divs[0] && !bad; di++)
+                for (int rn = 1; rn <= 4 && !bad; rn *= 2)
+                for (int rd = 1; rd <= 4 && !bad; rd *= 2) {
+                    if (divs[di] * rn > 12 * rd) { continue; }
+                    uint64_t want = 0;
+                    uint32_t last = 0;
+                    for (uint32_t t = 0; t < 8 * 96 && !bad; t++) {
+                        int s; uint32_t cy;
+                        if (!seq_pattern_slot_at(t, 64, divs[di], rn, rd, sw, &s,
+                                                 &cy)) {
+                            continue;
+                        }
+                        const uint64_t g = (uint64_t)cy * 64 + (uint64_t)s;
+                        if (g != want || (want > 0 && t <= last)) {
+                            printf("[FAIL] swing %d div %d *%d/%d: slot %llu on "
+                                   "tick %u, wanted slot %llu\n", pc, divs[di],
+                                   rn, rd, (unsigned long long)g, (unsigned)t,
+                                   (unsigned long long)want);
+                            fails++;
+                            bad = 1;
+                        }
+                        want = g + 1;
+                        last = t;
+                    }
+                }
+            }
+            if (!bad) {
+                printf("[ ok ] swing 50-75: every slot once, in order\n");
+            }
+        }
+        /* e) With no swing, nothing moves at all: every slot starts on the
+         *    nearest tick to g*Q/D, rounded exactly as it always was. */
+        {
+            int moved = 0;
+            for (int div = 1; div <= 12 && !moved; div++)
+            for (int rn = 1; rn <= 8 && !moved; rn *= 2)
+            for (int rd = 1; rd <= 8 && !moved; rd *= 2) {
+                if (div * rn > 24 * rd) { continue; }
+                const uint64_t Q = 24u * (uint64_t)rd, D = (uint64_t)div * (uint64_t)rn;
+                uint64_t want = 0;
+                for (uint32_t t = 0; t < 4 * 96 * (uint32_t)rd && !moved; t++) {
+                    int s; uint32_t cy;
+                    if (!seq_pattern_slot_at(t, 64, div, rn, rd, 0, &s, &cy)) {
+                        continue;
+                    }
+                    const uint64_t g = (uint64_t)cy * 64 + (uint64_t)s;
+                    if (g != want || t != (2 * g * Q + D) / (2 * D)) {
+                        printf("[FAIL] unswung div %d *%d/%d: slot %llu on tick "
+                               "%u\n", div, rn, rd, (unsigned long long)g,
+                               (unsigned)t);
+                        fails++;
+                        moved = 1;
+                    }
+                    want = g + 1;
+                }
+            }
+            if (!moved) {
+                printf("[ ok ] no swing: every slot on the tick it always had\n");
             }
         }
     }

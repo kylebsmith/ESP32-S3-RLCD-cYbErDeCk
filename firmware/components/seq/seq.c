@@ -408,10 +408,10 @@ static void service_offs(int64_t now)
     s_emitting = NULL;
 }
 
-/* Swing, in ticks. A sixteenth is six ticks, so an eighth is twelve; a
- * shuffle puts the offbeat at `swing` per cent of the way through that
- * eighth instead of at the halfway point. 67 per cent lands on 8 of 12,
- * which is two ticks late - triplet swing, exactly.
+/* Swing, in ticks. A sixteenth is 24 ticks, so an eighth is 48; a shuffle
+ * puts the offbeat at `swing` per cent of the way through that eighth instead
+ * of at the halfway point. 67 per cent lands on 32 of 48, which is eight ticks
+ * late - triplet swing, exactly.
  *
  * Only ODD sixteenths move. The downbeat staying put is the whole difference
  * between a groove and a tempo change. */

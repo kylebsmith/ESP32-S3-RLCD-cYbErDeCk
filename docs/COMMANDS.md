@@ -242,6 +242,17 @@ sixteenths move — the downbeat never does, which is the difference between a
 groove and a tempo change. A pattern that only hits even steps is unaffected
 by swing, which is correct and surprises people.
 
+**Swing bends time, and every lane lives in the same time.** A roll moves with
+the sixteenth it is in, and a lane at `/2` swings exactly as its notes would
+written out in sixteenths — `xxxxxxxx /2` and `x.x.x.x.x.x.x.x.` are the same
+eighths, and neither swings. Until 2026-09-26 swing moved a lane's odd *slots*,
+which are sixteenths only in a plain lane: one `[xx]` made every slot a
+thirty-second and straightened the whole line (at swing 67, offbeats on ticks
+24, 72, 120, 168 against every other lane's 32, 80, 128, 176), and `/2` made
+them eighths, which then swung twice as hard as anything else could.
+`seq_pattern.h`; `tools/test_seq_pattern.c` item 14 fails 48 ways on the old
+arithmetic.
+
 Measured on the deck at 124 bpm, as inter-onset intervals in ms:
 
 | `>swing` | Intervals | Offbeat sits at |
