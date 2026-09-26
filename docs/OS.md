@@ -636,10 +636,22 @@ Two things, and neither was cleverness:
 
 ### Still open `[OPEN]`
 
-Two branches of the verdict are **written but unexercised**: `STOPPED DEAD` (a run
+Two branches of the verdict are **unexercised on hardware**: `STOPPED DEAD` (a run
 that never said goodbye) and `RESTART HUNG` (said goodbye, recovered by hand). Only
 `restarted on purpose` is verified on hardware, because the condition that produced
 the other two is now fixed and they are the ones that would fire if it came back.
+Since 2026-09-25 every branch runs on the host: the verdict is
+`firmware/main/vitals_verdict.h`, and `tools/test_vitals.c` drives it through all of
+them.
+
+**A fourth outcome, found by running it.** Records are written only in USB MIDI mode
+and on a deliberate restart, so a run in serial mode left nothing — and the next boot
+described whichever run last wrote a record. Both decks said "last run: 67s, serial …
+restarted on purpose" through a day of flashes. Every boot now marks its start, and a
+serial run that ends without a goodbye is reported as `serial, not watched`: calling
+it `STOPPED DEAD`, as the old rule would have, would send the hunt after every
+flash. Verified on the deck: the boot after a flash reads the mark the one before it
+wrote. One NVS write per boot.
 
 `>flash now` from USB MIDI mode has the same deadlock and is **not** fixed. It
 cannot use the same escape: it sets `FORCE_DOWNLOAD_BOOT` in the RTC domain and

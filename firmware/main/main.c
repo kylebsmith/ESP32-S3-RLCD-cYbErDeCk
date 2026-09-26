@@ -663,7 +663,9 @@ void app_main(void)
      * comes up it owns the USB peripheral, so the USB-Serial-JTAG keyboard
      * must NOT also be started - the console moves to the CDC interface and
      * reaches the editor through the same key mapper. */
-    if (usbdev_boot()) {
+    const bool usb_midi = usbdev_boot();
+    vitals_started(usb_midi);
+    if (usb_midi) {
         if (seq_dest_add("usb", dest_usb, usbdev_midi_flush,
                          "USB MIDI (native)") != ESP_OK) {
             /* The deck is in USB MIDI mode with a host attached and cannot

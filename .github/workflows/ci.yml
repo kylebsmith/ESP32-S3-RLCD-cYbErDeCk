@@ -103,6 +103,16 @@ jobs:
              firmware/components/textgrid/font6x12.c
           /tmp/test_textgrid
 
+      # The previous run's last words, in every outcome - including STOPPED DEAD
+      # (a hang in USB MIDI mode) and RESTART HUNG (a power cycle after a
+      # goodbye), which the bench cannot produce. And the case it got wrong: a
+      # serial run with no goodbye, which the old rule would call STOPPED DEAD.
+      - name: Check the vitals verdicts
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror -I firmware/main \
+             -o /tmp/test_vitals tools/test_vitals.c
+          /tmp/test_vitals
+
       # The clock's ticks follow its grid. They did not: the timer was periodic
       # and a following deck's corrections moved only the grid, so its ticks
       # drifted 2 ppm from the leader while the ensemble reported the grids
