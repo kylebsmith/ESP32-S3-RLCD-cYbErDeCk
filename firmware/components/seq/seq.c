@@ -1,6 +1,7 @@
 #include "seq.h"
 #include "seq_clock.h"
 #include "seq_pattern.h"
+#include "seq_scale.h"
 
 #include <ctype.h>
 #include <string.h>
@@ -241,93 +242,30 @@ static void midi_task(void *arg)
 
 uint32_t seq_dropped(void) { return s_dropped; }
 
-/* THE KEY, AND WHY A SCALE IS A TABLE AND NOT A PARSER.
- *
- * A degree is resolved to a note by indexing this table and adding. That is
- * the entire pitch system: no note names in the realtime path, no string
- * anywhere near the clock, and a wrong note is not expressible. The modes are
- * the seven diatonic ones plus the three a performer actually reaches for
- * under pressure - minor pentatonic, which cannot sound wrong; blues, which
- * is pentatonic plus the flat five; and chromatic, for when the whole point
- * is to leave the key.
- *
- * Order matters: the longest names must be tested first or "maj" swallows
- * "maj5" and "b" swallows "blues". That is a real bug this table's layout is
- * chosen to prevent rather than a comment about one. */
-typedef struct { const char *name; uint8_t n; uint8_t iv[12]; } mode_t;
-static const mode_t s_modes[] = {
-    { "chrom", 12, {0,1,2,3,4,5,6,7,8,9,10,11} },
-    { "blues",  6, {0,3,5,6,7,10} },
-    { "pent",   5, {0,3,5,7,10} },       /* minor pentatonic - the safe one */
-    { "maj5",   5, {0,2,4,7,9} },        /* major pentatonic                */
-    { "maj",    7, {0,2,4,5,7,9,11} },
-    { "min",    7, {0,2,3,5,7,8,10} },
-    { "dor",    7, {0,2,3,5,7,9,10} },
-    { "phr",    7, {0,1,3,5,7,8,10} },
-    { "lyd",    7, {0,2,4,6,7,9,11} },
-    { "mix",    7, {0,2,4,5,7,9,10} },
-    { "loc",    7, {0,1,3,5,6,8,10} },
-};
-
-static uint8_t     s_root = 0;                  /* pitch class, C = 0 */
-static const mode_t *s_mode = &s_modes[5];      /* min */
-static char        s_scale_name[12] = "cmin";
+/* The key lives in seq_scale.h - the table, the parser and the degree - so the
+ * host checks read '>scale' and play a degree exactly as this does. */
+static int               s_root = 0;                         /* C = 0 */
+static const seq_mode_t *s_mode = &seq_modes[SEQ_MODE_MIN];
+static char              s_scale_name[12] = "cmin";
 
 const char *seq_scale_name(void) { return s_scale_name; }
 
 esp_err_t seq_scale(const char *spec)
 {
-    if (spec == NULL || spec[0] == '\0') {
+    int pc = 0;
+    const seq_mode_t *m = NULL;
+    if (seq_scale_parse(spec, &pc, &m) != 0) {
         return ESP_ERR_INVALID_ARG;
     }
-    const char *p = spec;
-    int pc;
-    switch (*p | 0x20) {          /* tolerate either case; nobody should care */
-    case 'c': pc = 0;  break;
-    case 'd': pc = 2;  break;
-    case 'e': pc = 4;  break;
-    case 'f': pc = 5;  break;
-    case 'g': pc = 7;  break;
-    case 'a': pc = 9;  break;
-    case 'b': pc = 11; break;
-    default: return ESP_ERR_INVALID_ARG;
-    }
-    p++;
-    if (*p == '#') { pc = (pc + 1) % 12; p++; }
-    else if (*p == 'b') { pc = (pc + 11) % 12; p++; }
-
-    const mode_t *m = &s_modes[5];              /* a bare root means minor */
-    if (*p != '\0') {
-        m = NULL;
-        for (size_t i = 0; i < sizeof s_modes / sizeof s_modes[0]; i++) {
-            if (strncmp(p, s_modes[i].name, strlen(s_modes[i].name)) == 0) {
-                m = &s_modes[i];
-                break;
-            }
-        }
-        if (m == NULL) {
-            return ESP_ERR_INVALID_ARG;
-        }
-    }
-    s_root = (uint8_t)pc;
+    s_root = pc;
     s_mode = m;
     snprintf(s_scale_name, sizeof s_scale_name, "%s", spec);
     return ESP_OK;
 }
 
-/* Degree to MIDI note. Degrees past the top of the scale keep climbing into
- * the next octave, so "0123456789" is a run and not a wrap - which is what
- * anyone typing it expects, and the reason degrees go to 9 rather than to the
- * size of the mode. */
 static uint8_t degree_note(uint8_t deg, int octave)
 {
-    const int n = s_mode->n;
-    const int up = deg / n;
-    const int idx = deg % n;
-    int note = 12 * (octave + 1 + up) + s_root + s_mode->iv[idx];
-    if (note < 0)   { note = 0; }
-    if (note > 127) { note = 127; }
-    return (uint8_t)note;
+    return seq_degree_note(s_root, s_mode, deg, octave);
 }
 
 /* Note-offs are scheduled rather than sent with the note, so a lane can never
@@ -414,7 +352,8 @@ static void service_offs(int64_t now)
  * late - triplet swing, exactly.
  *
  * Only ODD sixteenths move. The downbeat staying put is the whole difference
- * between a groove and a tempo change. */
+ * between a groove and a tempo change. How a lane's own steps follow - a roll,
+ * a '/2' - is seq_pattern_slot_at's: it bends time, not steps. */
 static int swing_ticks(void)
 {
     int d = (s_swing * 2 * SEQ_TICKS_PER_STEP) / 100 - SEQ_TICKS_PER_STEP;
