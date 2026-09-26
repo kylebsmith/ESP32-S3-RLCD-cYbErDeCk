@@ -300,6 +300,7 @@ counted among the audited rows.
 | **[CASE.md](docs/CASE.md)** | the carry case: how it guides, holds and prints |
 | **[CONCRETE.md](docs/CONCRETE.md)** | the cast concrete jacket, its mould, and the mix |
 | **[HANDOFF.md](HANDOFF.md)** | briefing for a session with the hardware in front of it |
+| **[SATELLITES.md](docs/SATELLITES.md)** | the satellites: the six-pin magnetic cable, the CAN bus and the first two nodes, to build from |
 | **[OS.md](docs/OS.md)** | the firmware design: what it runs, why, and what it deliberately will not do |
 | **[THESIS.md](docs/THESIS.md)** | the running note for the paper: each decision made for legibility, as it was made |
 | **[DESIGN.md](docs/DESIGN.md)** | form language, why it is shaped this way, material and finish |

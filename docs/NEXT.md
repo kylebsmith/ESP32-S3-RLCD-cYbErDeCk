@@ -19,6 +19,8 @@ a circle, a eurorack module and a knob on somebody else's desk.
 >   relay on the laptop), §8 (OSC in, as §5's mechanism: `>knob1 = knob`), §7 (Link
 >   not integrated, for the licence), §9, §10 (the defect, and three more).
 > - **Waiting on hardware:** §5's satellites, the direct deck-to-node link, MIDI in.
+>   The satellites' cable, bus and frames are briefed, 2026-09-26, for the owner to
+>   build: [SATELLITES.md](SATELLITES.md).
 > - **Two claims in this brief did not survive measurement.** §2's "two decks in
 >   phase within 35 µs" was the grids, not the notes: a follower's ticks drifted 2 ppm
 >   and two decks' steps fell up to 71 ms apart — both fixed ([NETWORK.md](NETWORK.md),
