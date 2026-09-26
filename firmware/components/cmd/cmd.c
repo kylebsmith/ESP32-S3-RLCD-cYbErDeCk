@@ -201,6 +201,13 @@ static void old_spelling(cmd_ctx_t *ctx, const char *w, size_t n)
         cmd_out(ctx, "cc is a kind now: >fx = cc 74");
         return;
     }
+    /* They set a buffer's kind, and nothing has read a kind since '>' began
+     * marking command lines - docs/MAP.md §0. */
+    if ((n == 5 && strncmp(w, "guide", 5) == 0) ||
+        (n == 5 && strncmp(w, "prose", 5) == 0)) {
+        cmd_out(ctx, "%.*s is gone: > marks a line", (int)n, w);
+        return;
+    }
     cmd_out(ctx, "%.*s? try: help", (int)n, w);
 }
 

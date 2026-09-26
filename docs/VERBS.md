@@ -1,6 +1,6 @@
 # Every verb, on one page
 
-*The whole language. Thirty-six verbs, counted from the command table itself —
+*The whole language. Thirty-four verbs, counted from the command table itself —
 if this page and the firmware disagree, the firmware is right and this page is
 stale. [MAP.md](MAP.md) §0 has the snippet that counts them. The lane names are not
 verbs: they are yours, defined in the boot document.*
@@ -144,7 +144,7 @@ routes draws in table order, whatever order the lines were typed.
 | `dump` | a document to the console |
 | `frame` | the picture over OSC |
 
-## Documents — 10
+## Documents — 8
 
 | | |
 |---|---|
@@ -153,7 +153,6 @@ routes draws in table order, whatever order the lines were typed.
 | `open lullaby` `list` `close` | |
 | `run lullaby` | run every line, without leaving this page |
 | `save` | write now |
-| `guide` `prose` | mark what a buffer is |
 | `help` | all of this, on the deck |
 
 `Ctrl-L` / `Ctrl-J` walk documents. `Ctrl-O` returns from output. `Ctrl-G` the guide.

@@ -63,7 +63,7 @@ typo that plays is the one they cannot hear.
   >name = note 36 what a name means - the names are yours
 ```
 
-Thirty-six verbs, all of them on [VERBS.md](VERBS.md). The lane names are not
+Thirty-four verbs, all of them on [VERBS.md](VERBS.md). The lane names are not
 among them: they are definitions, and the boot document holds sixteen.
 
 ---

@@ -380,20 +380,6 @@ static cmd_status_t c_close(cmd_ctx_t *ctx)
  * a command and Ctrl+Enter runs it, in any buffer. The kind is kept because
  * it still has to decide prose-versus-grid reflow for Orca patches, which is
  * the distinction docs/SUBSTRATE.md actually cares about. */
-static cmd_status_t c_guide(cmd_ctx_t *ctx)
-{
-    doc_buf_set_kind(DOC_KIND_GUIDE);
-    snprintf(ctx->msg, sizeof ctx->msg, "kind: guide");
-    return CMD_DONE;
-}
-
-static cmd_status_t c_prose(cmd_ctx_t *ctx)
-{
-    doc_buf_set_kind(DOC_KIND_PROSE);
-    snprintf(ctx->msg, sizeof ctx->msg, "kind: prose");
-    return CMD_DONE;
-}
-
 static cmd_status_t c_out(cmd_ctx_t *ctx) __attribute__((unused));
 static cmd_status_t c_out(cmd_ctx_t *ctx)
 {
@@ -2219,8 +2205,6 @@ static const cmd_t s_builtins[] = {
     { "run",   c_run,   CMD_CAP_EDIT,                   "run a document without leaving this one" },
     { "save",  c_save,  CMD_CAP_STORE,                  "write this buffer now" },
     { "close", c_close, CMD_CAP_EDIT,                   "forget this buffer" },
-    { "guide", c_guide, CMD_CAP_EDIT,                   "mark as a guide" },
-    { "prose", c_prose, CMD_CAP_EDIT,                   "mark as prose" },
     { "density", c_density, CMD_CAP_EDIT,               "low | high (use high to split)" },
 };
 

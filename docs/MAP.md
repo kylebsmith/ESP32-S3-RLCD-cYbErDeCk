@@ -27,7 +27,7 @@ almost anything is useful — it is:
 
 If neither, it is refused, however good it is.
 
-**Thirty-six verbs `[FACT]`**, counted from the command table itself:
+**Thirty-four verbs `[FACT]`**, counted from the command table itself:
 
 ```
     python3 - <<'EOF'
@@ -54,6 +54,12 @@ The thirty-three lane names stopped being verbs: a sound name is a line in the b
 document — `>kick = note 36` — and a picture answers to its own name, so the one lane
 command serves all of them ([MANIFESTO.md](MANIFESTO.md) §3.8). That is criterion 5
 of §8 honoured by thirty-three, where [NEXT.md](NEXT.md) guessed thirty-one.
+
+**Thirty-six became thirty-four the same day: `guide` and `prose` are gone.** They set
+a buffer's *kind*, and nothing has read a kind since Enter stopped running lines in a
+guide buffer and `>` began marking what a command is (the note at Enter in
+`firmware/main/editor.c`). A verb that changes nothing anyone can see is a lie on the
+help page. An old line that still runs one is told `guide is gone: > marks a line`.
 
 ---
 
@@ -91,7 +97,7 @@ wrong. Teach the *binding* about the output.
 
 ## 2. The surface, as it stands `[FACT]`
 
-Thirty-six verbs, grouped by what they actually touch — and the names, which are not
+Thirty-four verbs, grouped by what they actually touch — and the names, which are not
 verbs.
 
 ### Lanes — no verbs, one command, and the names are yours
@@ -141,9 +147,9 @@ wifi host join a network, or be one
 lanes jitter dump density split frame
 ```
 
-### Documents — 10
+### Documents — 8
 ```
-help list new name open run save close guide prose
+help list new name open run save close
 ```
 
 ### Escape hatches and the rest — 8
@@ -438,13 +444,14 @@ argue against later:
    at compile time.
 3. **One shared clock mechanism** that covers both a second deck and a laptop.
 4. **MIDI in and out on a wire**, so the deck needs no computer at all.
-5. **Thirty-six verbs down, not up**, and counted with the snippet in §0 rather
+5. **Thirty-four verbs down, not up**, and counted with the snippet in §0 rather
    than by eye — *by running it*, which is the part that failed. The collapse spent
    twelve of them buying one lane system; nothing else may spend any without deleting
    its own. §9.5 was the first change to honour that literally: `turn`, `mask` and
    `edge` in, `star`, `shake` and `tile` out, same number either side. The names
    becoming definitions (§2) was the second, and it went from sixty-nine to
-   thirty-six with nothing added.
+   thirty-six with nothing added; `guide` and `prose`, which did nothing, took it
+   to thirty-four.
 6. **Every verb in one printed page**, because a performer cannot search.
 7. **No verb that exists only to work around another verb.**
 
