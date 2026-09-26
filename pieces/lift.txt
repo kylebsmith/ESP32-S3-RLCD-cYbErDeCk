@@ -1,0 +1,124 @@
+LIFT
+
+-- after dj_dave 140
+>bpm 140
+>scale f#min
+>swing 50
+>lead = voice 4 ch 2 gate 90
+>lead 4.4..3.2..2.3.4.6.4..3.2..0.2...
+>play
+>pad = voice 3 ch 3 gate 400
+>pad <[2,4,7] [2,5,7] [2,4,6] [1,3,6]>___ /4
+>kick 9......6..9.....
+>clap ........9.......
+>hat 4.3.4.3.4.3.[35][79]3.
+>hat:2 .......<. [357]> /2
+>bass = voice 1 ch 1 gate 200
+>bass <0526>____<0526>__ /2
+>bass:oct <1 0>...............
+>lead:vel 9.5.7.5.
+>scale gmin
+
+-- after switch angel 138
+>lead
+>lead:vel
+>hat:2
+>bpm 138
+>scale amin
+>kick 9...9...9...9...
+>clap ....8.......8...
+>ohat ..6...6...6...6.
+>hat 2323232323232323
+>bass = voice 2 ch 1 gate 110
+>bass .0.0.0.0.5.5.5.5.2.2.2.2.6.6.6.6 /2
+>bass:oct <2 1>...............
+>pad = voice 3 ch 3 gate 1700
+>pad <[2,4,7] [2,5,7] [2,4,6] [1,3,6]> /16
+>chop = cc 11 ch 3
+>chop 9090990909909090
+>arp = voice 4 ch 4 gate 80
+>arp 024742
+>arp:oct 4..5.
+build
+>mute kick
+>rise = cc 74 ch 4
+>rise 1223344556677889 /4 !1
+>snare <[3...4...5...5...] [4.4.5.5.6.6.6.6.] [5566667777888899] [66667777888888889999999999999999]> /16 !4
+>route crash snare:end
+>kick:2 9...9...9...9... !255
+>route kick:2 snare:end
+
+-- after yaxu 133
+>kick:2
+>rise
+>chop
+>crash
+>clap
+>ohat
+>pad
+>arp:oct
+>bass:oct
+>bpm 133
+>scale cpent
+>kick 9..6..9..6..8...
+>snare ....9.......<9 [99]>...
+>hat 5.3.4.3
+>rim 3.4..
+>tom ..5...4..
+>bass = voice 2 ch 1 gate 160
+>bass 0..3..5
+>arp = voice 5 ch 4 gate 70
+>arp 0247<9 5>
+>hat <5 <. [53]>>3.4.3%50.
+>kick <[9..6..9..6..8...] [9.6.9...9..6.8..]> /16
+
+-- after kindohm 170
+>rim
+>tom
+>bpm 170
+>scale c#phr
+>kick 9..9.....9.9%50..
+>snare ....9..[99]...9.[9999]%40
+>hat x%70x%40x%90x%30 *2
+>bass = voice 1 ch 1 gate 90
+>bass 0..0....1%50..0..
+>arp = voice 4 ch 4 gate 40
+>arp <0 1 5 7>%60... *3
+>kick <[9..9.....9.9%50..] [9.99....9.9..9%30]> /14
+>solo kick snare
+>mute
+
+-- after olivia jack 124
+>arp
+>bpm 124
+>scale dmin
+>kick 9...9...9...9...
+>snare ....9.......9...
+>hat ..3...3...3...3.
+>bass = voice 2 ch 1 gate 300
+>bass 0_______7___5___ /2
+>echo 8
+>disc 9
+>route disc kick
+>move u
+>fold 9
+>turn <2 4 6 8>
+>spin 3
+>route spin snare
+>edge 5
+>route edge hat
+>noise 1
+out
+>noise
+>edge
+>spin
+>turn
+>fold
+>move
+>disc
+>echo
+>bass
+>hat
+>snare
+>kick
+>stop

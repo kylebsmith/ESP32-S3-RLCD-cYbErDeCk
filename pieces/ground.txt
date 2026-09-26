@@ -1,0 +1,81 @@
+GROUND
+
+-- house 122
+>bpm 122
+>scale fmin
+>swing 56
+>kick 9...8...9...8...
+>clap ....8.......8..3
+>ohat ..6...6...6...6.
+>hat .3.4.3.4.3.4.3.4%70
+>play
+>bass = voice 2 ch 1 gate 180
+>bass 0__.0..70__..64.
+>pad = voice 3 ch 3 gate 1900
+>pad <[2,4,6,8][3,5,7,9]> /16
+>cut 2345678987654321 /4
+>lead = voice 4 ch 2 gate 120
+>lead ......4_6_<7 9>_....
+
+-- lofi 84
+>clap
+>ohat
+>arp
+>bpm 84
+>scale ebmaj
+>swing 62
+>kick 9......7..9.....
+>snare ....9......39...
+>hat 4.2.4.224.2.4.2.
+>cut 3 /32
+>bass 3_.52_.41_.30__. /4
+>pad = voice 3 ch 3 gate 700
+>pad <[3,5,7,9] [2,4,6,8] [1,3,5,7] [0,2,4,6]>___ /4
+>lead = voice 3 ch 2 gate 240
+>lead ........9_8_7_<6 5>_
+
+-- techno 130
+>clap
+>lead
+>pad
+>bpm 130
+>scale aphr
+>swing 50
+>kick 9...9...9...9...
+>snare ....6.......6...
+>ohat ..7...7...7...7.
+>hat 3535353535353535
+>bass = voice 1 ch 1 gate 70
+>bass .000.000.000.000
+>arp = voice 4 ch 4 gate 90
+>arp 0.0..1.0..5.
+>cut 234567876543 /4
+
+-- liquid 174
+>clap
+>arp
+>bpm 174
+>scale dmin
+>swing 50
+>kick 9.......<. 9>.9.....
+>snare ....9..3%60....9..2%50
+>hat 4323432343234323
+>ohat ..............6.
+>bass = voice 2 ch 1 gate 400
+>bass 0___5___3___4___ /4
+>pad = voice 3 ch 3 gate 300
+>pad <[2,4,6,8] [2,4,5,7] [2,4,5,7] [1,3,4,6]>___ /4
+>cut 6 /32
+>lead = voice 4 ch 2 gate 300
+>lead 7___8___9_8_7___ /4
+
+-- out
+>lead
+>pad
+>hat
+>ohat
+>snare
+>kick
+>cut
+>bass
+>stop
