@@ -7,7 +7,7 @@ a line at a time — the order of the lines is the arrangement.
 |---|---|---|
 | `ground` | one | Four grooves done properly: house, lofi, techno, liquid drum and bass. Steps, velocity, ties, chords, rolls, odds, alternation, a controller, swing. |
 | `lift` | two | Five sketches after live coders — DJ_Dave, Switch Angel, Yaxu, Kindohm, Olivia Jack. Instances, parts, a four-bar build in one line, a cue that drops the kick on the downbeat, a gate on a controller, polymeter that repeats after 315 bars, 7/8, pictures routed from drums. |
-| `orbitals` | three | The piece. One chord line that is never edited, under seven lights: phrygian night, minor, dorian, lydian day, an eclipse, dorian, night. The bass is the sun and never leaves D. A twelve-step arpeggio against the bar, and a planet whose x and y run at sixteen and twelve steps, so the orbit it draws is the polyrhythm. |
+| `orbitals` | three | The piece. One chord line that is never edited, under seven lights: phrygian night, minor, dorian, lydian day, an eclipse, dorian, night. The bass is the sun and never leaves D. A twelve-step arpeggio against the bar, and a planet whose x and y run at sixteen and twelve steps round a square sun that beats on the beat - echo smears it into a comet, and its path is the polyrhythm. |
 
 **What to plug in.** The boot names: a General MIDI drum kit on channel 10, bass
 on 1, lead on 2, pad on 3, arp on 4. `cut` is controller 74 on channel 1; the

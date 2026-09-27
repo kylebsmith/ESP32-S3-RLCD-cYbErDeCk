@@ -22,11 +22,10 @@ for the satellites to come
 >turn
 >spin
 >kick 5...4...5...4...
+>box 2...1...2...1...
 >disc 3
->route disc kick
->box 0
->box:x 9986531000135689
->box:y 578987521012
+>disc:x 8876532111235678
+>disc:y 568886531113
 >bass = voice 2 ch 1 gate 110
 >bass .000.000.000.000
 >hat ..3...3...3...4.
@@ -63,8 +62,7 @@ for the satellites to come
 >rim
 >fold
 >mute bass
->route disc
->disc 6
+>box 6
 >edge 1
 
 -- VI return
@@ -76,7 +74,7 @@ for the satellites to come
 >hat ..5...5...5...4.
 >mute
 >edge
->route disc kick
+>box 2...1...2...1...
 
 -- VII night
 >scale dphr
@@ -87,9 +85,9 @@ for the satellites to come
 >lead
 >arp
 >bass
+>disc:y
+>disc:x
 >disc
->box:y
->box:x
 >box
 >crash
 >flip
