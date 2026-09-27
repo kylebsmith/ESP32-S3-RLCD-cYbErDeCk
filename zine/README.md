@@ -4,11 +4,12 @@
 
 | file | what it is |
 |---|---|
-| `hello-print.pdf` | the sheet to print: US Letter, landscape, one side — fold and cut once |
-| `hello-pages.pdf` | the eight pages in reading order, for a screen |
+| `hello-booklet.pdf` | to print: US Letter, landscape, two pages a side — both sides, fold, staple |
+| `hello-pages.pdf` | the sixteen pages in reading order, half letter, for a screen |
 | `hello.txt` | the zine as a deck document, `hello`: thirty columns, and the headings are lines you can run |
 
-Everything is set in the deck's own two faces — the 12×24 it reads in and the 6×12
+One idea to a page, in one narrow column — thirty characters, the deck's own
+line — on a page that is mostly paper. Everything is set in the deck's own two faces — the 12×24 it reads in and the 6×12
 it fits sixty columns with — and its own tiles (codes 128–155: nine tones,
 sparkles, blocks, arcs). **Every picture was drawn by the deck's own picture
 engine**: `tools/zine_art.c` links `firmware/components/viz/viz.c`, marks
@@ -20,23 +21,17 @@ and under it is what the deck says to that line, quoted from
 `firmware/components/cmd/cmd.c`: `what? try: help`. The back cover is `>help`, the
 one title it knows. The deck's refusals on pages 4 and 5 are quoted from the
 firmware too (`seq_pattern.h`, `lane_name.h`, `builtins.c`), not paraphrased.
-Page numbers are steps: page three of eight is `..x.....`.
+Page numbers are steps: sixteen pages are one bar.
 
 ## Print it
 
-```
- top row, printed upside down:   5 | 4 | 3 | 2
- bottom row:                     6 | 7 | 8 | 1
-```
-
-Print `hello-print.pdf` at 100 % on one side. Fold it in half along the long
-edge and unfold; fold it into eighths; then, folded in half across the short
-edge, cut along the solid line — the middle two panels only. Open it, fold it
-lengthwise with the print outside, push the ends together so the cut opens,
-and fold it closed with the cover outermost. The layout is the standard
-one-sheet, one-cut mini zine (Wikibooks, *Zine Making/Putting pages together*,
-"An 8-sided zine from 1 sheet with 1 cut"; Princeton University Library,
-*Single-Sheet Mini Zine – 8 pp.* template).
+Sixteen half-letter pages (5.5 × 8.5 in), one bar: the folio at the foot of
+each page is its step, so page five is `....x...........`. Print
+`hello-booklet.pdf` on both sides of four US Letter sheets at 100 %, flipping
+on the **short** edge. Stack the sheets in order, fold them in half together,
+and staple twice along the fold. The sides pair pages the usual saddle-stitch
+way — 16|1, 2|15, 14|3, 4|13, 12|5, 6|11, 10|7, 8|9 — so the fold reads
+straight through.
 
 ## Build it
 

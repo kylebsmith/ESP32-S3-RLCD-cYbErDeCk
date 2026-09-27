@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """zine.py ART_DIR OUT_DIR - set the hello zine in the deck's own faces.
 
-The zine is eight pages of a one-sheet mini zine: 2.75 x 4.25 in at 300 dpi,
-one bit deep, like the panel. Body text is the deck's 12x24 face at twice its
-size - thirty columns, the chunky screen's line length - and notes are its 6x12
-face, sixty columns, the dense screen's. The pictures are the deck's own: cells
-drawn by firmware/components/viz/viz.c through tools/zine_art.c, set in the
-same tiles the panel uses. Nothing here is a typeface from anywhere else.
+Sixteen pages, half letter (5.5 x 8.5 in) at 300 dpi, one bit deep, like the
+panel. Body text is the deck's 12x24 face at twice its size - thirty columns,
+the chunky screen's line length, as one narrow column on a wide page - and
+notes are its 6x12 face, sixty columns, the dense screen's. The pictures are
+the deck's own: cells drawn by firmware/components/viz/viz.c through
+tools/zine_art.c, set in the same tiles the panel uses. Nothing here is a
+typeface from anywhere else.
 
-Writes OUT_DIR/hello-pages.pdf (reading order), OUT_DIR/hello-print.pdf (the
-imposed sheet, US Letter landscape, fold and cut) and a PNG per page.
+Writes OUT_DIR/hello-pages.pdf (reading order), OUT_DIR/hello-booklet.pdf
+(US Letter landscape, two pages a side: print both sides, flip on the short
+edge, fold, staple) and a PNG per page.
 """
 import os, re, sys
 from PIL import Image, ImageDraw
@@ -18,8 +20,9 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BIG_SRC = os.path.join(REPO, 'firmware/components/textgrid/font12x24.c')
 SMALL_SRC = os.path.join(REPO, 'firmware/components/textgrid/font6x12.c')
 
-W, H = 825, 1275            # a panel: 2.75 x 4.25 in at 300 dpi
-M = 40                      # the margin, flush left
+W, H = 1650, 2550           # a page: 5.5 x 8.5 in at 300 dpi
+M = 200                     # the left margin: the column starts here
+T = 250                     # the top margin
 INK, PAPER = 0, 1
 
 
@@ -136,11 +139,10 @@ class Page:
         mask = r.point(lambda v: 255 if v == 0 else 0).convert('1')
         self.im.paste(0, (x, y), mask)
 
-    def marker(self, n):
-        """The page as a step: page three of eight is ..x....."""
-        steps = ''.join('x' if i == n - 1 else '.' for i in range(8))
-        self.text(M, H - M - 24, steps, SMALL, 2)
-        self.text(W - M - 12 * 3, H - M - 24, f'{n}/8', SMALL, 2)
+    def marker(self, n, total=16):
+        """The page as a step: page five of sixteen is ....x..........."""
+        steps = ''.join('x' if i == n - 1 else '.' for i in range(total))
+        self.text(M, H - 190, steps, SMALL, 2)
 
 
 def halftone(X, Y):
@@ -167,35 +169,36 @@ def build(art, out):
     for i, fn in enumerate(PAGES, 1):
         p = Page()
         fn(p, art)
-        p.marker(i)
+        if 1 < i:
+            p.marker(i, len(PAGES))
         pages.append(p.im)
-        p.im.save(os.path.join(out, f'hello-{i}.png'), dpi=(300, 300))
+        p.im.save(os.path.join(out, f'hello-{i:02d}.png'), dpi=(300, 300))
     pages[0].save(os.path.join(out, 'hello-pages.pdf'), save_all=True,
                   append_images=pages[1:], resolution=300)
     return impose(pages, out)
 
 
 def impose(pages, out):
-    """One US Letter sheet, landscape: four panels by two, the top row turned
-    upside down, so one fold, one cut and one more fold make the booklet."""
-    sheet = Image.new('1', (3300, 2550), PAPER)
-    # see zine_pages.IMPOSITION for the order and its source
-    from zine_pages import IMPOSITION
-    for row, panels in enumerate(IMPOSITION):
-        for col, (page, flip) in enumerate(panels):
-            im = pages[page - 1]
-            if flip:
-                im = im.rotate(180)
-            sheet.paste(im, (col * W, row * H))
-    d = ImageDraw.Draw(sheet)
-    for col in range(1, 4):                                   # fold lines, dotted
-        for y in range(0, 2550, 24):
-            d.line([(col * W, y), (col * W, y + 8)], fill=0)
-    for x in range(0, 3300, 24):
-        d.line([(x, H), (x + 8, H)], fill=0)
-    d.line([(W, H), (3 * W, H)], fill=0, width=3)             # the one cut
-    sheet.save(os.path.join(out, 'hello-print.pdf'), resolution=300)
-    return sheet
+    """A saddle-stitched booklet: US Letter landscape, two pages a side. For
+    sixteen pages the sides are 16|1, 2|15, 14|3, 4|13, 12|5, 6|11, 10|7,
+    8|9 - print both sides flipping on the short edge, stack in order, fold
+    and staple at the fold."""
+    n = len(pages)
+    assert n % 4 == 0, 'a booklet is a multiple of four pages'
+    sides = []
+    lo, hi = 1, n
+    while lo < hi:
+        sides.append((hi, lo)); sides.append((lo + 1, hi - 1))
+        lo += 2; hi -= 2
+    sheets = []
+    for left, right in sides:
+        sheet = Image.new('1', (2 * W, H), PAPER)
+        sheet.paste(pages[left - 1], (0, 0))
+        sheet.paste(pages[right - 1], (W, 0))
+        sheets.append(sheet)
+    sheets[0].save(os.path.join(out, 'hello-booklet.pdf'), save_all=True,
+                   append_images=sheets[1:], resolution=300)
+    return sheets
 
 
 if __name__ == '__main__':
