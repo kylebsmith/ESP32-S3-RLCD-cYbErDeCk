@@ -156,6 +156,40 @@ int main(int argc, char **argv)
     }
     save("smoke", 0);
 
+    /* THE SIXTEEN, one specimen each, for docs/CMF.md: a field alone, or an
+     * operator doing its one thing to a field - the lines are in the name. */
+    fresh(); mark("disc", 8, 0); step(); save("spec-disc", 0);
+    fresh(); mark("box", 8, 0); step(); save("spec-box", 0);
+    fresh(); mark("turn", 9, 'u'); step(); save("spec-turn", 0);
+    fresh(); mark("ramp", 9, 'r'); step(); save("spec-ramp", 0);
+    fresh(); mark("grid", 5, 0); step(); save("spec-grid", 0);
+    fresh(); mark("noise", 3, 0); step(); save("spec-noise", 0);
+    fresh(); mark("disc", 9, 0); mark("mask", 7, 0); step(); save("spec-mask", 0);
+    fresh(); mark("disc", 8, 0); mark("edge", 1, 0); step(); save("spec-edge", 0);
+    fresh();
+    for (int s = 0; s < 8; s++) {                    /* >echo 8, a disc moving */
+        mark("echo", 8, 0); at("disc", 'x', 1 + s); mark("disc", 3, 0); step();
+    }
+    save("spec-echo", 0);
+    fresh();
+    for (int s = 0; s < 10; s++) {                   /* >move u under echo */
+        mark("echo", 9, 0); mark("move", 9, 'u'); mark("noise", 1, 0); step();
+    }
+    save("spec-move", 0);
+    fresh();
+    for (int s = 0; s < 12; s++) {                   /* >spin <0 3 6 9> on a turn */
+        const int spin[4] = { 0, 3, 6, 9 };
+        mark("echo", 8, 0); mark("turn", 2, 0); mark("spin", spin[s % 4], 0); step();
+    }
+    save("spec-spin", 0);
+    /* warp bends the history, before anything draws: a ramp, then echo+warp */
+    fresh(); mark("ramp", 9, 'd'); step();
+    mark("echo", 9, 0); mark("warp", 9, 'd'); step(); save("spec-warp", 0);
+    fresh(); mark("noise", 1, 0); mark("grow", 9, 0); step(); save("spec-grow", 0);
+    fresh(); mark("box", 8, 0); mark("thin", 9, 0); step(); save("spec-thin", 0);
+    fresh(); mark("disc", 6, 0); mark("flip", 9, 0); step(); save("spec-flip", 0);
+    fresh(); mark("turn", 4, 'l'); mark("fold", 9, 0); step(); save("spec-fold", 0);
+
     printf("scenes written to %s\n", s_dir);
     return 0;
 }

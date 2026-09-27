@@ -300,6 +300,7 @@ counted among the audited rows.
 | **[CASE.md](docs/CASE.md)** | the carry case: how it guides, holds and prints |
 | **[CONCRETE.md](docs/CONCRETE.md)** | the cast concrete jacket, its mould, and the mix |
 | **[HANDOFF.md](HANDOFF.md)** | briefing for a session with the hardware in front of it |
+| **[CMF.md](docs/CMF.md)** | colour, material, finish: the object, the panel, both faces and every glyph, the pictures, and each decision |
 | **[zine/](zine/README.md)** | *hello*, zine #0: getting started, eight pages set in the deck's own faces, to print, fold and hand on |
 | **[SATELLITES.md](docs/SATELLITES.md)** | the satellites: the six-pin magnetic cable, the CAN bus and the first two nodes, to build from |
 | **[OS.md](docs/OS.md)** | the firmware design: what it runs, why, and what it deliberately will not do |
