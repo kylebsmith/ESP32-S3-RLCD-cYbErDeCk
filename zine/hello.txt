@@ -1,0 +1,69 @@
+HELLO  zine #0
+for a box that plays text.
+the headings are lines too:
+run one. the deck answers.
+
+>what
+a keyboard, a screen that
+needs daylight, a clock.
+a line is a lane. lanes
+play: drums, synths,
+filters, pictures.
+no mouse. no menu. no mode.
+
+>hello
+>kick 9...8...9...8...
+>play
+ctrl+enter runs a line.
+enter makes one.
+the same line again: quiet.
+again: back.
+it sends midi, not sound.
+usb on   to a computer
+din 17   to a synth
+drums 10 bass 1 lead 2
+pad 3 arp 4
+
+>grammar
+x hit  . rest  0-9 how much
+_ hold   [xx] two in one
+[0,4,7]  all at once
+<a b>    one each time
+x%30     30 in 100
+/2 *2    this lane's speed
+!4       four, then end
+
+>names
+>conga = note 63
+>conga x..x..x.
+>route cut kick
+>conga
+a lane that ends can start
+another: an arrangement is
+endings.
+
+>pictures
+>echo 8
+>disc 8
+>edge 1
+a ring: a disc through an
+edge.
+>edge
+>disc
+>echo
+
+>room
+lovelace 1843. mathews.
+riley. reich. xenakis.
+spiegel. obarski. eno.
+mccartney. toplap.
+toussaint. aaron. mclean.
+collins. jack. roos.
+and you.
+
+on this deck: ground, lift,
+orbitals. open one. run it
+top to bottom.
+>kick
+>cut
+>stop
