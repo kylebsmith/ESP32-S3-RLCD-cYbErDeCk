@@ -136,6 +136,15 @@ pixel cell.
 *Left: the engine's own `disc 8`. Middle and right: a mock-up in Python, not the
 engine.*
 
+> **Corrected 2026-09-28.** The paragraph below mixed the two faces. A 60 × 24 frame
+> exists only in the 6 × 12 face (360 × 288 pixels), where 2 × 4 blocks are 3 × 3
+> pixels; in the default 12 × 24 face the editor's picture pane is **28 × 4 cells** (at
+> most 28 × 5), where 2 × 4 blocks of 6 × 6 give 56 × 16. Mocking both on the engine's own
+> frames showed the larger fact: in the default face a disc is a rectangle, because
+> the picture's resolution is tied to the text's. The proposal that replaces this
+> section — square **4 × 4 dots**, independent of the text — is in
+> [wiki/pictures-and-type.md](wiki/pictures-and-type.md).
+
 **Sub-cell blocks.** Divide each 12 × 24 cell into 2 × 4 blocks of 6 × 6 pixels —
 square — and the 60 × 24 frame becomes **120 × 96 addressable blocks**, eight bits a
 cell, 256 glyphs. The precedents are old and good: teletext's 2 × 3 mosaics, and the

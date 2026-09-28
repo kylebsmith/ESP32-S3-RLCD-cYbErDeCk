@@ -1,6 +1,6 @@
 """The zine's references, in order; [@key] in a page resolves to its number.
 
-Short forms, set in the zine's lower case, because eight pages cannot hold a
+Short forms, set in the zine's lower case, because sixteen pages cannot hold a
 bibliography; every one is given in full - authors, pages, DOI or stable URL,
 and what was checked - in zine/README.md. Each was verified against a primary
 or scholarly source on 2026-09-27; nothing here is from memory.

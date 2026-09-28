@@ -294,6 +294,7 @@ counted among the audited rows.
 
 | | |
 |---|---|
+| **[wiki/](docs/wiki/README.md)** | the deck, top to bottom: every verb, mark, picture, key and output, how each combines with the rest, what the code does that the words do not, and the next steps |
 | **[DATUMS.md](docs/DATUMS.md)** | every dimension, its provenance, forty-nine recorded corrections, nine open items |
 | **[HARDWARE.md](docs/HARDWARE.md)** | the board itself: panel, controller, pin map, USB and power, all traced to vendor sources |
 | **[SUBSTRATE.md](docs/SUBSTRATE.md)** | the conceptual core: one data structure, one noun, three verbs |
@@ -301,7 +302,8 @@ counted among the audited rows.
 | **[CONCRETE.md](docs/CONCRETE.md)** | the cast concrete jacket, its mould, and the mix |
 | **[HANDOFF.md](HANDOFF.md)** | briefing for a session with the hardware in front of it |
 | **[CMF.md](docs/CMF.md)** | colour, material, finish: the object, the panel, both faces and every glyph, the pictures, and each decision |
-| **[zine/](zine/README.md)** | *hello*, zine #0: getting started, eight pages set in the deck's own faces, to print, fold and hand on |
+| **[zine/](zine/README.md)** | *hello*, zine #0: getting started, sixteen pages set in the deck's own faces, to print, fold and hand on |
+| **[GRAPHICS.md](docs/GRAPHICS.md)** | drawing on this panel: what it costs, what it must never cost, and where the deck sits among live-coding systems |
 | **[SATELLITES.md](docs/SATELLITES.md)** | the satellites: the six-pin magnetic cable, the CAN bus and the first two nodes, to build from |
 | **[OS.md](docs/OS.md)** | the firmware design: what it runs, why, and what it deliberately will not do |
 | **[THESIS.md](docs/THESIS.md)** | the running note for the paper: each decision made for legibility, as it was made |
