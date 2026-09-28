@@ -14,8 +14,8 @@ and then grows the ecosystem.
 
 ## The five, if only five
 
-1. **Flash the swing fix, and stop the flash writes that happen while playing** (§1.0–1.2),
-   each measured on the deck before and after.
+1. **Stop the flash writes that happen while playing** (§1.1–1.2), measured on the deck
+   before and after — as the swing fix (§1.0) now has been.
 2. **Put the deck in front of five to eight people** (§2) before adding anything.
 3. **Tab completion, and the two open editor decisions** (§3) — hand speed for
    beginners, no new verbs.
@@ -34,7 +34,7 @@ The clock's record is the instrument's foundation: tick standard deviation 4–5
 is flash, blocking I/O on the output task, and code the tick fetches from flash — and,
 as it turned out, one arithmetic mistake.
 
-### 1.0 Swing lost notes in the finest rolls — fixed in the source, not yet on the deck
+### 1.0 Swing lost notes in the finest rolls — fixed, and measured on the deck
 
 The swing change of 2026-09-26 squeezes the second sixteenth of each eighth to 24 − s
 ticks. A lane with more slots in a sixteenth than that put two on one tick, and only
@@ -49,9 +49,17 @@ finest lane has 4 slots a sixteenth.
 - **The check** (`tools/test_seq_pattern.c` §14 f–g) walks every subdivision the clock
   accepts at every swing from 50 to 75 and fails on the old header. All nineteen host
   checks pass with the fix.
-- **Still to do, on the deck:** the before-number, taken on the firmware the deck runs
-  now — `[xxxx] *4` at `>swing 73` into `>send mon on`, counting notes over eight bars —
-  then flash, then the same count.
+- **Measured on the deck, 2026-09-28**, with `>cut [9999999999999999] !16` — sixteen
+  passes of sixteen controller messages — at 60 bpm into `>send mon on`, counting what
+  arrived:
+
+  | | old firmware (`67f6439`) | fixed (`2c16aa9`) | predicted on the host |
+  |---|---|---|---|
+  | swing 67 % | 256 of 256 | — | 256 |
+  | swing 75 % | **224 of 256** | **256 of 256** | 224, then 256 |
+
+  A plain sixteenth lane at swing 67 % still alternates 333 ms and 167 ms at 60 bpm —
+  the same 8-tick offbeat as before the fix. Nothing was dropped from the queue.
 
 ### 1.1 The vitals record is written while playing — in the default transport
 

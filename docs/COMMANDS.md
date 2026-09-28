@@ -259,7 +259,10 @@ thirteen or more at 75 %, a ratchet like `[xxxx] *4` — keeps only the swing it
 has room for, and no slot is ever lost. Until 2026-09-28 such a lane put two
 slots on one tick and one of them never sounded: `[xxxx] *4` lost 48 of 512 at
 73 %. Item 14 f–g fails on that arithmetic. Every lane with twelve or fewer
-slots a sixteenth swings exactly as before.
+slots a sixteenth swings exactly as before. Measured on the deck: `>cut
+[9999999999999999] !16` at swing 75 sent 224 of 256 messages on the old
+firmware and 256 of 256 on the fixed one; a plain lane at swing 67 still
+alternates 333 and 167 ms at 60 bpm.
 
 Measured on the deck at 124 bpm, as inter-onset intervals in ms:
 
