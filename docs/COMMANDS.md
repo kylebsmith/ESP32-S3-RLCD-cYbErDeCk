@@ -253,6 +253,14 @@ them eighths, which then swung twice as hard as anything else could.
 `seq_pattern.h`; `tools/test_seq_pattern.c` item 14 fails 48 ways on the old
 arithmetic.
 
+**A lane swings only as far as its slots allow.** Swing squeezes the offbeat
+sixteenth to 24 − s ticks, so a lane with more slots than that in a sixteenth —
+thirteen or more at 75 %, a ratchet like `[xxxx] *4` — keeps only the swing it
+has room for, and no slot is ever lost. Until 2026-09-28 such a lane put two
+slots on one tick and one of them never sounded: `[xxxx] *4` lost 48 of 512 at
+73 %. Item 14 f–g fails on that arithmetic. Every lane with twelve or fewer
+slots a sixteenth swings exactly as before.
+
 Measured on the deck at 124 bpm, as inter-onset intervals in ms:
 
 | `>swing` | Intervals | Offbeat sits at |

@@ -729,8 +729,17 @@ static inline uint64_t seq_pattern_swung(uint64_t g, uint64_t Q, uint64_t D,
                                          int swing_ticks)
 {
     const uint64_t T = SEQ_PATTERN_TICKS_PER_STEP;          /* a sixteenth */
-    const uint64_t s = (uint64_t)(swing_ticks < 0 ? 0
-                     : swing_ticks >= (int)T ? (int)T - 1 : swing_ticks);
+    uint64_t s = (uint64_t)(swing_ticks < 0 ? 0
+               : swing_ticks >= (int)T ? (int)T - 1 : swing_ticks);
+    /* A LANE SWINGS ONLY AS FAR AS ITS SLOTS ALLOW. The squeezed sixteenth is
+     * T - s ticks long; a lane with `fit` slots in a sixteenth needs at least
+     * that many ticks there, or two slots round onto one tick and only one is
+     * ever heard - which the too-fine rule promises cannot happen. So the
+     * finest lanes (thirteen or more slots a sixteenth at 75 %) give up the
+     * swing they cannot hold; every other lane is exactly as it was. */
+    const uint64_t fit = (T * D + Q - 1) / Q;               /* rounded up */
+    if (fit >= T)          { s = 0; }
+    else if (s > T - fit)  { s = T - fit; }
     const uint64_t at = g * Q;
     const uint64_t e = at / (2 * T * D);                    /* which eighth */
     const uint64_t r = at - e * 2 * T * D;                  /* into it, over D */

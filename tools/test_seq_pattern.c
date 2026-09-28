@@ -579,6 +579,58 @@ int main(void)
                 printf("[ ok ] no swing: every slot on the tick it always had\n");
             }
         }
+        /* f) ...and where a slot is ONE tick, too - every subdivision the clock
+         *    accepts. (d) stopped at two ticks, and that is where swing lost
+         *    notes: it squeezes the second sixteenth of an eighth to 24 - s
+         *    ticks, so a sixteenth holding more slots than that put two on one
+         *    tick and only one sounded - [xxxx] *4 lost 48 of 512 at swing 73,
+         *    a 24-way split lost them from 53. The too-fine rule promises that
+         *    whatever compiles is heard. */
+        {
+            int bad = 0;
+            for (int pc = 50; pc <= 75 && !bad; pc++) {
+                const int sw = (pc * 2 * 24) / 100 - 24;
+                for (int div = 1; div <= 24 && !bad; div++)
+                for (int rn = 1; rn <= 8 && !bad; rn *= 2)
+                for (int rd = 1; rd <= 4 && !bad; rd *= 2) {
+                    if (div * rn > 24 * rd) { continue; }   /* too fine: refused */
+                    uint64_t want = 0;
+                    uint32_t last = 0;
+                    for (uint32_t t = 0; t < 4 * 96 * (uint32_t)rd && !bad; t++) {
+                        int s; uint32_t cy;
+                        if (!seq_pattern_slot_at(t, 64, div, rn, rd, sw, &s, &cy)) {
+                            continue;
+                        }
+                        const uint64_t g = (uint64_t)cy * 64 + (uint64_t)s;
+                        if (g != want || (want > 0 && t <= last)) {
+                            printf("[FAIL] swing %d div %d *%d/%d: slot %llu on "
+                                   "tick %u, wanted slot %llu - one never "
+                                   "sounds\n", pc, div, rn, rd,
+                                   (unsigned long long)g, (unsigned)t,
+                                   (unsigned long long)want);
+                            fails++;
+                            bad = 1;
+                        }
+                        want = g + 1;
+                        last = t;
+                    }
+                }
+            }
+            if (!bad) {
+                printf("[ ok ] swing 50-75: every slot heard, down to one tick\n");
+            }
+        }
+        /* g) The fine lanes give up only the swing they cannot hold: a lane
+         *    with room for the whole squeeze keeps all of it, and one with
+         *    sixteen slots a sixteenth - room for 8 ticks of swing, not 12 -
+         *    still moves its offbeat sixteenth by those 8. */
+        {
+            int s; uint32_t cy;
+            const int full = seq_pattern_slot_at(24 + 12, 64, 12, 1, 1, 12, &s, &cy);
+            eqi("twelve a sixteenth: the offbeat moves all 12 ticks", full && s == 12, 1);
+            const int part = seq_pattern_slot_at(24 + 8, 64, 16, 1, 1, 12, &s, &cy);
+            eqi("sixteen a sixteenth: the offbeat moves the 8 it can", part && s == 16, 1);
+        }
     }
 
     /* 15. THE PLAYHEAD MOVES AT THE LANE'S OWN SPEED.
