@@ -7,10 +7,13 @@
  * firmware/components/viz/viz.c, and once against a copy with square dots (the
  * proposal being mocked) - and sets both side by side.
  *
- *   mock_frames OUTDIR W H
+ *   mock_frames OUTDIR W H          one frame of each scene
+ *   mock_frames OUTDIR W H motion   every frame of the radar and the orbit, a
+ *                                   step at a time, as the panel shows them
  *
  * OUTDIR/<scene>-<W>x<H>.cells is 2 bytes (w, h) then w*h cells.
  */
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -81,8 +84,9 @@ static int save(const char *scene)
 
 int main(int argc, char **argv)
 {
-    if (argc != 4) {
-        fprintf(stderr, "usage: mock_frames OUTDIR W H\n");
+    const bool motion = argc == 5 && strcmp(argv[4], "motion") == 0;
+    if (argc != 4 && !motion) {
+        fprintf(stderr, "usage: mock_frames OUTDIR W H [motion]\n");
         return 2;
     }
     s_dir = argv[1];
@@ -93,6 +97,34 @@ int main(int argc, char **argv)
         return 2;
     }
     int bad = 0;
+
+    if (motion) {
+        /* The engine draws a frame when a lane fires and not between, so a frame
+         * a step is the whole of the motion: the radar, then the orbit. */
+        char name[32];
+        fresh();
+        for (int s = 0; s < 32; s++) {
+            static const int spin[4] = { 0, 3, 6, 9 };
+            mark("echo", 8, 0); mark("turn", 2, 0); mark("spin", spin[s % 4], 0);
+            step();
+            snprintf(name, sizeof name, "radar%02d", s);
+            bad |= save(name);
+        }
+        static const char xs[] = "8876532111235678", ys[] = "568886531113";
+        static const char sun[] = "2...1...2...1...";
+        fresh();
+        for (int s = 0; s < 48; s++) {
+            mark("echo", 8, 0);
+            if (sun[s % 16] != '.') { mark("box", sun[s % 16] - '0', 0); }
+            at("disc", 'x', xs[s % 16] - '0');
+            at("disc", 'y', ys[s % 12] - '0');
+            mark("disc", 3, 0);
+            step();
+            snprintf(name, sizeof name, "orbit%02d", s);
+            bad |= save(name);
+        }
+        return bad;
+    }
 
     fresh(); mark("disc", 8, 0); step(); bad |= save("disc");
     fresh(); mark("disc", 9, 0); mark("mask", 5, 0); step(); bad |= save("discmask");

@@ -200,6 +200,7 @@ rectangle. The proposal:
    24 in the default pane, 90 × 72 across the whole text area. A dot is one period of the
    tone matrix and exactly two framebuffer bytes, so banding is a 13 KB lookup kept in
    RAM. **Adopt on a number**: frame time on the deck, jitter unchanged, push unchanged.
+   The screen stays Bayer; three of our own wait for a look on the panel.
 2. **`stamp`** — the picture says what played: a routed stamp shows its source's name,
    at the source's strength.
 3. **The type overhaul**, decided by the reading test in [CMF.md](../CMF.md): errors per

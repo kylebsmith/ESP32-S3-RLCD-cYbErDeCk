@@ -139,6 +139,61 @@ the deck anything. Later, the same node pairs wirelessly — an RP2040 with an E
 companion on ESP-NOW, or a faster link — and joins the ensemble as a follower, as a second
 deck does.
 
+### The screen — what the greys are made of
+
+A screen is the order in which a dot's sixteen pixels ink as its grey rises. Each one is a
+table of sixteen numbers, or sixty-four, so every screen below costs exactly what Bayer
+costs, and the clock never sees any of them.
+
+![Bayer and five screens from print](../img/pictures-screens.png)
+
+**First try: the screens print used.** A dot that grows (halftone; poster is the same at
+twice the pitch), lines that thicken, the engraver's diagonals and hatching. The owner's
+verdict, 2026-09-28: **Bayer is the best by a large margin.** The numbers agree. Blur the
+dots and the greys the engine meant alike, as the eye does at arm's length, and measure
+the difference. Bayer's is the smallest; every print screen is 1.5 to 8.5 times further
+off.
+
+**Why Bayer wins.** In a 4 × 4 cell its order is the most even there is. At a quarter, a
+half and three quarters there is exactly one best pattern: a square grid, a checkerboard,
+the grid inverted. Bayer has all three. Anything else is less even somewhere.
+
+![Bayer and three of our own, at twice the panel's pixel](../img/pictures-own.png)
+
+**So ours keep what they can of Bayer and change one thing on purpose:**
+
+- **grain** — Bayer's quarter, half and three quarters, exactly. The greys between them
+  grow along rows, so a scan line shows only there.
+- **weave** — Bayer in every other dot, turned half a turn in the rest, like a
+  chessboard. The faintest grey comes out almost hexagonal, more even than Bayer's; the
+  rest weaves.
+- **wide** — Bayer on pixels two wide, as the C64 drew its colour modes.
+
+![The radar from ORBITALS, moving: Bayer and our three](../img/pictures-motion.gif)
+
+| screen | truth: distance from the intended greys, lower is truer | pixels changing alone: the radar | the orbit |
+|---|---|---|---|
+| **bayer** | **0.015** | 83.8 % | 56.7 % |
+| grain | 0.025 | 86.3 % | 57.2 % |
+| weave | 0.028 | 87.1 % | 57.3 % |
+| wide | 0.030 | 1.6 % | 9.0 % |
+| diagonal | 0.022 | 60.7 % | 44.3 % |
+| hatch | 0.040 | 9.2 % | 16.8 % |
+| halftone | 0.042 | 1.5 % | 6.6 % |
+| lines | 0.067 | 0.3 % | 2.5 % |
+| poster | 0.128 | 8.1 % | 13.3 % |
+
+*Measured on the engine's own frames by `tools/mock_pictures.py`. Truth is the RMS
+difference over four scenes, both blurred by σ = 1.2 pixels. A pixel changing alone is one
+that changes from one frame to the next with no changed pixel beside it; that is what
+sparkle is.*
+
+**Where this leaves it.** None of ours is as true as Bayer, and in a 4 × 4 cell none can
+be. What they buy is a signature. grain buys it most cheaply, at two-thirds more error;
+wide is the one that holds still in motion. **Bayer stays** until one of ours wins on the
+panel itself. These are the engine's frames drawn on a computer, and the reflective
+panel's slow pixels can only be judged on the deck.
+
 ## 3. Proposal B, tried and set aside — smoothing the cells
 
 ![Smoothing today's cells](../img/pictures-smoothing.png)
@@ -308,7 +363,7 @@ Pass 2 keeps n = 2.2 and draws **the punctuation the language lives on** by the 
 - the chevrons have round joins;
 - `%`, `( )`, `{ }`, `!`, `?`, `~`, `@` and `$` are drawn on the same curve.
 
-Then seven styles on that base, each one idea:
+Then seven styles on that base, each one idea. All seven were set aside with the pass:
 
 | style | what it does | where it belongs |
 |---|---|---|
@@ -321,9 +376,53 @@ Then seven styles on that base, each one idea:
 | **inline** | hollow strokes | titles at three times the size and up; a stroke needs six pixels to be hollow |
 
 None of it costs the deck anything to run: the deck keeps a bitmap, whatever drew it.
-Honest limits: this is a first draft of about seventy glyphs, not a finished face. The
-straight letters are still today's, and every style still has to pass the reading test on
-the panel.
+
+**Set aside, 2026-09-28.** The owner's verdict on pass 2: none of it good enough. Letters
+broken, blobs on the `>`, the `~` broken, the `f` broken in most styles, and most of it
+poorly designed. The programme assembled letters from pieces of curve that did not meet
+at the pixel. What replaced it is below.
+
+### The round face — laid by hand, and checked
+
+![Every glyph that changed, today beside round, then the language at the panel's size](../img/type-round.png)
+
+At 12 × 24 a face is made by hand, so this one is: `tools/type_round.py`.
+
+**What changed, and only that.** It starts from today's face and gives every bowl, arch
+and hook the same round corner, three steps where today's takes two. That corner is
+n = 2.2 sampled at the pixel:
+
+    today         round
+    ..######..    ...####...
+    .########.    .########.
+    ##......##    .##....##.
+                  ##......##
+
+- **Straight letters stay today's**, and so do today's proportions.
+- **Every terminal ends the same way**: one row past the curve's widest row, as in `c`.
+- **Dots are round beads**: `.` `,` `:` `;` `!` `?` `%`.
+- **`>` and `<` are three pixels a row**, the weight of a two-pixel stem on the diagonal.
+  Today's are four, which is heavier than every stem beside them.
+- **`~` turned half a turn is itself**, and falls as evenly as it rises.
+
+Four of today's faults are fixed on the way. `i` and `j` had their dots at different
+heights. `M`'s middle touched the rest only at pixel corners. `P`'s bowl had a notch that
+`B`, `D` and `R` did not. And `Q`'s tail crossed its counter, which at this size fills it.
+
+**Checked, every glyph.** `check()` refuses a glyph with:
+
+- a piece that does not join;
+- a pixel that touches the rest only at a corner;
+- a stray pixel or a spur;
+- a one-pixel neck;
+- ink in the two gap columns.
+
+A glyph that fails is boxed on the proof, and the tool exits non-zero. The check caught a
+spur on `a` and today's `M` while this was drawn. All 48 changed glyphs pass.
+
+**Honest limits.** `@`, `&` and `$` keep today's two-step corners. `m`'s arches are too
+narrow for three steps, so only its outer shoulder steps in. None of it has been on the
+panel yet, and the reading test still decides.
 
 ## 7. Around the table — what the best of the others would bring
 
@@ -365,13 +464,17 @@ system's own documentation or its designers' papers, 2026-09-28 (the sources are
 
 - **4 × 4 dots, banded** — adopted once the clock's jitter with it on matches today's.
 - **The zero keeps its dot, full width.**
-- **The face's curve is n = 2.2**, drawn by the programme.
+- **The face's curve is n = 2.2.** It is laid by hand to that curve and checked (§6),
+  because the programme's drafts broke letters.
 - **The view node gets frame interpolation as a switch**, and later a wireless link.
 
 **Still open:**
 
 1. **`stamp`'s text** — the name of what fired it (recommended), or the line's pattern.
 2. **The twelve unused tiles** — become symbols, or go.
-3. **Which style for which role** — round for code; oblique for comments; stencil, slab
-   or inline for titles and the view node.
+3. **The round face** — adopt it as the deck's face (recommended), once it passes the
+   reading test on the panel.
 4. **Section lines at twice the size** — yes or no.
+5. **The screen** — Bayer, the owner's pick, unless grain, weave or wide wins on the
+   panel. Whichever it is, it is one setting for the whole deck, not a word in the
+   language.

@@ -78,6 +78,10 @@ Most include the **shipping** header, or `#include` the shipping `.c`, rather th
 | cmf.py | Draws the `docs/img/cmf-*.png` specimens (glyphs, tiles, metrics, pictures, marks, corner) from sources; needs Pillow | manual |
 | zine.py / zine_pages.py / zine_refs.py | Sets zine #0 (16 pages, `hello-pages.pdf`, `hello-booklet.pdf`, PNGs) in the deck's faces / page layouts / numbered refs; needs Pillow | manual (`zine/README.md:39-43`) |
 | zine_art.c | Links viz.c, plays scripted scenes, writes `.cells` frames for zine.py and cmf.py | manual compile |
+| mock_pictures.py / mock_frames.c | The picture mock-ups in `wiki/pictures-and-type.md`, drawn by viz.c and by a square-dot copy of it: dots, banding, the screens, the motion GIF, and each screen's truth and sparkle; needs a C compiler, Pillow and numpy | manual |
+| mock_type.py | The type proposal sheet, from the deck's own faces | manual |
+| type_programme.py | Letters drawn from the superellipse rule: two drafts, set aside for breaking letters | manual |
+| type_round.py | The round face, laid by hand, and `check()`: pieces, corner contacts, strays, spurs, necks, gap ink; exits non-zero on any failure | manual |
 | requirements.txt | CI's Python deps: trimesh numpy scipy shapely ezdxf matplotlib + networkx rtree manifold3d | CI |
 | corpus/features.txt | Hand-written Strudel patterns, by feature | input to gen.mjs |
 | corpus/gen.mjs | Node script: runs `@strudel/core`/`mini` 1.2.6 as an oracle and writes the corpus | manual |
@@ -87,7 +91,7 @@ Most include the **shipping** header, or `#include` the shipping `.c`, rather th
 **Not covered by CI:**
 - the firmware build;
 - `seq.c` itself: the realtime core needs esp_timer/FreeRTOS, so only its pure headers are tested (test_viz.c:11-15);
-- `check_golden.py`, `render.sh`, cmf/zine/preview/relay tools, `gen.mjs`;
+- `check_golden.py`, `render.sh`, cmf/zine/preview/relay tools, the mock-up and type tools, `gen.mjs`;
 - the marker grep does not look in `firmware/`.
 
 ## 2. Documents and the other directories
