@@ -236,8 +236,10 @@ measured are in [VIEW.md](../VIEW.md).
 **On the node, as built.** All six run at 320 × 240 in eight bits, doubled to 640 × 480,
 from one frame a step; the images above are the mock-ups they were built from, and the
 node follows them rather than matching them pixel for pixel. The poster's lines ride in
-a control frame ahead of each picture. Measured: 2,097 frames and 0 refused through all
-six modes, driven from a computer. **Unverified:** the deck driving them end to end, and
+a control frame ahead of each picture. The deck's own glyphs — the sparkles, the small
+disc, the arcs — are drawn as themselves over the dots, in its compact face
+([VIEW.md](../VIEW.md)). Measured: 2,097 frames and 0 refused through all six modes,
+driven from a computer. **Unverified:** the deck driving them end to end, and
 how any of it looks - the node reports frames, not pixels, and there is no camera here.
 Interpolation between steps is still to build.
 

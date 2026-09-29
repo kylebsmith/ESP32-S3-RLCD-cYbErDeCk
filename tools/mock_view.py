@@ -4,12 +4,13 @@
 A MOCK-UP. The deck keeps Bayer and sends the view node what it sends today: a
 frame a step, and the tick it belongs to. Everything below happens on the node.
 
-Every frame is drawn by the deck's picture engine - the square-dot copy of viz.c
-that tools/mock_pictures.py builds - playing the radar from ORBITALS at 80 x 60
-dots. Each mode uses only what an RP2040 on PicoDVI has: a 640 x 480 one-bit
-buffer, or a 320 x 240 eight-bit one with a palette; whole-number arithmetic;
-and, for feedback, the affine lookup its interpolators were built for. Each mode
-is a function of the frames and their ticks and of nothing else, so the same
+Every frame is drawn by the deck's own picture engine, viz.c as flashed, at the
+80 x 30 cells the deck sends, playing ORBITALS' night - the radar and >noise 1 -
+and each cell is two square dots, as on the node (view/deckview). The greys are
+the deck's dots; every cell the engine wrote as a glyph - the sparkles, the
+small disc - is drawn as itself on top, in the deck's 6 x 12 face, as the node
+draws it. Each mode uses only what an RP2040 on PicoDVI has, and each is a
+function of the frames and their ticks and of nothing else, so the same
 performance draws the same pictures every time.
 
     view-modes.png    the six modes, the same step of the radar in each
@@ -29,18 +30,49 @@ import type_round as T        # noqa: E402
 from zine import SMALL, Page  # noqa: E402
 
 W, H = 640, 480
-STEPS = 32                    # the radar, a sixteenth a step
+STEPS = 32                    # the night, a sixteenth a step
 STILL = 20                    # the step every still shows
 
 
 # ---------------------------------------------------------------- the deck's frames
 
-def frames(tmp, w, h):
-    exe = M.build(tmp, True)
-    d = os.path.join(tmp, f'm{w}x{h}')
+def frames(tmp, w, h, square=True, scene='radar'):
+    exe = M.build(tmp, square)
+    d = os.path.join(tmp, f'm{w}x{h}{"s" if square else "r"}')
     os.makedirs(d)
     subprocess.run([exe, d, str(w), str(h), 'motion'], check=True)
-    return [M.load(d, f'radar{k:02d}', w, h) for k in range(STEPS)]
+    return [M.load(d, f'{scene}{k:02d}', w, h) for k in range(STEPS)]
+
+
+def is_glyph(c):
+    """Drawn as itself on the node: a letter, or a tile past the nine tones."""
+    return (32 < c < 127) or (137 <= c <= 155)
+
+
+def dots(cells):
+    """The node's grid: each cell two square dots, one above the other; a glyph
+    cell is no grey in it, because the glyph is drawn on top."""
+    return [[128 if is_glyph(c) else c for c in row] for row in cells for _ in (0, 1)]
+
+
+def sprites(cells, scan=False):
+    """The glyph layer, 320 x 240: each glyph cell's 6 x 12 glyph from the deck's
+    compact face, centred on the cell - or, in scan, sitting on its row's line."""
+    out = np.zeros((240, 320), bool)
+    rows = len(cells)
+    for cy, row in enumerate(cells):
+        for cx, c in enumerate(row):
+            if not is_glyph(c):
+                continue
+            x0, y0 = cx * 4 + 2 - 3, cy * 8 + 4 - 6
+            if scan:
+                y0 = 44 + ((cy + 1) * (240 - 10 - 44)) // rows - 12
+            for r, bits in enumerate(SMALL.g[c]):
+                for k in range(6):
+                    X, Y = x0 + k, y0 + r
+                    if bits & (0x8000 >> k) and 0 <= X < 320 and 0 <= Y < 240:
+                        out[Y, X] = True
+    return out
 
 
 def bayer(g):
@@ -83,54 +115,57 @@ def rgb(mask, ink, paper):
 # ---------------------------------------------------------------- the modes
 
 def plain(fr):
-    """Today's view with the new dots: the deck's picture, light on black,
-    a panel pixel to 2 x 2."""
+    """The deck's picture, light on black: its greys as dots, its glyphs as
+    glyphs."""
     for g in fr:
-        yield rgb(up(bayer(g)), (236, 236, 228), (0, 0, 0))
+        yield rgb(up(bayer(dots(g)) | sprites(g)), (236, 236, 228), (0, 0, 0))
 
 
 def scan(fr):
     """Rutt and Etra's scan processor, 1972, and the pulsar plot Joy Division
-    put on a record sleeve, 1979: each row of the picture drawn as one line,
-    lifted by its greys, each line hiding what is behind it. One ink."""
-    xs = np.arange(W)
+    put on a record sleeve, 1979: each row of cells drawn as one line, lifted by
+    its greys, each line hiding what is behind it; the glyphs sit on the lines.
+    As the node draws it, at 320 x 240."""
+    top, bottom, lift, pad = 44, 240 - 10, 38, 16
+    span = 320 - 2 * pad
     for g in fr:
-        t = tones(g)
-        rows, cols = t.shape
-        pos = (xs + 0.5) / W * cols - 0.5
-        x0 = np.clip(np.floor(pos).astype(int), 0, cols - 1)
-        x1 = np.clip(x0 + 1, 0, cols - 1)
-        f = np.clip(pos - np.floor(pos), 0, 1)
-        img = np.zeros((H, W), bool)
-        top, bottom, lift, pad = 96, H - 28, 64, 48
-        gap = (bottom - top) / rows
-        for j in range(rows):
-            v = t[j, x0] * (1 - f) + t[j, x1] * f
-            y = np.round(top + (j + 1) * gap - lift * v).astype(int)
-            for x in range(pad, W - pad):
-                img[y[x] + 1:, x] = False                  # hide what is behind
-            for x in range(pad, W - pad - 1):
-                lo, hi = sorted((y[x], y[x + 1]))
+        t = np.array([[M.tone(c) for c in row] for row in dots(g)], float)
+        rows = len(g)
+        cols = t.shape[1]
+        img = np.zeros((240, 320), bool)
+        for k in range(rows):
+            row = t[2 * k]
+            base = top + ((k + 1) * (bottom - top)) // rows
+            ys = np.zeros(320, int)
+            for x in range(pad, 320 - pad):
+                pos = (((x - pad) * 2 + 1) * cols * 256) // (2 * span) - 128
+                pos = max(pos, 0)
+                u0, f = pos >> 8, pos & 255
+                if u0 >= cols - 1:
+                    u0, f = cols - 1, 0
+                u1 = min(u0 + 1, cols - 1)
+                tt = row[u0] * (256 - f) + row[u1] * f
+                ys[x] = base - int(lift * tt) // 2048
+            for x in range(pad, 320 - pad):
+                img[ys[x] + 1:base + 1, x] = False             # hide what is behind
+            for x in range(pad, 320 - pad - 1):
+                lo, hi = sorted((ys[x], ys[x + 1]))
                 img[lo:hi + 1, x] = True
-        yield rgb(img, (236, 236, 228), (0, 0, 0))
+        yield rgb(up(img | sprites(g, scan=True)), (236, 236, 228), (0, 0, 0))
 
 
 def phosphor(fr):
     """A green tube: what the beam lit keeps glowing and fades, about a beat to
     dark, and every other line of the screen is dimmer. The beam is the deck's
-    own picture."""
+    own picture; its sparkles flare at full glow and fade like everything else."""
     lut = np.zeros((256, 3), np.uint8)
     for i in range(256):
         v = i / 255
         lut[i] = (int(170 * v ** 2.6), int(255 * min(1, 1.08 * v ** 0.75)), int(120 * v ** 2.2))
     glow = np.zeros((240, 320))
     for g in fr:
-        glow = np.maximum(glow * 0.55, bayer(g) * 1.0)
-        soft = glow.copy()
-        soft[:, 1:] += 0.22 * glow[:, :-1]
-        soft[:, :-1] += 0.22 * glow[:, 1:]
-        img = lut[np.clip(soft * 255, 0, 255).astype(np.uint8)]
-        img = up(img)
+        glow = np.maximum(glow * 0.55, (bayer(dots(g)) | sprites(g)) * 1.0)
+        img = up(lut[np.clip(glow * 255, 0, 255).astype(np.uint8)])
         img[1::2] = (img[1::2] * 0.45).astype(np.uint8)
         yield img
 
@@ -140,12 +175,13 @@ def feedback(fr):
     worked: each frame is the last one, zoomed a little and turned about the
     centre, a little dimmer, with the new picture on top. The turn is a full
     circle every two bars; the zoom kicks on each beat. It feeds back the greys,
-    not the dots: turning a dither by a few degrees turns it to noise."""
+    not the dots - turning a dither by a few degrees turns it to noise - and the
+    glyphs at full white, so the stars are drawn into the tunnel."""
     lut = np.zeros((256, 3), np.uint8)
     for i in range(256):
         v = i / 255
-        lut[i] = (int(255 * min(1, 1.6 * v)), int(255 * max(0, v - 0.55) * 2.2 * 0.9),
-                  int(255 * max(0, v - 0.8) * 5 * 0.8))
+        lut[i] = (int(255 * min(1, 1.6 * v)), int(255 * max(0, v - 0.55) * 2.0),
+                  int(255 * max(0, v - 0.8) * 4.0))
     yy, xx = np.mgrid[0:240, 0:320].astype(float)
     cx, cy = 159.5, 119.5
     buf = np.zeros((240, 320))
@@ -155,21 +191,21 @@ def feedback(fr):
         c, s = math.cos(th) / z, math.sin(th) / z
         sx = np.clip(np.round(cx + c * (xx - cx) + s * (yy - cy)).astype(int), 0, 319)
         sy = np.clip(np.round(cy - s * (xx - cx) + c * (yy - cy)).astype(int), 0, 239)
-        buf = np.maximum(buf[sy, sx] * 0.84, smooth(g))
-        img = lut[np.clip(buf * 255, 0, 255).astype(np.uint8)]
-        yield up(img)
+        buf = np.maximum(buf[sy, sx] * 0.84, smooth(dots(g)))
+        buf[sprites(g)] = 1.0
+        yield up(lut[np.clip(buf * 255, 0, 255).astype(np.uint8)])
 
 
 def riso(fr):
     """Two inks, printed out of register: pink is this step, blue the step
-    before last, and the blue plate drifts with the bar. Where they overlap
-    the paper takes both. The deck's Bayer in each ink."""
+    before last, and the blue plate drifts with the bar - its sparkles with it.
+    Where they overlap the paper takes both. The deck's Bayer in each ink."""
     paper = np.array((244, 240, 229), float) / 255
     pink = np.array((255, 72, 176), float) / 255
     blue = np.array((0, 120, 191), float) / 255
     for k, g in enumerate(fr):
-        a = bayer(g)
-        b = bayer(fr[k - 2]) if k >= 2 else np.zeros_like(a)
+        a = bayer(dots(g)) | sprites(g)
+        b = (bayer(dots(fr[k - 2])) | sprites(fr[k - 2])) if k >= 2 else np.zeros_like(a)
         dx, dy = round(4 * math.sin(2 * math.pi * k / 16)), 3
         b = np.roll(np.roll(b, dy, axis=0), dx, axis=1)
         img = np.ones((240, 320, 3)) * paper
@@ -263,7 +299,7 @@ def main():
     out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(HERE), 'docs/img')
     os.makedirs(out, exist_ok=True)
     tmp = tempfile.mkdtemp(prefix='mock_view_')
-    fr = frames(tmp, 80, 60)
+    fr = frames(tmp, 80, 30, square=False, scene='night')   # the deck's own cells
     pic = frames(tmp, 36, 27)
     shots = {}
     for name, mode in MODES:

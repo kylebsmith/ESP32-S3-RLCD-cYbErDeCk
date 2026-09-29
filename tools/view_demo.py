@@ -4,12 +4,13 @@
   python3 tools/view_demo.py --view /dev/cu.usbmodemNODE            # all six, in turn
   python3 tools/view_demo.py --view /dev/cu.usbmodemNODE --mode scan
 
-docs/VIEW.md. The frames are the deck's picture engine - viz.c, built on this
-computer by tools/mock_pictures.py - playing the radar and the orbit from
-ORBITALS, a sixteenth apart at 124 bpm, packed exactly as the deck packs them: a
-control frame naming the mode (and, for the poster, its lines), then the
-picture. For seeing the modes on a screen without the deck; the deck itself is
-what firmware/main/view.c sends.
+docs/VIEW.md. The frames are the deck's own picture engine - viz.c, built on
+this computer by tools/mock_pictures.py - at the deck's 80 x 30, playing ORBITALS'
+night (the radar and >noise 1, whose sparkles are glyphs) and its orbit, a
+sixteenth apart at 124 bpm, packed exactly as the deck packs them: a control
+frame naming the mode (and, for the poster, its lines), then the picture. For
+seeing the modes on a screen without the deck; the deck itself is what
+firmware/main/view.c sends.
 
 The packing here is a copy of firmware/main/view_wire.h, in Python. The copy
 that matters is checked: tools/test_view_wire.c runs the deck's packer through
@@ -70,16 +71,14 @@ def main():
     a = ap.parse_args()
 
     tmp = tempfile.mkdtemp(prefix='view_demo_')
-    exe = M.build(tmp, True)
+    exe = M.build(tmp, False)                     # the deck's viz.c, as flashed
     d = os.path.join(tmp, 'm')
     os.makedirs(d)
-    subprocess.run([exe, d, '80', '60', 'motion'], check=True)
-    # 80 x 60 square dots are 80 x 30 of the deck's cells, two dots to a cell.
+    subprocess.run([exe, d, '80', '30', 'motion'], check=True)
     film = []
-    for scene, n in (('radar', 32), ('orbit', 48)):
+    for scene, n in (('night', 32), ('orbit', 48)):
         for k in range(n):
-            g = M.load(d, f'{scene}{k:02d}', 80, 60)
-            film.append([g[2 * y][x] for y in range(30) for x in range(80)])
+            film.append([c for row in M.load(d, f'{scene}{k:02d}', 80, 30) for c in row])
 
     node = serial.Serial(a.view, 115200, timeout=0.1)
 

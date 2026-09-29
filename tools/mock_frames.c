@@ -8,8 +8,8 @@
  * proposal being mocked) - and sets both side by side.
  *
  *   mock_frames OUTDIR W H          one frame of each scene
- *   mock_frames OUTDIR W H motion   every frame of the radar and the orbit, a
- *                                   step at a time, as the panel shows them
+ *   mock_frames OUTDIR W H motion   every frame of the radar, the night and the
+ *                                   orbit, a step at a time, as the panel shows them
  *
  * OUTDIR/<scene>-<W>x<H>.cells is 2 bytes (w, h) then w*h cells.
  */
@@ -128,6 +128,17 @@ int main(int argc, char **argv)
             radar(s);
             step();
             snprintf(name, sizeof name, "radar%02d", s);
+            bad |= save(name);
+        }
+        /* ORBITALS' first section as written - the radar and >noise 1, whose
+         * sparkles are the deck's own glyphs and have to reach the screen as
+         * glyphs, not as greys */
+        fresh();
+        for (int s = 0; s < 32; s++) {
+            radar(s);
+            mark("noise", 1, 0);
+            step();
+            snprintf(name, sizeof name, "night%02d", s);
             bad |= save(name);
         }
         static const char xs[] = "8876532111235678", ys[] = "568886531113";

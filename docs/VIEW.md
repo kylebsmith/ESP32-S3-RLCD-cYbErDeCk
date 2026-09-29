@@ -36,11 +36,21 @@ Mock-ups of each from the engine's real frames are in
 `tools/mock_view.py`; `tools/view_demo.py` drives a real node through all six
 with no deck.
 
+**The deck's own glyphs stay glyphs**, in every mode but the poster. The greys are
+the dots; every cell the engine wrote as a glyph — the four sparkles `noise`
+scatters, the small disc, the arcs, any letter — is drawn as itself on top, in the
+deck's compact 6×12 face, which on the screen is 12×24, the size the panel draws
+them. In phosphor they flare and fade, in feedback they are drawn into the tunnel,
+in riso they print on both plates, in scan they sit on the lines. The owner,
+2026-09-28: the sparkles and glyphs are "part of the whole vibe". Before this the
+node turned every cell into a grey by how much of it was inked, and a speck came
+out as nothing at all. The poster's picture is too small for them and shows the
+greys alone.
+
 **`plain` is not yet the panel.** The node draws the dots decided for the panel;
-the panel still draws its tiles until the dots are built into it. The type the
-node writes — the poster, and the screen it shows before the first frame — is the
-deck's own: `view/deckview/deckfont.h` is generated from the same art as the panel's
-faces (`tools/make_font.py --view`, diffed in CI).
+the panel still draws its tiles until the dots are built into it. Every glyph the
+node draws is the deck's own: `view/deckview/deckfont.h` is generated from the same
+art as the panel's faces (`tools/make_font.py --view`, diffed in CI).
 
 **Light on black** in `plain` and `scan`. The panel is dark ink on reflective
 paper; the screen emits light. The owner's first look, 2026-09-25: "an inverted
@@ -135,6 +145,19 @@ a boost. So the deck cannot send 5 V down the cable. Two ways round it:
 
 Either way the deck's USB-host firmware is not written yet. When it is, only the
 transport in `firmware/main/view.c` changes: the bytes are already the wire format.
+
+## Measured, 2026-09-28 — the glyphs
+
+- The node with the glyph layer, fed ORBITALS' night from the deck's own engine at
+  80×30 (the radar and `>noise 1`, about 237 sparkles a frame): 8.5 frames a
+  second in every mode, **0 refused**. Build: 94 KB of flash, 88 KB of RAM before
+  the framebuffers.
+- **Found on the way, not changed:** `echo` counts any glyph as solid, so every
+  sparkle fades into a grey block over seven steps. In the night that leaves 58 %
+  of the frame grey smudge, on the panel as on the screen; with the sparkles left
+  to twinkle it is 28 %, all of it the radar's own trail. The small disc must
+  keep fading — on a small pane it is ORBITALS' planet, and its trail is the
+  comet — so the change on offer is for the four sparkles only. The owner's call.
 
 ## Measured, 2026-09-28 — the six modes
 
