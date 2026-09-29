@@ -209,6 +209,13 @@ the classic confusions are answered by design.
   7/1, rn/m. The worst pairs depend on the design, not on the letters (Maddox et al. 1977).
   Short strings like `x...9..x` and `kick` are where one bad pair shows.
 
+![The type proposal, drawn from the deck's own faces](../img/type-proposal.png)
+
+*The deck's own faces, drawn by `tools/mock_type.py`. The one invented glyph is the
+narrower zero, made from today's by taking out two interior columns. Also shown: the
+confusion sets as the panel draws them, a section line at twice the size, and the 6 × 12
+face as a status line.*
+
 **So the redesign starts with evidence, not taste.** [CMF.md](../CMF.md) sets out the reading
 test:
 
