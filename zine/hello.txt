@@ -16,7 +16,7 @@ no mouse. no menu. no mode.
 >play
 ctrl+enter runs a line.
 enter makes one.
-the same line again: quiet.
+the same line again: gone.
 again: back.
 it sends midi, not sound.
 usb on   to a computer
@@ -61,9 +61,9 @@ toussaint. aaron. mclean.
 collins. jack. roos.
 and you.
 
-on this deck: ground, lift,
-orbitals. open one. run it
-top to bottom.
+on this deck: one set, three
+acts: ground, lift, orbitals.
+run them in order.
 >kick
 >cut
 >stop

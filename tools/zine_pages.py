@@ -12,7 +12,7 @@ because a title is a command the instrument does not know. Sixteen pages are
 one bar: the folio is the step.
 """
 import os
-from zine import BIG, SMALL, M, T, W, H, INK, PAPER
+from zine import BIG, SMALL, M, T, W, H, INK, PAPER, RED
 
 B = 48      # a line of body text: the 12x24 face at twice its size
 S = 24      # a line of notes: the 6x12 face at twice its size
@@ -23,9 +23,12 @@ def art(d, name):
 
 
 def title(p, cmd, reply, ink=INK, y=T):
-    p.text(M, y, '>' + cmd, BIG, 3, ink=ink)
-    p.glyph(M, y + 72 + 14, 137, SMALL, 2, ink=ink)
-    p.text(M + 24, y + 72 + 14, reply, SMALL, 2, ink=ink)
+    """The line you could type, its prompt red; under it the deck's reply, red,
+    as the deck's replies are what it lights."""
+    x = p.text(M, y, '>', BIG, 3, ink=RED)
+    p.text(x, y, cmd, BIG, 3, ink=ink)
+    p.glyph(M, y + 72 + 14, 137, SMALL, 2, ink=RED)
+    p.text(M + 24, y + 72 + 14, reply, SMALL, 2, ink=RED)
     return y + 72 + 14 + S + 96
 
 
@@ -52,13 +55,18 @@ def cells_small(p, x, y, path, crop=None):
 # ------------------------------------------------------------------ 1
 
 def cover(p, d):
+    # THE SUN: '>disc 9', as the deck's engine draws it, twice its size and
+    # red, its dithered edge the deck's own Bayer - half off the top right
+    # corner, a plate of its own, with the black type printing over it.
+    # ORBITALS' bass is the sun.
+    p.cells(W - 880, -420, art(d, 'disc-0'), 2, crop=(16, 0, 64, 30), ink=RED)
     p.text(M, T, 'cYbErDeCk', SMALL, 2)
     p.text(M, T + S + 6, 'zine #0', SMALL, 2)
-    # the deck's own ring, >disc 8 >edge 1, small and alone
-    cells_small(p, W - M - 45 * 6, T, art(d, 'ring-0'), crop=(8, 1, 53, 23))
-    y = 1640
-    p.text(M, y, '>hello', BIG, 4)
-    para(p, y + 96 + 48, 'a getting-started zine\nfor a box that plays text.')
+    y = 1330
+    x = p.text(M - 36, y, '>', BIG, 10, ink=RED)
+    p.text(x, y, 'hello', BIG, 10)
+    for k, ln in enumerate(('a getting-started zine', 'for a box', 'that plays text.')):
+        p.text(M + k * 96, y + 240 + 72 + k * 60, ln, BIG, 2)
 
 
 # ------------------------------------------------------------------ 2
@@ -111,7 +119,7 @@ def argument(p, d):
          'watch [@schloss][@reeves][@berthaut].')
     note(p, 2010,
          'an esp32-s3 and a 400x300 reflective panel, one bit, no\n'
-         'backlight. 96 ticks a beat, 16 lanes, 34 verbs. usb midi\n'
+         'backlight. 96 ticks a beat, 16 lanes, 37 verbs. usb midi\n'
          'jitter at the host: 0.03 ms, measured. it makes no sound\n'
          'itself: it sends midi, osc and pictures to what does.')
 
@@ -138,7 +146,10 @@ def keys(p, d):
          'enter       makes a line\n'
          '\n'
          'again, while it plays:\n'
-         'quiet. again: back.')
+         'gone. again: back.\n'
+         '\n'
+         '>toggle kick hat\n'
+         'a block, off and back.')
     para(p, 1150,
          'it sends midi, not sound.\n'
          '\n'
@@ -160,9 +171,10 @@ def grammar(p, d):
     for k, v in (('x', 'a hit'), ('.', 'a rest'), ('0-9', 'how much'),
                  ('_', 'hold the last one'), ('[xx]', 'two in one step'),
                  ('[0,4,7]', 'all at once'), ('<a b>', 'one each time round'),
+                 ('<00 77>', 'a word each time'),
                  ('x%30', '30 times in 100'), ('/2 *2', "this lane's speed"),
                  ('!4', 'four times, then end')):
-        p.text(M, y, k)
+        p.text(M, y, k, ink=RED)
         p.text(M + 9 * 24, y, v)
         y += B + 24
 
@@ -173,13 +185,13 @@ def meter(p, d):
     para(p, T, 'a line is as long as it is.')
     # sixteen steps against twelve, for forty-eight: where each comes round
     y = 900
-    for n in (16, 12):
-        p.text(M, y, str(n), SMALL, 2)
+    for n, ink in ((16, INK), (12, RED)):
+        p.text(M, y, str(n), SMALL, 2, ink)
         x = M + 3 * 12
         for s in range(49):
-            p.glyph(x + s * 14, y, 147 if s % n == 0 else 137, SMALL, 2)
+            p.glyph(x + s * 14, y, 147 if s % n == 0 else 137, SMALL, 2, ink)
         y += 72
-    p.text(M + 3 * 12 + 48 * 14 - 24, y, 'home', SMALL, 2)
+    p.text(M + 3 * 12 + 48 * 14 - 24, y, 'home', SMALL, 2, RED)
     para(p, 1500,
          '16 against 12 comes home\n'
          'every 3 bars. that is all\n'
@@ -205,7 +217,7 @@ def strudel(p, d):
         x = p.text(M, y, '>hat ', SMALL, 2)
         for ch in pat:
             if ch in 'X?-':
-                p.frame(x - 3, y - 3, 12 + 6, 24 + 6, 2)
+                p.frame(x - 3, y - 3, 12 + 6, 24 + 6, 2, RED)
             x = p.text(x, y, ch, SMALL, 2)
         p.text(M + 17 * 12, y, why, SMALL, 2)
         y += S + 14
@@ -220,6 +232,7 @@ def names(p, d):
              '>conga = note 63\n'
              '>strings = voice 3 ch 5\n'
              '>fx = cc 20 ch 2\n'
+             '>strings = ch 6  moved.\n'
              '>conga =         gone.')
     para(p, y + 150,
          'anything drives anything:\n'
@@ -263,7 +276,7 @@ def pictures(p, d):
              'bends   echo move spin warp grow thin flip fold')
     y = para(p, y + 40, 'a ring is a disc through an\nedge: >disc 8 >edge 1')
     y += 70
-    p.cells(M, y, art(d, 'orbit-5'), 1, crop=(0, 1, 60, 22))
+    p.cells(M, y, art(d, 'orbit-5'), 1, crop=(0, 1, 60, 22), ink=RED)
     y += 21 * 24 + 40
     for i, name in enumerate(('radar-0', 'day-5', 'eclipse-5')):
         cells_small(p, M + i * 246, y, art(d, name), crop=(11, 3, 49, 21))
@@ -284,8 +297,8 @@ def band(p, d):
          'semicolon.')
     para(p, 1500, 'x is a hit. . is a rest.\nnow form a band [@sideburns].')
     note(p, 2010,
-         'on the deck: ground, lift, orbitals. open one, run it top\n'
-         'to bottom. every set ends in silence.')
+         'on the deck: one set in three acts - ground, lift,\n'
+         'orbitals. run them in order; the set ends in silence.')
 
 
 # ------------------------------------------------------------------ 15
@@ -312,14 +325,15 @@ def room(p, d):
                            ('2017', 'jack', 'hydra [@hydra]'),
                            ('2023', 'roos, mclean', 'strudel [@strudel]'),
                            ('2026', 'you', 'this box')):
-        p.text(M, y, f'{yr}  {who:<16} {what_}', SMALL, 2, ink=PAPER)
+        x = p.text(M, y, yr, SMALL, 2, ink=RED)
+        p.text(x, y, f'  {who:<16} {what_}', SMALL, 2, ink=PAPER)
         y += S + 12
 
 
 # ------------------------------------------------------------------ 16
 
 def back(p, d):
-    y = title(p, 'help', '34 commands - the one line here it knows')
+    y = title(p, 'help', '37 commands - the one line here it knows')
     from zine_refs import REFS
     for n, (_, ref) in enumerate(REFS, 1):
         words = f'[{n}] {ref}'.split(' ')
@@ -336,8 +350,9 @@ def back(p, d):
             y += S
         y += 8
     note(p, 2090,
-         "set in the deck's own 12x24 and 6x12 faces; one bit; every\n"
-         "picture drawn by its engine. a deck after gibson [@gibson], a\n"
+         "set in the deck's own 12x24 and 6x12 faces; two inks, one\n"
+         "bit each; every picture drawn by its engine. a deck after\n"
+         "gibson [@gibson], a\n"
          "grid after weingart, sometimes called swiss punk [@weingart].\n"
          "full references: zine/README.md. copy it, fold it, pass it on.")
 

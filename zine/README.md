@@ -6,6 +6,7 @@
 |---|---|
 | `hello-booklet.pdf` | to print: US Letter, landscape, two pages a side — both sides, fold, staple |
 | `hello-pages.pdf` | the sixteen pages in reading order, half letter, for a screen |
+| `hello-plate-black.pdf`, `hello-plate-red.pdf` | the booklet's two plates apart, each in black: one riso drum apiece |
 | `hello.txt` | the zine as a deck document, `hello`: thirty columns, and the headings are lines you can run |
 
 One idea to a page, in one narrow column — thirty characters, the deck's own
@@ -14,7 +15,17 @@ it fits sixty columns with — and its own tiles (codes 128–155: nine tones,
 sparkles, blocks, arcs). **Every picture was drawn by the deck's own picture
 engine**: `tools/zine_art.c` links `firmware/components/viz/viz.c`, marks
 primitives the way the clock does when a lane fires, and saves the cells. The
-orbit on page 6 is `orbitals` as it is written. One bit, like the panel.
+orbit on page 13 is `orbitals` as it is written.
+
+**Two inks, one bit each** (2026-09-29). Black, and a red that means one thing:
+what the deck lights — the prompt, the deck's replies, the step you are on, the
+page's number, a picture on its own plate. Each ink is one bit deep, like the
+panel, and each is its own plate: the PDFs are two stencils a page, red then
+black over it, so they stay exact and small, and the plates come apart for a riso
+print shop. The cover is ORBITALS' sun, `>disc`, as the engine draws it, twice its
+size and half off the corner; every page's number stands at the foot of its outer
+edge in the deck's 12×24 face at eighteen times, under the black where they cross.
+A grid after Weingart, the zine says on its back, sometimes called Swiss punk.
 
 Each page is titled with a line you could type — `>what`, `>grammar`, `>room` —
 and under it is what the deck says to that line, quoted from
@@ -54,7 +65,7 @@ Every figure in the zine is measured on the deck or read from its source:
 |---|---|
 | USB MIDI jitter 0.03 ms at the host | [README.md](../README.md), *The instrument* |
 | 51 of 51 corpus patterns play what Strudel 1.2.6 plays | [docs/STRUDEL.md](../docs/STRUDEL.md), *Measured*; `tools/test_corpus.c` in CI |
-| 96 ticks a beat, 16 lanes, 34 verbs | `seq.h`, `SEQ_MAX_LANES`; the verb table in `builtins.c` |
+| 96 ticks a beat, 16 lanes, 37 verbs | `seq.h`, `SEQ_MAX_LANES`; the verb table in `builtins.c` |
 | 16 steps against 12 come home every 3 bars | lcm(16, 12) = 48 steps |
 | a value survives a lost phone | [docs/MAP.md](../docs/MAP.md) §9.8 |
 
