@@ -146,6 +146,92 @@ a boost. So the deck cannot send 5 V down the cable. Two ways round it:
 Either way the deck's USB-host firmware is not written yet. When it is, only the
 transport in `firmware/main/view.c` changes: the bytes are already the wire format.
 
+## The wire — deck to node with no computer `[PLAN]` 2026-09-29
+
+The owner wants the deck to power the node and send it everything over a short
+cable from the pins on the deck's back. **A UART is the link:** one data wire from
+the deck to the node, plus ground and power. It is simpler than USB host, faster
+than the relay, and deterministic, because a byte on a UART always takes the same
+time and nothing else shares the wire.
+
+**The bytes do not change.** The node already reads DKV1 and DKC1 frames and
+resynchronises on the magic after a torn frame (`view_read.h`, tested in CI). On a
+raw wire the base64 and the terminal escape go, and the frames go out as binary.
+
+| link | a picture (2,411 B) | worst case, picture + code lines (3,448 B) | verdict |
+|---|---|---|---|
+| UART 2 Mbaud | 12.1 ms | 17.2 ms | **start here** |
+| UART 3 Mbaud | 8.0 ms | 11.5 ms | if 2 Mbaud measures clean |
+| I2C 400 kHz (STEMMA QT as I2C) | ~60 ms | ~86 ms | too slow: two-thirds of a sixteenth at 165 bpm |
+| I2C 1 MHz | ~24 ms | ~34 ms | slower than a UART, and a bus to arbitrate |
+| today: USB to the computer, the relay, USB | several ms, jittered by two USB stacks and Python | | what the wire replaces |
+
+At 165 bpm a sixteenth is 91 ms, so a 2 Mbaud wire is busy 13 % of the time,
+19 % with the code view's lines. SPI would be faster again, but the node would have to be an SPI
+target while its cores are busy making DVI; a UART lands in a hardware FIFO and a
+DMA channel, which is enough.
+
+**Two ways to build the cable. Both are the same circuit.**
+
+```
+  DECK back header                     FEATHER RP2040 DVI
+  ----------------                     ------------------
+  GND  ------------------------------  GND
+  3V3  ------------------------------  3V   (powers the node; see power below)
+  GPIO a (UART TX, 2 Mbaud) ---------  RX   = GPIO1, UART0      (way A)
+                                   or  SDA  = GPIO2, PIO UART   (way B, the QT port)
+  GPIO b (UART RX, optional) --------  TX   = GPIO0             (node present / acks)
+```
+
+- **Way A, 0.1-inch ribbon.** Pins pushed into the deck's header, four wires to
+  the Feather's GND, 3V, RX and TX. The Feather's hardware UART, nothing clever.
+- **Way B, a STEMMA QT cable.** Adafruit sells a JST SH 4-pin cable ending in
+  0.1-inch male pins: the pins go into the deck's header, and the keyed end clicks
+  into the Feather's QT port. The QT port is wired for I2C (GPIO2/3), which the
+  RP2040's hardware UART cannot use, but a **PIO UART** can: PicoDVI takes one of
+  the two PIO blocks and the other is free. One keyed cable carries power,
+  ground and a 2 Mbaud UART, with no soldering on the node. The owner's word
+  for it: "insane".
+
+Any free GPIO on the deck can be the UART TX, because the ESP32-S3 routes UART
+signals to any pin. Both sides are 3.3 V logic: no level shifter.
+
+**Power.** The node draws roughly 100 mA at 3.3 V running DVI (**unmeasured**; to
+measure before it is wired). The deck's 3V3 into the Feather's 3V pin runs it. Two
+things are still open:
+
+1. **The deck's 3.3 V regulator headroom** with WiFi on, which peaks at a few
+   hundred mA. From the schematic (H4 in [HARDWARE.md](HARDWARE.md)).
+2. **HDMI's 5 V pin.** Fed 3.3 V, the Feather has no 5 V for the HDMI connector,
+   and some screens will not see a source without it. The fix, when a screen
+   refuses: a small 5 V boost from the deck's battery into the Feather's USB pin,
+   which then feeds both the Feather's regulator and HDMI 5 V. The deck's own USB-C
+   cannot supply it: its charger is charge-only ([HARDWARE.md](HARDWARE.md)
+   question 3).
+
+**Deterministic, and how far.** On the wire a frame's latency is its length over
+the baud rate plus microseconds: fixed. The one jitter left is the node's
+vsync, up to 16.7 ms, because a finished picture waits for the next 60 Hz
+frame. The frames already carry their tick, so a later step can send each
+picture a step early and have the node show it on its own tick, which removes
+that too.
+
+**What gets written**
+
+- **Deck** (`view.c`): the packed frame goes to a UART as well as the console.
+  It uses a driver ring that never blocks, and a frame that does not fit is
+  dropped whole and counted, as on the console today. The pin is set once, e.g.
+  `>view pin 17`, and kept in NVS.
+- **Node** (`deckview.ino`): read `Serial1` (way A) or a PIO UART on GPIO2
+  (way B) into the same reader as the USB serial. USB keeps working beside it.
+- **Check:** `tools/test_view_wire.c` already proves the bytes. The new test is
+  on the bench: frames a second, 0 refused, and the deck's `view` time in the
+  heartbeat, before and after, through the relay and then on the wire.
+
+**Needed from the owner:** the labels on the deck's back header — which pins are
+3V3, GND, the battery or 5 V, and which GPIOs are free. The pinout is not in this
+repo; the vendor schematic is H4.
+
 ## Measured, 2026-09-28 — the glyphs
 
 - The node with the glyph layer, fed ORBITALS' night from the deck's own engine at
