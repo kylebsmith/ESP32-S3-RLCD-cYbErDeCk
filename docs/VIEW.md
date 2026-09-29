@@ -307,6 +307,14 @@ schematic stays the vendor's: this page names its pins and does not copy it.
   yet on the deck: a frame is queued whole into a 4 KB buffer or dropped and counted,
   never waited for (`usbdev_console_write_whole`), and at 53×20 it is half the size.
   **Unmeasured until it is flashed.**
+- **Flashed, and measured the same way, 53×20 in USB MIDI mode:** the view costs the
+  editor 66 ms of every 10 s where it cost 3,459, and the loop runs 188 turns a second
+  where it ran 119, 0 frames dropped.
+- **The notes were never late**, before or after: at 165 bpm with 32nd hats, ratchets
+  and a kick on the beat, the deck's USB MIDI measured at the host sat within 0.12 ms
+  of the grid with the view on and 0.16 ms with it off on the old firmware (0.05 and
+  0.07 ms rms), and within 0.11 ms on the new (0.03 ms rms). The clock and the MIDI
+  path do not wait for the editor, so the view's stall slowed typing, not the music.
 - **Unverified until it is on a screen:** how the blocks look through a given
   monitor's own scaler (see above), and the deck end to end with the colour lanes.
 
