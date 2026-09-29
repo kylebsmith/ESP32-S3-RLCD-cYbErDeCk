@@ -67,6 +67,12 @@
  * smaller and are unaffected. */
 #define VIZ_W 80
 #define VIZ_H 30
+/* THE VIEW NODE'S OWN GRID, one to one: 53 x 20 cells of the deck's 6 x 12
+ * tiles are 318 x 240, the node's whole screen, and on HDMI every one of the
+ * deck's pixels is a 2 x 2 block. What '>send view on' gives (2026-09-29, the
+ * owner: the node's smoothing "blurred and mushed" the pixels). */
+#define VIZ_VIEW_W 53
+#define VIZ_VIEW_H 20
 
 /* Set the live frame size. The editor calls this whenever the layout changes,
  * so the generators always draw into the rectangle that is actually visible -

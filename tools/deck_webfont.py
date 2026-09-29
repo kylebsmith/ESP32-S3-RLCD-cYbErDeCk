@@ -86,13 +86,17 @@ def build(name, glyphs, gw, gh, base_row, extra, path):
     fb.save(path)
 
 
-def main():
-    out = sys.argv[1] if len(sys.argv) > 1 else '.'
+def write(out):
+    """Deck.ttf and DeckSmall.ttf into `out`."""
     os.makedirs(out, exist_ok=True)
     big = {c: bitmap_rows(g, 12) for c, g in load_face(BIG_SRC, 12, 24).items()}
     small = {c: bitmap_rows(g, 6) for c, g in load_face(SMALL_SRC, 6, 12).items()}
     build('Deck', big, 12, 24, 20, deck_extra.EXTRA, os.path.join(out, 'Deck.ttf'))
     build('Deck Small', small, 6, 12, 9, deck_extra.SMALL, os.path.join(out, 'DeckSmall.ttf'))
+
+
+def main():
+    write(sys.argv[1] if len(sys.argv) > 1 else '.')
 
 
 if __name__ == '__main__':

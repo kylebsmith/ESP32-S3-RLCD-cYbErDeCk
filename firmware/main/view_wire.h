@@ -59,11 +59,13 @@ static inline size_t view_wire_pack(uint8_t *out, size_t max, uint32_t tick,
 /* THE CONTROL FRAME: how the node is to draw, and, for the poster, what it is
  * to write.
  *
- *   'D' 'K' 'C' '1'   magic
+ *   'D' 'K' 'C' '2'   magic ('DKC1' is the same without the parameters)
  *   tick  u32, little-endian: the pulse it belongs to, as a picture's
  *   mode  u8: VIEW_MODE_*
  *   n     u8: lines of text, 0..VIEW_LINES_MAX - the poster's, or the code's
  *   len   u16, little-endian: bytes of text
+ *   par   8 x u8 (DKC2 only): the view's parameters, 0-127, or 255 for unset -
+ *         the last value of controllers 1-8 the deck sent on MIDI channel 16
  *   text  len bytes - n lines, each one: from u8, to u8, its characters, '\n'.
  *         [from, to) is the span to light, the step a lane is on; from == to
  *         lights nothing.
@@ -71,7 +73,13 @@ static inline size_t view_wire_pack(uint8_t *out, size_t max, uint32_t tick,
  *
  * The deck sends one ahead of every picture, so a node that joins late, or
  * loses one, is right again a step later - the mode is never a message that
- * had to arrive once. The node does all the drawing; the deck only names it. */
+ * had to arrive once. The node does all the drawing; the deck only names it.
+ *
+ * THE PARAMETERS ARE LANES. Colour on the screen is not an effect the node
+ * picks; it is a controller the performer plays: '>ink = cc 1 ch 16', then
+ * '>ink 0123456789 /16' sweeps it, '>route ink kick' makes it follow the kick,
+ * '>toggle ink' holds it. The same controllers go to every MIDI output too
+ * (2026-09-29, the owner: colour "to toggle and have continuous controls"). */
 enum {
     VIEW_MODE_PLAIN, VIEW_MODE_SCAN, VIEW_MODE_PHOSPHOR, VIEW_MODE_FEEDBACK,
     VIEW_MODE_RISO, VIEW_MODE_POSTER, VIEW_MODE_CODE, VIEW_MODES
@@ -79,30 +87,34 @@ enum {
 #define VIEW_LINES_MAX    12
 #define VIEW_LINE_MAX     60
 #define VIEW_TEXT_MAX     1024
+#define VIEW_PARAMS       8
+#define VIEW_PARAM_UNSET  255
 #define VIEW_CTL_HEAD_LEN (VIEW_MAGIC_LEN + 8)
+#define VIEW_CTL2_HEAD_LEN (VIEW_CTL_HEAD_LEN + VIEW_PARAMS)
+#define VIEW_PARAM_CHANNEL 16       /* MIDI channel 16: controllers 1-8 */
 
 typedef struct {
     const char *text;
     uint8_t     from, to;
 } view_line_t;
 
-/* Pack a control frame. Lines longer than VIEW_LINE_MAX are cut there, and a
- * span that falls past the cut lights nothing. Returns the length, or 0. */
-static inline size_t view_wire_pack_ctl(uint8_t *out, size_t max, uint32_t tick,
-                                        int mode, const view_line_t *lines, int n)
+static inline size_t view_wire_pack_ctl_ver(uint8_t *out, size_t max, uint32_t tick,
+                                            int mode, const uint8_t *params,
+                                            const view_line_t *lines, int n, int ver)
 {
+    const size_t head = (ver == 2) ? VIEW_CTL2_HEAD_LEN : VIEW_CTL_HEAD_LEN;
     if (mode < 0 || mode >= VIEW_MODES || n < 0 || n > VIEW_LINES_MAX ||
-        max < VIEW_CTL_HEAD_LEN + 1) {
+        max < head + 1) {
         return 0;
     }
-    size_t o = VIEW_CTL_HEAD_LEN;
+    size_t o = head;
     for (int i = 0; i < n; i++) {
         const char *t = lines[i].text ? lines[i].text : "";
         size_t k = 0;
         while (t[k] != '\0' && t[k] != '\n' && k < VIEW_LINE_MAX) {
             k++;
         }
-        if (o + 2 + k + 1 > VIEW_CTL_HEAD_LEN + VIEW_TEXT_MAX || o + 2 + k + 1 + 1 > max) {
+        if (o + 2 + k + 1 > head + VIEW_TEXT_MAX || o + 2 + k + 1 + 1 > max) {
             return 0;
         }
         uint8_t from = lines[i].from, to = lines[i].to;
@@ -115,8 +127,8 @@ static inline size_t view_wire_pack_ctl(uint8_t *out, size_t max, uint32_t tick,
         o += k;
         out[o++] = '\n';
     }
-    const size_t len = o - VIEW_CTL_HEAD_LEN;
-    out[0] = 'D'; out[1] = 'K'; out[2] = 'C'; out[3] = '1';
+    const size_t len = o - head;
+    out[0] = 'D'; out[1] = 'K'; out[2] = 'C'; out[3] = (uint8_t)('0' + ver);
     out[4] = (uint8_t)tick;
     out[5] = (uint8_t)(tick >> 8);
     out[6] = (uint8_t)(tick >> 16);
@@ -125,12 +137,33 @@ static inline size_t view_wire_pack_ctl(uint8_t *out, size_t max, uint32_t tick,
     out[9] = (uint8_t)n;
     out[10] = (uint8_t)len;
     out[11] = (uint8_t)(len >> 8);
+    if (ver == 2) {
+        for (int i = 0; i < VIEW_PARAMS; i++) {
+            out[VIEW_CTL_HEAD_LEN + i] = params ? params[i] : VIEW_PARAM_UNSET;
+        }
+    }
     uint8_t sum = 0;
     for (size_t i = 4; i < o; i++) {
         sum ^= out[i];
     }
     out[o] = sum;
     return o + 1;
+}
+
+/* Pack a control frame. Lines longer than VIEW_LINE_MAX are cut there, and a
+ * span that falls past the cut lights nothing. Returns the length, or 0. */
+static inline size_t view_wire_pack_ctl(uint8_t *out, size_t max, uint32_t tick,
+                                        int mode, const view_line_t *lines, int n)
+{
+    return view_wire_pack_ctl_ver(out, max, tick, mode, NULL, lines, n, 1);
+}
+
+/* The same, with the view's parameters: what the deck sends (DKC2). */
+static inline size_t view_wire_pack_ctl2(uint8_t *out, size_t max, uint32_t tick,
+                                         int mode, const uint8_t *params,
+                                         const view_line_t *lines, int n)
+{
+    return view_wire_pack_ctl_ver(out, max, tick, mode, params, lines, n, 2);
 }
 
 /* Base64, for carrying a frame inside a line of text: the console today.

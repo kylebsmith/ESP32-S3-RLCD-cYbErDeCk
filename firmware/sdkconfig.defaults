@@ -87,6 +87,8 @@ CONFIG_FATFS_MAX_LFN=64
 # competing for the same controller.
 CONFIG_TINYUSB_CDC_ENABLED=y
 CONFIG_TINYUSB_CDC_COUNT=1
+# A whole view frame fits, so it is queued, not waited for (view.c).
+CONFIG_TINYUSB_CDC_TX_BUFSIZE=4096
 CONFIG_TINYUSB_MIDI_COUNT=1
 
 # A PANIC MUST REBOOT, NOT TRY TO EXPLAIN ITSELF FIRST.

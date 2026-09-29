@@ -2120,8 +2120,8 @@ static cmd_status_t c_send(cmd_ctx_t *ctx)
         return CMD_DONE;
     }
     /* THE VIEW NODE TAKES A SIZE AS WELL: '>send view 40x12' is on, at that
-     * many cells. 'on' alone is 80x30 - the node's whole screen, a cell to two
-     * square dots - and 'off' gives the size back to the preview pane. The pane
+     * many cells. 'on' alone is 53x20 - the node's whole screen with every
+     * tile one to one - and 'off' gives the size back to the preview pane. The pane
      * keeps its own shape throughout and shows a sample of the output. */
     int vw = 0, vh = 0;
     const bool view = (strcmp(name, "view") == 0);
@@ -2141,24 +2141,24 @@ static cmd_status_t c_send(cmd_ctx_t *ctx)
     const bool on = strcmp(state, "on") == 0;
     if (!on && strcmp(state, "off") != 0) {
         if (view) {
-            cmd_out(ctx, "send view on|off|80x30|mode");
-            cmd_out(ctx, "modes: plain scan phosphor");
-            cmd_out(ctx, "  feedback riso poster code");
+            cmd_out(ctx, "send view on|off|53x20|mode");
+            cmd_out(ctx, "modes: plain scan riso");
+            cmd_out(ctx, "  poster code");
         } else {
             cmd_out(ctx, "send <name> on | off");
         }
         return CMD_ERROR;
     }
     if (view) {
-        /* 'on' alone is 80x30, the node's whole screen - unless the view is
-         * already on, when it keeps the size it was given. */
+        /* 'on' alone is 53x20, the node's whole screen one to one - unless
+         * the view is already on, when it keeps the size it was given. */
         if (!on) {
             viz_out_size(0, 0);
         } else if (vw > 0) {
             viz_out_size(vw, vh);
             viz_split(true);
         } else if (!seq_dest_is_on("view")) {
-            viz_out_size(VIZ_W, VIZ_H);
+            viz_out_size(VIZ_VIEW_W, VIZ_VIEW_H);
             viz_split(true);
         }
         if (mode >= 0) {

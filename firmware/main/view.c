@@ -23,6 +23,7 @@
 #include "lane_name.h"
 #include "seq.h"
 #include "seq_pattern.h"
+#include "usbdev.h"
 #include "view_wire.h"
 #include "viz.h"
 
@@ -31,12 +32,25 @@ _Static_assert((int)VIZ_OUT_MODES == (int)VIEW_MODES &&
                (int)VIZ_OUT_CODE == (int)VIEW_MODE_CODE,
                "the engine and the wire number the view's modes the same way");
 
+/* THE VIEW'S PARAMETERS: the last value of controllers 1-8 on MIDI channel
+ * 16, sent to the node with every control frame (view_wire.h). The clock's task
+ * writes them and the editor's loop reads them; a byte is one store, and a
+ * frame that catches one mid-change shows it a step later. */
+static volatile uint8_t s_par[VIEW_PARAMS] = {
+    VIEW_PARAM_UNSET, VIEW_PARAM_UNSET, VIEW_PARAM_UNSET, VIEW_PARAM_UNSET,
+    VIEW_PARAM_UNSET, VIEW_PARAM_UNSET, VIEW_PARAM_UNSET, VIEW_PARAM_UNSET };
+
 static void view_sink(const char *lane, uint8_t status, uint8_t d1, uint8_t d2,
                       uint32_t when_us)
 {
-    /* The view node takes pictures, not notes. It is a destination so that
-     * '>send' can list it and turn it on; the notes are someone else's. */
-    (void)lane; (void)status; (void)d1; (void)d2; (void)when_us;
+    /* The view node takes pictures, not notes; the notes are someone else's.
+     * But a controller on channel 16 is the performer playing the screen:
+     * '>ink = cc 1 ch 16', '>ink 0123456789 /16'. */
+    (void)lane; (void)when_us;
+    if ((status & 0xF0) == 0xB0 && (status & 0x0F) == VIEW_PARAM_CHANNEL - 1 &&
+        d1 >= 1 && d1 <= VIEW_PARAMS) {
+        s_par[d1 - 1] = d2 & 0x7F;
+    }
 }
 
 void view_init(void)
@@ -75,11 +89,10 @@ static bool view_emit(const uint8_t *frame, size_t n)
         if (usb_serial_jtag_write_bytes(line, (size_t)k, 0) != k) {
             return false;
         }
-    } else {
-        fwrite(line, 1, (size_t)k, stdout);
-        fflush(stdout);
+        return true;
     }
-    return true;
+    /* USB MIDI mode: the console is the CDC. Whole, or dropped - never a wait. */
+    return usbdev_console_write_whole(line, (size_t)k);
 }
 
 /* THE POSTER'S LINES: the piece's name, the section the cursor is in, the tempo
@@ -256,9 +269,20 @@ static int code_lines(view_line_t *out, char text[][VIEW_LINE_MAX + 1])
 
 void view_frame(void)
 {
+    /* OFF CLEARS THE COLOURS: the parameters go back to unset, so the next
+     * '>send view' starts from the node's own defaults whatever a set before it
+     * played - each act of a set begins clean. */
+    static bool was_on;
     if (!seq_dest_is_on("view")) {
+        if (was_on) {
+            for (int i = 0; i < VIEW_PARAMS; i++) {
+                s_par[i] = VIEW_PARAM_UNSET;
+            }
+        }
+        was_on = false;
         return;
     }
+    was_on = true;
     static uint8_t cells[VIZ_W * VIZ_H];
     static uint8_t frame[VIZ_W * VIZ_H + VIEW_HEAD_LEN + 1];
     int w = 0, h = 0;
@@ -268,13 +292,17 @@ void view_frame(void)
     }
     /* THE MODE GOES AHEAD OF EVERY PICTURE, and the poster's lines with it, so
      * a node that joins late or loses one is right again a step later. */
-    static uint8_t ctl[VIEW_CTL_HEAD_LEN + VIEW_TEXT_MAX + 1];
+    static uint8_t ctl[VIEW_CTL2_HEAD_LEN + VIEW_TEXT_MAX + 1];
     static view_line_t lines[VIEW_LINES_MAX];
     static char text[VIEW_LINES_MAX][VIEW_LINE_MAX + 1];
     const int mode = viz_out_mode_now();
     const int nl = (mode == VIZ_OUT_POSTER) ? poster_lines(lines, text)
                  : (mode == VIZ_OUT_CODE)   ? code_lines(lines, text) : 0;
-    const size_t cn = view_wire_pack_ctl(ctl, sizeof ctl, tick, mode, lines, nl);
+    uint8_t par[VIEW_PARAMS];
+    for (int i = 0; i < VIEW_PARAMS; i++) {
+        par[i] = s_par[i];
+    }
+    const size_t cn = view_wire_pack_ctl2(ctl, sizeof ctl, tick, mode, par, lines, nl);
     if (cn > 0) {
         view_emit(ctl, cn);
     }

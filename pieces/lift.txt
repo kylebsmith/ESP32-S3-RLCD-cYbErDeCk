@@ -3,6 +3,8 @@ LIFT
 -- stack 124
 >send view poster
 >bpm 124
+>day = cc 4 ch 16
+>day 9 /16
 >scale dmin
 >swing 50
 >echo
@@ -35,6 +37,8 @@ LIFT
 >hat:2 .......<. [357]> /2
 >ramp u 5
 >edge
+>glint = cc 6 ch 16
+>glint <2 6> /16
 
 -- seven
 >send view code
@@ -55,7 +59,8 @@ LIFT
 >grid 9.....9...6...
 
 -- drill 165
->send view phosphor
+>send view plain
+>glint
 >toggle kick snare hat rim bass
 >bpm 165
 >scale ephr
@@ -69,9 +74,12 @@ LIFT
 >grid
 >noise 3
 >route flip kick
+>inv = cc 5 ch 16
+>inv 90......9090....
 
 -- after
->send view feedback
+>send view scan
+>inv 0 /16
 >toggle kick snare hat rim bass
 >bpm 124
 >scale ddor
@@ -87,3 +95,6 @@ LIFT
 >box
 >scale dmin
 >echo 9
+>inv
+>day
+>send view off

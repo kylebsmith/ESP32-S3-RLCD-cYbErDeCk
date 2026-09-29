@@ -11,60 +11,81 @@ page is its wire format and what is and is not yet true of it.*
 The deck's picture lanes draw a frame of cells — its own tiles, codepoints 128–155,
 nine tones and the shapes — and the panel shows it in the split. With
 `>send view on` the deck also sends each frame to the view node, which draws it on
-any HDMI screen **in one of six modes**. The deck only names the mode; the node does
+any HDMI screen **in one of five modes**. The deck only names the mode; the node does
 all the drawing, so no mode costs the deck anything, and every mode is worked out
 from the frames and their ticks alone — the same performance draws the same
 pictures.
 
+**Every pixel is the deck's** (2026-09-29). The node draws each cell with the deck's
+own 6×12 tile, bit for bit, and each of its pixels is a 2×2 block on the screen:
+**53×20 cells fill it**, and that is what `>send view on` sends. Nothing is blended,
+resampled or re-dithered. The owner, looking at the first modes: the node's smoothing
+"blurred and mushed" the "chunky blocks, rigid ass lovely pixels". It was the node's
+own doing — `plain` spread each grey across its neighbours before dithering it again,
+and `feedback` zoomed and turned the frame — so the smoothing is gone, and phosphor
+and feedback, which only worked by resampling, are retired. Their numbers stay taken
+on the wire and draw plain.
+
 The node draws 320×240 at eight bits a pixel through a palette, doubled to
-**640×480 at 60 Hz**, the mode every HDMI screen takes. It keeps two framebuffers:
-the next picture is drawn while the last is shown, and phosphor and feedback read
-the one on the screen. A cell is twice as tall as it is wide, so on the node it is
-two square dots; 80×30 cells are 80×60 dots of four pixels, the whole screen.
+**640×480 at 60 Hz**, the mode every HDMI screen takes. A screen that is not 640×480
+scales it again itself, and most smooth when they do: if the blocks look soft on
+the screen and sharp here, look in its menu for *1:1*, *just scan* or *integer
+scaling*.
 
 | mode | what the node draws |
 |---|---|
-| `plain` | the picture's greys as the deck's 4×4 banded dots, Bayer, light on black |
-| `scan` | each row of cells as one line across the screen, lifted by its greys, hiding what is behind it — Rutt and Etra's scan processor |
-| `phosphor` | a green tube: what the beam lit glows, and fades to about half each step; every other line dimmer |
-| `feedback` | the frame on the screen, zoomed and turned a little and dimmer, with the new picture's greys on top: a full turn every two bars, a zoom that kicks on each beat |
-| `riso` | two inks out of register: pink is this step, blue the step before last, its plate drifting with the bar |
-| `poster` | a live Swiss poster: the piece's name, the section's number in red, tempo, bar and step, a rule, the section's name, the lanes in play with the step each is on lit red, and the picture |
+| `plain` | the deck's cells, tile for tile |
+| `scan` | each row of cells one line across the screen, stepped up by each cell's grey in whole pixels, hiding what is behind it — Rutt and Etra's scan processor on the deck's grid |
+| `riso` | two plates out of register: this step, and the step before last, drifting with the bar in whole pixels |
+| `poster` | a live Swiss poster: the piece's name, the section's number in red, tempo, bar and step, the section's name, the lanes in play with the step each is on lit red, and the picture cell for cell |
+| `code` | the document itself, round the cursor, over the picture dimmed |
 
-Mock-ups of each from the engine's real frames are in
-[wiki/pictures-and-type.md](wiki/pictures-and-type.md), drawn by
-`tools/mock_view.py`; `tools/view_demo.py` drives a real node through all six
-with no deck.
+![The five modes and three colour settings, drawn by the node's own code](img/view-modes.png)
 
-**The deck's own glyphs stay glyphs**, in every mode but the poster. The greys are
-the dots; every cell the engine wrote as a glyph — the four sparkles `noise`
-scatters, the small disc, the arcs, any letter — is drawn as itself on top, in the
-deck's compact 6×12 face, which on the screen is 12×24, the size the panel draws
-them. In phosphor they flare and fade, in feedback they are drawn into the tunnel,
-in riso they print on both plates, in scan they sit on the lines. The owner,
-2026-09-28: the sparkles and glyphs are "part of the whole vibe". Before this the
-node turned every cell into a grey by how much of it was inked, and a speck came
-out as nothing at all. The poster's picture is too small for them and shows the
-greys alone.
+The sheet above is the node's code, not a mock-up: `tools/node_sim.cpp` builds
+`view/deckview/deckview.ino` on a computer, feeds it the engine's frames packed as
+the deck packs them, and writes what it draws; `tools/node_shots.py` makes the
+pictures. `tools/view_demo.py` drives a real node through every mode with no deck.
 
-**`plain` is not yet the panel.** The node draws the dots decided for the panel;
-the panel still draws its tiles until the dots are built into it. Every glyph the
-node draws is the deck's own: `view/deckview/deckfont.h` is generated from the same
-art as the panel's faces (`tools/make_font.py --view`, diffed in CI).
+**Colour is played, not picked.** Controllers 1–8 on **MIDI channel 16** colour the
+screen, and the deck forwards their last values with every control frame. A
+controller is a lane like any other, so colour takes patterns, routes, counts and
+`>toggle`:
 
-**Light on black** in `plain` and `scan`. The panel is dark ink on reflective
-paper; the screen emits light. The owner's first look, 2026-09-25: "an inverted
-version of the display — that's amazing." Kept.
+| controller | does | with nothing sent |
+|---|---|---|
+| `cc 1` | ink hue | warm white |
+| `cc 2` | paper hue | — |
+| `cc 3` | saturation: 0 is monochrome | monochrome |
+| `cc 4` | day: 0 is light on black, 127 black on paper, and every grey between | light on black (riso: paper) |
+| `cc 5` | invert, from 64 | off |
+| `cc 6` | the glyphs' own hue — sparkles, letters, the small disc (riso: the second plate) | the ink's |
+| `cc 7` | riso's drift, or scan's lift | 4 px, 30 px |
+| `cc 8` | the deck's cell grid, drawn on the screen, this bright | off |
+
+```
+>day = cc 4 ch 16
+>day 0011223344556677 /16      first light: black to paper over the section
+>inv = cc 5 ch 16
+>inv 90......9090....          the screen flips on the kick
+```
+
+The same controllers go to every MIDI output as well. **`>send view off` clears
+them**, so each act of a set starts from the node's own colours.
+
+**`plain` is the panel, now.** Every glyph and tile the node draws is the deck's own:
+`view/deckview/deckfont.h` is generated from the same art as the panel's faces
+(`tools/make_font.py --view`, diffed in CI).
 
 ## On the deck
 
 | | |
 |---|---|
-| `>send view on` | frames go out at **80×30** cells, the node's whole screen; if the view is already on, it keeps its size |
-| `>send view scan` | on, drawn as scan lines — likewise `plain`, `phosphor`, `feedback`, `riso`, `poster` |
-| `>send view 40x12` | on, at any size up to 80×30 |
+| `>send view on` | frames go out at **53×20** cells, the node's screen one to one; if the view is already on, it keeps its size |
+| `>send view scan` | on, drawn as scan lines — likewise `plain`, `riso`, `poster`, `code` |
+| `>send view 80x30` | on, at any size up to 80×30; the node shows the middle 53×20 |
 | `>send view` | which: `view is on, scan` |
-| `>send view off` | stop, and the panel's split decides the size again |
+| `>send view off` | stop; the panel's split decides the size again, and the colours clear |
 
 A mode is one more argument to the destination, not a new word. Written into a
 section of a piece, it changes with the piece.
@@ -86,11 +107,12 @@ w, h  u8, u8      the frame in cells
 cells w*h bytes   row by row: 32–126 text, 128–155 the deck's tiles
 sum   u8          XOR of every byte after the magic
 
-'D' 'K' 'C' '1'   magic: a control frame
+'D' 'K' 'C' '2'   magic: a control frame ('DKC1' is the same without par)
 tick  u32 LE      as above
-mode  u8          0 plain, 1 scan, 2 phosphor, 3 feedback, 4 riso, 5 poster
+mode  u8          0 plain, 1 scan, 4 riso, 5 poster, 6 code (2 and 3 retired: plain)
 n     u8          lines of text, 0–12
 len   u16 LE      bytes of text
+par   8 x u8      the colour controllers, cc 1-8 on channel 16: 0-127, 255 unset
 text  len bytes   n lines, each: from u8, to u8, its characters, '\n' -
                   [from, to) is the span to light, the step a lane is on
 sum   u8          XOR of every byte after the magic
@@ -116,8 +138,9 @@ kinds, junk with a false magic in it, 20 KB of nothing but torn frames, the larg
 picture, a corrupted control frame that must leave the mode as it was, and the two
 headers' limits held equal.
 
-**Room for both.** The picture goes out as 3,225 bytes of base64 and the poster's
-lines as at most about 600, through the console's 4,000-byte ring. The ring stays
+**Room for both.** At 53×20 the picture goes out as 1,428 bytes of base64 (3,225 at
+the largest, 80×30), and the poster's or the code's lines as at most about 620 with
+the colours, through the console's 4,000-byte ring. The ring stays
 under 4,096 bytes so it is kept in internal RAM, because the USB interrupt touches it
 and PSRAM is not there while the flash is being written.
 
@@ -154,7 +177,7 @@ the deck to the node, plus ground and power. It is simpler than USB host, faster
 than the relay, and deterministic, because a byte on a UART always takes the same
 time and nothing else shares the wire.
 
-**The bytes do not change.** The node already reads DKV1 and DKC1 frames and
+**The bytes do not change.** The node already reads DKV1, DKC1 and DKC2 frames and
 resynchronises on the magic after a torn frame (`view_read.h`, tested in CI). On a
 raw wire the base64 and the terminal escape go, and the frames go out as binary.
 
@@ -166,8 +189,10 @@ raw wire the base64 and the terminal escape go, and the frames go out as binary.
 | I2C 1 MHz | ~24 ms | ~34 ms | slower than a UART, and a bus to arbitrate |
 | today: USB to the computer, the relay, USB | several ms, jittered by two USB stacks and Python | | what the wire replaces |
 
-At 165 bpm a sixteenth is 91 ms, so a 2 Mbaud wire is busy 13 % of the time,
-19 % with the code view's lines. SPI would be faster again, but the node would have to be an SPI
+The table is the largest frame, 80×30. At 53×20, what `>send view on` sends now, a
+picture is 1,071 bytes: **5.4 ms at 2 Mbaud**. At 165 bpm a sixteenth is 91 ms, so
+the wire is busy 6 % of the time, 13 % at the largest frame, 19 % with the code
+view's lines. SPI would be faster again, but the node would have to be an SPI
 target while its cores are busy making DVI; a UART lands in a hardware FIFO and a
 DMA channel, which is enough.
 
@@ -264,6 +289,27 @@ that too.
 UART, `>view pin 18`, and the node reading `Serial1` or GPIO2 are small. The
 schematic stays the vendor's: this page names its pins and does not copy it.
 
+## Measured, 2026-09-29 — every pixel the deck's
+
+- **On this computer, the node's own code** (`tools/node_sim.cpp`): ORBITALS' night
+  and orbit at 53×20, every mode, every frame packed as the deck packs it — 48 frames,
+  **0 refused**, and the screens are the sheet at the top of this page. The colour
+  settings on it were set as controllers would set them.
+- Build: **91 KB of flash, 55 KB of RAM** before the framebuffers, down from 94 KB
+  and 91 KB: the greys, their corners and the banded ink were the smoothing, and they
+  are gone.
+- `tools/test_view_wire.c` reads DKC2 with its colours, DKC1 with none, refuses a
+  colour with a bit wrong, and does not compile against the reader before it.
+- **In USB MIDI mode, measured live** while the owner played, 80×30 riso through the
+  relay: **4.1 frames a second of 8.27, and each held the editor's loop 30.4 ms**
+  (1.25 s of every 10); the loop fell to 166 turns a second. Stdio waited on the CDC's
+  512-byte transmit buffer until the host had every byte. Fixed in the firmware, not
+  yet on the deck: a frame is queued whole into a 4 KB buffer or dropped and counted,
+  never waited for (`usbdev_console_write_whole`), and at 53×20 it is half the size.
+  **Unmeasured until it is flashed.**
+- **Unverified until it is on a screen:** how the blocks look through a given
+  monitor's own scaler (see above), and the deck end to end with the colour lanes.
+
 ## Measured, 2026-09-28 — the glyphs
 
 - The node with the glyph layer, fed ORBITALS' night from the deck's own engine at
@@ -307,9 +353,8 @@ schematic stays the vendor's: this page names its pins and does not copy it.
   in 234, and the node's refusal count did not move. If the ring has no room the frame is
   **dropped whole, never torn**, and the heartbeat counts it (`sent`, `dropped`).
   A frame can now land inside another task's log line; the relay keeps the text.
-- **Unverified:** the view in USB MIDI mode. There the console is on the CDC
-  interface, this driver is not installed, and the frame goes through stdio as it
-  always did - untested either way.
+- **Unverified then:** the view in USB MIDI mode. Measured 2026-09-29: 30 ms a
+  frame, half the frames lost - see the top of this list.
 
 **Unmeasured, and the brief asks for it measured:** what the node costs the
 deck's battery. It needs the direct link and a way to power the node from the deck

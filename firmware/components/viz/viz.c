@@ -206,15 +206,19 @@ int viz_out_mode_now(void) { return s_out_mode; }
 
 const char *viz_out_mode_name(int mode)
 {
+    /* Phosphor and feedback are retired (2026-09-29): both resampled the
+     * deck's pixels, and the owner wants them rigid. Their numbers stay taken
+     * on the wire, and the node draws them plain. */
     static const char *const names[VIZ_OUT_MODES] = {
-        "plain", "scan", "phosphor", "feedback", "riso", "poster", "code" };
+        "plain", "scan", NULL, NULL, "riso", "poster", "code" };
     return (mode >= 0 && mode < VIZ_OUT_MODES) ? names[mode] : NULL;
 }
 
 int viz_out_mode_find(const char *name)
 {
     for (int m = 0; m < VIZ_OUT_MODES; m++) {
-        if (name != NULL && strcmp(name, viz_out_mode_name(m)) == 0) {
+        const char *n = viz_out_mode_name(m);
+        if (name != NULL && n != NULL && strcmp(name, n) == 0) {
             return m;
         }
     }

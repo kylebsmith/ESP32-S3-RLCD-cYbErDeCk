@@ -196,7 +196,9 @@ originality goes where there is room for it: the view node, next.
 
 ### The view node — Bayer on the deck, anything on the screen
 
-![Six ways the view node could draw the same step of the radar](../img/view-modes.png)
+![The view node's five modes and three colour settings, drawn by its own code](../img/view-modes.png)
+
+**Rebuilt 2026-09-29: every pixel the deck's.** The owner found the first modes "blurred and mushed": the node spread each grey over its neighbours and dithered it again, and phosphor and feedback resampled the frame. Now each cell is the deck's own 6×12 tile at 2×2 a pixel, 53×20 cells to the screen, and colour is played on channel 16 ([VIEW.md](../VIEW.md)). What follows is the first design, kept for the record; the picture above is the node's code, not a mock-up.
 
 The deck keeps Bayer and sends the node what it sends today: one frame a step, and the
 tick it belongs to. **Everything below happens on the node, so the deck pays nothing for

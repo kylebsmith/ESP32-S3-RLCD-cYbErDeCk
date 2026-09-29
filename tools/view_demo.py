@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Drive the view node with no deck: the engine's own frames, every mode.
 
-  python3 tools/view_demo.py --view /dev/cu.usbmodemNODE            # all seven, in turn
+  python3 tools/view_demo.py --view /dev/cu.usbmodemNODE            # all five, in turn
   python3 tools/view_demo.py --view /dev/cu.usbmodemNODE --mode scan
 
 docs/VIEW.md. The frames are the deck's own picture engine - viz.c, built on
@@ -30,7 +30,8 @@ import serial
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mock_pictures as M   # noqa: E402
 
-MODES = ['plain', 'scan', 'phosphor', 'feedback', 'riso', 'poster', 'code']
+MODES = ['plain', 'scan', 'riso', 'poster', 'code']
+WIRE = {'plain': 0, 'scan': 1, 'riso': 4, 'poster': 5, 'code': 6}   # view_wire.h's numbers
 ORB = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'pieces/orbitals.txt')
 VERBS = {'send', 'bpm', 'scale', 'swing', 'play', 'stop', 'mute', 'solo', 'toggle',
          'clear', 'map', 'route'}
@@ -100,11 +101,11 @@ def main():
     exe = M.build(tmp, False)                     # the deck's viz.c, as flashed
     d = os.path.join(tmp, 'm')
     os.makedirs(d)
-    subprocess.run([exe, d, '80', '30', 'motion'], check=True)
+    subprocess.run([exe, d, '53', '20', 'motion'], check=True)
     film = []
     for scene, n in (('night', 32), ('orbit', 48)):
         for k in range(n):
-            film.append([c for row in M.load(d, f'{scene}{k:02d}', 80, 30) for c in row])
+            film.append([c for row in M.load(d, f'{scene}{k:02d}', 53, 20) for c in row])
 
     node = serial.Serial(a.view, 115200, timeout=0.1)
 
@@ -124,14 +125,12 @@ def main():
     period = 60.0 / 124 / 4
     try:
         while not a.total or time.time() - start < a.total:
-            if a.mode:
-                mode = MODES.index(a.mode)
-            else:
-                mode = int((time.time() - start) / a.seconds) % len(MODES)
+            name = a.mode or MODES[int((time.time() - start) / a.seconds) % len(MODES)]
+            mode = WIRE[name]
             tick = step * 24
-            lines = (poster_lines(step) if MODES[mode] == 'poster' else
-                     code_lines(step) if MODES[mode] == 'code' else [])
-            node.write(control(tick, mode, lines) + picture(tick, 80, 30, film[step % len(film)]))
+            lines = (poster_lines(step) if name == 'poster' else
+                     code_lines(step) if name == 'code' else [])
+            node.write(control(tick, mode, lines) + picture(tick, 53, 20, film[step % len(film)]))
             step += 1
             time.sleep(max(0.0, start + step * period - time.time()))
     except KeyboardInterrupt:

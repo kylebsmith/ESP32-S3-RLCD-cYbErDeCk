@@ -359,6 +359,23 @@ jobs:
           python3 tools/make_font.py --view > /tmp/deckfont.h
           diff -u view/deckview/deckfont.h /tmp/deckfont.h
 
+      # The node's own drawing code, run here: view/deckview/deckview.ino built
+      # against a stand-in for PicoDVI, fed the engine's frames at 53 x 20 packed
+      # as the deck packs them, through every mode, with colours set and unset.
+      # A crash, an out-of-bounds write or a refused frame fails it.
+      - name: Draw with the view node's own code
+        run: |
+          cc -std=c11 -O1 -I firmware/components/viz/include \
+             -I firmware/components/seq/include -I tools/hostshim \
+             -o /tmp/mock_frames tools/mock_frames.c firmware/components/viz/viz.c
+          c++ -std=c++17 -O1 -Wall -Werror -Wno-unused-function -fsanitize=address,undefined \
+             -I tools/nodesim -I view/deckview -o /tmp/node_sim tools/node_sim.cpp
+          mkdir -p /tmp/node_cells && /tmp/mock_frames /tmp/node_cells 53 20 motion > /dev/null
+          for m in plain scan riso poster code; do
+            /tmp/node_sim /tmp/node_cells 'night%02d-53x20.cells' $m /tmp/node_$m.ppm
+            /tmp/node_sim /tmp/node_cells 'orbit%02d-53x20.cells' $m /tmp/node_c_$m.ppm 70 20 127 127 127 0 90 60
+          done
+
       - name: Check the documentation is self-consistent
         run: python3 tools/check_docs.py
 

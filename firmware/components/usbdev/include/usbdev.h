@@ -43,6 +43,14 @@ esp_err_t usbdev_want(bool on);
 bool      usbdev_wanted(void);
 unsigned  usbdev_tries(void);
 
+/* A WHOLE WRITE TO THE CONSOLE, OR NONE, AND NEVER A WAIT. In USB MIDI mode
+ * the console is the CDC interface, and stdio waits there until the host has
+ * taken every byte: a view frame held the editor's loop 30 ms, measured, and
+ * half the frames never went (2026-09-29). This queues `n` bytes only if the
+ * CDC's transmit buffer has room for all of them, and returns false - the
+ * caller counts a drop - if it has not, or if no host is there. */
+bool usbdev_console_write_whole(const void *buf, size_t n);
+
 /* Messages sent, and how many USB packets carried them. */
 void usbdev_packing(uint32_t *msgs, uint32_t *packets);
 

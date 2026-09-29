@@ -182,6 +182,8 @@ routes draws in table order, whatever order the lines were typed.
 | `map cut` | only `cut` sends MIDI — learn it in the DAW, then `map` |
 
 `>bass = ch 5` sends the bass that is playing to another synth, same octave and gate.
+Controllers 1-8 on channel 16 colour the HDMI view: `>day = cc 4 ch 16`, then
+`>day 0123456789 /16` is a dawn ([VIEW.md](VIEW.md)).
 
 ## When something is wrong — 7
 

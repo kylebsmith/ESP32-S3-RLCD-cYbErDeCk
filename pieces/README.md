@@ -41,6 +41,7 @@ Press `>play` on the one: it starts the act's bar count from the top.
 | 5 | Bass2: where `>bass = ch 5` sends the bass |
 | 6 | Bass3: `>bass = ch 6` |
 | 10 | a General MIDI drum kit |
+| 16 | **the HDMI screen's colour**: `day`, `inv`, `glint`, `skew`, `lines` are controllers 1-8 here ([VIEW.md](../docs/VIEW.md)) |
 
 `cut` is controller 74 on channel 1, and follows the bass to channel 5 in
 `ground`. Each act defines the voices it uses, because octave and gate are part

@@ -4,7 +4,8 @@
  * frames with the deck's firmware/main/view_wire.h and feeds them through this.
  *
  * TWO KINDS OF FRAME, ONE READER. A picture ('DKV1': the cells) and a control
- * frame ('DKC1': the mode, and the poster's lines) share a magic up to its third
+ * frame ('DKC1' or 'DKC2': the mode, the poster's lines, and in DKC2 the view's
+ * parameters) share a magic up to its third
  * byte and a checksum, so one scan finds both and one resync serves both.
  *
  * ONE LOST BYTE COSTS ONE FRAME. A reader that goes back to scanning when a
@@ -33,8 +34,8 @@
 enum { VR_PICTURE = 1, VR_CONTROL = 2 };   /* what view_read_byte() completed */
 
 typedef struct {
-    int      state, got, kind, need;
-    uint8_t  head[8];
+    int      state, got, kind, ver, need;
+    uint8_t  head[16];
     uint8_t  sum;
     uint8_t  cells[VIEW_MAX_W * VIEW_MAX_H];
     uint8_t  body[VIEW_READ_TEXT_MAX];        /* a control frame's text, as it comes */
@@ -49,6 +50,7 @@ typedef struct {
     /* the last good control frame */
     uint32_t ctl_tick, controls;
     uint8_t  mode, nlines;
+    uint8_t  params[8];                  /* 255 unset, and always in DKC1 */
     uint16_t text_len;
     uint8_t  text[VIEW_READ_TEXT_MAX];
 } view_reader_t;
@@ -65,7 +67,8 @@ static inline int view_read_step(view_reader_t *r, uint8_t b)
     case VR_MAGIC: {
         const int g = r->got;
         const int ok = (g == 0 && b == 'D') || (g == 1 && b == 'K') ||
-                       (g == 2 && (b == 'V' || b == 'C')) || (g == 3 && b == '1');
+                       (g == 2 && (b == 'V' || b == 'C')) ||
+                       (g == 3 && (b == '1' || (b == '2' && r->kind)));
         if (!ok) {
             r->got = (b == 'D') ? 1 : 0;
             return 0;
@@ -73,12 +76,15 @@ static inline int view_read_step(view_reader_t *r, uint8_t b)
         if (g == 2) {
             r->kind = (b == 'C');
         }
+        if (g == 3) {
+            r->ver = b - '0';
+        }
         if (++r->got == 4) {
             r->state = VR_HEAD;
             r->got = 0;
             r->sum = 0;
             r->raw[0] = 'D'; r->raw[1] = 'K'; r->raw[2] = r->kind ? 'C' : 'V';
-            r->raw[3] = '1';
+            r->raw[3] = (uint8_t)('0' + r->ver);
             r->nraw = 4;
         }
         return 0;
@@ -86,7 +92,7 @@ static inline int view_read_step(view_reader_t *r, uint8_t b)
     case VR_HEAD:
         r->head[r->got++] = b;
         r->sum ^= b;
-        if (r->got == (r->kind ? 8 : 6)) {
+        if (r->got == (r->kind ? (r->ver == 2 ? 16 : 8) : 6)) {
             r->got = 0;
             if (r->kind) {
                 const int n = r->head[5], len = r->head[6] | (r->head[7] << 8);
@@ -126,6 +132,9 @@ static inline int view_read_step(view_reader_t *r, uint8_t b)
             r->ctl_tick = tick;
             r->mode = r->head[4];
             r->nlines = r->head[5];
+            for (int i = 0; i < 8; i++) {
+                r->params[i] = (r->ver == 2) ? r->head[8 + i] : 255;
+            }
             r->text_len = (uint16_t)r->need;
             memcpy(r->text, r->body, (size_t)r->need);
             r->controls++;

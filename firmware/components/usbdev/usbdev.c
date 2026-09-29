@@ -169,6 +169,16 @@ static uint32_t s_dropped;
 unsigned usbdev_tries(void) { rtc_init_once(); return (unsigned)s_tries; }
 bool     usbdev_mounted(void) { return s_active && tud_midi_mounted(); }
 
+bool usbdev_console_write_whole(const void *buf, size_t n)
+{
+    if (!s_active || !tud_mounted() || tud_cdc_n_write_available(0) < n) {
+        return false;
+    }
+    const uint32_t k = tud_cdc_n_write(0, buf, (uint32_t)n);
+    tud_cdc_n_write_flush(0);
+    return k == n;
+}
+
 void usbdev_status(char *out, size_t max)
 {
     /* tud_mounted() is the DEVICE; tud_midi_mounted() is the MIDI INTERFACE

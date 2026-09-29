@@ -162,6 +162,38 @@ int main(void)
     CHECK(k == VIEW_LINE_MAX && from == 0 && to == 0,
           "a long line is cut at %d characters and its span past the cut dropped", VIEW_LINE_MAX);
 
+    /* 11. DKC2 carries the view's parameters - controllers 1-8 on channel 16,
+     *     255 for unset - and a DKC1 frame still reads, every parameter unset. */
+    const uint8_t par[VIEW_PARAMS] = { 0, 64, 127, VIEW_PARAM_UNSET, 1, 2, 3, 4 };
+    const size_t c2n = view_wire_pack_ctl2(c, sizeof c, 7, VIEW_MODE_PLAIN, par, lines, 1);
+    CHECK(c2n > 0 && memcmp(c, "DKC2", 4) == 0 && c2n == VIEW_CTL2_HEAD_LEN + (2 + 8 + 1) + 1,
+          "a DKC2 frame is DKC1 with eight parameters (%zu bytes)", c2n);
+    memset(&R, 0, sizeof R);
+    CHECK(feed(c, c2n) == VR_CONTROL && memcmp(R.params, par, VIEW_PARAMS) == 0 &&
+          R.nlines == 1 && R.mode == VIEW_MODE_PLAIN, "the node reads the parameters");
+    k = view_read_line(&R, 0, &ch, &from, &to);
+    CHECK(k == 8 && memcmp(ch, "ORBITALS", 8) == 0, "and the lines after them");
+    uint8_t c1[64];
+    const size_t c1n = view_wire_pack_ctl(c1, sizeof c1, 8, VIEW_MODE_SCAN, NULL, 0);
+    CHECK(feed(c1, c1n) == VR_CONTROL && R.mode == VIEW_MODE_SCAN &&
+          R.params[0] == VIEW_PARAM_UNSET && R.params[7] == VIEW_PARAM_UNSET,
+          "a DKC1 frame leaves every parameter unset");
+    const size_t c3n = view_wire_pack_ctl2(c, sizeof c, 9, VIEW_MODE_RISO, par, NULL, 0);
+    c[VIEW_CTL_HEAD_LEN + 2] ^= 0x01;
+    const uint32_t was = R.refused;
+    CHECK(feed(c, c3n) == 0 && R.refused > was && R.mode == VIEW_MODE_SCAN,
+          "a parameter with a bit wrong is refused, and the mode stands");
+    static uint8_t mix[512];
+    size_t mo = 0;
+    const size_t c4n = view_wire_pack_ctl2(mix + 40, sizeof mix - 40, 10, VIEW_MODE_POSTER, par, NULL, 0);
+    memcpy(mix, mix + 40, c4n / 2); mo = c4n / 2;                /* torn */
+    memmove(mix + mo, mix + 40, c4n); mo += c4n;                 /* whole */
+    memset(&R, 0, sizeof R);
+    CHECK(feed(mix, mo) == VR_CONTROL && R.mode == VIEW_MODE_POSTER && R.params[2] == 127,
+          "a torn DKC2 costs itself and the next is read");
+    CHECK(VIEW_CTL2_HEAD_LEN + VIEW_TEXT_MAX + 1 <= VIEW_RAW_MAX,
+          "the largest control frame fits the node's buffer");
+
     /* 6. Base64 as the console carries it today: RFC 4648's own vectors. */
     static const char *in[] = { "", "f", "fo", "foo", "foob", "fooba", "foobar" };
     static const char *out[] = { "", "Zg==", "Zm8=", "Zm9v", "Zm9vYg==",

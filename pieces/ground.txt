@@ -16,6 +16,10 @@ GROUND
 >cut <3 3 5 7> /16
 >grid 4.......4.......
 >box 9.......9.......
+>lines = cc 8 ch 16
+>lines 3 /16
+>day = cc 4 ch 16
+>day 0 /16
 
 -- offset
 >send view riso
@@ -29,6 +33,9 @@ GROUND
 >bass 0_....3.0_..5.7.
 >move r 4...
 >grid
+>lines
+>skew = cc 7 ch 16
+>skew <2 4 6 8> /16
 
 -- erase
 >send view scan
@@ -41,9 +48,10 @@ GROUND
 >kick:2 5..
 >cut 2345678987654321 /4
 >box 9..
+>skew 0123456789876543 /4
 
 -- 124
->send view feedback
+>send view plain
 >toggle hat rim conga bass lead kick:2
 >bpm 124
 >swing 50
@@ -62,3 +70,5 @@ GROUND
 >pad <[0,2,4,6] [0,2,4,6] [5,0,2,4] [3,5,0,2]> /16
 >box 9...
 >grid 2...2...2...2...
+>skew
+>day 0123456789999999 /16

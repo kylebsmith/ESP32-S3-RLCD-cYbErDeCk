@@ -163,13 +163,13 @@ A picture of more than 1,083 characters overflows the buffer, for example a 60×
 | Command | Effect |
 |---|---|
 | `>send view on` | streams at **80×30** (the node's whole screen, two square dots to a cell); pins the frame with `viz_out_size`; turns the split on; if already on, keeps its size |
-| `>send view <mode>` | on, and the node draws it that way: plain, scan, phosphor, feedback, riso, poster (`docs/VIEW.md`) |
+| `>send view <mode>` | on, and the node draws it that way: plain, scan, riso, poster, code (`docs/VIEW.md`); colour from controllers 1-8 on channel 16 |
 | `>send view WxH` | 4×2 up to 80×30; out of range gives `view is 4x2 to 80x30 cells` |
 | `>send view off` | stops and unpins (the pane decides the size again) |
 | `>send view` | shows `view is on, <mode>` / `view is off` |
 | `>send` | lists destinations; this one's help text is cut to 25 characters: `the picture to an HDMI no` (`view.c:36`, `builtins.c:2071`) |
 
-Other replies: `view on, <mode>`, `view off`, usage `send view on|off|80x30|mode` and the seven modes.
+Other replies: `view on, <mode>`, `view off`, usage `send view on|off|53x20|mode` and the five modes.
 
 **Capability.** `send` needs `CMD_CAP_SYSTEM` (`builtins.c:2313`), so it is **refused from the boot document**, which runs as GUIDE (`cmd.c:23-24`, `main.c:315`): `send: not permitted here`.
 

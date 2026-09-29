@@ -6,28 +6,30 @@
 // so none of it costs the deck anything, and all of it is worked out from the
 // frames and their ticks alone - the same performance draws the same pictures.
 //
-//   plain     the deck's picture, bit for bit, light on black
-//   scan      each row drawn as one line, lifted by its greys (Rutt/Etra, 1972)
-//   phosphor  a green tube: what the beam lit glows and fades over about a beat
-//   feedback  the last frame, zoomed and turned, with the new one on top
-//   riso      two inks out of register: pink is this step, blue the one before last
+// EVERY PIXEL IS THE DECK'S (2026-09-29). Each cell is drawn with the deck's own
+// 6 x 12 tile, bit for bit, and each of its pixels is a 2 x 2 block on the HDMI
+// screen: 53 x 20 cells are the whole screen. Nothing is blended, resampled or
+// re-dithered. The owner, looking at the old modes: the smoothing "blurred and
+// mushed" the "chunky blocks, rigid ass lovely pixels"; phosphor and feedback,
+// which only worked by resampling, are retired, and their numbers draw plain.
+//
+//   plain     the deck's cells, tile for tile
+//   scan      each row of cells one line across the screen, stepped up by its greys
+//   riso      two plates out of register: this step, and the step before last
 //   poster    a live Swiss poster of the piece, from the lines the deck sends
 //   code      the code itself, round the cursor, over the picture dimmed
 //
-// THE DECK'S OWN GLYPHS STAY GLYPHS. The greys are the deck's dots; every cell
-// the engine wrote as a glyph - the four sparkles noise scatters, the small disc,
-// the arcs, any letter - is drawn as itself on top, in the deck's compact 6 x 12
-// face, which on the screen is 12 x 24: the size the panel draws them. A sparkle
-// turned into a grey is a speck of nothing, and they are half the picture's voice.
+// COLOUR IS PLAYED, NOT PICKED: controllers 1-8 on MIDI channel 16, which the
+// deck forwards with every control frame (view_wire.h) - ink, paper, saturation,
+// day, invert, the glyphs' accent, drift, and the grid. See params().
 //
 // 320 x 240, eight bits a pixel through a palette, doubled to 640 x 480 at 60 Hz
 // - the mode every HDMI screen takes. Two framebuffers: the next picture is drawn
-// while the last is shown, and phosphor and feedback read the one on screen.
-// Mock-ups of each, from the engine's real frames: tools/mock_view.py.
+// while the last is shown.
 //
 // Frames arrive over USB serial. Today the deck's frames are relayed by a
 // computer (tools/viewrelay.py); the same bytes are what the deck will send
-// itself when it drives this board directly.
+// itself when it drives this board directly (docs/VIEW.md, "The wire").
 //
 //   arduino-cli compile -b rp2040:rp2040:adafruit_feather_dvi view/deckview
 //   arduino-cli upload  -b rp2040:rp2040:adafruit_feather_dvi -p <port> view/deckview
@@ -37,162 +39,107 @@
 #include "deckfont.h"
 #include "view_read.h"
 
+typedef struct { int r, g, b; } col_t;       // a colour, 0-255 a channel
+static inline col_t C(int r, int g, int b) { col_t c = { r, g, b }; return c; }
+
 DVIGFX8 display(DVI_RES_320x240p60, true, adafruit_feather_dvi_cfg);
 
 #define W 320
 #define H 240
+#define CW 6                                   // a cell: the deck's compact tile
+#define CH 12
+#define COLS (W / CW)                          // 53
+#define ROWS (H / CH)                          // 20
 
 // The modes, numbered as the deck's firmware/main/view_wire.h numbers them.
 enum { PLAIN, SCAN, PHOSPHOR, FEEDBACK, RISO, POSTER, CODE, MODES };
-static const char *const NAMES[MODES] = { "plain", "scan", "phosphor", "feedback",
+static const char *const NAMES[MODES] = { "plain", "scan", "plain", "plain",
                                           "riso", "poster", "code" };
 
 static view_reader_t s_rd;
-static uint8_t *s_base;                 // the first of the two framebuffers
 static int s_mode = PLAIN, s_pal_dirty = 2;
 static uint32_t s_label_until;          // show the mode's name until then
+static uint8_t s_par_seen[8];            // the parameters the palette was made from
 
-static const uint8_t BAYER[4][4] = {
-  { 0, 8, 2, 10 }, { 12, 4, 14, 6 }, { 3, 11, 1, 9 }, { 15, 7, 13, 5 } };
-
-// ---- the picture as greys ------------------------------------------------
+// ---- the cells, as the deck sent them ------------------------------------
 //
-// A cell is twice as tall as it is wide, so it is two square dots, one above
-// the other: 80 x 30 cells are 80 x 60 dots, a dot 4 x 4 pixels.
+// This step and the two before, for riso's second plate.
 
-#define DW_MAX 80
-#define DH_MAX 60
-static uint8_t s_tone_of[256];
-static bool    s_glyph[256];                  // drawn as itself, not as a grey
-static uint8_t s_hist[3][DH_MAX][DW_MAX];    // this step and the two before
-static uint8_t s_code[3][DH_MAX / 2][DW_MAX]; // and their cells, for the glyphs
-static uint8_t s_hdw[3], s_hdh[3];
+static uint8_t s_cells[3][VIEW_MAX_H][VIEW_MAX_W];
+static uint8_t s_cw[3], s_ch[3];
 static int s_cur;
-static int16_t s_cor[DH_MAX + 1][DW_MAX + 1];  // greys at dot corners, 0..256
-static uint8_t s_ink[H][W / 8];                // this step, banded, bit for bit
-// where each screen column and row falls in the grid
-static int16_t s_cdot[W], s_rdot[H];
-static uint8_t s_cfrac[W], s_rfrac[H];
-static int s_dw, s_dh, s_s, s_ox, s_oy;
+static uint8_t s_tone_of[256];           // 0..8: how grey a cell is, for scan
+static bool    s_glyph[256];             // a letter or a sign, not a tone
 
-// A tile's grey: the tones are 128..136; the small disc, 147, is solid; any
-// other glyph is as grey as it is inked.
 static void tones_init(void)
 {
   for (int c = 0; c < 256; c++) {
     int ink = 0;
     if (c >= DECKFONT_FIRST && c <= DECKFONT_LAST) {
       const int g = c - DECKFONT_FIRST;
-      for (int r = 0; r < 24; r++) {
-        uint16_t bits = (deckfont_12x24[(g * 24 + r) * 2] << 8) | deckfont_12x24[(g * 24 + r) * 2 + 1];
+      for (int r = 0; r < CH; r++) {
+        uint8_t bits = deckfont_6x12[g * CH + r];
         while (bits) { ink += bits & 1; bits >>= 1; }
       }
     }
-    s_tone_of[c] = (uint8_t)((ink * 8 + 144) / 288);
+    s_tone_of[c] = (uint8_t)((ink * 8 + 36) / 72);
+    if (s_tone_of[c] > 8) s_tone_of[c] = 8;
   }
   for (int t = 0; t <= 8; t++) s_tone_of[128 + t] = (uint8_t)t;
   s_tone_of[' '] = 0;
-  // a glyph is drawn as itself, so it is no grey in the field under it
-  for (int c = 0; c < 256; c++) {
-    s_glyph[c] = (c > ' ' && c < 127) || (c >= 137 && c <= DECKFONT_LAST);
-    if (s_glyph[c]) s_tone_of[c] = 0;
-  }
+  for (int c = 0; c < 256; c++) s_glyph[c] = (c > ' ' && c < 127) || (c >= 137 && c <= DECKFONT_LAST);
 }
 
-static void grid_from_cells(const uint8_t *cells, int w, int h)
+static void keep_cells(const uint8_t *cells, int w, int h)
 {
-  const int dw = w < DW_MAX ? w : DW_MAX;
-  const int dh = 2 * h < DH_MAX ? 2 * h : DH_MAX;
   s_cur = (s_cur + 1) % 3;
-  for (int j = 0; j < dh; j++) {
-    const int cy = (j * 2 * h / dh) / 2;
-    for (int i = 0; i < dw; i++) {
-      const uint8_t c = cells[cy * w + i * w / dw];
-      s_hist[s_cur][j][i] = s_tone_of[c];
-      if ((j & 1) == 0) s_code[s_cur][j / 2][i] = c;
-    }
-  }
-  s_hdw[s_cur] = (uint8_t)dw;
-  s_hdh[s_cur] = (uint8_t)dh;
+  for (int y = 0; y < h; y++) memcpy(s_cells[s_cur][y], cells + y * w, w);
+  s_cw[s_cur] = (uint8_t)w;
+  s_ch[s_cur] = (uint8_t)h;
 }
 
-// Place a dw x dh grid of s-pixel dots at (ox, oy), and tabulate where every
-// column and row lands, so nothing below divides per pixel.
-static void place(int dw, int dh, int s, int ox, int oy)
+// ONE CELL, BIT FOR BIT: the deck's 6 x 12 tile at (x, y). A tone is drawn in
+// `ink`, a glyph in `accent`; paper is left alone. `plate` ORs instead of
+// setting, for riso's two inks.
+static void cell(uint8_t *fb, int x, int y, uint8_t c, uint8_t ink, uint8_t accent, bool plate)
 {
-  s_dw = dw; s_dh = dh; s_s = s; s_ox = ox; s_oy = oy;
-  for (int x = 0; x < W; x++) {
-    const int g = x - ox;
-    if (g < 0 || g >= dw * s) { s_cdot[x] = -1; continue; }
-    s_cdot[x] = (int16_t)(g / s);
-    s_cfrac[x] = (uint8_t)(((2 * (g % s) + 1) * 256) / (2 * s));
-  }
-  for (int y = 0; y < H; y++) {
-    const int g = y - oy;
-    if (g < 0 || g >= dh * s) { s_rdot[y] = -1; continue; }
-    s_rdot[y] = (int16_t)(g / s);
-    s_rfrac[y] = (uint8_t)(((2 * (g % s) + 1) * 256) / (2 * s));
-  }
-}
-
-static void place_fit(int dw, int dh)
-{
-  int s = W / dw < H / dh ? W / dw : H / dh;
-  if (s < 1) s = 1;
-  place(dw, dh, s, (W - dw * s) / 2, (H - dh * s) / 2);
-}
-
-// The greys at the dots' corners: each the mean of the dots that meet there.
-static void corners(const uint8_t *g, int pitch, int dw, int dh)
-{
-  for (int j = 0; j <= dh; j++) {
-    for (int i = 0; i <= dw; i++) {
-      int sum = 0, n = 0;
-      for (int k = 0; k < 4; k++) {
-        const int x = i - 1 + (k & 1), y = j - 1 + (k >> 1);
-        if (x >= 0 && x < dw && y >= 0 && y < dh) { sum += g[y * pitch + x]; n++; }
-      }
-      s_cor[j][i] = (int16_t)((sum * 32 + n / 2) / n);
+  if (c < DECKFONT_FIRST || c > DECKFONT_LAST || c == ' ') return;
+  const int g = c - DECKFONT_FIRST;
+  const uint8_t v = s_glyph[c] ? accent : ink;
+  for (int r = 0; r < CH; r++) {
+    const int Y = y + r;
+    if (Y < 0 || Y >= H) continue;
+    const uint8_t bits = deckfont_6x12[g * CH + r];
+    if (!bits) continue;
+    for (int k = 0; k < CW; k++) {
+      const int X = x + k;
+      if (!(bits & (0x80 >> k)) || X < 0 || X >= W) continue;
+      if (plate) fb[Y * W + X] |= v; else fb[Y * W + X] = v;
     }
   }
 }
 
-// The grey a pixel was meant to have, 0..256, between its dot's corners.
-static inline int grey_at(int dx, int dy, int fx, int fy)
+// A slot's cells into the box [x0, x0 + cols*6) x [y0, y0 + rows*12), cropped
+// about the frame's centre when the frame is larger than the box.
+static void cells_at(uint8_t *fb, int slot, int x0, int y0, int cols, int rows,
+                     uint8_t ink, uint8_t accent, bool plate)
 {
-  const int a = s_cor[dy][dx], b = s_cor[dy][dx + 1];
-  const int d = s_cor[dy + 1][dx], e = s_cor[dy + 1][dx + 1];
-  const int left = a * 256 + (d - a) * fy, right = b * 256 + (e - b) * fy;
-  return (left * 256 + (right - left) * fx) >> 16;
+  const int w = s_cw[slot], h = s_ch[slot];
+  const int nc = w < cols ? w : cols, nr = h < rows ? h : rows;
+  const int cx0 = (w - nc) / 2, cy0 = (h - nr) / 2;
+  const int bx = x0 + (cols - nc) * CW / 2, by = y0 + (rows - nr) * CH / 2;
+  for (int j = 0; j < nr; j++)
+    for (int i = 0; i < nc; i++)
+      cell(fb, bx + i * CW, by + j * CH, s_cells[slot][cy0 + j][cx0 + i], ink, accent, plate);
 }
 
-// THE DECK'S OWN RULE (docs/wiki/pictures-and-type.md): a grey dot is banded
-// between its corners and cut into the nine tones; a solid or an empty dot is
-// exactly what it is. Bayer, at the pixel's place in the grid.
-static inline bool banded(const uint8_t *g, int pitch, int x, int y)
+// The whole screen's box: the frame centred, 53 x 20 at most.
+static void screen_box(int slot, int *x0, int *y0, int *cols, int *rows)
 {
-  if (x < 0 || x >= W || y < 0 || y >= H) return false;
-  const int dx = s_cdot[x], dy = s_rdot[y];
-  if (dx < 0 || dy < 0) return false;
-  const int t = g[dy * pitch + dx];
-  if (t == 0) return false;
-  if (t >= 8) return true;
-  int lv = (grey_at(dx, dy, s_cfrac[x], s_rfrac[y]) + 16) >> 5;
-  if (lv < 1) lv = 1;
-  if (lv > 7) lv = 7;
-  return BAYER[(y - s_oy) & 3][(x - s_ox) & 3] < 2 * lv;
-}
-
-static inline bool ink(int x, int y) { return s_ink[y][x >> 3] & (0x80 >> (x & 7)); }
-
-static void ink_this_step(void)
-{
-  const uint8_t *g = &s_hist[s_cur][0][0];
-  corners(g, DW_MAX, s_dw, s_dh);
-  memset(s_ink, 0, sizeof s_ink);
-  for (int y = 0; y < H; y++)
-    for (int x = 0; x < W; x++)
-      if (banded(g, DW_MAX, x, y)) s_ink[y][x >> 3] |= 0x80 >> (x & 7);
+  *cols = s_cw[slot] < COLS ? s_cw[slot] : COLS;
+  *rows = s_ch[slot] < ROWS ? s_ch[slot] : ROWS;
+  *x0 = (W - *cols * CW) / 2;
+  *y0 = (H - *rows * CH) / 2;
 }
 
 // ---- type, in the deck's own faces ---------------------------------------
@@ -247,45 +194,19 @@ static void fill(uint8_t *fb, int x, int y, int w, int h, uint8_t c)
         if (X >= 0 && X < W) fb[Y * W + X] = c;
 }
 
-// ---- the deck's glyphs, drawn as themselves ---------------------------------
+// ---- colour: the performer's, from channel 16 ----------------------------
 //
-// Each glyph cell's 6 x 12 glyph, centred on the cell. `how` is the mode's ink:
-// a palette index to set, or (riso) a plate bit to add; phosphor sets its full
-// glow on the line's own half of the palette. In scan a glyph sits on the line of
-// its row, since the rows are lines there.
+// A parameter is 0-127, or 255 when the deck has sent nothing for it. With all
+// of them unset, plain and scan are what they always were: warm light on black.
+//
+//   cc 1  ink hue            cc 5  invert, 64 and up
+//   cc 2  paper hue          cc 6  the glyphs' own hue: sparkles, letters, the disc
+//   cc 3  saturation         cc 7  drift (riso) or lift (scan)
+//   cc 4  day: 0 light on black, 127 black on paper, and every grey between
+//   cc 8  the deck's cell grid, shown, this bright
 
-enum { SET, PLATE, GLOW };
-
-static void glyphs(uint8_t *fb, int slot, int how, uint8_t ink, int ddx, int ddy)
-{
-  const int dw = s_hdw[slot], rows = s_hdh[slot] / 2;
-  const int lines = rows > 0 ? rows : 1;
-  for (int cy = 0; cy < rows; cy++) {
-    for (int cx = 0; cx < dw; cx++) {
-      const uint8_t c = s_code[slot][cy][cx];
-      if (!s_glyph[c]) continue;
-      int x0 = s_ox + cx * s_s + s_s / 2 - 3 + ddx;
-      int y0 = s_oy + cy * 2 * s_s + s_s - 6 + ddy;
-      if (s_mode == SCAN) y0 = 44 + ((cy + 1) * (H - 10 - 44)) / lines - 12;
-      const int g = c - DECKFONT_FIRST;
-      for (int r = 0; r < 12; r++) {
-        const uint8_t bits = deckfont_6x12[g * 12 + r];
-        const int Y = y0 + r;
-        if (!bits || Y < 0 || Y >= H) continue;
-        for (int k = 0; k < 6; k++) {
-          const int X = x0 + k;
-          if (!(bits & (0x80 >> k)) || X < 0 || X >= W) continue;
-          uint8_t *p = &fb[Y * W + X];
-          if (how == PLATE) *p |= ink;
-          else if (how == GLOW) *p = (uint8_t)(127 | ((Y & 1) << 7));
-          else *p = ink;
-        }
-      }
-    }
-  }
-}
-
-// ---- palettes ------------------------------------------------------------
+static int par(int i) { return s_rd.params[i]; }
+static bool set(int i) { return s_rd.params[i] != 255; }
 
 static uint16_t rgb(int r, int g, int b)
 {
@@ -295,49 +216,75 @@ static uint16_t rgb(int r, int g, int b)
   return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
 }
 
+// A hue 0-127 round the wheel, saturation and value 0-255.
+static col_t hsv(int h, int s, int v)
+{
+  const int hh = ((h % 128) + 128) % 128 * 6, sx = hh / 128, f = hh % 128;
+  const int p = v * (255 - s) / 255;
+  const int q = v * (255 - s * f / 127) / 255;
+  const int t = v * (255 - s * (127 - f) / 127) / 255;
+  switch (sx) {
+  case 0: return C(v, t, p);
+  case 1: return C(q, v, p);
+  case 2: return C(p, v, t);
+  case 3: return C(p, q, v);
+  case 4: return C(t, p, v);
+  default: return C(v, p, q);
+  }
+}
+
+static col_t mix(col_t a, col_t b, int k)            // k 0..256 of b
+{
+  return C(a.r + (b.r - a.r) * k / 256, a.g + (b.g - a.g) * k / 256,
+                  a.b + (b.b - a.b) * k / 256);
+}
+
+static void put(uint16_t *p, int i, col_t c) { p[i] = rgb(c.r, c.g, c.b); }
+
+// Paper, ink and the glyphs' colour from the parameters: 0 paper, 1 ink,
+// 2 glyphs, 3 both of riso's plates, 5 the grid.
 static void palette(int mode)
 {
   uint16_t *p = display.getPalette();
   for (int i = 0; i < 256; i++) p[i] = 0;
-  switch (mode) {
-  case PLAIN: case SCAN:
-    p[1] = rgb(236, 236, 228);
-    break;
-  case PHOSPHOR:                          // a green tube, and its dimmer odd lines
-    for (int i = 0; i < 128; i++) {
-      const float v = i / 127.0f;
-      const int r = (int)(170 * powf(v, 2.6f)), g = (int)(255 * fminf(1.0f, 1.08f * powf(v, 0.75f)));
-      const int b = (int)(120 * powf(v, 2.2f));
-      p[i] = rgb(r, g, b);
-      p[128 + i] = rgb(r * 45 / 100, g * 45 / 100, b * 45 / 100);
-    }
-    break;
-  case FEEDBACK:                          // black, through red and orange, to white
-    for (int i = 0; i < 256; i++) {
-      const float v = i / 255.0f;
-      p[i] = rgb((int)(255 * fminf(1.0f, 1.6f * v)), (int)(255 * fmaxf(0.0f, v - 0.55f) * 2.0f),
-                 (int)(255 * fmaxf(0.0f, v - 0.8f) * 4.0f));
-    }
-    break;
-  case RISO:                              // paper, pink, blue, and both
-    p[0] = rgb(244, 240, 229);
-    p[1] = rgb(255, 72, 176);
-    p[2] = rgb(0, 120, 191);
-    p[3] = rgb(0, 34, 133);
-    break;
-  case POSTER:                            // paper, ink, a red, and a grey
+  const bool riso = (mode == RISO);
+  const int day = set(3) ? par(3) : (riso ? 127 : 0);
+  const int sat = set(2) ? par(2) * 2 : (riso ? 255 : 0);
+  col_t paper, ink, ink2, glyph;
+  if (riso && !set(0) && !set(1) && !set(2) && !set(3)) {
+    paper = C(244, 240, 229);                  // paper, pink, blue, and both
+    ink = C(255, 72, 176);
+    ink2 = C(0, 120, 191);
+  } else {
+    paper = hsv(set(1) ? par(1) : 10, sat * 35 / 100, 8 + day * 237 / 127);
+    const int light = day >= 64;
+    ink = (!set(0) && !set(2)) ? (light ? C(18, 18, 18) : C(236, 236, 228))
+                               : hsv(set(0) ? par(0) : 0, sat, light ? 40 + sat * 150 / 255 : 245);
+    ink2 = hsv((set(5) ? par(5) : (set(0) ? par(0) : 116) + 64), riso ? 255 : sat,
+               light ? 60 + sat * 120 / 255 : 230);
+  }
+  glyph = set(5) ? hsv(par(5), 255, day >= 64 ? 200 : 255) : ink;
+  if (set(4) && par(4) >= 64) { col_t t = paper; paper = ink; ink = t; }
+  put(p, 0, paper);
+  put(p, 1, ink);
+  put(p, 2, riso ? ink2 : glyph);
+  put(p, 3, C(ink.r < ink2.r ? ink.r : ink2.r, ink.g < ink2.g ? ink.g : ink2.g,
+                     ink.b < ink2.b ? ink.b : ink2.b));
+  if (riso && day < 64) put(p, 3, mix(ink, ink2, 128));
+  put(p, 5, mix(paper, ink, set(7) ? 16 + par(7) : 0));
+  if (mode == POSTER) {                                // paper, ink, a red, and a grey
     p[0] = rgb(246, 244, 238);
     p[1] = rgb(18, 18, 18);
-    p[2] = rgb(228, 0, 43);
+    p[2] = set(5) ? p[2] : rgb(228, 0, 43);
     p[3] = rgb(150, 148, 142);
-    break;
-  case CODE:                              // black, the picture dimmed, text, red, grey
+    if (set(5)) { const col_t a = hsv(par(5), 255, 220); put(p, 2, a); }
+  } else if (mode == CODE) {                           // black, the picture dimmed, text, red, grey
     p[0] = rgb(0, 0, 0);
     p[1] = rgb(58, 58, 54);
     p[2] = rgb(236, 236, 228);
     p[3] = rgb(228, 0, 43);
     p[4] = rgb(128, 128, 122);
-    break;
+    if (set(5)) { const col_t a = hsv(par(5), 255, 255); put(p, 3, a); }
   }
 }
 
@@ -345,109 +292,78 @@ static void palette(int mode)
 
 static uint32_t step_of(uint32_t tick) { return tick / 24; }   // 96 to the beat
 
-static void draw_plain(uint8_t *fb)
+// The deck's cell grid itself, the lines between its cells: the Swiss reveal.
+static void grid_lines(uint8_t *fb, int x0, int y0, int cols, int rows)
 {
-  for (int y = 0; y < H; y++)
-    for (int x = 0; x < W; x++) fb[y * W + x] = ink(x, y) ? 1 : 0;
+  if (!set(7) || par(7) == 0) return;
+  for (int j = 0; j <= rows; j++) {
+    const int y = y0 + j * CH - (j == rows);
+    if (y >= 0 && y < H) for (int x = x0; x < x0 + cols * CW && x < W; x++) fb[y * W + x] = 5;
+  }
+  for (int i = 0; i <= cols; i++) {
+    const int x = x0 + i * CW - (i == cols);
+    if (x >= 0 && x < W) for (int y = y0; y < y0 + rows * CH && y < H; y++) fb[y * W + x] = 5;
+  }
 }
 
-// Each row of cells as one line across the screen, lifted by its greys; each
-// line hides what is behind it. A line only ever rises from its own base, and
-// the lines behind it sit on higher bases, so hiding them means clearing from
-// the line down to its base and no further.
+static void draw_plain(uint8_t *fb)
+{
+  memset(fb, 0, W * H);
+  int x0, y0, cols, rows;
+  screen_box(s_cur, &x0, &y0, &cols, &rows);
+  grid_lines(fb, x0, y0, cols, rows);
+  cells_at(fb, s_cur, x0, y0, cols, rows, 1, 2, false);
+}
+
+// Each row of cells as one line across the screen, stepped up by each cell's
+// grey in whole pixels - no slope between cells, the steps are the cells - and
+// each line hides what is behind it, down to its own base. A glyph rides its
+// line, drawn as itself (Rutt and Etra's scan processor, on the deck's grid).
 static void draw_scan(uint8_t *fb)
 {
   memset(fb, 0, W * H);
-  const int lines = s_dh / 2 > 0 ? s_dh / 2 : 1;
-  const int top = 44, bottom = H - 10, pad = 16, lift = 38;
-  const int span = W - 2 * pad;
-  static int16_t ys[W];
-  for (int k = 0; k < lines; k++) {
-    const uint8_t *row = s_hist[s_cur][k * 2 < s_dh ? k * 2 : s_dh - 1];
-    const int base = top + ((k + 1) * (bottom - top)) / lines;
-    for (int x = pad; x < W - pad; x++) {
-      int pos = (((x - pad) * 2 + 1) * s_dw * 256) / (2 * span) - 128;
-      if (pos < 0) pos = 0;
-      int u0 = pos >> 8, f = pos & 255;
-      if (u0 >= s_dw - 1) { u0 = s_dw - 1; f = 0; }
-      const int u1 = u0 + 1 < s_dw ? u0 + 1 : u0;
-      const int t = row[u0] * (256 - f) + row[u1] * f;          // 0..2048
-      ys[x] = (int16_t)(base - (lift * t) / 2048);
-    }
-    for (int x = pad; x < W - pad; x++)
-      for (int y = ys[x] + 1; y <= base && y < H; y++) fb[y * W + x] = 0;
-    for (int x = pad; x < W - pad - 1; x++) {
-      const int a = ys[x] < ys[x + 1] ? ys[x] : ys[x + 1];
-      const int b = ys[x] < ys[x + 1] ? ys[x + 1] : ys[x];
-      for (int y = a; y <= b; y++) if (y >= 0 && y < H) fb[y * W + x] = 1;
-    }
-  }
-}
-
-// What the beam lit glows, and fades to about half each step; odd lines are
-// the dim half of the palette.
-static void draw_phosphor(uint8_t *fb, const uint8_t *front)
-{
-  for (int y = 0; y < H; y++) {
-    const uint8_t odd = (y & 1) << 7;
-    for (int x = 0; x < W; x++) {
-      int b = front[y * W + x] & 127;
-      b = (b * 70) >> 7;
-      if (ink(x, y)) b = 127;
-      fb[y * W + x] = (uint8_t)(b | odd);
-    }
-  }
-}
-
-// The frame on screen, zoomed and turned about the centre and a little dimmer,
-// with the new picture's greys on top. A full turn every two bars; a zoom that
-// kicks on each beat. It feeds back greys, not dots: a dither turned by a few
-// degrees is noise.
-static void draw_feedback(uint8_t *fb, const uint8_t *front, uint32_t tick)
-{
-  const float z = (step_of(tick) % 4 == 0) ? 1.10f : 1.035f;
-  const float th = 2.0f * (float)M_PI / 32.0f;
-  const int C = (int)(cosf(th) / z * 65536.0f), S = (int)(sinf(th) / z * 65536.0f);
-  const int cx2 = W - 1, cy2 = H - 1;                 // twice the centre
-  for (int y = 0; y < H; y++) {
-    // source = centre + R * (p - centre), in 16.16
-    const int ry = y * 2 - cy2, rx = -cx2;           // doubled offsets from the centre
-    int sx = (cx2 << 15) + (C * rx + S * ry) / 2;
-    int sy = (cy2 << 15) + (-S * rx + C * ry) / 2;
-    const int dy = s_rdot[y];
-    for (int x = 0; x < W; x++, sx += C, sy -= S) {
-      int X = (sx + 32768) >> 16, Y = (sy + 32768) >> 16;
-      X = X < 0 ? 0 : X >= W ? W - 1 : X;
-      Y = Y < 0 ? 0 : Y >= H ? H - 1 : Y;
-      int v = (front[Y * W + X] * 215) >> 8;
-      const int dx = s_cdot[x];
-      if (dx >= 0 && dy >= 0) {
-        const int n = (grey_at(dx, dy, s_cfrac[x], s_rfrac[y]) * 255) >> 8;
-        if (n > v) v = n;
+  int x0, y0, cols, rows;
+  screen_box(s_cur, &x0, &y0, &cols, &rows);
+  grid_lines(fb, x0, y0, cols, rows);
+  const int lift = set(6) ? par(6) * 48 / 127 : 30;
+  const int w = s_cw[s_cur], h = s_ch[s_cur];
+  const int cx0 = (w - cols) / 2, cy0 = (h - rows) / 2;
+  for (int j = 0; j < rows; j++) {
+    const int base = y0 + (j + 1) * CH - 1;
+    int prev = -1;
+    for (int i = 0; i < cols; i++) {
+      const uint8_t c = s_cells[s_cur][cy0 + j][cx0 + i];
+      const int y = base - (s_glyph[c] ? 0 : s_tone_of[c] * lift / 8);
+      const int xa = x0 + i * CW;
+      for (int X = xa; X < xa + CW && X < W; X++) {
+        for (int Y = y + 1; Y <= base && Y < H; Y++) if (Y >= 0) fb[Y * W + X] = 0;
+        if (y >= 0 && y < H) fb[y * W + X] = 1;
       }
-      fb[y * W + x] = (uint8_t)v;
+      if (prev >= 0 && prev != y) {
+        const int lo = prev < y ? prev : y, hi = prev < y ? y : prev;
+        for (int Y = lo; Y <= hi; Y++) if (Y >= 0 && Y < H) fb[Y * W + xa] = 1;
+      }
+      prev = y;
+      if (s_glyph[c]) cell(fb, xa, y - CH + 1, c, 1, 2, false);
     }
   }
 }
 
-// Pink is this step; blue is the step before last, its plate drifting with the
-// bar - and a plate carries its own screen with it.
+// Two plates out of register: this step in the first ink, the step before last
+// in the second, where they cross both, which the palette makes darker. The
+// second plate drifts with the bar in whole pixels, as far as cc 7 says.
 static void draw_riso(uint8_t *fb, uint32_t tick)
 {
+  memset(fb, 0, W * H);
+  int x0, y0, cols, rows;
+  screen_box(s_cur, &x0, &y0, &cols, &rows);
   const int old = (s_cur + 1) % 3;
-  const uint8_t *g = &s_hist[old][0][0];
-  corners(g, DW_MAX, s_hdw[old], s_hdh[old]);
-  const int step = (int)step_of(tick);
-  const int ddx = (int)lroundf(4.0f * sinf(2.0f * (float)M_PI * (step % 16) / 16.0f)), ddy = 3;
-  const bool have = s_hdw[old] == s_dw && s_hdh[old] == s_dh;
-  for (int y = 0; y < H; y++)
-    for (int x = 0; x < W; x++) {
-      const uint8_t a = ink(x, y) ? 1 : 0;
-      const uint8_t b = (have && banded(g, DW_MAX, x - ddx, y - ddy)) ? 2 : 0;
-      fb[y * W + x] = a | b;
-    }
-  glyphs(fb, s_cur, PLATE, 1, 0, 0);
-  if (have) glyphs(fb, old, PLATE, 2, ddx, ddy);
+  const int amt = set(6) ? par(6) * 8 / 127 : 4;
+  const int ph = (int)(step_of(tick) % 16), tri = ph < 8 ? ph : 16 - ph;   // 0..8..0
+  const int ddx = (tri - 4) * amt / 4, ddy = (amt + 1) / 2;
+  cells_at(fb, s_cur, x0, y0, cols, rows, 1, 1, true);
+  if (s_cw[old] == s_cw[s_cur] && s_ch[old] == s_ch[s_cur])
+    cells_at(fb, old, x0 + ddx, y0 + ddy, cols, rows, 2, 2, true);
 }
 
 // Type turned a quarter anticlockwise, reading upward from (x, y): the spine.
@@ -476,22 +392,6 @@ static int line_of(int i, char *out, int max, int *from, int *to)
   return n;
 }
 
-// This step's picture resampled to dw x dh dots of 4 pixels at (x0, y0), in `ink`.
-static void picture_at(uint8_t *fb, int dw, int dh, int x0, int y0, int x1, int y1, uint8_t ink)
-{
-  static uint8_t pic[DH_MAX][DW_MAX];
-  for (int j = 0; j < dh; j++)
-    for (int i = 0; i < dw; i++)
-      pic[j][i] = s_hist[s_cur][j * s_dh / dh][i * s_dw / dw];
-  const int dw0 = s_dw, dh0 = s_dh, s0 = s_s, ox0 = s_ox, oy0 = s_oy;
-  place(dw, dh, 4, x0, y0);
-  corners(&pic[0][0], DW_MAX, dw, dh);
-  for (int y = y0 < 0 ? 0 : y0; y < y1 && y < H; y++)
-    for (int x = x0 < 0 ? 0 : x0; x < x1 && x < W; x++)
-      if (banded(&pic[0][0], DW_MAX, x, y)) fb[y * W + x] = ink;
-  place(dw0, dh0, s0, ox0, oy0);
-}
-
 // THE POSTER, the owner's brief (2026-09-29): the title and the tempo took half
 // the screen, and it should be far more Swiss punk. So the picture takes the
 // page, bleeding off the top and the right; the section's number is huge, red,
@@ -518,7 +418,7 @@ static void draw_poster(uint8_t *fb, uint32_t tick)
   for (char *c = meta; *c; c++) if (*c >= 'a' && *c <= 'z') *c -= 32;
   const uint32_t step = step_of(s_rd.tick);
 
-  picture_at(fb, 56, 37, W - 224, 0, W, 148, 1);          // bleeds top and right
+  cells_at(fb, s_cur, W - 222, 2, 37, 12, 1, 2, false);   // cell for cell, top right
   fill(fb, 0, 0, 22, H, 1);                               // the spine
   for (int i = 0; title[i] && 8 + i * 12 < H; i++) glyph12up(fb, 5, H - 8 - i * 12, (uint8_t)title[i], 0);
   const int nl = (int)strlen(num);
@@ -558,7 +458,11 @@ static void draw_code(uint8_t *fb, uint32_t tick)
 {
   (void)tick;
   memset(fb, 0, W * H);                                   // black
-  picture_at(fb, 80, 60, 0, 0, W, H, 1);                  // the picture, dim
+  {                                                       // the picture, dim, cell for cell
+    int x0, y0, cols, rows;
+    screen_box(s_cur, &x0, &y0, &cols, &rows);
+    cells_at(fb, s_cur, x0, y0, cols, rows, 1, 1, false);
+  }
   int from, to;
   char title[40], meta[40];
   line_of(0, title, 24, &from, &to);
@@ -589,23 +493,22 @@ static void draw_code(uint8_t *fb, uint32_t tick)
 
 // ---- the screen ------------------------------------------------------------
 
-static const uint8_t LABEL_INK[MODES] = { 1, 1, 127, 255, 3, 2, 2 };
+static const uint8_t LABEL_INK[MODES] = { 1, 1, 1, 1, 1, 1, 2 };
 
 static void show(uint32_t tick)
 {
+  if (memcmp(s_par_seen, s_rd.params, sizeof s_par_seen) != 0) {
+    memcpy(s_par_seen, s_rd.params, sizeof s_par_seen);
+    s_pal_dirty = 2;
+  }
   if (s_pal_dirty > 0) { palette(s_mode); s_pal_dirty--; }
   uint8_t *fb = display.getBuffer();
-  const uint8_t *front = (fb == s_base) ? s_base + W * H : s_base;
-  place_fit(s_dw, s_dh);
-  ink_this_step();
   switch (s_mode) {
-  case SCAN:     draw_scan(fb);                  glyphs(fb, s_cur, SET, 1, 0, 0);   break;
-  case PHOSPHOR: draw_phosphor(fb, front);       glyphs(fb, s_cur, GLOW, 0, 0, 0);  break;
-  case FEEDBACK: draw_feedback(fb, front, tick); glyphs(fb, s_cur, SET, 255, 0, 0); break;
-  case RISO:     draw_riso(fb, tick);            break;             // both plates, inside
-  case POSTER:   draw_poster(fb, tick);          break;
-  case CODE:     draw_code(fb, tick);            break;
-  default:       draw_plain(fb);                 glyphs(fb, s_cur, SET, 1, 0, 0);   break;
+  case SCAN:   draw_scan(fb);         break;
+  case RISO:   draw_riso(fb, tick);   break;
+  case POSTER: draw_poster(fb, tick); break;
+  case CODE:   draw_code(fb, tick);   break;
+  default:     draw_plain(fb);        break;      // plain, and the two retired
   }
   if ((int32_t)(s_label_until - millis()) > 0) {
     fill(fb, 4, H - 18, 6 * (int)strlen(NAMES[s_mode]) + 4, 14, 0);
@@ -635,7 +538,6 @@ void setup()
     pinMode(LED_BUILTIN, OUTPUT);
     for (;;) digitalWrite(LED_BUILTIN, (millis() / 500) & 1);
   }
-  s_base = display.getBuffer();
   tones_init();
   show_waiting();
 }
@@ -659,9 +561,7 @@ void loop()
         }
       }
       if (got & VR_PICTURE) {
-        grid_from_cells(s_rd.cells, s_rd.w, s_rd.h);
-        s_dw = s_hdw[s_cur];
-        s_dh = s_hdh[s_cur];
+        keep_cells(s_rd.cells, s_rd.w, s_rd.h);
         show(s_rd.tick);
       }
     }

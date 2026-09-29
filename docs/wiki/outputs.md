@@ -140,11 +140,12 @@ See §3.
   - In USB MIDI mode it goes through `stdout`, which is the CDC interface (`view.c:71-74`).
   - `tools/viewrelay.py` relays it (`docs/VIEW.md:60-69`).
 - Size (`builtins.c:2093-2117`; `viz.h:64-65`):
-  - `on` means 80×30, unless the view is already on, when it keeps its size.
+  - `on` means 53×20, the node's screen one to one (80×30 until 2026-09-29), unless the view is already on, when it keeps its size.
   - `<W>x<H>` accepts 4×2 to 80×30; outside that it prints `view is 4x2 to 80x30 cells`.
-  - `<mode>` - plain, scan, phosphor, feedback, riso, poster, code - turns it on, drawn that way (`viz_out_mode`). `code` shows the document itself: its name, tempo and key, and ten lines round the cursor with each lane's step lit (`code_lines`, `view.c`), read in place since 2026-09-29.
+  - `<mode>` - plain, scan, riso, poster, code - turns it on, drawn that way (`viz_out_mode`). Phosphor and feedback were retired 2026-09-29: they resampled the deck's pixels. `code` shows the document itself: its name, tempo and key, and ten lines round the cursor with each lane's step lit (`code_lines`, `view.c`), read in place since 2026-09-29.
   - `off` restores the preview's own size.
-  - A bad argument prints `send view on|off|80x30|mode` and the seven modes.
+  - A bad argument prints `send view on|off|53x20|mode` and the five modes.
+- **Colour** is controllers 1-8 on MIDI channel 16, forwarded in every control frame (DKC2); `off` clears them ([VIEW.md](../VIEW.md)).
 - **No computer between them, planned:** a 2 Mbaud UART from the deck's back header (GPIO18) to the Feather's RX, with the deck's 3.3 V powering the node — [VIEW.md](../VIEW.md), "The wire".
 - The heartbeat reports `(%u sent, %u dropped)` (`main.c:950-954`).
 - Measured (`docs/VIEW.md:73-86`): 86 frames in about 10.5 s at 124 bpm with 0 refused. The per-frame cost fell from **31 ms** to **0.5 ms**, and the loop ran 199 → 142 → 192 turns/s (view off → view through stdio → after the fix). There were 0 drops in 234. USB MIDI mode is untested (`docs/VIEW.md:88-90`).
