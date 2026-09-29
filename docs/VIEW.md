@@ -171,17 +171,44 @@ At 165 bpm a sixteenth is 91 ms, so a 2 Mbaud wire is busy 13 % of the time,
 target while its cores are busy making DVI; a UART lands in a hardware FIFO and a
 DMA channel, which is enough.
 
+**The deck's back header** is P1 on the vendor schematic (H4): 2 × 8 pins at
+2.54 mm, lying horizontally on the back, with ESP32_SCL at the top right (the
+owner, 2026-09-29). Seen that way:
+
+```
+  top    VBUS  GND  USB'_N  USB'_P  U0TXD  U0RXD  SDA     SCL        pins 2 4 6 ... 16
+  bottom 3V3   GND  GPIO0   GPIO1   GPIO2  GPIO3  GPIO17  GPIO18     pins 1 3 5 ... 15
+```
+
+The orientation rests on one photo and one sentence: **check pin 1 is 3.3 V with
+a meter before anything is plugged in.**
+
+**Which pins, and why.** The view's TX is **GPIO18**. These are ruled out:
+
+- GPIO0 and GPIO3 are strapping pins.
+- U0TXD prints the boot ROM's text at every reset.
+- SDA and SCL are the board's own I2C bus.
+- GPIO17 is `>din 17`, the MIDI-on-a-wire output.
+- GPIO1–3 are ADC1 channels, which `>battery` may be using for the battery sense.
+
+The optional return line, from the node back to the deck, is GPIO2, and only if
+the battery sense is not on it. VBUS (pin 2) carries 5 V only while the deck's
+USB-C is plugged in, so on battery it is dead.
+
 **Two ways to build the cable. Both are the same circuit.**
 
 ```
-  DECK back header                     FEATHER RP2040 DVI
-  ----------------                     ------------------
-  GND  ------------------------------  GND
-  3V3  ------------------------------  3V   (powers the node; see power below)
-  GPIO a (UART TX, 2 Mbaud) ---------  RX   = GPIO1, UART0      (way A)
+  DECK P1                              FEATHER RP2040 DVI
+  -------                              ------------------
+  pin 3   GND  ----------------------  GND
+  pin 1   3V3  ----------------------  3V   (powers the node; see power below)
+  pin 15  GPIO18, UART TX 2 Mbaud ---  RX   = GPIO1, UART0      (way A)
                                    or  SDA  = GPIO2, PIO UART   (way B, the QT port)
-  GPIO b (UART RX, optional) --------  TX   = GPIO0             (node present / acks)
+  pin 9   GPIO2, optional -----------  TX   = GPIO0             (node present / acks)
 ```
+
+Three pins in the bottom row: 3V3 and GND at the left end, GPIO18 at the right
+corner.
 
 - **Way A, 0.1-inch ribbon.** Pins pushed into the deck's header, four wires to
   the Feather's GND, 3V, RX and TX. The Feather's hardware UART, nothing clever.
@@ -191,10 +218,15 @@ DMA channel, which is enough.
   RP2040's hardware UART cannot use, but a **PIO UART** can: PicoDVI takes one of
   the two PIO blocks and the other is free. One keyed cable carries power,
   ground and a 2 Mbaud UART, with no soldering on the node. The owner's word
-  for it: "insane".
+  for it: "insane". The cable's colours on P1: black to pin 3, red to pin 1,
+  blue (SDA) to pin 15, and yellow (SCL) to pin 9 if the return line is used.
 
-Any free GPIO on the deck can be the UART TX, because the ESP32-S3 routes UART
-signals to any pin. Both sides are 3.3 V logic: no level shifter.
+The ESP32-S3 can route a UART to any pin, which is why GPIO18 serves. Both
+sides are 3.3 V logic: no level shifter.
+
+**Never feed the Feather from the deck while its own USB is plugged into a
+computer.** Two supplies would fight on its 3V rail. While testing on USB, wire
+only GND and the data line.
 
 **Power.** The node draws roughly 100 mA at 3.3 V running DVI (**unmeasured**; to
 measure before it is wired). The deck's 3V3 into the Feather's 3V pin runs it. Two
@@ -228,9 +260,9 @@ that too.
   on the bench: frames a second, 0 refused, and the deck's `view` time in the
   heartbeat, before and after, through the relay and then on the wire.
 
-**Needed from the owner:** the labels on the deck's back header — which pins are
-3V3, GND, the battery or 5 V, and which GPIOs are free. The pinout is not in this
-repo; the vendor schematic is H4.
+**Next:** build the cable, meter pin 1, and then the firmware on both ends. The
+UART, `>view pin 18`, and the node reading `Serial1` or GPIO2 are small. The
+schematic stays the vendor's: this page names its pins and does not copy it.
 
 ## Measured, 2026-09-28 — the glyphs
 

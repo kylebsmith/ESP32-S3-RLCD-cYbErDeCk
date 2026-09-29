@@ -402,7 +402,7 @@ static inline int seq_pattern_item_span(const char *base, const char *p,
     if (*p != '<') {
         return 1;
     }
-    const char *q = p + 1, *inner_end = close - 1, *ms, *me;
+    const char *q = p + 1, *inner_end = close - 1, *ms = NULL, *me = NULL;
     int span = -1, r;
     while ((r = seq_pattern_member(base, &q, inner_end, &ms, &me, c)) == 1) {
         int words = 0, k = 1;
@@ -431,7 +431,7 @@ static inline int seq_pattern_measure_item(const char *base, const char *p,
     if (*p != '[' && *p != '<') {
         return 1;
     }
-    const char *q = p + 1, *inner_end = close - 1, *ms, *me;
+    const char *q = p + 1, *inner_end = close - 1, *ms = NULL, *me = NULL;
     int need = 1, cyc = 1, r;
     (void)e;
     while ((r = seq_pattern_member(base, &q, inner_end, &ms, &me, c)) == 1) {
@@ -597,7 +597,7 @@ static inline int seq_pattern_place_item(const char *base, const char *p,
     const int pr = seq_pattern_prob(prob, own);
 
     if (*p == '[' || *p == '<') {
-        const char *q = p + 1, *inner_end = close - 1, *ms, *me;
+        const char *q = p + 1, *inner_end = close - 1, *ms = NULL, *me = NULL;
         seq_tail_t out = { 0, { 0 } };
         int r;
         while ((r = seq_pattern_member(base, &q, inner_end, &ms, &me, c)) == 1) {
@@ -719,7 +719,7 @@ static inline int seq_pattern_place_words(const char *base, const char *p,
     int own = SEQ_PROB_ALWAYS;
     if (seq_pattern_mod_len(close, e, &own) <= 0) { own = SEQ_PROB_ALWAYS; }
     const int pr = seq_pattern_prob(prob, own);
-    const char *q = p + 1, *inner_end = close - 1, *ms, *me;
+    const char *q = p + 1, *inner_end = close - 1, *ms = NULL, *me = NULL;
     seq_tail_t out = { 0, { 0 } };
     int r;
     while ((r = seq_pattern_member(base, &q, inner_end, &ms, &me, c)) == 1) {

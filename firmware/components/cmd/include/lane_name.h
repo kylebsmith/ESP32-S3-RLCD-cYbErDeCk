@@ -321,7 +321,18 @@ static inline int lane_def_shift(const char *arg, const lane_def_t *was,
     char head[40];
     lane_def_text(was, head, sizeof head);
     while (*arg == ' ' || *arg == '\t') { arg++; }
-    snprintf(out, n, "%s %s", head, arg);
+    /* Joined by hand, cut to fit: a definition is a few words, and gcc
+     * refuses a snprintf that could be cut, even one that never is. */
+    if (n < 2) {
+        return -1;
+    }
+    size_t h = strlen(head), a = strlen(arg);
+    if (h + 2 > n) { h = n - 2; }
+    if (h + 1 + a + 1 > n) { a = n - h - 2; }
+    memcpy(out, head, h);
+    out[h] = ' ';
+    memcpy(out + h + 1, arg, a);
+    out[h + 1 + a] = '\0';
     return 1;
 }
 
