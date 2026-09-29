@@ -62,7 +62,7 @@ static inline size_t view_wire_pack(uint8_t *out, size_t max, uint32_t tick,
  *   'D' 'K' 'C' '1'   magic
  *   tick  u32, little-endian: the pulse it belongs to, as a picture's
  *   mode  u8: VIEW_MODE_*
- *   n     u8: lines of text, 0..VIEW_LINES_MAX
+ *   n     u8: lines of text, 0..VIEW_LINES_MAX - the poster's, or the code's
  *   len   u16, little-endian: bytes of text
  *   text  len bytes - n lines, each one: from u8, to u8, its characters, '\n'.
  *         [from, to) is the span to light, the step a lane is on; from == to
@@ -74,7 +74,7 @@ static inline size_t view_wire_pack(uint8_t *out, size_t max, uint32_t tick,
  * had to arrive once. The node does all the drawing; the deck only names it. */
 enum {
     VIEW_MODE_PLAIN, VIEW_MODE_SCAN, VIEW_MODE_PHOSPHOR, VIEW_MODE_FEEDBACK,
-    VIEW_MODE_RISO, VIEW_MODE_POSTER, VIEW_MODES
+    VIEW_MODE_RISO, VIEW_MODE_POSTER, VIEW_MODE_CODE, VIEW_MODES
 };
 #define VIEW_LINES_MAX    12
 #define VIEW_LINE_MAX     60

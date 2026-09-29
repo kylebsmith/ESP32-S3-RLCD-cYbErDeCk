@@ -151,7 +151,7 @@ int main(int argc, char **argv)
         }
     }
 
-    /* >echo 9 >move u >noise 1 - trails that rise, the olivia jack sketch */
+    /* >echo 9 >move u >noise 1 - trails that rise */
     fresh();
     for (int s = 0; s < 20; s++) {
         mark("echo", 9, 0); mark("move", 9, 'u'); mark("noise", 1, 0);

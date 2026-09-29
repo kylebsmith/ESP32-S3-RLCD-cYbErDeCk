@@ -2,6 +2,7 @@ ORBITALS
 for the satellites to come
 
 -- I night
+>send view phosphor
 >bpm 124
 >scale dphr
 >swing 50
@@ -20,13 +21,14 @@ for the satellites to come
 >bass 0 /16
 
 -- II first light
->scale dmin
+>send view plain
 >turn
 >turn:2
 >turn:3
 >turn:4
 >kick 5...4...5...4...
 >box 2...1...2...1...
+>scale dmin
 >disc 3
 >disc:x 8876532111235678
 >disc:y 568886531113
@@ -36,65 +38,72 @@ for the satellites to come
 >kick 9...8...9...8...
 
 -- III accretion
+>send view scan
 >noise
 >scale ddor
 >clap ....7.......7...
 >arp 047974247420
 >lead = voice 4 ch 2 gate 200
 >lead 7___9___8_7_4___.... /4
+>rim 5..3..4
 >glow = cc 74 ch 3
->glow 1234567899999999 /4 !1
->snare 4.4.5.5.6.6.7.7.7788889999999999 !1
->route crash snare:end
->route flip crash
+>glow <1 3 5 7 9 9 9 9> /16
 
 -- IV day
->scale dlyd
->snare
->glow
->fold 9
->kick 9...9...9...9...
+>send view riso
+>scale dmix
+>kick 9...9...9...9... !255
 >clap ....8.......8...
 >hat 2524252425242524
+>bass = ch 5
+>scale dmaj
 >rim ..3..3
+>fold 9
+>scale dlyd
 
 -- V eclipse
->scale dmin
->kick
->clap
->hat
->rim
+>send view poster
+>toggle kick clap hat rim arp lead
+>scale dloc
+>bass = ch 6
 >fold
->mute bass
 >box 6
 >edge 1
 
 -- VI return
->scale ddor
->snare 5.5.6.6.7.7.8.8. !1
->route crash snare:end
->kick 9...8...9...8...
->clap ....8.......8..3
->hat ..5...5...5...4.
->mute
+>send view feedback
+>scale dphr
 >edge
 >box 2...1...2...1...
+>toggle kick clap hat rim arp lead
+>bass = ch 1
+>kick 9...8...9...8...
+>hat ..5...5...5...4.
+>scale dmin
 
 -- VII night
+>send view code
 >scale dphr
->snare
 >clap
 >hat
+>rim
 >kick
+>turn u 2...............
+>turn:2 l ....2...........
+>turn:3 d ........2.......
+>turn:4 r ............2...
 >lead
 >arp
+>glow
 >bass
 >disc:y
 >disc:x
 >disc
 >box
->crash
->flip
+>turn:4
+>turn:3
+>turn:2
+>turn
 >pad
 >echo
 >stop

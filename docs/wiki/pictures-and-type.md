@@ -263,8 +263,17 @@ heading written in front.
 
 They step anticlockwise because a `turn` fades clockwise from its leading edge, so each
 trail falls behind its beam, and `echo 8` fades the trails where they were drawn. On the
-deck's engine no inked cell now stays the same over a bar. `spin` keeps its meaning,
-which `lift` relies on: in the olivia jack sketch it turns the feedback on the snare.
+deck's engine no inked cell now stays the same over a bar.
+
+**`spin` turns what is drawn, not the whole frame** (2026-09-29). The owner: the spin
+left "a set of static pixels" in every mode. It turned the finished frame round its
+centre, so whatever sat near the centre or in a corner the turn never reached stayed
+put. Now `spin` is a rate: each step adds its amount times ten degrees, and the
+pictures that draw this step (`noise disc box turn ramp grid`) are turned by the
+angle so far before the rest of the chain sees them. `spin 3` over a bar, and
+`echo 8 turn 2 spin <0 3 6 9>`, leave **0 cells** the same from step to step
+(`viz.c`, `turn_sources`; an integer sine table, so the host tests need no maths
+library).
 
 ## 3. Proposal B, tried and set aside — smoothing the cells
 

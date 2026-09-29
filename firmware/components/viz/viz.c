@@ -126,6 +126,12 @@ static char    s_fb[VIZ_H][VIZ_W + 1];
 /* The frame before this one, for echo. Feedback is the single technique that
  * turns a still picture into an animation, so it gets the memory it needs. */
 static char    s_prev[VIZ_H][VIZ_W + 1];
+/* ONE SCRATCH FRAME FOR EVERY PICTURE THAT NEEDS ONE - move, warp, grow,
+ * thin, edge and spin's turn each copy the frame, work, and are done before the
+ * next begins, because the engine runs on one task. They had one each: six
+ * frames, 14.6 KB of internal RAM, when at 80 x 30 a frame is 2.4 KB. Not
+ * spin's history (s_snap): that one is held while the pictures draw. */
+static char    s_tmp[VIZ_H][VIZ_W + 1];
 static bool    s_split;
 static uint32_t s_rng = 0x1234567u;
 
@@ -164,6 +170,7 @@ static inline int tone_of(char ch)
 }
 
 static void clear_frame(void);
+static int s_spin_deg;                /* spin's running angle; see draw_spin */
 
 /* The live frame size. Defaults to something drawable so a frame exists before
  * any layout has been set - viz_tick() can be called from the clock the moment
@@ -200,7 +207,7 @@ int viz_out_mode_now(void) { return s_out_mode; }
 const char *viz_out_mode_name(int mode)
 {
     static const char *const names[VIZ_OUT_MODES] = {
-        "plain", "scan", "phosphor", "feedback", "riso", "poster" };
+        "plain", "scan", "phosphor", "feedback", "riso", "poster", "code" };
     return (mode >= 0 && mode < VIZ_OUT_MODES) ? names[mode] : NULL;
 }
 
@@ -317,6 +324,7 @@ const char *viz_row(int y)
 
 void viz_forget_all(void)
 {
+    s_spin_deg = 0;
     s_nmark = 0;
     s_npmark = 0;
     for (int i = 0; i < NGEN; i++) { s_place[i].x = -1; s_place[i].y = -1; }
@@ -487,7 +495,7 @@ static void draw_move(int amt, char dir, uint32_t step)
     dx *= n; dy *= n;
     if (dx == 0 && dy == 0) { return; }
 
-    static char tmp[VIZ_H][VIZ_W + 1];   /* the engine runs on one task; not its stack */
+    char (*const tmp)[VIZ_W + 1] = s_tmp;
     for (int y = 0; y < s_h; y++) {
         memcpy(tmp[y], s_fb[y], (size_t)s_w + 1);
     }
@@ -514,7 +522,7 @@ static void draw_warp(int amt, char dir, uint32_t step)
     const int span = (amt < 0 ? 9 : amt);
     if (span == 0) { return; }
 
-    static char tmp[VIZ_H][VIZ_W + 1];   /* the engine runs on one task; not its stack */
+    char (*const tmp)[VIZ_W + 1] = s_tmp;
     for (int y = 0; y < s_h; y++) {
         memcpy(tmp[y], s_fb[y], (size_t)s_w + 1);
         memset(s_fb[y], TONE_0, (size_t)s_w);
@@ -666,7 +674,7 @@ static void draw_grid(int amt, char dir, uint32_t step)
 static void draw_grow(int amt, char dir, uint32_t step)
 {
     if (amt <= 0) { return; }
-    static char tmp[VIZ_H][VIZ_W + 1];   /* the engine runs on one task; not its stack */
+    char (*const tmp)[VIZ_W + 1] = s_tmp;
     for (int y = 0; y < s_h; y++) { memcpy(tmp[y], s_fb[y], (size_t)s_w + 1); }
     for (int y = 0; y < s_h; y++) {
         for (int x = 0; x < s_w; x++) {
@@ -688,7 +696,7 @@ static void draw_grow(int amt, char dir, uint32_t step)
 static void draw_thin(int amt, char dir, uint32_t step)
 {
     if (amt <= 0) { return; }
-    static char tmp[VIZ_H][VIZ_W + 1];   /* the engine runs on one task; not its stack */
+    char (*const tmp)[VIZ_W + 1] = s_tmp;
     for (int y = 0; y < s_h; y++) { memcpy(tmp[y], s_fb[y], (size_t)s_w + 1); }
     for (int y = 0; y < s_h; y++) {
         for (int x = 0; x < s_w; x++) {
@@ -729,27 +737,56 @@ static void draw_flip(int amt, char dir, uint32_t step)
  * interpolation that does not smear - a 30-degree rotation of ASCII is mush. A
  * quarter turn is exact: it is a transpose and a flip, every cell lands on a cell.
  */
+/* spin: A SPEED OF TURN, applied to what this step draws.
+ *
+ * It used to turn the HISTORY by quarter turns, before the sources drew - so a
+ * fresh wedge, a fresh disc, landed in the same place every step and only its
+ * trail moved: a corner of the screen that never changed, which the owner saw on
+ * every mode of the HDMI node and read, rightly, as broken (2026-09-28/29). No
+ * amount fixed it: turning the trail leaves the source still, and turning
+ * everything by one angle lands the source in one place again.
+ *
+ * So spin is now how FAST the picture turns: each spin adds amount x 10 degrees
+ * to a running angle (9 is a quarter turn a step), and every source this step
+ * draws is turned by that angle about the middle of the frame, on top of a history
+ * that stays where it was drawn - a beam that sweeps and leaves its trail behind
+ * it. The turn is a true rotation, a cell twice as tall as it is wide and all. A
+ * routed spin ('>route spin snare') still turns the picture on each hit. */
+static int s_spin_deg;                  /* the running angle, 0..359 */
+static char s_snap[VIZ_H][VIZ_W + 1];   /* the history, before the sources */
+static bool s_snapped;
+
 static void draw_spin(int amt, char dir, uint32_t step)
 {
-    const int turns = (amt < 0 ? 1 : amt) / 3;      /* 0..3 quarter turns */
-    if (turns == 0) { return; }
-    static char tmp[VIZ_H][VIZ_W + 1];   /* the engine runs on one task; not its stack */
-    for (int y = 0; y < s_h; y++) { memcpy(tmp[y], s_fb[y], (size_t)s_w + 1); }
-    /* THE FRAME IS NOT SQUARE, so a quarter turn cannot be a straight transpose:
-     * a 58x10 picture rotated into a 58x10 window has to be scaled back into it.
-     * Sampling the source at the transposed position does that in one pass and
-     * costs nothing a bigger buffer would have bought. */
+    (void)dir; (void)step;
+    s_spin_deg = (s_spin_deg + (amt < 0 ? 0 : amt) * 10) % 360;
+}
+
+/* Put back the history, then this step's sources on it, turned by the running
+ * angle. A cell counts as drawn by a source when it differs from the history. */
+static void turn_sources(void)
+{
+    char (*const layer)[VIZ_W + 1] = s_tmp;
+    memcpy(layer, s_fb, sizeof s_tmp);
+    memcpy(s_fb, s_snap, sizeof s_fb);
+    /* sine by tens of degrees, x 1024: whole numbers, so every build and every
+     * machine turns the picture the same */
+    static const int16_t q[10] = { 0, 178, 350, 512, 658, 784, 887, 962, 1008, 1024 };
+    const int k = (s_spin_deg / 10) % 36;
+    const int ks = k % 18, kc = (k + 9) % 36 % 18;
+    const int sn = (ks <= 9 ? q[ks] : q[18 - ks]) * (k < 18 ? 1 : -1);
+    const int c = (kc <= 9 ? q[kc] : q[18 - kc]) * ((k + 9) % 36 < 18 ? 1 : -1);
     for (int y = 0; y < s_h; y++) {
+        /* doubled offsets from the middle; a row counts twice, a cell is tall */
+        const int Y2 = 2 * (2 * y - (s_h - 1));
         for (int x = 0; x < s_w; x++) {
-            int sx, sy;
-            switch (turns) {
-            case 1:  sx = y * s_w / s_h;             sy = (s_h - 1) - x * s_h / s_w; break;
-            case 2:  sx = (s_w - 1) - x;             sy = (s_h - 1) - y;             break;
-            default: sx = (s_w - 1) - y * s_w / s_h; sy = x * s_h / s_w;             break;
-            }
-            if (sx < 0) { sx = 0; } if (sx >= s_w) { sx = s_w - 1; }
-            if (sy < 0) { sy = 0; } if (sy >= s_h) { sy = s_h - 1; }
-            s_fb[y][x] = tmp[sy][sx];
+            const int X2 = 2 * x - (s_w - 1);
+            const int sx2 = (c * X2 + sn * Y2) / 1024;
+            const int sy2 = (-sn * X2 + c * Y2) / 1024;
+            const int sx = (sx2 + (s_w - 1) + (sx2 >= 0 ? 1 : 0)) / 2;
+            const int sy = (sy2 / 2 + (s_h - 1) + (sy2 >= 0 ? 1 : 0)) / 2;
+            if (sx < 0 || sx >= s_w || sy < 0 || sy >= s_h) { continue; }
+            if (layer[sy][sx] != s_snap[sy][sx]) { s_fb[y][x] = layer[sy][sx]; }
         }
     }
 }
@@ -862,7 +899,7 @@ static void draw_edge(int amt, char dir, uint32_t step)
      * so 'edge 1' found nothing anywhere. 9 - amt spans the ramp exactly. */
     int drop = 9 - (amt < 1 ? 1 : (amt > 9 ? 9 : amt));
     if (drop < 1) { drop = 1; }
-    static char tmp[VIZ_H][VIZ_W + 1];   /* the engine runs on one task; not its stack */
+    char (*const tmp)[VIZ_W + 1] = s_tmp;
     for (int y = 0; y < s_h; y++) { memcpy(tmp[y], s_fb[y], (size_t)s_w + 1); }
     for (int y = 0; y < s_h; y++) {
         for (int x = 0; x < s_w; x++) {
@@ -902,6 +939,15 @@ static const draw_fn s_draw[NGEN] = {
     draw_grow,  draw_thin, draw_flip,
     draw_fold,
 };
+
+/* The sources - the fields that draw this step's picture - as against the
+ * history before them and the operators after. spin turns only these. */
+static bool is_source(int prim)
+{
+    const draw_fn f = s_draw[prim];
+    return f == draw_noise || f == draw_disc || f == draw_box || f == draw_turn ||
+           f == draw_ramp || f == draw_grid;
+}
 
 /* What the clock leaves for the main loop: a step number and a flag. Written in
  * the callback, read and cleared in viz_service. */
@@ -1073,16 +1119,29 @@ bool viz_service(void)
      * states the pipeline. */
     int rank[NGEN];
     chain_ranks(rank);
+    s_snapped = false;
+    bool turned = false;
     for (int r = 0; r <= NGEN; r++) {
         for (int prim = 0; prim < NGEN; prim++) {
             if (rank[prim] != r) { continue; }
             for (int m = 0; m < nm; m++) {
                 if (s_mark[m].prim != (uint8_t)prim) { continue; }
+                const bool src = is_source(prim);
+                if (src && !s_snapped && s_spin_deg != 0) {
+                    memcpy(s_snap, s_fb, sizeof s_snap);
+                    s_snapped = true;
+                } else if (!src && s_snapped && !turned) {
+                    turn_sources();
+                    turned = true;
+                }
                 s_drawing = prim;
                 s_draw[prim]((int)s_mark[m].amt, s_mark[m].dir, tick);
                 drew = true;
             }
         }
+    }
+    if (s_snapped && !turned) {
+        turn_sources();
     }
     s_live = drew || s_live;
     return true;

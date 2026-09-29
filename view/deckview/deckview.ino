@@ -12,6 +12,7 @@
 //   feedback  the last frame, zoomed and turned, with the new one on top
 //   riso      two inks out of register: pink is this step, blue the one before last
 //   poster    a live Swiss poster of the piece, from the lines the deck sends
+//   code      the code itself, round the cursor, over the picture dimmed
 //
 // THE DECK'S OWN GLYPHS STAY GLYPHS. The greys are the deck's dots; every cell
 // the engine wrote as a glyph - the four sparkles noise scatters, the small disc,
@@ -42,9 +43,9 @@ DVIGFX8 display(DVI_RES_320x240p60, true, adafruit_feather_dvi_cfg);
 #define H 240
 
 // The modes, numbered as the deck's firmware/main/view_wire.h numbers them.
-enum { PLAIN, SCAN, PHOSPHOR, FEEDBACK, RISO, POSTER, MODES };
+enum { PLAIN, SCAN, PHOSPHOR, FEEDBACK, RISO, POSTER, CODE, MODES };
 static const char *const NAMES[MODES] = { "plain", "scan", "phosphor", "feedback",
-                                          "riso", "poster" };
+                                          "riso", "poster", "code" };
 
 static view_reader_t s_rd;
 static uint8_t *s_base;                 // the first of the two framebuffers
@@ -324,10 +325,18 @@ static void palette(int mode)
     p[2] = rgb(0, 120, 191);
     p[3] = rgb(0, 34, 133);
     break;
-  case POSTER:                            // paper, ink, and a red
+  case POSTER:                            // paper, ink, a red, and a grey
     p[0] = rgb(246, 244, 238);
     p[1] = rgb(18, 18, 18);
     p[2] = rgb(228, 0, 43);
+    p[3] = rgb(150, 148, 142);
+    break;
+  case CODE:                              // black, the picture dimmed, text, red, grey
+    p[0] = rgb(0, 0, 0);
+    p[1] = rgb(58, 58, 54);
+    p[2] = rgb(236, 236, 228);
+    p[3] = rgb(228, 0, 43);
+    p[4] = rgb(128, 128, 122);
     break;
   }
 }
@@ -441,73 +450,146 @@ static void draw_riso(uint8_t *fb, uint32_t tick)
   if (have) glyphs(fb, old, PLATE, 2, ddx, ddy);
 }
 
-// THE POSTER. Its name; the section's number in red; the tempo and where the
-// bar is; a rule; the section's name; its lanes with the step each is on, lit
-// red; and the picture, Bayer at the pitch of the rest.
+// Type turned a quarter anticlockwise, reading upward from (x, y): the spine.
+static void glyph12up(uint8_t *fb, int x, int y, int ch, uint8_t c)
+{
+  if (ch < DECKFONT_FIRST || ch > DECKFONT_LAST) ch = ' ';
+  const int g = ch - DECKFONT_FIRST;
+  for (int r = 0; r < 24; r++) {
+    const uint16_t bits = (deckfont_12x24[(g * 24 + r) * 2] << 8) | deckfont_12x24[(g * 24 + r) * 2 + 1];
+    for (int k = 0; k < 12; k++) {
+      const int X = x + r, Y = y - k;
+      if ((bits & (0x8000 >> k)) && X >= 0 && X < W && Y >= 0 && Y < H) fb[Y * W + X] = c;
+    }
+  }
+}
+
+// Line i of the last control frame into a C string, cut at `max`; returns its length.
+static int line_of(int i, char *out, int max, int *from, int *to)
+{
+  const uint8_t *ch;
+  int n = view_read_line(&s_rd, i, &ch, from, to);
+  if (n <= 0) { out[0] = 0; return n; }
+  if (n > max) n = max;
+  memcpy(out, ch, n);
+  out[n] = 0;
+  return n;
+}
+
+// This step's picture resampled to dw x dh dots of 4 pixels at (x0, y0), in `ink`.
+static void picture_at(uint8_t *fb, int dw, int dh, int x0, int y0, int x1, int y1, uint8_t ink)
+{
+  static uint8_t pic[DH_MAX][DW_MAX];
+  for (int j = 0; j < dh; j++)
+    for (int i = 0; i < dw; i++)
+      pic[j][i] = s_hist[s_cur][j * s_dh / dh][i * s_dw / dw];
+  const int dw0 = s_dw, dh0 = s_dh, s0 = s_s, ox0 = s_ox, oy0 = s_oy;
+  place(dw, dh, 4, x0, y0);
+  corners(&pic[0][0], DW_MAX, dw, dh);
+  for (int y = y0 < 0 ? 0 : y0; y < y1 && y < H; y++)
+    for (int x = x0 < 0 ? 0 : x0; x < x1 && x < W; x++)
+      if (banded(&pic[0][0], DW_MAX, x, y)) fb[y * W + x] = ink;
+  place(dw0, dh0, s0, ox0, oy0);
+}
+
+// THE POSTER, the owner's brief (2026-09-29): the title and the tempo took half
+// the screen, and it should be far more Swiss punk. So the picture takes the
+// page, bleeding off the top and the right; the section's number is huge, red,
+// printed over it; the piece's name runs up a black spine; the section's name is
+// reversed out of a black bar; tempo, key, bar and step are set small and tight,
+// over sixteen blocks for the bar; and the lanes stand in a column, the step
+// each is on lit red.
 static void draw_poster(uint8_t *fb, uint32_t tick)
 {
-  memset(fb, 0, W * H);
-  const uint8_t *ch;
+  (void)tick;
+  memset(fb, 0, W * H);                                   // paper
   int from, to;
-  char title[40] = "cYbErDeCk", num[12] = "", name[40] = "", meta[48] = "";
-  int n = view_read_line(&s_rd, 0, &ch, &from, &to);
-  if (n > 0) { n = n < 39 ? n : 39; memcpy(title, ch, n); title[n] = 0; }
-  n = view_read_line(&s_rd, 1, &ch, &from, &to);
-  if (n > 0) {
+  char title[40], sect[40], meta[40], num[12] = "", name[40] = "";
+  line_of(0, title, 30, &from, &to);
+  if (!title[0]) strcpy(title, "cYbErDeCk");
+  const int sn = line_of(1, sect, 39, &from, &to);
+  line_of(2, meta, 30, &from, &to);
+  {
     int sp = 0;
-    while (sp < n && ch[sp] != ' ') sp++;
-    if (sp < n && sp < 11) {                            // "II first light"
-      memcpy(num, ch, sp); num[sp] = 0;
-      const int m = n - sp - 1 < 39 ? n - sp - 1 : 39;
-      memcpy(name, ch + sp + 1, m); name[m] = 0;
-    } else {
-      const int m = n < 39 ? n : 39;
-      memcpy(name, ch, m); name[m] = 0;
-    }
+    while (sp < sn && sect[sp] != ' ') sp++;
+    if (sp < sn && sp < 5) { memcpy(num, sect, sp); num[sp] = 0; strcpy(name, sect + sp + 1); }
+    else strcpy(name, sect);
   }
-  n = view_read_line(&s_rd, 2, &ch, &from, &to);
-  if (n > 0) { n = n < 30 ? n : 30; memcpy(meta, ch, n); meta[n] = 0; }
+  for (char *c = meta; *c; c++) if (*c >= 'a' && *c <= 'z') *c -= 32;
   const uint32_t step = step_of(s_rd.tick);
-  snprintf(meta + strlen(meta), sizeof meta - strlen(meta), "%sbar %lu  step %lu",
-           meta[0] ? "  " : "", (unsigned long)(step / 16 + 1), (unsigned long)(step % 16 + 1));
 
+  picture_at(fb, 56, 37, W - 224, 0, W, 148, 1);          // bleeds top and right
+  fill(fb, 0, 0, 22, H, 1);                               // the spine
+  for (int i = 0; title[i] && 8 + i * 12 < H; i++) glyph12up(fb, 5, H - 8 - i * 12, (uint8_t)title[i], 0);
   const int nl = (int)strlen(num);
-  const int ns = nl * 36 <= 110 ? 3 : 2;
-  const int numx = W - 12 - nl * 12 * ns;
-  const int room = (numx - 16 - 12) / 24;
-  text12(fb, 12, 6, title, (int)strlen(title) < room ? (int)strlen(title) : room, 2, 1);
-  if (nl) text12(fb, numx, 2, num, nl, ns, 2);
-  text6(fb, 12, 62, meta, 1);
-  for (int s = 0; s < 16; s++) fill(fb, W - 12 - 141 + s * 9, 80, 6, 6, s == (int)(step % 16) ? 2 : 1);
-  fill(fb, 12, 92, W - 24, 4, 1);
-  text12(fb, 12, 100, name, (int)strlen(name) < 24 ? (int)strlen(name) : 24, 1, 1);
+  if (nl) text12(fb, 28, 4, num, nl, nl <= 3 ? 5 : 4, 2); // over the picture
+  const int nn = (int)strlen(name) < 11 ? (int)strlen(name) : 11;
+  if (nn) {
+    fill(fb, 28, 156, nn * 12 + 10, 26, 1);
+    text12(fb, 33, 157, name, nn, 1, 0);
+  }
+  text6(fb, 28, 190, meta, 1);
+  char bar[24];
+  snprintf(bar, sizeof bar, "BAR %lu  %2lu/16", (unsigned long)(step / 16 + 1),
+           (unsigned long)(step % 16 + 1));
+  text6(fb, 28, 203, bar, 1);
+  for (int st = 0; st < 16; st++)
+    fill(fb, 28 + st * 9, 220, 7, 14, st == (int)(step % 16) ? 2 : (st % 4 == 0 ? 1 : 3));
   for (int i = 0; i < 7; i++) {
-    n = view_read_line(&s_rd, 3 + i, &ch, &from, &to);
+    const uint8_t *ch;
+    const int n = view_read_line(&s_rd, 3 + i, &ch, &from, &to);
     if (n <= 0) break;
-    const int y = 130 + i * 13;
-    for (int k = 0; k < n && k < 25; k++) {
+    const int y = 154 + i * 12;
+    for (int k = 0; k < n && k < 23; k++) {
+      const int x = W - 142 + k * 6;
       const bool lit = k >= from && k < to;
-      if (lit) fill(fb, 12 + k * 6, y, 6, 12, 2);
-      glyph6(fb, 12 + k * 6, y, ch[k], lit ? 0 : 1);
+      if (lit) fill(fb, x, y, 6, 11, 2);
+      glyph6(fb, x, y - 1, ch[k], lit ? 0 : 1);
     }
   }
-  // the picture: this step's greys, resampled to 36 x 27 dots of 4 pixels
-  static uint8_t small[27][36];
-  for (int j = 0; j < 27; j++)
-    for (int i = 0; i < 36; i++)
-      small[j][i] = s_hist[s_cur][j * s_dh / 27][i * s_dw / 36];
-  const int dw0 = s_dw, dh0 = s_dh, s0 = s_s, ox0 = s_ox, oy0 = s_oy;
-  place(36, 27, 4, W - 12 - 144, 100);
-  corners(&small[0][0], 36, 36, 27);
-  for (int y = 100; y < 208; y++)
-    for (int x = W - 12 - 144; x < W - 12; x++)
-      if (banded(&small[0][0], 36, x, y)) fb[y * W + x] = 1;
-  place(dw0, dh0, s0, ox0, oy0);
+}
+
+// THE CODE, the owner's ask (2026-09-29): a mode that is just the code, the way
+// live coders put their screens up (TOPLAP: "show us your screens"). The lines
+// round the cursor, in the deck's compact face, over the picture dimmed behind
+// them: a section heading red, a line whose lane is playing bright with its step
+// lit red, everything else grey. The deck sends the lines; it draws nothing.
+static void draw_code(uint8_t *fb, uint32_t tick)
+{
+  (void)tick;
+  memset(fb, 0, W * H);                                   // black
+  picture_at(fb, 80, 60, 0, 0, W, H, 1);                  // the picture, dim
+  int from, to;
+  char title[40], meta[40];
+  line_of(0, title, 24, &from, &to);
+  line_of(1, meta, 30, &from, &to);
+  for (char *c = meta; *c; c++) if (*c >= 'a' && *c <= 'z') *c -= 32;
+  const uint32_t step = step_of(s_rd.tick);
+  char right[48];
+  snprintf(right, sizeof right, "%s  BAR %lu  %2lu/16", meta, (unsigned long)(step / 16 + 1),
+           (unsigned long)(step % 16 + 1));
+  text12(fb, 12, 6, title, (int)strlen(title), 1, 2);
+  text6(fb, W - 12 - 6 * (int)strlen(right), 12, right, 4);
+  fill(fb, 12, 36, W - 24, 2, 3);
+  for (int i = 0; i < 10; i++) {
+    const uint8_t *ch;
+    const int n = view_read_line(&s_rd, 2 + i, &ch, &from, &to);
+    if (n < 0) break;
+    const int y = 46 + i * 18;
+    const bool head = n >= 2 && ch[0] == '-' && ch[1] == '-';
+    const bool live = from < to;
+    for (int k = 0; k < n && k < 49; k++) {
+      const int x = 12 + k * 6;
+      const bool lit = k >= from && k < to;
+      if (lit) fill(fb, x, y, 6, 12, 3);
+      glyph6(fb, x, y, ch[k], lit ? 0 : head ? 3 : live ? 2 : 4);
+    }
+  }
 }
 
 // ---- the screen ------------------------------------------------------------
 
-static const uint8_t LABEL_INK[MODES] = { 1, 1, 127, 255, 3, 2 };
+static const uint8_t LABEL_INK[MODES] = { 1, 1, 127, 255, 3, 2, 2 };
 
 static void show(uint32_t tick)
 {
@@ -522,6 +604,7 @@ static void show(uint32_t tick)
   case FEEDBACK: draw_feedback(fb, front, tick); glyphs(fb, s_cur, SET, 255, 0, 0); break;
   case RISO:     draw_riso(fb, tick);            break;             // both plates, inside
   case POSTER:   draw_poster(fb, tick);          break;
+  case CODE:     draw_code(fb, tick);            break;
   default:       draw_plain(fb);                 glyphs(fb, s_cur, SET, 1, 0, 0);   break;
   }
   if ((int32_t)(s_label_until - millis()) > 0) {

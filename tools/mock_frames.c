@@ -10,6 +10,10 @@
  *   mock_frames OUTDIR W H          one frame of each scene
  *   mock_frames OUTDIR W H motion   every frame of the radar, the night and the
  *                                   orbit, a step at a time, as the panel shows them
+ *   mock_frames OUTDIR W H script F every frame of a score: F has a line a step,
+ *                                   each the picture events tools/test_pieces -s
+ *                                   printed for it - 'disc:#9', 'ramp:d3',
+ *                                   'disc:x:#8', 'turn:2:u2' - played in order
  *
  * OUTDIR/<scene>-<W>x<H>.cells is 2 bytes (w, h) then w*h cells.
  */
@@ -106,8 +110,9 @@ static int save(const char *scene)
 int main(int argc, char **argv)
 {
     const bool motion = argc == 5 && strcmp(argv[4], "motion") == 0;
-    if (argc != 4 && !motion) {
-        fprintf(stderr, "usage: mock_frames OUTDIR W H [motion]\n");
+    const bool script = argc == 6 && strcmp(argv[4], "script") == 0;
+    if (argc != 4 && !motion && !script) {
+        fprintf(stderr, "usage: mock_frames OUTDIR W H [motion | script FILE]\n");
         return 2;
     }
     s_dir = argv[1];
@@ -118,6 +123,45 @@ int main(int argc, char **argv)
         return 2;
     }
     int bad = 0;
+
+    if (script) {
+        /* A SCORE, A STEP A LINE. A way the step does not name is the lane's
+         * default, down, as the deck's fire_event gives it; an instance ('turn:2')
+         * is its primitive; anything that is not a picture is someone else's. */
+        FILE *f = fopen(argv[5], "r");
+        if (f == NULL) { fprintf(stderr, "cannot read %s\n", argv[5]); return 2; }
+        char line[4096], name[32];
+        int k = 0;
+        fresh();
+        while (fgets(line, sizeof line, f) != NULL) {
+            for (char *t = strtok(line, " \t\r\n"); t != NULL; t = strtok(NULL, " \t\r\n")) {
+                char *part[4] = { 0 };
+                int np = 0;
+                for (char *q = t; np < 4; ) {
+                    part[np++] = q;
+                    q = strchr(q, ':');
+                    if (q == NULL) { break; }
+                    *q++ = '\0';
+                }
+                if (np < 2 || viz_prim_index(part[0]) < 0) { continue; }
+                const char *last = part[np - 1];
+                const char *axis = (np >= 3 && (strcmp(part[np - 2], "x") == 0 ||
+                                                strcmp(part[np - 2], "y") == 0)) ? part[np - 2] : NULL;
+                const char way = last[0];
+                const int amt = atoi(last + 1);
+                if (axis != NULL) {
+                    at(part[0], axis[0], amt);
+                } else if (way == '#' || way == 'u' || way == 'd' || way == 'l' || way == 'r') {
+                    mark(part[0], amt, way == '#' ? 'd' : way);
+                }
+            }
+            step();
+            snprintf(name, sizeof name, "s%03d", k++);
+            bad |= save(name);
+        }
+        fclose(f);
+        return bad;
+    }
 
     if (motion) {
         /* The engine draws a frame when a lane fires and not between, so a frame

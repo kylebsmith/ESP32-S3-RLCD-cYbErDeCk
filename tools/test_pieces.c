@@ -276,13 +276,13 @@ static void do_lane(const char *word, size_t n, const char *pat)
         fail("'%s': u d l r: move warp ramp turn", pat, NULL);
         return;
     }
-    /* RUN UNCHANGED, A LINE SILENCES ITS LANE - by hand, while playing
+    /* RUN UNCHANGED, A LINE REMOVES ITS LANE - by hand, while playing
      * (builtins.c rerun_silences). In a piece that is a trap: the same line
      * twice, or a sketch that repeats the one before it, mutes where it meant
-     * to play. A piece mutes with '>mute'. */
+     * to play. A piece mutes with '>mute' or '>toggle'. */
     lane_t *was = lane_find(ln.canon);
     if (was != NULL && was->has_pat && !was->muted && strcmp(was->text, pat) == 0) {
-        fail("'%s' is what %s already plays - by hand it silences it", pat, ln.canon);
+        fail("'%s' is what %s already plays - by hand it removes it", pat, ln.canon);
         return;
     }
     lane_t *l = lane_slot(ln.canon);
@@ -325,13 +325,26 @@ static void do_define(const char *word, size_t n, const char *arg)
     }
     while (*arg == ' ') { arg++; }
     if (*arg == '=') { arg++; }
+    alias_t *a = alias_find(ln.base);
+    lane_def_t was = { 0 };
+    if (a != NULL) {
+        was.kind = a->kind;
+        was.num = a->num;
+        was.chan = a->chan;
+        was.gate = a->gate;
+    }
+    char full[80];
+    const int shift = lane_def_shift(arg, &was, full, sizeof full);   /* >bass = ch 5 */
+    if (shift < 0) {
+        fail("%s: no sound to move", ln.base, NULL);
+        return;
+    }
     lane_def_t d;
-    lane_def_parse(arg, &d);
+    lane_def_parse(shift ? full : arg, &d);
     if (d.kind == LD_ERROR) {
         fail("%s: %s", ln.base, d.why);
         return;
     }
-    alias_t *a = alias_find(ln.base);
     input_t *in = input_find(ln.base);
     if (in != NULL && d.kind != in->kind) {
         in->name[0] = '\0';
@@ -503,6 +516,34 @@ static void do_verb(const char *w, const char *arg)
         if (arg[0] == '\0') {
             for (int i = 0; i < SEQ_MAX_LANES; i++) { s_lane[i].muted = false; }
         }
+    } else if (strcmp(w, "toggle") == 0) {
+        /* a switch for a block of lanes: each one named flips */
+        char buf[160];
+        snprintf(buf, sizeof buf, "%.159s", arg);
+        bool any = false;
+        for (char *t = strtok(buf, " "); t != NULL; t = strtok(NULL, " ")) {
+            for (int i = 0; i < SEQ_MAX_LANES; i++) {
+                if (s_lane[i].used && strcmp(s_lane[i].name, t) == 0) {
+                    s_lane[i].muted = !s_lane[i].muted;
+                    any = true;
+                }
+            }
+        }
+        if (!any) { fail("toggle %s: none of those is playing", arg, NULL); }
+    } else if (strcmp(w, "clear") == 0) {
+        for (int i = 0; i < SEQ_MAX_LANES; i++) { s_lane[i].used = false; }
+    } else if (strcmp(w, "send") == 0) {
+        /* A PIECE MAY SAY HOW THE SCREEN DRAWS IT - '>send view scan' - and
+         * nothing else about where the notes go: that is the player's setup,
+         * not the piece's. The mode must be one the engine knows. */
+        char what[16] = "", mode[16] = "";
+        sscanf(arg, "%15s %15s", what, mode);
+        if (strcmp(what, "view") != 0) {
+            fail("'send %s' does not belong in a piece", what, NULL);
+        } else if (viz_out_mode_find(mode) < 0 && strcmp(mode, "on") != 0 &&
+                   strcmp(mode, "off") != 0) {
+            fail("send view %s: no such mode", mode, NULL);
+        }
     } else if (strcmp(w, "play") == 0 || strcmp(w, "stop") == 0 ||
                strcmp(w, "panic") == 0 || strcmp(w, "lanes") == 0 ||
                strcmp(w, "split") == 0 || strcmp(w, "jitter") == 0 ||
@@ -634,7 +675,9 @@ static void fire(lane_t *l, const seq_leaf_t *e, bool routed, bool maybe)
     if (l->kind == LD_DRAW) {
         int amt = routed ? (l->trig_val * 9 + 63) / 127 : (val == SEQ_VAL_X ? 9 : val);
         if (amt > 9) { amt = 9; }
-        snprintf(t, sizeof t, "%c%d", (e && e->dir) ? e->dir : '#', amt);
+        /* the step's way, else the lane's, as the deck's fire_event picks it */
+        snprintf(t, sizeof t, "%c%d", (e && e->dir) ? e->dir : (l->c.dir ? l->c.dir : '#'),
+                 amt);
         say(l, t, maybe);
         published(l, amt * 127 / 9);
         return;

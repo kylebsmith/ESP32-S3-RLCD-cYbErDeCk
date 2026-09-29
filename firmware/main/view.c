@@ -20,13 +20,15 @@
 
 #include "docstore.h"
 #include "driver/usb_serial_jtag.h"
+#include "lane_name.h"
 #include "seq.h"
 #include "seq_pattern.h"
 #include "view_wire.h"
 #include "viz.h"
 
 _Static_assert((int)VIZ_OUT_MODES == (int)VIEW_MODES &&
-               (int)VIZ_OUT_POSTER == (int)VIEW_MODE_POSTER,
+               (int)VIZ_OUT_POSTER == (int)VIEW_MODE_POSTER &&
+               (int)VIZ_OUT_CODE == (int)VIEW_MODE_CODE,
                "the engine and the wire number the view's modes the same way");
 
 static void view_sink(const char *lane, uint8_t status, uint8_t d1, uint8_t d2,
@@ -150,6 +152,108 @@ static int poster_lines(view_line_t *out, char text[][VIEW_LINE_MAX + 1])
     return n;
 }
 
+/* THE SPAN OF THE STEP A LINE'S LANE IS ON, in the line: the same test the
+ * editor's playhead makes (editor.c, playhead_span) - the lane is playing, not
+ * muted, and playing exactly what this line says - so the screen lights what the
+ * panel lights and nothing else. Lines longer than CODE_COLS light only within
+ * what is sent. */
+#define CODE_COLS 40
+
+static void line_span(const char *line, size_t n, uint8_t *from, uint8_t *to)
+{
+    *from = *to = 0;
+    if (!seq_running() || n < 2 || line[0] != '>') {
+        return;
+    }
+    size_t a = 1;
+    while (a < n && line[a] != ' ' && line[a] != '\t') { a++; }
+    lane_name_t ln;
+    if (lane_name_parse(line + 1, a - 1, &ln) != LN_OK) {
+        return;
+    }
+    const seq_lane_t *l = seq_lane_find(ln.canon, -1);
+    if (l == NULL || l->muted || l->slots == 0) {
+        return;
+    }
+    while (a < n && (line[a] == ' ' || line[a] == '\t')) { a++; }
+    static char pat[SEQ_TEXT_MAX];
+    const size_t m = (n - a < sizeof pat - 1) ? n - a : sizeof pat - 1;
+    memcpy(pat, line + a, m);
+    pat[m] = '\0';
+    if (seq_pattern_hash(pat) != l->src) {
+        return;
+    }
+    int slot = 0, f = 0, t = 0;
+    uint32_t cycle = 0;
+    static seq_comp_t comp;                     /* the main task only */
+    if (!seq_lane_now(l, &slot, &cycle) || seq_pattern_compile(pat, &comp) != SEQ_PAT_OK ||
+        !seq_pattern_mark(&comp, slot, cycle, &f, &t)) {
+        return;
+    }
+    if (f < t && a + (size_t)t <= CODE_COLS) {
+        *from = (uint8_t)(a + (size_t)f);
+        *to = (uint8_t)(a + (size_t)t);
+    }
+}
+
+/* THE CODE'S LINES, for '>send view code': the document's name, the tempo and
+ * scale, and ten lines round the cursor - three above it, the rest below - each
+ * with the span its lane is on. Forty characters a line, so the picture and this
+ * still go out together through the console's ring. */
+static int code_lines(view_line_t *out, char text[][VIEW_LINE_MAX + 1])
+{
+    /* THE DOCUMENT IS READ WHERE IT LIES, a character at a time round the
+     * cursor: ten lines are wanted. The first version copied the whole
+     * document out every step, into 8 KB of internal RAM held for as long as
+     * the deck ran - the free heap fell from 48 to 39 KB (2026-09-29) - and a
+     * document past 8 KB showed the wrong lines. The walks are bounded, so a
+     * document with no line breaks costs a bounded look, not all of it. */
+    enum { LOOK = 4096 };
+    const size_t len = doc_len();
+    const size_t cur = doc_cursor() < len ? doc_cursor() : len;
+    int n = 0;
+    const char *nm = doc_buf_name(doc_buf_current());
+    snprintf(text[n], CODE_COLS + 1, "%s", (nm && nm[0]) ? nm : "scratch");
+    n++;
+    snprintf(text[n], CODE_COLS + 1, "%d bpm  %s", seq_get_bpm(), seq_scale_name());
+    n++;
+    for (int i = 0; i < n; i++) {
+        out[i].text = text[i];
+        out[i].from = out[i].to = 0;
+    }
+    const size_t floor = cur > LOOK ? cur - LOOK : 0;
+    size_t ls = cur;
+    while (ls > floor && doc_at(ls - 1) != '\n') { ls--; }
+    for (int back = 0; back < 3 && ls > floor; back++) {
+        ls--;
+        while (ls > floor && doc_at(ls - 1) != '\n') { ls--; }
+    }
+    char line[128];                    /* a line the editor runs is 127 at most */
+    while (n < 2 + 10 && n < VIEW_LINES_MAX && ls <= len) {
+        size_t le = ls, k = 0;
+        while (le < len && le - ls < LOOK) {
+            const char c = doc_at(le);
+            if (c == '\n') {
+                break;
+            }
+            if (k + 1 < sizeof line) {
+                line[k++] = c;
+            }
+            le++;
+        }
+        line[k] = '\0';
+        snprintf(text[n], CODE_COLS + 1, "%s", line);
+        out[n].text = text[n];
+        line_span(line, k, &out[n].from, &out[n].to);
+        n++;
+        if (le >= len) {
+            break;
+        }
+        ls = le + 1;
+    }
+    return n;
+}
+
 void view_frame(void)
 {
     if (!seq_dest_is_on("view")) {
@@ -168,7 +272,8 @@ void view_frame(void)
     static view_line_t lines[VIEW_LINES_MAX];
     static char text[VIEW_LINES_MAX][VIEW_LINE_MAX + 1];
     const int mode = viz_out_mode_now();
-    const int nl = (mode == VIZ_OUT_POSTER) ? poster_lines(lines, text) : 0;
+    const int nl = (mode == VIZ_OUT_POSTER) ? poster_lines(lines, text)
+                 : (mode == VIZ_OUT_CODE)   ? code_lines(lines, text) : 0;
     const size_t cn = view_wire_pack_ctl(ctl, sizeof ctl, tick, mode, lines, nl);
     if (cn > 0) {
         view_emit(ctl, cn);

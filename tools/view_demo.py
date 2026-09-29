@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Drive the view node with no deck: the engine's own frames, every mode.
 
-  python3 tools/view_demo.py --view /dev/cu.usbmodemNODE            # all six, in turn
+  python3 tools/view_demo.py --view /dev/cu.usbmodemNODE            # all seven, in turn
   python3 tools/view_demo.py --view /dev/cu.usbmodemNODE --mode scan
 
 docs/VIEW.md. The frames are the deck's own picture engine - viz.c, built on
@@ -30,7 +30,10 @@ import serial
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mock_pictures as M   # noqa: E402
 
-MODES = ['plain', 'scan', 'phosphor', 'feedback', 'riso', 'poster']
+MODES = ['plain', 'scan', 'phosphor', 'feedback', 'riso', 'poster', 'code']
+ORB = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'pieces/orbitals.txt')
+VERBS = {'send', 'bpm', 'scale', 'swing', 'play', 'stop', 'mute', 'solo', 'toggle',
+         'clear', 'map', 'route'}
 LANES = ['kick 9...8...9...8...', 'box 2...1...2...1...', 'disc:x 8876532111235678',
          'disc:y 568886531113', 'hat ..3...3...3...4.', 'bass .000.000.000.000']
 
@@ -59,6 +62,29 @@ def poster_lines(step):
         name, pat = lane.split(' ')
         at = len(name) + 1 + step % len(pat)
         out.append((lane, at, at + 1))
+    return out
+
+
+def span(line, step):
+    """The step a plain lane line is on - one character a step. The deck
+    lights every kind; this is enough to see the code screen move."""
+    if not line.startswith('>') or ' ' not in line:
+        return 0, 0
+    name, pat = line[1:].split(' ', 1)
+    body = pat.split(' ')[0]
+    if name in VERBS or '=' in pat or not body or any(c in body for c in '[]<>%_'):
+        return 0, 0
+    at = len(name) + 2 + step % len(body)
+    return at, at + 1
+
+
+def code_lines(step):
+    """As the deck sends them: the document, tempo and key, then ten lines."""
+    text = open(ORB).read().split('\n')
+    i = next(n for n, l in enumerate(text) if l.startswith('-- II first light'))
+    out = [('orbitals', 0, 0), ('124 bpm  dmin', 0, 0)]
+    for l in text[max(0, i - 1):i + 9]:
+        out.append((l, *span(l, step)))
     return out
 
 
@@ -103,7 +129,8 @@ def main():
             else:
                 mode = int((time.time() - start) / a.seconds) % len(MODES)
             tick = step * 24
-            lines = poster_lines(step) if mode == MODES.index('poster') else []
+            lines = (poster_lines(step) if MODES[mode] == 'poster' else
+                     code_lines(step) if MODES[mode] == 'code' else [])
             node.write(control(tick, mode, lines) + picture(tick, 80, 30, film[step % len(film)]))
             step += 1
             time.sleep(max(0.0, start + step * period - time.time()))

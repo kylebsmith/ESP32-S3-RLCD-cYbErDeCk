@@ -116,6 +116,51 @@ int main(void)
     def(" disc x",                LD_ERROR, 0, 0, 0);
     def(" Disc",                  LD_ERROR, 0, 0, 0);
 
+    /* A sound moves with only what changes: '>bass = ch 5' keeps the octave
+     * and gate the name had. Nothing moves that is not a sound. */
+    {
+        const lane_def_t bass = { .kind = LD_VOICE, .num = 2, .chan = 1, .gate = 180 };
+        const lane_def_t cut = { .kind = LD_CC, .num = 74, .chan = 1 };
+        const lane_def_t none = { .kind = LD_REMOVE };
+        const lane_def_t disc = { .kind = LD_DRAW };
+        struct { const char *arg; const lane_def_t *was; int ret; int chan, gate; } t[] = {
+            { " ch 5",           &bass, 1, 5, 180 },
+            { "ch 6 gate 40",    &bass, 1, 6, 40 },
+            { " gate 900",       &bass, 1, 1, 900 },
+            { " ch 3",           &cut,  1, 3, 150 },
+            { " ch 5",           &none, -1, 0, 0 },
+            { " ch 5",           &disc, -1, 0, 0 },
+            { " voice 1 ch 5",   &bass, 0, 0, 0 },
+            { " chord",          &bass, 0, 0, 0 },
+        };
+        for (size_t i = 0; i < sizeof t / sizeof t[0]; i++) {
+            char full[80];
+            lane_def_t d = { 0 };
+            const int r = lane_def_shift(t[i].arg, t[i].was, full, sizeof full);
+            if (r == 1) {
+                lane_def_parse(full, &d);
+            }
+            if (r != t[i].ret || (r == 1 && (d.kind != t[i].was->kind ||
+                d.num != t[i].was->num || d.chan != t[i].chan || d.gate != t[i].gate))) {
+                printf("[FAIL] shift '%s' -> %d, ch %d gate %d\n", t[i].arg, r, d.chan, d.gate);
+                fails++;
+            }
+        }
+        lane_def_t d;
+        char full[80];
+        if (lane_def_shift(" ch 17", &bass, full, sizeof full) != 1 ||
+            lane_def_parse(full, &d) != LD_ERROR) {
+            printf("[FAIL] ch 17 moved the bass\n");
+            fails++;
+        }
+        lane_def_parse(" voice 2 ch 5 gate 180", &d);
+        lane_def_text(&d, full, sizeof full);
+        if (strcmp(full, "voice 2 ch 5 gate 180") != 0) {
+            printf("[FAIL] the reply reads '%s'\n", full);
+            fails++;
+        }
+    }
+
     /* Every reason a name is refused fits the status bar too. */
     for (int e = LN_EMPTY; e <= LN_BRACKET; e++) {
         char why[64];

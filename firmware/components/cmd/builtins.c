@@ -591,18 +591,24 @@ static bool binding_of(const lane_name_t *ln, seq_binding_t *b, char *why,
     return true;
 }
 
-/* RE-RUNNING A LINE YOU HAVE NOT TOUCHED SILENCES THE LANE.
+/* RE-RUNNING A LINE YOU HAVE NOT TOUCHED TAKES THE LANE AWAY.
  *
  * The rule in one sentence: Ctrl+Enter always compiles the line and starts
  * the lane, EXCEPT when the transport is running and the line is byte-for-byte
- * what you last ran for that lane, in which case it silences it instead.
+ * what you last ran for that lane, in which case the lane goes.
+ *
+ * IT USED TO MUTE, and a muted lane kept its slot: the owner toggled '>bass
+ * 1.1.1.1.' off, found it still there, and had no way to see why sixteen lanes
+ * filled up (2026-09-29). Off now means gone - the slot is free, '>lanes' does
+ * not list it - and the same key brings it back, compiled fresh. Muting has its
+ * own words, '>mute bass' and '>toggle bass', for silence that keeps its place.
  *
  * Why that does not surprise anyone on stage:
  *
  *  - The only way in is pressing Run on a line you did not edit. The obvious
  *    objection to a toggle - "I tweaked it and re-ran it and it went silent" -
  *    cannot happen, because an edited line is excluded by definition.
- *  - It is self-inverse. The lane is now muted, so the guard fails on the next
+ *  - It is self-inverse. The lane is now gone, so the guard fails on the next
  *    press and the same key brings it back. A fumbled double-press in a loud
  *    room is a no-op, not a coin flip.
  *  - It is unreachable while stopped, so it can never leave the deck in a
@@ -693,8 +699,8 @@ cmd_status_t cmd_lane(cmd_ctx_t *ctx, const char *word, size_t n)
         return CMD_DONE;
     }
     if (rerun_silences(ctx)) {
-        seq_mute(name, true);
-        snprintf(ctx->msg, sizeof ctx->msg, "%s silent", name);
+        seq_forget(name);
+        snprintf(ctx->msg, sizeof ctx->msg, "%s off - again for on", name);
         return CMD_DONE;
     }
     /* A WAY WHERE NOTHING TURNS IS REFUSED (docs/MANIFESTO.md §3.10). 'u d l r'
@@ -794,13 +800,26 @@ cmd_status_t cmd_define(cmd_ctx_t *ctx, const char *word, size_t n)
     if (*arg == '=') {
         arg++;
     }
+    alias_t *a = alias_find(ln.base);
+    lane_def_t was = { 0 };
+    if (a != NULL) {
+        was.kind = a->kind;
+        was.num  = a->num;
+        was.chan = a->chan + 1;
+        was.gate = a->gate;
+    }
+    char full[80];
+    const int shift = lane_def_shift(arg, &was, full, sizeof full);
+    if (shift < 0) {
+        cmd_out(ctx, "%.8s: no sound to move", ln.base);
+        return CMD_ERROR;
+    }
     lane_def_t d;
-    lane_def_parse(arg, &d);
+    lane_def_parse(shift ? full : arg, &d);
     if (d.kind == LD_ERROR) {
         cmd_out(ctx, "%s", d.why);
         return CMD_ERROR;
     }
-    alias_t *a = alias_find(ln.base);
     /* An input stops being one whatever it becomes, and a name that becomes an
      * input takes its lanes with it: an input has no pattern to play. */
     if (a != NULL && (a->kind == LD_KNOB || a->kind == LD_PAD) &&
@@ -871,7 +890,12 @@ cmd_status_t cmd_define(cmd_ctx_t *ctx, const char *word, size_t n)
     a->chan = (uint8_t)((d.chan > 0 ? d.chan : 1) - 1);
     a->gate = (uint16_t)d.gate;
     rebind_lanes(ln.base);
-    snprintf(ctx->msg, sizeof ctx->msg, "%s =%s", ln.base, arg);
+    if (shift) {
+        lane_def_text(&d, full, sizeof full);
+        snprintf(ctx->msg, sizeof ctx->msg, "%s = %s", ln.base, full);
+    } else {
+        snprintf(ctx->msg, sizeof ctx->msg, "%s =%s", ln.base, arg);
+    }
     return CMD_DONE;
 }
 
@@ -2119,7 +2143,7 @@ static cmd_status_t c_send(cmd_ctx_t *ctx)
         if (view) {
             cmd_out(ctx, "send view on|off|80x30|mode");
             cmd_out(ctx, "modes: plain scan phosphor");
-            cmd_out(ctx, "  feedback riso poster");
+            cmd_out(ctx, "  feedback riso poster code");
         } else {
             cmd_out(ctx, "send <name> on | off");
         }
@@ -2327,6 +2351,83 @@ static cmd_status_t c_mute(cmd_ctx_t *ctx)
     return CMD_DONE;
 }
 
+/* '>clear' - EVERY LANE GONE, THE PAGE STAYS. '>new' was the only clean
+ * slate, and it took the page with it; a performer building a set wants the
+ * sound gone and the text still there to run again (2026-09-29). The clock
+ * keeps running, so the next line lands on the grid. */
+static cmd_status_t c_clear(cmd_ctx_t *ctx)
+{
+    int n = 0;
+    seq_lanes(&n);
+    seq_forget_all();
+    viz_forget_all();
+    snprintf(ctx->msg, sizeof ctx->msg, "%d lane%s gone", n, n == 1 ? "" : "s");
+    return CMD_DONE;
+}
+
+/* '>toggle kick snare hat' - A SWITCH FOR A BLOCK OF LANES. Each one named
+ * goes silent if it is playing and comes back if it is silent, keeping its
+ * place, so the line itself is the switch: run it for the drop, run it again
+ * for the return. With no names it says how. */
+static cmd_status_t c_toggle(cmd_ctx_t *ctx)
+{
+    if (ctx->arg[0] == '\0') {
+        cmd_out(ctx, "toggle what? toggle kick hat");
+        return CMD_ERROR;
+    }
+    int n = 0, off = 0, on = 0;
+    const seq_lane_t *l = seq_lanes(&n);
+    for (int i = 0; i < SEQ_MAX_LANES; i++) {
+        if (!l[i].used || !lane_named(ctx->arg, l[i].name)) {
+            continue;
+        }
+        const bool mute = !l[i].muted;
+        seq_mute(l[i].name, mute);
+        if (mute) { off++; } else { on++; }
+    }
+    if (off + on == 0) {
+        snprintf(ctx->msg, sizeof ctx->msg, "none of those is playing");
+        return CMD_ERROR;
+    }
+    snprintf(ctx->msg, sizeof ctx->msg, "toggle: %d off, %d on", off, on);
+    return CMD_DONE;
+}
+
+/* '>map cut' - FOR MIDI LEARN. A DAW learns the next controller it hears, and
+ * with a set playing it hears everything; so every other lane that sends MIDI
+ * goes quiet and only the one named is left - move it, learn it, '>map' alone
+ * brings the rest back. Pictures keep drawing: they send no MIDI (2026-09-29). */
+static cmd_status_t c_map(cmd_ctx_t *ctx)
+{
+    const bool all = (ctx->arg[0] == '\0');
+    int n = 0, quiet = 0;
+    bool found = all;
+    const seq_lane_t *l = seq_lanes(&n);
+    for (int i = 0; i < SEQ_MAX_LANES; i++) {
+        if (!l[i].used || l[i].bind == SEQ_BIND_VIZ) {
+            continue;
+        }
+        const bool named = !all && lane_named(ctx->arg, l[i].name);
+        found = found || named;
+        const bool want = !all && !named;
+        if (want != l[i].muted) {
+            seq_mute(l[i].name, want);
+        }
+        quiet += want ? 1 : 0;
+    }
+    if (!found) {
+        snprintf(ctx->msg, sizeof ctx->msg, "no lane called %s", ctx->arg);
+        return CMD_ERROR;
+    }
+    if (all) {
+        snprintf(ctx->msg, sizeof ctx->msg, "map off - all back on");
+    } else {
+        snprintf(ctx->msg, sizeof ctx->msg, "map: only %.12s - learn, then >map", ctx->arg);
+    }
+    (void)quiet;
+    return CMD_DONE;
+}
+
 static cmd_status_t c_panic(cmd_ctx_t *ctx)
 {
     seq_stop();
@@ -2361,6 +2462,9 @@ static const cmd_t s_builtins[] = {
     { "panic", c_panic, CMD_CAP_EDIT,  "silence everything" },
     { "mute",  c_mute,  CMD_CAP_EDIT,  "mute hat bass | mute = all on" },
     { "solo",  c_mute,  CMD_CAP_EDIT,  "solo kick | solo = all on" },
+    { "toggle",c_toggle,CMD_CAP_EDIT,  "toggle kick hat - off, then on" },
+    { "clear", c_clear, CMD_CAP_EDIT,  "every lane gone; the page stays" },
+    { "map",   c_map,   CMD_CAP_EDIT,  "map cut - only it sends, to learn" },
     { "help",  c_help,  CMD_CAP_READ,                   "list the commands" },
     { "list",  c_list,  CMD_CAP_READ,                   "list open buffers" },
     { "new",   c_new,   CMD_CAP_EDIT,                   "a fresh scratch buffer" },

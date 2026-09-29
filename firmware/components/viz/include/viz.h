@@ -82,12 +82,12 @@ void viz_size(int w, int h);
 void viz_out_size(int w, int h);
 
 /* HOW THE VIEW NODE DRAWS WHAT IT IS SENT: plain, scan, phosphor, feedback,
- * riso, poster (docs/VIEW.md). The deck only names the mode - it rides in the
+ * riso, poster, code (docs/VIEW.md). The deck only names the mode - it rides in the
  * control frame ahead of every picture - and the node does the drawing, so no
  * mode costs the deck anything. Numbered as firmware/main/view_wire.h numbers
  * them. */
 enum { VIZ_OUT_PLAIN, VIZ_OUT_SCAN, VIZ_OUT_PHOSPHOR, VIZ_OUT_FEEDBACK, VIZ_OUT_RISO,
-       VIZ_OUT_POSTER, VIZ_OUT_MODES };
+       VIZ_OUT_POSTER, VIZ_OUT_CODE, VIZ_OUT_MODES };
 void        viz_out_mode(int mode);
 int         viz_out_mode_now(void);
 const char *viz_out_mode_name(int mode);   /* NULL past the last */

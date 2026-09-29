@@ -326,7 +326,14 @@ static void do_reboot(void)
      *
      * Setting the register and the mux first costs two stores and means that
      * every route out of here - orderly restart, watchdog, panic - lands in
-     * download mode on a PHY the flasher owns. */
+     * download mode on a PHY the flasher owns.
+     *
+     * LET GO OF THE CABLE FIRST, so the computer sees the deck leave. Handed
+     * straight over, the pull-up never dropped: the Mac kept the old device,
+     * got no answer from it, and never looked for the loader, which sat there
+     * unseen until the cable was pulled (2026-09-29). */
+    tud_disconnect();
+    vTaskDelay(pdMS_TO_TICKS(200));
     usbmux_release_to_usj();
     if (s_reboot_to_loader) {
         REG_WRITE(RTC_CNTL_OPTION1_REG, RTC_CNTL_FORCE_DOWNLOAD_BOOT);

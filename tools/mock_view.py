@@ -27,7 +27,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import mock_pictures as M     # noqa: E402
 import type_round as T        # noqa: E402
-from zine import SMALL, Page  # noqa: E402
+from zine import BIG, SMALL, Page  # noqa: E402
 
 W, H = 640, 480
 STEPS = 32                    # the night, a sixteenth a step
@@ -214,85 +214,167 @@ def riso(fr):
         yield up((img * 255).astype(np.uint8))
 
 
-# ---------------------------------------------------------------- the poster
+# ---------------------------------------------------------------- poster and code
+#
+# As the node draws them (view/deckview/deckview.ino, draw_poster and draw_code):
+# 320 x 240 in the deck's own faces, doubled.
 
-PIECE = 'orbitals'
-SECTION = ('II', 'first light')
-LANES = ['kick 9...8...9...8...', 'box 2...1...2...1...', 'disc:x 8876532111235678',
-         'disc:y 568886531113', 'hat ..3...3...3...4.', 'bass .000.000.000.000']
-
-
-def glyph(ch):
-    return T.R.get(ch) or T.today(ch)
+NW, NH = 320, 240
+PAPER_P = {0: (246, 244, 238), 1: (18, 18, 18), 2: (228, 0, 43), 3: (150, 148, 142)}
+PAPER_C = {0: (0, 0, 0), 1: (58, 58, 54), 2: (236, 236, 228), 3: (228, 0, 43), 4: (128, 128, 122)}
 
 
-def big(img, x, y, text, s, colour):
-    """The round face, a font pixel to s x s."""
-    for i, ch in enumerate(text):
-        rows = glyph(ch)
-        for r in range(24):
-            for c in range(12):
-                if rows[r][c] == '#':
-                    X, Y = x + (i * 12 + c) * s, y + r * s
-                    img[Y:Y + s, X:X + s] = colour
+def g12(fb, x, y, ch, s, c, up=False):
+    rows = BIG.g.get(ord(ch)) if isinstance(ch, str) else BIG.g.get(ch)
+    if not rows:
+        return
+    for r in range(24):
+        for k in range(12):
+            if rows[r] & (0x8000 >> k):
+                for yy in range(s):
+                    for xx in range(s):
+                        X, Y = (x + r, y - k) if up else (x + k * s + xx, y + r * s + yy)
+                        if 0 <= X < NW and 0 <= Y < NH:
+                            fb[Y, X] = c
 
 
-def small(img, x, y, text, colour):
-    for i, ch in enumerate(text):
-        bits = SMALL.g.get(ord(ch))
-        if not bits:
-            continue
-        for r, b in enumerate(bits):
-            for c in range(6):
-                if b & (0x8000 >> c):
-                    img[y + r, x + i * 6 + c] = colour
+def g6(fb, x, y, ch, c):
+    rows = SMALL.g.get(ord(ch))
+    if not rows:
+        return
+    for r in range(12):
+        for k in range(6):
+            if rows[r] & (0x8000 >> k) and 0 <= x + k < NW and 0 <= y + r < NH:
+                fb[y + r, x + k] = c
 
 
-def poster(fr, pic):
-    """A live Swiss poster of the piece: its name, the section in red, a rule,
-    the section's lanes with the step each one is on, the picture, and the
-    count - flush left, on a grid, redrawn each step. It needs the deck to
-    send the lines as well as the frame."""
-    paper, ink, red = (246, 244, 238), (18, 18, 18), (228, 0, 43)
-    for k, g in enumerate(pic):
-        img = np.empty((H, W, 3), np.uint8)
-        img[:] = paper
-        big(img, 32, 28, PIECE, 4, ink)
-        big(img, W - 32 - 2 * 12 * 6, 12, SECTION[0], 6, red)
-        img[196:204, 32:W - 32] = ink
-        big(img, 32, 220, SECTION[1], 2, ink)
-        for i, lane in enumerate(LANES):
-            y = 290 + i * 28
-            name, pat = lane.split(' ')
-            big(img, 32, y, name, 1, ink)
-            x0 = 32 + (len(name) + 1) * 12
-            on = k % len(pat)
-            for j, ch in enumerate(pat):
-                if j == on:
-                    img[y:y + 24, x0 + j * 12:x0 + j * 12 + 12] = red
-                    big(img, x0 + j * 12, y, ch, 1, paper)
-                else:
-                    big(img, x0 + j * 12, y, ch, 1, ink)
-        b = up(bayer(g))                                   # Bayer at twice the pitch
-        px, py = W - 32 - b.shape[1], 220
-        img[py:py + b.shape[0], px:px + b.shape[1]][b] = ink
-        meta = f'124 bpm   dmin   bar {k // 16 + 1}   step {k % 16 + 1:>2}'
-        for i, ch in enumerate(meta):
-            bits = SMALL.g.get(ord(ch))
-            for r, row in enumerate(bits or []):
-                for c in range(6):
-                    if row & (0x8000 >> c):
-                        img[140 + 2 * r:142 + 2 * r, 32 + 12 * i + 2 * c:34 + 12 * i + 2 * c] = ink
+def t12(fb, x, y, t, s, c):
+    for i, ch in enumerate(t):
+        g12(fb, x + i * 12 * s, y, ch, s, c)
+
+
+def t6(fb, x, y, t, c):
+    for i, ch in enumerate(t):
+        g6(fb, x + i * 6, y, ch, c)
+
+
+def picture_at(fb, cells, dw, dh, x0, y0, x1, y1, ink):
+    """This step's greys, resampled to dw x dh dots of 4 pixels at (x0, y0)."""
+    grid = dots(cells)
+    t = [[M.tone(grid[j * len(grid) // dh][i * len(grid[0]) // dw]) for i in range(dw)]
+         for j in range(dh)]
+    b = bayer([[128 + v for v in row] for row in t])
+    for y in range(max(0, y0), min(y1, NH)):
+        for x in range(max(0, x0), min(x1, NW)):
+            if b[y - y0, x - x0]:
+                fb[y, x] = ink
+
+
+def paint(fb, pal):
+    img = np.zeros((NH, NW, 3), np.uint8)
+    for k, c in pal.items():
+        img[fb == k] = c
+    return up(img)
+
+
+def poster(fr, lines):
+    """The poster: the picture bleeds off the top and the right, the section's
+    number huge and red over it, the piece's name up a black spine, the section's
+    name reversed out of a bar, tempo and bar small over sixteen blocks, and the
+    lanes in a column, the step each is on lit red."""
+    for k, g in enumerate(fr):
+        title, sect, meta, lanes = lines(k)
+        fb = np.zeros((NH, NW), np.uint8)
+        picture_at(fb, g, 56, 37, NW - 224, 0, NW, 148, 1)
+        fb[:, 0:22] = 1
+        for i, ch in enumerate(title[:19]):
+            g12(fb, 5, NH - 8 - i * 12, ch, 1, 0, up=True)
+        num, _, name = sect.partition(' ') if ' ' in sect and len(sect.split(' ')[0]) < 5 else ('', '', sect)
+        if num:
+            t12(fb, 28, 4, num, 5 if len(num) <= 3 else 4, 2)
+        name = name[:11]
+        if name:
+            fb[156:182, 28:28 + len(name) * 12 + 10] = 1
+            t12(fb, 33, 157, name, 1, 0)
+        t6(fb, 28, 190, meta.upper(), 1)
+        t6(fb, 28, 203, f'BAR {k // 16 + 1}  {k % 16 + 1:>2}/16', 1)
         for st in range(16):
-            x = W - 32 - 16 * 18 + st * 18 + 6
-            img[172:184, x:x + 12] = red if st == k % 16 else ink
-        yield img
+            fb[220:234, 28 + st * 9:35 + st * 9] = 2 if st == k % 16 else (1 if st % 4 == 0 else 3)
+        for i, (text, f, t) in enumerate(lanes[:7]):
+            y = 154 + i * 12
+            for j, ch in enumerate(text[:23]):
+                x = NW - 142 + j * 6
+                if f <= j < t:
+                    fb[y:y + 11, x:x + 6] = 2
+                g6(fb, x, y - 1, ch, 0 if f <= j < t else 1)
+        yield paint(fb, PAPER_P)
+
+
+def code(fr, lines):
+    """The code: the lines round the cursor over the picture dimmed, a heading
+    red, a playing line bright with its step lit red, the rest grey."""
+    for k, g in enumerate(fr):
+        title, meta, rows = lines(k)
+        fb = np.zeros((NH, NW), np.uint8)
+        picture_at(fb, g, 80, 60, 0, 0, NW, NH, 1)
+        right = f'{meta.upper()}  BAR {k // 16 + 1}  {k % 16 + 1:>2}/16'
+        t12(fb, 12, 6, title[:24], 1, 2)
+        t6(fb, NW - 12 - 6 * len(right), 12, right, 4)
+        fb[36:38, 12:NW - 12] = 3
+        for i, (text, f, t) in enumerate(rows[:10]):
+            y = 46 + i * 18
+            head, live = text.startswith('--'), f < t
+            for j, ch in enumerate(text[:49]):
+                x = 12 + j * 6
+                if f <= j < t:
+                    fb[y:y + 12, x:x + 6] = 3
+                g6(fb, x, y, ch, 0 if f <= j < t else 3 if head else 2 if live else 4)
+        yield paint(fb, PAPER_C)
+
+
+VERBS = {'send', 'bpm', 'scale', 'swing', 'play', 'stop', 'mute', 'solo', 'toggle',
+         'clear', 'map', 'route', 'new', 'name', 'open', 'list', 'dump', 'lanes'}
+
+
+def span(line, k):
+    """The step a simple lane line is on at step k: one character a step, no
+    groups - enough for a mock-up; the deck lights every kind."""
+    if not line.startswith('>') or ' ' not in line:
+        return 0, 0
+    name, pat = line[1:].split(' ', 1)
+    if name in VERBS:                 # the deck lights lanes, never a verb's line
+        return 0, 0
+    body = pat.split(' ')[0]
+    if not body or any(c in body for c in '[]<>%_ ') or '=' in pat:
+        return 0, 0
+    at = len(name) + 2 + k % len(body)
+    return at, at + 1
+
+
+def piece_lines(path, heading):
+    """A section's own lines, from its heading on, as the code screen shows them."""
+    text = open(path).read().split('\n')
+    i = next(n for n, l in enumerate(text) if l.startswith(heading))
+    return text[max(0, i - 1):i + 12]
 
 
 # ---------------------------------------------------------------- sheets
 
-MODES = [('plain - today, with the dots', plain), ('scan', scan), ('phosphor', phosphor),
-         ('feedback', feedback), ('riso', riso), ('poster', None)]
+MODES = [('plain', plain), ('scan', scan), ('phosphor', phosphor),
+         ('feedback', feedback), ('riso', riso), ('poster', None), ('code', None)]
+ORB = os.path.join(os.path.dirname(HERE), 'pieces', 'orbitals.txt')
+LANES = ['kick 9...8...9...8...', 'box 2...1...2...1...', 'disc:x 8876532111235678',
+         'disc:y 568886531113', 'hat ..3...3...3...4.', 'bass .000.000.000.000']
+
+
+def poster_lines(k):
+    return ('ORBITALS', 'II first light', '124 bpm  dmin',
+            [(l, *(lambda s: (s[0] - 1, s[1] - 1))(span('>' + l, k))) for l in LANES])
+
+
+def code_lines(k):
+    rows = piece_lines(ORB, '-- II first light')
+    return ('orbitals', '124 bpm  dmin', [(l, *span(l, k)) for l in rows])
 
 
 def main():
@@ -300,14 +382,18 @@ def main():
     os.makedirs(out, exist_ok=True)
     tmp = tempfile.mkdtemp(prefix='mock_view_')
     fr = frames(tmp, 80, 30, square=False, scene='night')   # the deck's own cells
-    pic = frames(tmp, 36, 27)
     shots = {}
     for name, mode in MODES:
-        run = list(poster(fr, pic) if mode is None else mode(fr))
+        if name == 'poster':
+            run = list(poster(fr, poster_lines))
+        elif name == 'code':
+            run = list(code(fr, code_lines))
+        else:
+            run = list(mode(fr))
         shots[name] = run
 
     gap, label = 24, 28
-    sheet = Image.new('RGB', (2 * W + 3 * gap, 3 * (H + label) + gap), (255, 255, 255))
+    sheet = Image.new('RGB', (2 * W + 3 * gap, 4 * (H + label) + gap), (255, 255, 255))
     pg = Page(sheet.width, sheet.height)
     for i, (name, _) in enumerate(MODES):
         x, y = gap + (i % 2) * (W + gap), label + (i // 2) * (H + label)

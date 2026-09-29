@@ -30,6 +30,8 @@
  *     [ab]     a group: subdivides the step it occupies, any depth
  *     [0,4,7]  a stack: every member sounds at once - a chord
  *     <ab>     alternation: one member per cycle
+ *     <00 77>  with spaces, a WORD is one member, played whole: two steps that
+ *              play 00 one cycle and 77 the next. Every word one length.
  *     %NN      on any step or group: NN per cent odds
  *
  * and at the end of the line, after a space:  /2 *2  (rate)  !4  (play four
@@ -103,6 +105,7 @@ enum {
     SEQ_PAT_TRAILER,      /* a rate or a count that is not a number in range   */
     SEQ_PAT_TWICE,        /* two rates, or two counts                          */
     SEQ_PAT_FINE,         /* a slot shorter than one tick of the clock         */
+    SEQ_PAT_WORDS,        /* words in '< >' that are not all one length        */
 };
 
 /* One step as the compiler found it. Rests and ties are leaves too, because the
@@ -338,6 +341,84 @@ static inline int seq_pattern_measure_seq(const char *base, const char *p,
                                           const char *end, int depth,
                                           seq_comp_t *c, int *items, int *per);
 
+/* WORDS IN AN ALTERNATION.
+ *
+ * '<0 7>' plays 0 one cycle and 7 the next, and '<ab>' has always been a or b.
+ * The owner wrote '<000 777>' meaning the same thing a word at a time - three
+ * 0s one bar, three 7s the next - and heard 0 0 0 7 7 7 walked one per cycle,
+ * because every character was its own choice (2026-09-29). So WHERE THE CHOICES
+ * ARE SPACED, a word - a run of steps with no space in it - is one choice, and
+ * it takes as many steps as it has. With no spaces, each step is a choice, as
+ * before. A word of one step is a step, so nothing that was written before
+ * reads differently; tools/corpus and every piece were checked for that.
+ *
+ * Counts the words of one member [ms, me) and the steps in each. *k is the
+ * common length, or 1 when every step is its own choice. Returns 0, or -1 with
+ * the error set - words of different lengths cannot take turns in one place. */
+static inline int seq_pattern_words(const char *base, const char *ms,
+                                    const char *me, seq_comp_t *c, int *words,
+                                    int *k)
+{
+    int nw = 0, len = 0, common = -1;
+    const char *word_at = ms;
+    for (const char *a = ms; ; ) {
+        const int gap = (a >= me) || seq_pattern_is_spacing(*a);
+        if (gap && len > 0) {
+            if (common >= 0 && len != common) {
+                c->err = SEQ_PAT_WORDS; c->err_at = (int)(word_at - base);
+                return -1;
+            }
+            common = len;
+            nw++;
+            len = 0;
+        }
+        if (a >= me) { break; }
+        if (gap) { a++; continue; }
+        if (len == 0) { word_at = a; }
+        a = seq_pattern_item_end(base, a, me, c, NULL);
+        if (a == NULL) { return -1; }
+        len++;
+    }
+    *words = nw;
+    *k = (nw >= 2) ? common : 1;
+    return 0;
+}
+
+/* The start of the j-th step of the word that begins at `a`. */
+static inline const char *seq_pattern_word_step(const char *base, const char *a,
+                                                const char *me, int j, seq_comp_t *c)
+{
+    for (int i = 0; i < j && a != NULL; i++) {
+        a = seq_pattern_item_end(base, a, me, c, NULL);
+    }
+    return a;
+}
+
+/* HOW MANY STEPS AN ITEM TAKES: one, except an alternation of words, which
+ * takes the length of its words. Every member of it must agree. */
+static inline int seq_pattern_item_span(const char *base, const char *p,
+                                        const char *close, seq_comp_t *c)
+{
+    if (*p != '<') {
+        return 1;
+    }
+    const char *q = p + 1, *inner_end = close - 1, *ms, *me;
+    int span = -1, r;
+    while ((r = seq_pattern_member(base, &q, inner_end, &ms, &me, c)) == 1) {
+        int words = 0, k = 1;
+        if (seq_pattern_words(base, ms, me, c, &words, &k) < 0) { return -1; }
+        if (span >= 0 && k != span) {
+            const char *at = ms;
+            while (at < me && seq_pattern_is_spacing(*at)) { at++; }
+            c->err = SEQ_PAT_WORDS; c->err_at = (int)(at - base);
+            return -1;
+        }
+        span = k;
+    }
+    if (r < 0) { return -1; }
+    return span < 1 ? 1 : span;
+}
+
 /* Slots one item needs, and how many cycles it takes to come round (*per). A
  * step needs one slot. A '[]' needs what its widest member needs. A '<>' needs
  * what its widest ALTERNATIVE needs, because only one plays per cycle but the
@@ -362,6 +443,35 @@ static inline int seq_pattern_measure_item(const char *base, const char *p,
             need = seq_pattern_lcm(need, w);
             cyc  = seq_pattern_lcm(cyc, mp);
         } else {
+            int words = 0, span = 1;
+            if (seq_pattern_words(base, ms, me, c, &words, &span) < 0) { return -1; }
+            if (span > 1) {
+                /* WORDS: step j of every word takes turns in step j of the
+                 * group. Each column comes round every `words` cycles, times
+                 * whatever its own steps alternate by. */
+                for (int j = 0; j < span; j++) {
+                    int inner = 1;
+                    for (const char *a = ms; a < me; ) {
+                        if (seq_pattern_is_spacing(*a)) { a++; continue; }
+                        const char *s = seq_pattern_word_step(base, a, me, j, c);
+                        if (s == NULL) { return -1; }
+                        const char *ac = NULL;
+                        const char *ae = seq_pattern_item_end(base, s, me, c, &ac);
+                        if (ae == NULL) { return -1; }
+                        int ip = 1;
+                        const int w = seq_pattern_measure_item(base, s, ae, ac,
+                                                               depth - 1, c, &ip);
+                        if (w < 0) { return -1; }
+                        need  = seq_pattern_lcm(need, w);
+                        inner = seq_pattern_lcm(inner, ip);
+                        /* on to the next word */
+                        a = seq_pattern_word_step(base, a, me, span, c);
+                        if (a == NULL) { return -1; }
+                    }
+                    cyc = seq_pattern_lcm(cyc, words * inner);
+                }
+                continue;
+            }
             /* ALTERNATION: each item of this member is one alternative. A
              * member of k items comes round every k cycles, times whatever its
              * items themselves alternate by. */
@@ -407,9 +517,11 @@ static inline int seq_pattern_measure_seq(const char *base, const char *p,
         int ip = 1;
         const int s = seq_pattern_measure_item(base, p, e, close, depth, c, &ip);
         if (s < 0) { return -1; }
+        const int span = seq_pattern_item_span(base, p, close, c);
+        if (span < 0) { return -1; }
         l = seq_pattern_lcm(l, s);
         cyc = seq_pattern_lcm(cyc, ip);
-        k++;
+        k += span;
         p = e;
     }
     *items = k;
@@ -592,6 +704,60 @@ static inline int seq_pattern_place_item(const char *base, const char *p,
     return 0;
 }
 
+/* AN ALTERNATION OF WORDS, laid down a step at a time: step j of the group
+ * holds step j of every word, word w playing on the cycles where
+ * (cycle / per) % words == w - so each cycle plays one word whole, and a tie
+ * inside a word holds that word's note, because the tie and the note it holds
+ * share a word's cycles. Every member of the group starts from the same note
+ * before it, as the alternatives of a one-step group do. */
+static inline int seq_pattern_place_words(const char *base, const char *p,
+                                          const char *e, const char *close,
+                                          int start, int share, int span,
+                                          int per, int ph, int prob, int depth,
+                                          seq_comp_t *c, seq_tail_t *tail)
+{
+    int own = SEQ_PROB_ALWAYS;
+    if (seq_pattern_mod_len(close, e, &own) <= 0) { own = SEQ_PROB_ALWAYS; }
+    const int pr = seq_pattern_prob(prob, own);
+    const char *q = p + 1, *inner_end = close - 1, *ms, *me;
+    seq_tail_t out = { 0, { 0 } };
+    int r;
+    while ((r = seq_pattern_member(base, &q, inner_end, &ms, &me, c)) == 1) {
+        int words = 0, k = 1;
+        if (seq_pattern_words(base, ms, me, c, &words, &k) < 0) { return -1; }
+        if ((long)per * words > SEQ_PATTERN_MAX_PER) {
+            c->err = SEQ_PAT_PER; c->err_at = (int)(p - base);
+            c->err_num = per * words;
+            return -1;
+        }
+        seq_tail_t col = *tail;
+        for (int j = 0; j < span; j++) {
+            seq_tail_t next = { 0, { 0 } };
+            int w = 0;
+            for (const char *a = ms; a < me; ) {
+                if (seq_pattern_is_spacing(*a)) { a++; continue; }
+                const char *s = seq_pattern_word_step(base, a, me, j, c);
+                const char *ac = NULL;
+                const char *ae = seq_pattern_item_end(base, s, me, c, &ac);
+                seq_tail_t t = col;
+                if (seq_pattern_place_item(base, s, ae, ac, start + j * share, share,
+                                           per * words, ph + per * w, pr, depth - 1,
+                                           c, &t) < 0) {
+                    return -1;
+                }
+                seq_pattern_tail_add(&next, &t);
+                w++;
+                a = seq_pattern_word_step(base, a, me, span, c);
+            }
+            col = next;
+        }
+        seq_pattern_tail_add(&out, &col);
+    }
+    if (r < 0) { return -1; }
+    *tail = out;
+    return 0;
+}
+
 static inline int seq_pattern_place_seq(const char *base, const char *p,
                                         const char *end, int start, int width,
                                         int per, int ph, int prob, int depth,
@@ -600,9 +766,13 @@ static inline int seq_pattern_place_seq(const char *base, const char *p,
     int k = 0;
     for (const char *q = p; q < end; ) {
         if (seq_pattern_is_spacing(*q)) { q++; continue; }
-        q = seq_pattern_item_end(base, q, end, c, NULL);
-        if (q == NULL) { return -1; }
-        k++;
+        const char *close = NULL;
+        const char *e = seq_pattern_item_end(base, q, end, c, &close);
+        if (e == NULL) { return -1; }
+        const int span = seq_pattern_item_span(base, q, close, c);
+        if (span < 0) { return -1; }
+        k += span;
+        q = e;
     }
     if (k == 0) { return 0; }
     const int share = width / k;
@@ -611,11 +781,17 @@ static inline int seq_pattern_place_seq(const char *base, const char *p,
         if (seq_pattern_is_spacing(*p)) { p++; continue; }
         const char *close = NULL;
         const char *e = seq_pattern_item_end(base, p, end, c, &close);
-        if (seq_pattern_place_item(base, p, e, close, start + idx * share, share,
-                                   per, ph, prob, depth, c, tail) < 0) {
+        const int span = seq_pattern_item_span(base, p, close, c);
+        if (span > 1) {
+            if (seq_pattern_place_words(base, p, e, close, start + idx * share, share,
+                                        span, per, ph, prob, depth, c, tail) < 0) {
+                return -1;
+            }
+        } else if (seq_pattern_place_item(base, p, e, close, start + idx * share,
+                                          share, per, ph, prob, depth, c, tail) < 0) {
             return -1;
         }
-        idx++;
+        idx += span;
         p = e;
     }
     return 0;
@@ -872,6 +1048,7 @@ static inline void seq_pattern_error_text(const seq_comp_t *c, const char *pat,
         break;
     case SEQ_PAT_TWICE:       snprintf(out, n, "one rate and one count only"); break;
     case SEQ_PAT_FINE:        snprintf(out, n, "too fine for the clock"); break;
+    case SEQ_PAT_WORDS:       snprintf(out, n, "words in < > need one length"); break;
     default:                  snprintf(out, n, "not a pattern"); break;
     }
 }

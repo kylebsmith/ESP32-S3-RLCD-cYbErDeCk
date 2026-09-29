@@ -289,4 +289,40 @@ static inline int lane_def_parse(const char *arg, lane_def_t *d)
     return d->kind = LD_DRAW;
 }
 
+/* A sound's definition as it would be typed after the '=', for a reply. */
+static inline void lane_def_text(const lane_def_t *d, char *out, size_t n)
+{
+    const char *k = d->kind == LD_NOTE ? "note" : d->kind == LD_VOICE ? "voice" : "cc";
+    if (d->kind == LD_CC) {
+        snprintf(out, n, "%s %d ch %d", k, d->num, d->chan);
+    } else {
+        snprintf(out, n, "%s %d ch %d gate %d", k, d->num, d->chan, d->gate);
+    }
+}
+
+/* A SOUND MOVES WITH ONLY WHAT CHANGES. '>bass = ch 5' sends the bass that is
+ * playing to channel 5 - the same line on another synth, Bass2 in the DAW -
+ * and keeps its octave and gate. The definition the name had is written in
+ * front of the new words, and the later words win, as they always did.
+ * Returns 0 when `arg` does not start with ch or gate, 1 with the whole
+ * definition in `out`, and -1 when `was` is no sound to move. */
+static inline int lane_def_shift(const char *arg, const lane_def_t *was,
+                                 char *out, size_t n)
+{
+    char w[8];
+    const char *p = arg;
+    lane_word(&p, w, sizeof w);
+    if (strcmp(w, "ch") != 0 && strcmp(w, "gate") != 0) {
+        return 0;
+    }
+    if (was->kind != LD_NOTE && was->kind != LD_VOICE && was->kind != LD_CC) {
+        return -1;
+    }
+    char head[40];
+    lane_def_text(was, head, sizeof head);
+    while (*arg == ' ' || *arg == '\t') { arg++; }
+    snprintf(out, n, "%s %s", head, arg);
+    return 1;
+}
+
 #endif /* LANE_NAME_H */

@@ -269,6 +269,42 @@ int main(void)
         eqi("and the 3",          C.leaf[1].len, 2);
     }
 
+    /* 10b. WORDS IN AN ALTERNATION (2026-09-29). Where the choices are spaced,
+     *      a word is one choice, played whole, taking as many steps as it has.
+     *      The owner wrote '<000 777>' for "000 one bar, 777 the next" and heard
+     *      0 0 0 7 7 7 walked one a cycle, over a one-step group that also cut
+     *      their sixteen-step line to fourteen. */
+    render_is("<000 777>", 0, "000");
+    render_is("<000 777>", 1, "777");
+    render_is(".000.000.000.<000 777>", 0, ".000.000.000.000");
+    render_is(".000.000.000.<000 777>", 1, ".000.000.000.777");
+    render_is("<x. .x>", 0, "x.");
+    render_is("<x. .x>", 1, ".x");
+    render_is("<0 7>", 1, "7");              /* one-step words: as before */
+    render_is("<07>", 0, "0");               /* no spaces: each step a choice */
+    render_is("<07>", 1, "7");
+    {
+        seq_pattern_compile("<000 777>", &C);
+        eqi("<000 777> is three steps", C.steps, 3);
+        eqi("and comes round every two cycles", C.per, 2);
+        seq_pattern_compile(".000.000.000.<000 777>", &C);
+        eqi("a sixteen-step line ending in words is sixteen", C.steps, 16);
+        /* a tie inside a word holds that word's own note */
+        const char *t = "<0_ 7_>";
+        seq_pattern_compile(t, &C);
+        eqi("<0_ 7_>: the 0 is held two steps", leaf_at_char(t, 1)->len, 2);
+        eqi("and so is the 7",                   leaf_at_char(t, 4)->len, 2);
+        /* the playhead lights the word's own step */
+        int f = -1, to = -1;
+        seq_pattern_compile("<000 777>", &C);
+        eqi("the second step of cycle 1 is lit", seq_pattern_mark(&C, 1, 1, &f, &to), 1);
+        eqi("at the second 7", f, 6);
+        eqi("and only it", to, 7);
+        /* words that cannot take turns in one place are refused, at the word */
+        refused("<00 777>", SEQ_PAT_WORDS, 4);
+        refused("<00 77, 000 777>", SEQ_PAT_WORDS, 8);
+    }
+
     /* 11. REFUSED, WITH THE CHARACTER. Every one of these used to play:
      *     anything that was not a rest was a hit, and an unclosed bracket was
      *     absorbed into a nonsense subdivision. */
