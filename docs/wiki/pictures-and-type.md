@@ -188,11 +188,56 @@ difference over four scenes, both blurred by σ = 1.2 pixels. A pixel changing a
 that changes from one frame to the next with no changed pixel beside it; that is what
 sparkle is.*
 
-**Where this leaves it.** None of ours is as true as Bayer, and in a 4 × 4 cell none can
-be. What they buy is a signature. grain buys it most cheaply, at two-thirds more error;
-wide is the one that holds still in motion. **Bayer stays** until one of ours wins on the
-panel itself. These are the engine's frames drawn on a computer, and the reflective
-panel's slow pixels can only be judged on the deck.
+**Decided, 2026-09-28: Bayer.** The owner's words: Bayer is the best, and these
+variations are worse. None of ours is as true, and in a 4 × 4 cell none can be. The
+originality goes where there is room for it: the view node, next.
+
+### The view node — Bayer on the deck, anything on the screen
+
+![Six ways the view node could draw the same step of the radar](../img/view-modes.png)
+
+The deck keeps Bayer and sends the node what it sends today: one frame a step, and the
+tick it belongs to. **Everything below happens on the node, so the deck pays nothing for
+any of it.** Each mode is worked out from the frames and their ticks alone, so the same
+performance draws the same pictures every time. And because each frame knows where it
+falls in the bar, a mode can lock to the music: a zoom that kicks on the beat, a plate
+that drifts once a bar.
+
+![Four of them moving through a bar](../img/view-motion.gif)
+
+| mode | what it does | from | on the node |
+|---|---|---|---|
+| **plain** | the deck's picture, bit for bit, light on black | today's view | 640 × 480, one bit — what it does now |
+| **scan** | each row of the picture drawn as a line, lifted by its greys, hiding what is behind it | Rutt and Etra's scan processor, 1972; the pulsar plot on *Unknown Pleasures*, 1979 | one bit; sixty lines a frame |
+| **phosphor** | a green tube: what the beam lit glows and fades over about a beat, every other line dimmer | green-screen terminals | 320 × 240, eight bits and a palette |
+| **feedback** | each frame is the last one, zoomed and turned a little, with the new picture on top; a full turn every two bars, a zoom on each beat | a camera pointed at its own monitor, the way video synthesists worked | eight bits; the RP2040's interpolators do the zoom and turn in hardware |
+| **riso** | two inks out of register: pink is this step, blue the step before last, and the blue plate drifts with the bar | the risograph | eight bits; four colours |
+| **poster** | a live Swiss poster of the piece: its name, the section in red, the lanes with the step each is on, the picture as Bayer at twice the pitch | the International Style | one bit and a red; **needs the deck to send its lines** as well as the frame |
+
+The poster's type is the round face (§6) at four and six times, where its curves show.
+
+**How a piece would choose.** `>send view` already takes `on`, `off` and a size. A mode
+would be one more argument, `>send view scan`, not a new word. Written into a section, it
+changes with the piece, so the performer makes it like everything else.
+
+**Not mocked yet, and as cheap:**
+
+- **wobble**: rows pushed sideways by a wave locked to the beat, the demoscene's raster
+  trick.
+- **cycle**: the greys' colours turning a step at a time, palette animation as the Amiga
+  did it.
+- **moiré**: two lanes in two screens, overlapping.
+- **trace**: glowing outlines, as the Vectrex drew.
+
+**Honest limits.** These are mock-ups drawn on a computer from the engine's real frames,
+using only what the node has: a one-bit or an eight-bit buffer, a palette, whole numbers
+and affine lookups. Nothing here runs on the RP2040 yet.
+
+- The memory is estimated, not measured: two eight-bit buffers are 154 KB, beside the
+  58 KB the sketch uses, in 264 KB.
+- Feedback at the step rate is easy; at 60 frames a second it is unmeasured.
+- The poster needs a second kind of frame on the wire, carrying the lines. That frame is
+  not designed.
 
 ## 3. Proposal B, tried and set aside — smoothing the cells
 
@@ -463,6 +508,8 @@ system's own documentation or its designers' papers, 2026-09-28 (the sources are
 **Decided, 2026-09-28:**
 
 - **4 × 4 dots, banded** — adopted once the clock's jitter with it on matches today's.
+- **The screen is Bayer.** Five screens from print and three of our own were drawn and
+  measured; none is as true, and none looked better.
 - **The zero keeps its dot, full width.**
 - **The face's curve is n = 2.2.** It is laid by hand to that curve and checked (§6),
   because the programme's drafts broke letters.
@@ -475,6 +522,4 @@ system's own documentation or its designers' papers, 2026-09-28 (the sources are
 3. **The round face** — adopt it as the deck's face (recommended), once it passes the
    reading test on the panel.
 4. **Section lines at twice the size** — yes or no.
-5. **The screen** — Bayer, the owner's pick, unless grain, weave or wide wins on the
-   panel. Whichever it is, it is one setting for the whole deck, not a word in the
-   language.
+5. **The view node's modes** — which to build first, after interpolation.

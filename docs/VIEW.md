@@ -57,6 +57,13 @@ Packing is `firmware/main/view_wire.h`, reading is `view/deckview/view_read.h`, 
 `tools/test_view_wire.c` runs the one through the other in CI — a torn frame, junk
 with a false magic in it, 20 KB of nothing but torn frames, the largest frame.
 
+## Modes — proposed, not built
+
+The same frames drawn other ways, all on the node, the deck paying nothing: scan lines,
+a phosphor tube, video feedback, two-ink riso, a live Swiss poster of the piece. Mocked
+from the engine's real frames in
+[wiki/pictures-and-type.md](wiki/pictures-and-type.md) by `tools/mock_view.py`.
+
 ## How it gets there — today, and not yet
 
 **Today a computer relays it.** The deck writes each frame to its console as a
