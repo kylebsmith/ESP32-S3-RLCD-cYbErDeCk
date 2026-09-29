@@ -380,7 +380,10 @@ def main():
     args = ap.parse_args()
     if not os.path.isdir(args.reference):
         sys.exit(f"reference tree not found: {args.reference}\n"
-                 f"  git clone --depth 1 https://github.com/nilseuropa/solar_term {args.reference}")
+                 f"  the audited commit, as CI fetches it:\n"
+                 f"  git init {args.reference} && cd {args.reference} && "
+                 f"git fetch --depth 1 https://github.com/nilseuropa/solar_term "
+                 f"c4053c6d2ac9acc470771c872777ccdcd854c420 && git checkout FETCH_HEAD")
 
     p = params.load_with_defaults()
     r = measure_reference(args.reference)

@@ -42,9 +42,17 @@ jobs:
       # comparison inside build.sh actually run. Non-fatal: it is a third-party
       # repository CI does not control, and build.sh skips those steps without
       # it rather than failing.
-      - name: Fetch the reference design
+      #
+      # PINNED to the commit the design was audited against. On 2026-09-28 the
+      # upstream moved stl/ata to stl/rlcd_ata and every push failed here - an
+      # audit against a moving target is not an audit. Moving the pin is a
+      # decision, made with the audit's answer in front of you.
+      - name: Fetch the reference design, pinned
         continue-on-error: true
-        run: git clone --depth 1 https://github.com/nilseuropa/solar_term /tmp/solar_term
+        run: |
+          git init -q /tmp/solar_term
+          git -C /tmp/solar_term fetch -q --depth 1 https://github.com/nilseuropa/solar_term c4053c6d2ac9acc470771c872777ccdcd854c420
+          git -C /tmp/solar_term checkout -q FETCH_HEAD
 
       # Renders every part and fails on an OpenSCAD "unknown variable" warning.
       # A deleted parameter does not stop a render - OpenSCAD substitutes undef

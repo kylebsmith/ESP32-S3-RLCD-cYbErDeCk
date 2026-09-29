@@ -18,7 +18,9 @@ Neither claim is that the parts have been printed and fitted. They have not.
 
 ```sh
 pip install -r tools/requirements.txt
-git clone --depth 1 https://github.com/nilseuropa/solar_term /tmp/solar_term
+git init /tmp/solar_term && git -C /tmp/solar_term fetch --depth 1 \
+    https://github.com/nilseuropa/solar_term c4053c6d2ac9acc470771c872777ccdcd854c420 && \
+    git -C /tmp/solar_term checkout FETCH_HEAD     # the audited commit, as CI pins it
 
 python3 tools/measure_reference.py --reference /tmp/solar_term \
         --json export/reports/measurements.json

@@ -10,7 +10,7 @@ What checks the deck, what draws its documents, and what every file in `docs/` i
 One job, `audit`: ubuntu-latest, 45 min (ci.yml:12-15). It triggers on every push, every PR and manual dispatch. Steps in order:
 
 1. apt `openscad xvfb`; Python 3.11; `pip install -r tools/requirements.txt` (ci.yml:20-39).
-2. Clone `nilseuropa/solar_term` to `/tmp/solar_term` — non-fatal (45-47).
+2. Fetch `nilseuropa/solar_term` to `/tmp/solar_term`, **pinned to `c4053c6`**, the commit the design was audited against — non-fatal. Pinned on 2026-09-28, when the upstream moved `stl/ata` to `stl/rlcd_ata` and the unpinned clone broke every push.
 3. `./tools/build.sh` (54-55).
 4. `measure_reference.py --reference /tmp/solar_term --json export/reports/measurements.json` — non-fatal (59-63).
 5. Each host C check compiled with `cc`/`gcc` into `/tmp` and run (81-325; table §6.2).
