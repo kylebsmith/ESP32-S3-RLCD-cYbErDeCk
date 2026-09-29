@@ -1,62 +1,72 @@
 # Pieces
 
-One set in three acts, typed onto the deck as three documents. Open one and run
-it top to bottom, a line at a time: the order of the lines is the arrangement.
-Played in order, each act hands its last groove to the next.
+An EP of four tracks, each a document on the deck. Open one and run it top to
+bottom, a line at a time. Every track ends in silence, so any can follow any.
 
-| document | act | what it is |
-|---|---|---|
-| `ground` | one | **The grid, and how to break it.** 93 bpm: a strict grid; then the snare displaced a sixteenth and five- and seven-step percussion drifting against it; then the drums erased and the bass moved to another synth; then a ghost kick every three sixteenths becomes the beat at 124. Steps, velocity, ties, chords, odds, alternation, word alternation, a controller, swing, a block toggle. |
-| `lift` | two | **Layers out of register.** 124: lanes of 16, 12, 8 and 5 steps stacked; the bass moved from synth to synth while a second bass takes the channel it left; seven-eight; a cut to silence and a drill at 165 that lands on the bar; a cut back to 124. Instances, parts, routes, counts, polymeter, voices on more channels. |
-| `orbitals` | three | The piece. One chord line that is never edited, under seven lights: phrygian night, minor, dorian, a day that brightens one note at a time to lydian, an eclipse, and back to night. The bass is the sun and never leaves D, but its light moves from synth to synth. A twelve-step arpeggio against the bar, and a planet whose x and y run at sixteen and twelve steps round a square sun. |
+| document | tempo, key | what it is | the screen |
+|---|---|---|---|
+| `grid` | 124, F minor | Swiss techno: a strict kick, offbeat hats, a rolling bass and a hook over F minor 9 – D♭ maj 7 – A♭ maj 7 – E♭; the lift climbs B♭m – Cm – D♭ – E♭ | `plain`, with the deck's own cell grid drawn on it until the drop |
+| `offset` | 132, A dorian | broken two-step, swung: the dorian vamp A m9 – D9, then C maj7 – Bm7 – Em7 – D7 falling back; the bass on Bass2 | `riso`, the plates slipping on the snare |
+| `drill` | 165, E phrygian | punk drill'n'bass: power chords E – F – G – F, a pumping bass on Bass3, a riff; the turn goes C – D – E | `scan`, the screen flipping on the snare from the drop |
+| `orbitals` | 124, D minor | the piece: a radar, a planet and a sun that never leaves D. Night, first light, a day that lifts the harmony, an eclipse, and night again | `poster` throughout, the paper brightening with the day |
 
-## How the set moves
+## How a track plays
 
-No snare-roll builds. Each change is one of these:
+**Everything is written before `>play`**, so nothing drops out by accident. After
+that a section is one line, and it **lands on the next bar's first beat**, however
+early it is run: `>toggle` waits for the one (`seq_toggle.h`).
 
-- **A key changes by one note, or by none.** Most moves keep all seven notes and
-  move the centre: G minor to C dorian to D minor are the same notes. When a note
-  does change, it is one at a time: ORBITALS climbs from phrygian to lydian one
-  note per line. Only the eclipse changes many notes at once, and it does so while
-  the fast lanes are switched off, so it lands on the pad's next bar.
-- **Tempos are 4:3 apart**: 93, 124, 165. The three-sixteenth pulse at one tempo
-  is the beat at the next. The tempo changes while only the pad sounds.
-- **Erase, don't add.** `>toggle kick snare hat` switches a whole block off, and
-  the same line brings it back.
-- **`!255` makes a line wait for its bar.** The drill and the day both land on the
-  one, however early the line is run.
-- **Move the sound, not the notes.** `>bass = ch 5` sends the bass that is playing
-  to another synth and keeps its octave and gate.
-
-Press `>play` on the one: it starts the act's bar count from the top.
+- **One key a track.** Harmony moves by progression, with the voices led, not by
+  changing key. The only key change on the EP is ORBITALS' eclipse and its return.
+- **Two versions of the harmony.** `pad`, `bass` and `lead` each have a second,
+  `pad:2` and so on, and one line swaps the whole song between them — `>toggle pad
+  pad:2 bass bass:2 lead lead:2` — and the same line swaps it back.
+- **Drums are one lane a part.** A break is `>toggle kick hat clap`, and the same
+  line brings them back. Their variations are written as a second line under a
+  heading: run it to switch, run the first to switch back. A drum switch carries
+  on from the step it is on.
+- **Every lane is a bar or four bars long,** so nothing drifts against the bar;
+  the planet's orbit in ORBITALS is the only thing at twelve, and it is a picture.
+- **The screen is chosen once a track,** and it moves only with the music: the
+  grid leaves at GRID's drop, the plates slip on OFFSET's snare, DRILL's screen
+  flips on its snare after the drop, and ORBITALS' paper lightens at first light
+  and darkens in the eclipse.
 
 ## What to plug in
 
 | channel | what |
 |---|---|
-| 1 | Bass1: `bass`, and `sub` in `lift` |
+| 1 | Bass1: `bass` in `grid` and `orbitals` |
 | 2 | lead |
-| 3 | pad; `glow` is controller 74 here |
+| 3 | pad |
 | 4 | arp |
-| 5 | Bass2: where `>bass = ch 5` sends the bass |
-| 6 | Bass3: `>bass = ch 6` |
+| 5 | Bass2: `bass` in `offset` |
+| 6 | Bass3: `bass` in `drill` |
 | 10 | a General MIDI drum kit |
-| 16 | **the HDMI screen's colour**: `day`, `inv`, `glint`, `skew`, `lines` are controllers 1-8 here ([VIEW.md](../docs/VIEW.md)) |
+| 16 | **the HDMI screen's colour**: `lines`, `skew`, `inv` and `day` are controllers here ([VIEW.md](../docs/VIEW.md)) |
 
-`cut` is controller 74 on channel 1, and follows the bass to channel 5 in
-`ground`. Each act defines the voices it uses, because octave and gate are part
-of the sound. **More voices:** any new name is another part on another channel,
-for example `>bass2 = voice 1 ch 7`. The deck holds 16 lanes and 32 names at once.
+Each track defines its own voices, because octave and gate are part of the sound.
+**More voices:** any new name is another part on another channel, for example
+`>bass2 = voice 1 ch 7`; `>bass = ch 5` moves a playing part. The deck holds 16
+lanes and 32 names at once.
+
+**Timing, measured 2026-09-29:** the deck's MIDI at 165 bpm with 32nd hats, ratchets
+and the view on landed within 0.11 ms of the grid (0.03 ms rms). If a dense
+passage sounds loose in a DAW, look at the DAW's audio buffer first: it plays
+incoming MIDI in chunks of its buffer, 10–20 ms at 512–1024 samples.
 
 ## Whose is it
 
-The notes, and the set's rules above, are ours. The grooves still stand on
-common ground: a four-on-the-floor kick, a backbeat on two and four, and a
-rolling bass line are shared by every dance record. Until 2026-09-29 `lift` was
-five sketches written in the manner of named live coders, and `ground` was four
-genre studies. Both were replaced by this set.
+Every line is ours, written for this deck; nothing is copied from a recording. The
+vocabulary is shared — a four-on-the-floor kick, a backbeat, a two-step, the
+i – VI – III – VII of a thousand records, power chords — and the forms are ours.
+`.000.000.000.<000 777>` was the owner's line. Until 2026-09-29 the pieces were
+sketches after named live coders, genre studies, then one long set with a key
+change a section; the owner found the keys, the dropouts and the screen changes
+arbitrary, and this EP replaced them.
 
-**Checked, every line:** `tools/test_pieces.c` runs each act through the deck's
-own compiler, names, key and pictures, alone, twice over, and as the whole set
-in order. `-s` prints the notes each section plays, which is how these were
-written. Nothing here has been heard yet. It has only been read.
+**Checked, every line:** `tools/test_pieces.c` runs each track through the deck's
+own compiler, names, key and pictures, alone, twice over, and as the EP in order.
+`-s` prints the notes each section plays: every chord, bass note and lead note
+was read against the others that way. Nothing here has been heard by the author;
+it has been read.

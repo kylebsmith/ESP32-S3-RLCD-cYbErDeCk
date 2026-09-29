@@ -177,7 +177,7 @@ routes draws in table order, whatever order the lines were typed.
 
 | | |
 |---|---|
-| `toggle kick hat` | a block off; the same line brings it back |
+| `toggle kick hat` | a block off **on the next bar's one**; the same line brings it back. `toggle pad pad:2` swaps two versions |
 | `clear` | every lane gone; the page stays |
 | `map cut` | only `cut` sends MIDI — learn it in the DAW, then `map` |
 

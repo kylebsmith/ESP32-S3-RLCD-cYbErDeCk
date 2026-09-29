@@ -297,8 +297,8 @@ def band(p, d):
          'semicolon.')
     para(p, 1500, 'x is a hit. . is a rest.\nnow form a band [@sideburns].')
     note(p, 2010,
-         'on the deck: one set in three acts - ground, lift,\n'
-         'orbitals. run them in order; the set ends in silence.')
+         'on the deck: an ep of four - grid, offset, drill,\n'
+         'orbitals. each ends in silence; any follows any.')
 
 
 # ------------------------------------------------------------------ 15

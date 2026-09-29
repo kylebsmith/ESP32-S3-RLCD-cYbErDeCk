@@ -1067,15 +1067,22 @@ a message.
 - `>toggle a b …` flips each named lane: one that plays goes silent, one that is silent
   comes back. It keeps its slot, its pattern and its place in the bar, so **the line is
   the switch** — run it for the drop, run it again for the return.
+- **It lands on the one** (2026-09-29): the change waits, pending, for the first tick of
+  the next bar, and the clock makes it before any lane fires (`seq_toggle.h`, `seq.c`
+  `tick`). Run again before the bar, it takes the change back. With the clock stopped
+  it acts at once, so a piece can set itself up before `>play`. `tools/test_toggle.c`.
+  A pair — `>toggle pad pad:2` with one of them silent — swaps two versions of a part
+  on the one.
 - No names: `"toggle what? toggle kick hat"`, an error.
 
 **Names** are exact canonical lane names, as for `mute` (`lane_named`).
 
-**Status:** `"toggle: %d off, %d on"`; `"none of those is playing"` (an error) when no
-name matched.
+**Status:** `"toggle: %d off, %d on - on the one"` while playing, without the tail
+when stopped; `"none of those is playing"` (an error) when no name matched.
 
-**In a piece** it is the block switch: `>toggle kick clap hat rim arp lead` erases the
-fast lanes for ORBITALS' eclipse, and the same line brings them back
+**In a piece** it is every section change: `>toggle kick hat clap lead bass:2 arp`
+empties ORBITALS for its eclipse on the one, and the same line brings it back;
+`>toggle pad pad:2 bass bass:2 lead lead:2` moves a track to its second progression
 ([pieces/README.md](../../pieces/README.md)).
 
 ### 2.27 `clear` · EDIT · "every lane gone; the page stays" · `c_clear`

@@ -177,6 +177,14 @@ jobs:
       # naive one (step index == character offset) that every UNSPACED
       # pattern makes look right by accident - which is every pattern in the
       # shipped guide. Run against the naive version it fails 13 ways.
+      # '>toggle' lands on the next bar's first tick, not when it is pressed:
+      # the rule in seq_toggle.h that the clock runs, played out over ticks.
+      - name: Check that a toggle lands on the one
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror -I firmware/components/seq/include \
+             -o /tmp/test_toggle tools/test_toggle.c
+          /tmp/test_toggle
+
       - name: Check the pattern geometry
         run: |
           cc -std=c11 -Wall -Wextra -Werror \
@@ -199,8 +207,8 @@ jobs:
       # the command layer's rules for lanes, definitions and routes, from the
       # boot document's names. Each set is also run twice, back to back, the
       # way a performer loops it - a line that repeats what its lane already
-      # plays would remove it by hand - and the three as one set, in order,
-      # since each act hands its last groove to the next.
+      # plays would remove it by hand - and the EP's four in order, since each
+      # must end in silence for the next to begin clean.
       - name: Check the pieces
         run: |
           cc -std=c11 -Wall -Wextra -Werror -Wno-unused-parameter -O1 \
@@ -210,7 +218,7 @@ jobs:
              -I firmware/main -I tools/hostshim \
              -o /tmp/test_pieces tools/test_pieces.c firmware/components/viz/viz.c
           for f in pieces/*.txt; do cat "$f" "$f" > "/tmp/twice_$(basename "$f")"; done
-          cat pieces/ground.txt pieces/lift.txt pieces/orbitals.txt > /tmp/set.txt
+          cat pieces/grid.txt pieces/offset.txt pieces/drill.txt pieces/orbitals.txt > /tmp/set.txt
           /tmp/test_pieces firmware/components/cmd/builtins.c pieces/*.txt /tmp/twice_*.txt /tmp/set.txt
 
       # The Strudel conformance corpus (docs/NEXT.md §11): Strudel's own events

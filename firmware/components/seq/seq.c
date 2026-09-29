@@ -1,4 +1,5 @@
 #include "seq.h"
+#include "seq_toggle.h"
 #include "seq_clock.h"
 #include "seq_pattern.h"
 #include "seq_scale.h"
@@ -937,6 +938,20 @@ static void tick(void *arg)
      * wrapped cleanly while a 5-, 6- or 12-step lane took a phase jump every
      * 66 minutes.
      */
+    /* A SWITCH LANDS ON THE ONE: a '>toggle' waits here for the first tick of
+     * the next bar, and is made before any lane fires (seq_toggle.h). The
+     * exchange is atomic because the command that set it runs on the other
+     * core; a press between the read and the clear is never lost. */
+    if (seq_toggle_at_bar(s_tick)) {
+        for (int i = 0; i < SEQ_MAX_LANES; i++) {
+            seq_lane_t *l = &s_lanes[i];
+            const int p = __atomic_exchange_n(&l->pend_mute, (int8_t)SEQ_PEND_NONE,
+                                              __ATOMIC_ACQ_REL);
+            if (l->used && p != SEQ_PEND_NONE) {
+                l->muted = seq_toggle_land(l->muted, p);
+            }
+        }
+    }
     fire_lanes(s_tick);
     /* The visuals advance on the same tick as the music, so the animation and
      * the beat share a clock by construction rather than by being kept in
@@ -1475,7 +1490,28 @@ esp_err_t seq_mute(const char *name, bool mute)
     if (l == NULL) {
         return ESP_ERR_NOT_FOUND;
     }
+    __atomic_store_n(&l->pend_mute, (int8_t)SEQ_PEND_NONE, __ATOMIC_RELEASE);
     l->muted = mute;
+    return ESP_OK;
+}
+
+esp_err_t seq_toggle(const char *name, bool *will_mute)
+{
+    seq_lane_t *l = find(name, false);
+    if (l == NULL) {
+        return ESP_ERR_NOT_FOUND;
+    }
+    const int next = seq_toggle_next(l->muted,
+                                     __atomic_load_n(&l->pend_mute, __ATOMIC_ACQUIRE));
+    if (will_mute != NULL) {
+        *will_mute = (next == SEQ_PEND_MUTE);
+    }
+    if (!s_running) {
+        __atomic_store_n(&l->pend_mute, (int8_t)SEQ_PEND_NONE, __ATOMIC_RELEASE);
+        l->muted = (next == SEQ_PEND_MUTE);
+    } else {
+        __atomic_store_n(&l->pend_mute, (int8_t)next, __ATOMIC_RELEASE);
+    }
     return ESP_OK;
 }
 

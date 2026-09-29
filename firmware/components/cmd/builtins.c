@@ -2368,7 +2368,9 @@ static cmd_status_t c_clear(cmd_ctx_t *ctx)
 /* '>toggle kick snare hat' - A SWITCH FOR A BLOCK OF LANES. Each one named
  * goes silent if it is playing and comes back if it is silent, keeping its
  * place, so the line itself is the switch: run it for the drop, run it again
- * for the return. With no names it says how. */
+ * for the return. It lands on the next bar's first tick, not mid-bar
+ * (seq_toggle.h): '>toggle bass bass:2' swaps two versions of a part on the
+ * one. With no names it says how. */
 static cmd_status_t c_toggle(cmd_ctx_t *ctx)
 {
     if (ctx->arg[0] == '\0') {
@@ -2381,15 +2383,16 @@ static cmd_status_t c_toggle(cmd_ctx_t *ctx)
         if (!l[i].used || !lane_named(ctx->arg, l[i].name)) {
             continue;
         }
-        const bool mute = !l[i].muted;
-        seq_mute(l[i].name, mute);
+        bool mute = false;
+        seq_toggle(l[i].name, &mute);
         if (mute) { off++; } else { on++; }
     }
     if (off + on == 0) {
         snprintf(ctx->msg, sizeof ctx->msg, "none of those is playing");
         return CMD_ERROR;
     }
-    snprintf(ctx->msg, sizeof ctx->msg, "toggle: %d off, %d on", off, on);
+    snprintf(ctx->msg, sizeof ctx->msg, seq_running() ? "toggle: %d off, %d on - on the one"
+                                                      : "toggle: %d off, %d on", off, on);
     return CMD_DONE;
 }
 

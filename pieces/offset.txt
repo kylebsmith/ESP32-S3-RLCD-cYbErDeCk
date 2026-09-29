@@ -1,0 +1,56 @@
+OFFSET
+
+-- set
+>send view riso
+>skew = cc 7 ch 16
+>skew 2...9...2...9...
+>bpm 132
+>scale ador
+>swing 58
+>kick 9......7..9.....
+>snare ....9.......9...
+>hat ..5...5...5...5.
+>rim ......5.....5.5.
+>bass = voice 1 ch 5 gate 240
+>bass 0_.0..0. 0_.0.70. 3_.3..3. 3_.3.53. /2
+>bass:2 2_.2..2. 1_.1..1. 3_.3..3. 3_.3.53. /2
+>pad = voice 3 ch 3 gate 900
+>pad <[0,2,4,6,8] [0,2,4,6,8] [3,4,5,7,9] [3,4,5,7,9]>___ /4
+>pad:2 <[2,4,6,8] [1,3,5,7] [3,4,6,8] [3,5,7,9]>___ /4
+>lead = voice 4 ch 2 gate 140
+>lead 4.6.7... ....8.7. 5.7.9... ....7.5. /2
+>lead:2 6.4.2... 5.3.1... 4.6.8... 9.7.5... /2
+>move r 4...
+>ramp u ....9.......9...
+>toggle snare hat rim ramp bass bass:2 pad:2 lead lead:2
+>play
+
+-- in
+>toggle snare hat rim ramp
+>toggle bass
+
+-- hook
+>toggle lead
+
+-- turn
+>toggle pad pad:2 bass bass:2 lead lead:2
+
+-- kick
+>kick 9..9......9..7..
+>kick 9......7..9.....
+
+-- hat
+>hat 3.53.53.3.53.53.
+>hat ..5...5...5...5.
+
+-- strip
+>toggle kick snare hat rim
+
+-- drop
+>toggle kick snare hat rim
+
+-- out
+>toggle kick snare hat rim ramp
+>clear
+>send view off
+>stop
