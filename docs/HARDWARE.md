@@ -397,10 +397,15 @@ keyboard-first writing device.
    been measured on the bench. The power argument for LPM is currently
    qualitative.
 3. **Can the ETA6098 boost VBUS?** Its SW / PMID pins and the 2.2 µH inductor
-   are the topology of a part that *may* support an OTG boost, but the ETA6098
-   datasheet has not been read and the CC resistors configure the port as a
-   sink regardless. Only matters if USB host is ever wanted; it is not wanted
-   today. **Do not assume either answer.**
+   are the topology of a part that *may* support an OTG boost, and the CC
+   resistors configure the port as a sink regardless. **Probably not, 2026-09-28:**
+   ETA's published feature list for the ETA6098 is a charger's alone - 32 V
+   input standoff, 2.5 A, no sense resistor - and names no OTG or boost, where its
+   sibling the ETA6095 names one. Read from the vendor's feature list and a
+   distributor's summary; the datasheet's own pin table is still unread. It now
+   matters: the owner wants the HDMI view node powered from the deck over USB-C
+   ([VIEW.md](VIEW.md)), and without a boost the deck cannot send 5 V down the
+   cable.
 4. **Schematic net names** have not been fully cross-read against the pin map above;
    the pin map rests on vendor example code, which is strong but secondary.
 

@@ -10,25 +10,54 @@ page is its wire format and what is and is not yet true of it.*
 
 The deck's picture lanes draw a frame of cells — its own tiles, codepoints 128–155,
 nine tones and the shapes — and the panel shows it in the split. With
-`>send view on` the deck also sends each frame to the view node, which draws it at
-640×480, one bit per pixel, **in the deck's own glyphs**: `view/deckview/deckfont.h`
-is generated from the same art as the panel's faces (`tools/make_font.py --view`,
-diffed in CI), so a tile on the screen is the tile on the panel, bit for bit.
+`>send view on` the deck also sends each frame to the view node, which draws it on
+any HDMI screen **in one of six modes**. The deck only names the mode; the node does
+all the drawing, so no mode costs the deck anything, and every mode is worked out
+from the frames and their ticks alone — the same performance draws the same
+pictures.
 
-The node picks whichever face and whole-number scale fills the screen best and
-centres the frame: a cell is always a square block of its tile, never smeared.
+The node draws 320×240 at eight bits a pixel through a palette, doubled to
+**640×480 at 60 Hz**, the mode every HDMI screen takes. It keeps two framebuffers:
+the next picture is drawn while the last is shown, and phosphor and feedback read
+the one on the screen. A cell is twice as tall as it is wide, so on the node it is
+two square dots; 80×30 cells are 80×60 dots of four pixels, the whole screen.
 
-**Light ink on black.** The panel is dark ink on reflective paper; the screen emits
-light, so the node draws ink as light. The owner's first look, 2026-09-25: "an
-inverted version of the display — that's amazing." Kept as the default.
-
-## The size
-
-| on the deck | |
+| mode | what the node draws |
 |---|---|
-| `>send view on` | frames go out at **53×20** cells — the whole 640×480 screen in the 12×24 face |
-| `>send view 40x12` | at any size up to 60×24 |
+| `plain` | the picture's greys as the deck's 4×4 banded dots, Bayer, light on black |
+| `scan` | each row of cells as one line across the screen, lifted by its greys, hiding what is behind it — Rutt and Etra's scan processor |
+| `phosphor` | a green tube: what the beam lit glows, and fades to about half each step; every other line dimmer |
+| `feedback` | the frame on the screen, zoomed and turned a little and dimmer, with the new picture's greys on top: a full turn every two bars, a zoom that kicks on each beat |
+| `riso` | two inks out of register: pink is this step, blue the step before last, its plate drifting with the bar |
+| `poster` | a live Swiss poster: the piece's name, the section's number in red, tempo, bar and step, a rule, the section's name, the lanes in play with the step each is on lit red, and the picture |
+
+Mock-ups of each from the engine's real frames are in
+[wiki/pictures-and-type.md](wiki/pictures-and-type.md), drawn by
+`tools/mock_view.py`; `tools/view_demo.py` drives a real node through all six
+with no deck.
+
+**`plain` is not yet the panel.** The node draws the dots decided for the panel;
+the panel still draws its tiles until the dots are built into it. The type the
+node writes — the poster, and the screen it shows before the first frame — is the
+deck's own: `view/deckview/deckfont.h` is generated from the same art as the panel's
+faces (`tools/make_font.py --view`, diffed in CI).
+
+**Light on black** in `plain` and `scan`. The panel is dark ink on reflective
+paper; the screen emits light. The owner's first look, 2026-09-25: "an inverted
+version of the display — that's amazing." Kept.
+
+## On the deck
+
+| | |
+|---|---|
+| `>send view on` | frames go out at **80×30** cells, the node's whole screen; if the view is already on, it keeps its size |
+| `>send view scan` | on, drawn as scan lines — likewise `plain`, `phosphor`, `feedback`, `riso`, `poster` |
+| `>send view 40x12` | on, at any size up to 80×30 |
+| `>send view` | which: `view is on, scan` |
 | `>send view off` | stop, and the panel's split decides the size again |
+
+A mode is one more argument to the destination, not a new word. Written into a
+section of a piece, it changes with the piece.
 
 **The deck's preview keeps its own shape.** When the view sets the size, the
 engine draws at the view's size and the split shows a sample of it — the preview
@@ -37,32 +66,50 @@ nothing about the split changes.
 
 ## The wire format
 
+Two kinds of frame, and the deck sends both every step: a control frame, then the
+picture.
+
 ```
-'D' 'K' 'V' '1'   magic
+'D' 'K' 'V' '1'   magic: a picture
 tick  u32 LE      the deck's pulse this frame was drawn for
 w, h  u8, u8      the frame in cells
 cells w*h bytes   row by row: 32–126 text, 128–155 the deck's tiles
 sum   u8          XOR of every byte after the magic
+
+'D' 'K' 'C' '1'   magic: a control frame
+tick  u32 LE      as above
+mode  u8          0 plain, 1 scan, 2 phosphor, 3 feedback, 4 riso, 5 poster
+n     u8          lines of text, 0–12
+len   u16 LE      bytes of text
+text  len bytes   n lines, each: from u8, to u8, its characters, '\n' -
+                  [from, to) is the span to light, the step a lane is on
+sum   u8          XOR of every byte after the magic
 ```
+
+**The mode rides ahead of every picture**, so a node that joins late, or loses a
+control frame, is right again a step later. The lines are sent only for the poster:
+the piece's name, the section the cursor is in, the tempo and scale, and up to
+seven lanes in play, each with the span the editor lights for its step — so the
+poster and the panel never disagree about where the music is.
 
 **Every frame carries its tick**, so a node that joins the ensemble can show a frame
 when it was meant to be shown rather than when it arrived — the wireless node rides
-the deck's clock instead of guessing. Today the node shows each frame on arrival
-and reports the tick it last drew.
+the deck's clock instead of guessing. The modes already use it: feedback's zoom on
+the beat, riso's drift with the bar, the poster's bar and step.
 
 **One lost byte costs one frame.** The node keeps the bytes since a frame's magic,
 and when a frame is refused it reads them again one byte later, finding the magic
-the torn frame had swallowed. The reader this replaced lost the next frame too.
-Packing is `firmware/main/view_wire.h`, reading is `view/deckview/view_read.h`, and
-`tools/test_view_wire.c` runs the one through the other in CI — a torn frame, junk
-with a false magic in it, 20 KB of nothing but torn frames, the largest frame.
+the torn frame had swallowed. One reader serves both kinds. Packing is
+`firmware/main/view_wire.h`, reading is `view/deckview/view_read.h`, and
+`tools/test_view_wire.c` runs the one through the other in CI — torn frames of both
+kinds, junk with a false magic in it, 20 KB of nothing but torn frames, the largest
+picture, a corrupted control frame that must leave the mode as it was, and the two
+headers' limits held equal.
 
-## Modes — proposed, not built
-
-The same frames drawn other ways, all on the node, the deck paying nothing: scan lines,
-a phosphor tube, video feedback, two-ink riso, a live Swiss poster of the piece. Mocked
-from the engine's real frames in
-[wiki/pictures-and-type.md](wiki/pictures-and-type.md) by `tools/mock_view.py`.
+**Room for both.** The picture goes out as 3,225 bytes of base64 and the poster's
+lines as at most about 600, through the console's 4,000-byte ring. The ring stays
+under 4,096 bytes so it is kept in internal RAM, because the USB interrupt touches it
+and PSRAM is not there while the flash is being written.
 
 ## How it gets there — today, and not yet
 
@@ -71,9 +118,36 @@ terminal escape — `ESC ] view;<base64> BEL` — which a terminal swallows, and
 `tools/viewrelay.py` lifts the frames out and writes them to the node's USB serial.
 The frames are the deck's own; only the cable between the two is stood in for.
 
-**Not yet: the deck driving the node directly over USB.** That is the intended link
-and it is not built. When it is, the bytes are already the wire format; only the
-transport in `firmware/main/view.c` changes.
+**Not yet: the deck driving the node directly over USB-C, on the deck's battery.**
+The data half is possible: the ESP32-S3 can be a USB host, and the node already
+reads the wire format from its USB serial. **The power half is not, on this
+board.** Its USB-C port is wired as a power sink (the CC resistors,
+[HARDWARE.md](HARDWARE.md) open question 3), and its charger, the ETA6098, is
+charge-only by its published feature list; its sibling the ETA6095 is the one with
+a boost. So the deck cannot send 5 V down the cable. Two ways round it:
+
+1. **The node on its own 3.7 V LiPo**, in the Feather's battery socket, with the
+   deck as USB host for the data. Simple. **Unverified:** whether the Feather's HDMI
+   connector has its 5 V pin powered on battery alone. It probably takes it from USB
+   only, and some screens will not see a source without it.
+2. **A small 5 V boost inside the deck**, from its 18650, feeding the node's side of
+   the cable, with the deck as USB host. One cable, any screen. A hardware change.
+
+Either way the deck's USB-host firmware is not written yet. When it is, only the
+transport in `firmware/main/view.c` changes: the bytes are already the wire format.
+
+## Measured, 2026-09-28 — the six modes
+
+- **The node alone**, fed the engine's own frames from the computer by
+  `tools/view_demo.py`: **2,097 frames, 0 refused**, 8.3 a second against 124 bpm's
+  8.27 sixteenths, stepping through all six modes and back; the poster received its
+  nine lines.
+- Build: 93 KB of flash and 80 KB of RAM, before the two 77 KB framebuffers the
+  display takes when it starts. Uploaded with no button.
+- The deck: builds and flashes; 88 KB of internal RAM left. The engine's scratch
+  moved off the main task's 8 KB stack, since an 80×30 frame makes each copy 2.4 KB.
+  **Unverified until it is run:** the deck end to end with the modes, and what
+  the larger frame costs its editor loop.
 
 ## Measured, 2026-09-25
 
@@ -96,9 +170,9 @@ transport in `firmware/main/view.c` changes.
   interface, this driver is not installed, and the frame goes through stdio as it
   always did - untested either way.
 
-**Unmeasured, and the brief asks for it measured:** whether the node can run from
-the deck's battery over USB-C, and what that costs the deck in runtime. It needs the
-deck powering the node, which needs the direct link.
+**Unmeasured, and the brief asks for it measured:** what the node costs the
+deck's battery. It needs the direct link and a way to power the node from the deck
+(above).
 
 **Unverified:** anything about how the picture looks, beyond the owner's first
 look above — there is no camera here. The node reports frames drawn and refused,

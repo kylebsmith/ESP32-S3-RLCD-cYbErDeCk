@@ -56,10 +56,12 @@ esp_err_t serialkbd_init(void)
 {
     usb_serial_jtag_driver_config_t cfg = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
     cfg.rx_buffer_size = 256;
-    /* Room for two of the view's frames (1,436 bytes each, view.c) and the log
-     * around them, so a frame is copied in and the editor carries on. At 1024
-     * no frame fitted, and every one blocked the editor's loop until USB had
-     * drained it. Under 4096, so malloc keeps it in internal RAM. */
+    /* Room for the view's picture and the control frame ahead of it (3,225 and
+     * at most 600 bytes as they go out, view.c) and the log around them, so a
+     * frame is copied in and the editor carries on. At 1024 no frame fitted,
+     * and every one blocked the editor's loop until USB had drained it. Under
+     * 4096, so malloc keeps it in internal RAM: this ring is touched from the
+     * USB interrupt, and PSRAM is not there while the flash is being written. */
     cfg.tx_buffer_size = 4000;
 
     const esp_err_t err = usb_serial_jtag_driver_install(&cfg);

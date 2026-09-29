@@ -35,8 +35,8 @@ INCLUDES = ['-I', os.path.join(REPO, 'firmware/components/seq/include'),
 # (pattern, replacement, how many times it must match) - the whole of the
 # square-dot proposal as far as the engine is concerned.
 SQUARE = [
-    (r'#define VIZ_W 60\b', '#define VIZ_W 100', 1, 'h'),
-    (r'#define VIZ_H 24\b', '#define VIZ_H 75', 1, 'h'),
+    (r'#define VIZ_W 80\b', '#define VIZ_W 100', 1, 'h'),
+    (r'#define VIZ_H 30\b', '#define VIZ_H 75', 1, 'h'),
     (r'-2 \* \(y - cy\)', '-(y - cy)', 1, 'c'),
     (r'2 \* \(y - cy\)', '(y - cy)', 4, 'c'),
     (r'\(s_w / 2 < s_h\) \? \(s_w / 2\) : s_h', '(s_w < s_h) ? (s_w / 2) : (s_h / 2)', 2, 'c'),

@@ -2081,39 +2081,64 @@ static cmd_status_t c_send(cmd_ctx_t *ctx)
         return CMD_DONE;
     }
     char name[16] = {0};
-    char state[8] = {0};
-    if (sscanf(ctx->arg, "%15s %7s", name, state) < 1) {
+    char state[16] = {0};
+    if (sscanf(ctx->arg, "%15s %15s", name, state) < 1) {
         return CMD_ERROR;
     }
     if (state[0] == '\0') {
-        snprintf(ctx->msg, sizeof ctx->msg, "%s is %s", name,
-                 seq_dest_is_on(name) ? "on" : "off");
+        if (strcmp(name, "view") == 0 && seq_dest_is_on(name)) {
+            snprintf(ctx->msg, sizeof ctx->msg, "view is on, %s",
+                     viz_out_mode_name(viz_out_mode_now()));
+        } else {
+            snprintf(ctx->msg, sizeof ctx->msg, "%s is %s", name,
+                     seq_dest_is_on(name) ? "on" : "off");
+        }
         return CMD_DONE;
     }
-    /* THE VIEW NODE TAKES A SIZE AS WELL: '>send view 53x20' is on, at that
-     * many cells. 'on' alone is 53x20 - the whole 640x480 screen in the deck's
-     * own 12x24 face - and 'off' gives the size back to the preview pane. The
-     * pane keeps its own shape throughout and shows a sample of the output. */
+    /* THE VIEW NODE TAKES A SIZE AS WELL: '>send view 40x12' is on, at that
+     * many cells. 'on' alone is 80x30 - the node's whole screen, a cell to two
+     * square dots - and 'off' gives the size back to the preview pane. The pane
+     * keeps its own shape throughout and shows a sample of the output. */
     int vw = 0, vh = 0;
     const bool view = (strcmp(name, "view") == 0);
+    /* AND A MODE: '>send view scan' is on, drawn as scan lines. The node does
+     * the drawing (docs/VIEW.md); the deck only names it, so a mode is one more
+     * argument to the destination and not a new word. */
+    const int mode = view ? viz_out_mode_find(state) : -1;
     if (view && sscanf(state, "%dx%d", &vw, &vh) == 2) {
         if (vw < 4 || vh < 2 || vw > VIZ_W || vh > VIZ_H) {
             cmd_out(ctx, "view is 4x2 to %dx%d cells", VIZ_W, VIZ_H);
             return CMD_ERROR;
         }
         snprintf(state, sizeof state, "on");
+    } else if (mode >= 0) {
+        snprintf(state, sizeof state, "on");
     }
     const bool on = strcmp(state, "on") == 0;
     if (!on && strcmp(state, "off") != 0) {
-        cmd_out(ctx, view ? "send view on | off | 53x20" : "send <name> on | off");
+        if (view) {
+            cmd_out(ctx, "send view on|off|80x30|mode");
+            cmd_out(ctx, "modes: plain scan phosphor");
+            cmd_out(ctx, "  feedback riso poster");
+        } else {
+            cmd_out(ctx, "send <name> on | off");
+        }
         return CMD_ERROR;
     }
     if (view) {
+        /* 'on' alone is 80x30, the node's whole screen - unless the view is
+         * already on, when it keeps the size it was given. */
         if (!on) {
             viz_out_size(0, 0);
-        } else {
-            viz_out_size(vw ? vw : 53, vh ? vh : 20);
+        } else if (vw > 0) {
+            viz_out_size(vw, vh);
             viz_split(true);
+        } else if (!seq_dest_is_on("view")) {
+            viz_out_size(VIZ_W, VIZ_H);
+            viz_split(true);
+        }
+        if (mode >= 0) {
+            viz_out_mode(mode);
         }
         tg_invalidate();
     }
@@ -2121,7 +2146,12 @@ static cmd_status_t c_send(cmd_ctx_t *ctx)
         cmd_out(ctx, "no destination called '%s'. try just: send", name);
         return CMD_ERROR;
     }
-    snprintf(ctx->msg, sizeof ctx->msg, "%s %s", name, on ? "on" : "off");
+    if (view && on) {
+        snprintf(ctx->msg, sizeof ctx->msg, "view on, %s",
+                 viz_out_mode_name(viz_out_mode_now()));
+    } else {
+        snprintf(ctx->msg, sizeof ctx->msg, "%s %s", name, on ? "on" : "off");
+    }
     return CMD_DONE;
 }
 

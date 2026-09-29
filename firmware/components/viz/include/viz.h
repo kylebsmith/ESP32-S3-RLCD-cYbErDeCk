@@ -61,8 +61,12 @@
  * can show - see viz_size() - because a fixed 32x12 frame drawn into a pane of
  * another shape is cropped on two sides and stale on the others, and the owner
  * saw exactly that: half a picture with junk under it. */
-#define VIZ_W 60
-#define VIZ_H 24
+/* 80 x 30 is the view node's frame (docs/VIEW.md): a cell is twice as tall as
+ * wide, so on the node it is two square dots, and 80 x 30 cells are 80 x 60
+ * dots of four pixels - its whole 320 x 240 screen. The panel's own panes are
+ * smaller and are unaffected. */
+#define VIZ_W 80
+#define VIZ_H 30
 
 /* Set the live frame size. The editor calls this whenever the layout changes,
  * so the generators always draw into the rectangle that is actually visible -
@@ -76,6 +80,18 @@ void viz_size(int w, int h);
  * what it was asked to stay: an approximation of the output. Zero gives the
  * decision back to the pane. */
 void viz_out_size(int w, int h);
+
+/* HOW THE VIEW NODE DRAWS WHAT IT IS SENT: plain, scan, phosphor, feedback,
+ * riso, poster (docs/VIEW.md). The deck only names the mode - it rides in the
+ * control frame ahead of every picture - and the node does the drawing, so no
+ * mode costs the deck anything. Numbered as firmware/main/view_wire.h numbers
+ * them. */
+enum { VIZ_OUT_PLAIN, VIZ_OUT_SCAN, VIZ_OUT_PHOSPHOR, VIZ_OUT_FEEDBACK, VIZ_OUT_RISO,
+       VIZ_OUT_POSTER, VIZ_OUT_MODES };
+void        viz_out_mode(int mode);
+int         viz_out_mode_now(void);
+const char *viz_out_mode_name(int mode);   /* NULL past the last */
+int         viz_out_mode_find(const char *name);   /* -1 if there is none */
 
 /* The cell to show at (x, y) of a pane pw x ph: the frame's own cell when the
  * two are the same size, its nearest when the output is bigger. */

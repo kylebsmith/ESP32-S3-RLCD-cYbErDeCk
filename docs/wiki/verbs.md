@@ -444,17 +444,20 @@ error (`seq.c:1631-1635`).
 - An unknown name prints `"no destination called '%s'. try just: send"` and returns
   `CMD_ERROR`.
 - Any other state word prints `"send <name> on | off"` (for `view`,
-  `"send view on | off | 53x20"`) and returns `CMD_ERROR`.
+  `"send view on|off|80x30|mode"` and the six modes) and returns `CMD_ERROR`.
 
 **`>send view <W>x<H>`** turns view on at that size.
-- W must be 4–60 and H 2–24 (`viz.h:64-65`); otherwise it prints
-  `"view is 4x2 to %dx%d cells"`, which reads 60x24.
-- `on` pins the frame at W×H, or 53×20 if no size is given. The preview then shows a
+- W must be 4–80 and H 2–30 (`VIZ_W`, `VIZ_H`); otherwise it prints
+  `"view is 4x2 to %dx%d cells"`, which reads 80x30.
+- `on` pins the frame at W×H, or 80×30 if no size is given and the view was off. The preview then shows a
   sample of that frame, and the split is turned on.
 - `off` returns sizing to the pane; the split is left as it is.
 - Code: `builtins.c:2093-2119`; `viz.c:180-187`.
 
-**Parsing:** `sscanf "%15s %7s"` (`builtins.c:2085`). Further words are ignored.
+**`>send view <mode>`** - plain, scan, phosphor, feedback, riso, poster - turns view on
+and names how the HDMI node draws it (`viz_out_mode`; `docs/VIEW.md`).
+
+**Parsing:** `sscanf "%15s %15s"` (`builtins.c`, `c_send`). Further words are ignored.
 
 **Effects:** it flips a flag and nothing more, except for `ble` (the radio, via the main
 loop) and `view` (frame size and split).

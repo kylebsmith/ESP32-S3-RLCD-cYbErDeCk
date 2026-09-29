@@ -200,9 +200,10 @@ rectangle. The proposal:
    24 in the default pane, 90 × 72 across the whole text area. A dot is one period of the
    tone matrix and exactly two framebuffer bytes, so banding is a 13 KB lookup kept in
    RAM. **Adopt on a number**: frame time on the deck, jitter unchanged, push unchanged.
-   The screen is Bayer, decided 2026-09-28. The view node can do far more with the same
-   frames (scan, phosphor, feedback, riso, a live poster), mocked in
-   [pictures-and-type.md](pictures-and-type.md).
+   The screen is Bayer, decided 2026-09-28. The view node draws the same frames six ways -
+   plain, scan, phosphor, feedback, riso and a live poster - built 2026-09-28
+   ([VIEW.md](../VIEW.md)). Next for the eye: interpolation between steps, and the direct
+   USB-C link, which needs the node powered (VIEW.md, *How it gets there*).
 2. **`stamp`** — the picture says what played: a routed stamp shows its source's name,
    at the source's strength.
 3. **The type overhaul**, decided by the reading test in [CMF.md](../CMF.md): errors per

@@ -80,6 +80,7 @@ Most include the **shipping** header, or `#include` the shipping `.c`, rather th
 | zine_art.c | Links viz.c, plays scripted scenes, writes `.cells` frames for zine.py and cmf.py | manual compile |
 | mock_pictures.py / mock_frames.c | The picture mock-ups in `wiki/pictures-and-type.md`, drawn by viz.c and by a square-dot copy of it: dots, banding, the screens, the motion GIF, and each screen's truth and sparkle; needs a C compiler, Pillow and numpy | manual |
 | mock_view.py | The view node's proposed modes (plain, scan, phosphor, feedback, riso, poster) from the engine's real frames, still and moving; needs a C compiler, Pillow and numpy | manual |
+| view_demo.py | Drives a real view node with no deck: the engine's own frames, packed as the deck packs them, through all six modes (`--mode` for one); needs a C compiler and pyserial | manual |
 | mock_type.py | The type proposal sheet, from the deck's own faces | manual |
 | type_programme.py | Letters drawn from the superellipse rule: two drafts, set aside for breaking letters | manual |
 | type_round.py | The round face, laid by hand, and `check()`: pieces, corner contacts, strays, spurs, necks, gap ink; exits non-zero on any failure | manual |

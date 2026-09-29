@@ -1,15 +1,22 @@
 // deckview - the deck's picture on HDMI, from an Adafruit Feather RP2040 DVI.
 //
-// docs/NEXT.md §6: the visualization node. viz.c left the wire format unwritten
-// "because a format invented before its reader is a format nobody implements";
-// this is the reader, and docs/VIEW.md is the format.
+// docs/NEXT.md §6: the visualization node, and docs/VIEW.md: its wire format.
+// The deck sends a picture a step, and ahead of each a control frame naming
+// how to draw it. The deck only names the mode; everything below happens here,
+// so none of it costs the deck anything, and all of it is worked out from the
+// frames and their ticks alone - the same performance draws the same pictures.
 //
-// It draws the deck's own glyphs - deckfont.h is generated from the same art as
-// the panel's faces (tools/make_font.py --view) - one bit per pixel, because the
-// deck's picture is one ink and a screen that added colour would be showing
-// something the performer never made. Each frame is drawn at the largest whole
-// scale that fits 640x480, with whichever of the two faces fills it best, and
-// centred: a cell is always a square block of the tile, never smeared.
+//   plain     the deck's picture, bit for bit, light on black
+//   scan      each row drawn as one line, lifted by its greys (Rutt/Etra, 1972)
+//   phosphor  a green tube: what the beam lit glows and fades over about a beat
+//   feedback  the last frame, zoomed and turned, with the new one on top
+//   riso      two inks out of register: pink is this step, blue the one before last
+//   poster    a live Swiss poster of the piece, from the lines the deck sends
+//
+// 320 x 240, eight bits a pixel through a palette, doubled to 640 x 480 at 60 Hz
+// - the mode every HDMI screen takes. Two framebuffers: the next picture is drawn
+// while the last is shown, and phosphor and feedback read the one on screen.
+// Mock-ups of each, from the engine's real frames: tools/mock_view.py.
 //
 // Frames arrive over USB serial. Today the deck's frames are relayed by a
 // computer (tools/viewrelay.py); the same bytes are what the deck will send
@@ -19,110 +26,469 @@
 //   arduino-cli upload  -b rp2040:rp2040:adafruit_feather_dvi -p <port> view/deckview
 
 #include <PicoDVI.h>
+#include <math.h>
 #include "deckfont.h"
-
-DVIGFX1 display(DVI_RES_640x480p60, true, adafruit_feather_dvi_cfg);
-
-#define SCREEN_W 640
-#define SCREEN_H 480
-#define ROW_BYTES (SCREEN_W / 8)
-
-// ---- the wire format: docs/VIEW.md, read by view_read.h ------------------
 #include "view_read.h"
+
+DVIGFX8 display(DVI_RES_320x240p60, true, adafruit_feather_dvi_cfg);
+
+#define W 320
+#define H 240
+
+// The modes, numbered as the deck's firmware/main/view_wire.h numbers them.
+enum { PLAIN, SCAN, PHOSPHOR, FEEDBACK, RISO, POSTER, MODES };
+static const char *const NAMES[MODES] = { "plain", "scan", "phosphor", "feedback",
+                                          "riso", "poster" };
+
 static view_reader_t s_rd;
+static uint8_t *s_base;                 // the first of the two framebuffers
+static int s_mode = PLAIN, s_pal_dirty = 2;
+static uint32_t s_label_until;          // show the mode's name until then
 
-// ---- drawing ------------------------------------------------------------
+static const uint8_t BAYER[4][4] = {
+  { 0, 8, 2, 10 }, { 12, 4, 14, 6 }, { 3, 11, 1, 9 }, { 15, 7, 13, 5 } };
 
-static inline void set_run(uint8_t *row, int x, int n)
+// ---- the picture as greys ------------------------------------------------
+//
+// A cell is twice as tall as it is wide, so it is two square dots, one above
+// the other: 80 x 30 cells are 80 x 60 dots, a dot 4 x 4 pixels.
+
+#define DW_MAX 80
+#define DH_MAX 60
+static uint8_t s_tone_of[256];
+static uint8_t s_hist[3][DH_MAX][DW_MAX];    // this step and the two before
+static uint8_t s_hdw[3], s_hdh[3];
+static int s_cur;
+static int16_t s_cor[DH_MAX + 1][DW_MAX + 1];  // greys at dot corners, 0..256
+static uint8_t s_ink[H][W / 8];                // this step, banded, bit for bit
+// where each screen column and row falls in the grid
+static int16_t s_cdot[W], s_rdot[H];
+static uint8_t s_cfrac[W], s_rfrac[H];
+static int s_dw, s_dh, s_s, s_ox, s_oy;
+
+// A tile's grey: the tones are 128..136; the small disc, 147, is solid; any
+// other glyph is as grey as it is inked.
+static void tones_init(void)
 {
-  for (int i = 0; i < n; i++, x++) {
-    row[x >> 3] |= (uint8_t)(0x80 >> (x & 7));
+  for (int c = 0; c < 256; c++) {
+    int ink = 0;
+    if (c >= DECKFONT_FIRST && c <= DECKFONT_LAST) {
+      const int g = c - DECKFONT_FIRST;
+      for (int r = 0; r < 24; r++) {
+        uint16_t bits = (deckfont_12x24[(g * 24 + r) * 2] << 8) | deckfont_12x24[(g * 24 + r) * 2 + 1];
+        while (bits) { ink += bits & 1; bits >>= 1; }
+      }
+    }
+    s_tone_of[c] = (uint8_t)((ink * 8 + 144) / 288);
+  }
+  for (int t = 0; t <= 8; t++) s_tone_of[128 + t] = (uint8_t)t;
+  s_tone_of[147] = 8;
+  s_tone_of[' '] = 0;
+}
+
+static void grid_from_cells(const uint8_t *cells, int w, int h)
+{
+  const int dw = w < DW_MAX ? w : DW_MAX;
+  const int dh = 2 * h < DH_MAX ? 2 * h : DH_MAX;
+  s_cur = (s_cur + 1) % 3;
+  for (int j = 0; j < dh; j++) {
+    const int cy = (j * 2 * h / dh) / 2;
+    for (int i = 0; i < dw; i++) {
+      s_hist[s_cur][j][i] = s_tone_of[cells[cy * w + i * w / dw]];
+    }
+  }
+  s_hdw[s_cur] = (uint8_t)dw;
+  s_hdh[s_cur] = (uint8_t)dh;
+}
+
+// Place a dw x dh grid of s-pixel dots at (ox, oy), and tabulate where every
+// column and row lands, so nothing below divides per pixel.
+static void place(int dw, int dh, int s, int ox, int oy)
+{
+  s_dw = dw; s_dh = dh; s_s = s; s_ox = ox; s_oy = oy;
+  for (int x = 0; x < W; x++) {
+    const int g = x - ox;
+    if (g < 0 || g >= dw * s) { s_cdot[x] = -1; continue; }
+    s_cdot[x] = (int16_t)(g / s);
+    s_cfrac[x] = (uint8_t)(((2 * (g % s) + 1) * 256) / (2 * s));
+  }
+  for (int y = 0; y < H; y++) {
+    const int g = y - oy;
+    if (g < 0 || g >= dh * s) { s_rdot[y] = -1; continue; }
+    s_rdot[y] = (int16_t)(g / s);
+    s_rfrac[y] = (uint8_t)(((2 * (g % s) + 1) * 256) / (2 * s));
   }
 }
 
-// One frame of cells into the back buffer, in face `big` (12x24) or not
-// (6x12), `s` screen pixels to a glyph pixel, top-left at (x0, y0).
-static void draw_cells(const uint8_t *cells, int w, int h, bool big, int s,
-                       int x0, int y0)
+static void place_fit(int dw, int dh)
 {
-  uint8_t *fb = display.getBuffer();
-  const int fw = big ? 12 : 6, fh = big ? 24 : 12;
-  for (int cy = 0; cy < h; cy++) {
-    for (int gr = 0; gr < fh; gr++) {
-      for (int sy = 0; sy < s; sy++) {
-        const int y = y0 + (cy * fh + gr) * s + sy;
-        if (y < 0 || y >= SCREEN_H) continue;
-        uint8_t *row = fb + y * ROW_BYTES;
-        for (int cx = 0; cx < w; cx++) {
-          int code = cells[cy * w + cx];
-          if (code < DECKFONT_FIRST || code > DECKFONT_LAST) code = ' ';
-          const int g = code - DECKFONT_FIRST;
-          uint16_t bits;
-          if (big) {
-            bits = (uint16_t)((deckfont_12x24[(g * 24 + gr) * 2] << 8) |
-                              deckfont_12x24[(g * 24 + gr) * 2 + 1]);
-          } else {
-            bits = (uint16_t)(deckfont_6x12[g * 12 + gr] << 8);
-          }
-          if (bits == 0) continue;
-          const int xb = x0 + cx * fw * s;
-          for (int gc = 0; gc < fw; gc++) {
-            if (bits & (0x8000 >> gc)) {
-              const int x = xb + gc * s;
-              if (x >= 0 && x + s <= SCREEN_W) set_run(row, x, s);
-            }
-          }
+  int s = W / dw < H / dh ? W / dw : H / dh;
+  if (s < 1) s = 1;
+  place(dw, dh, s, (W - dw * s) / 2, (H - dh * s) / 2);
+}
+
+// The greys at the dots' corners: each the mean of the dots that meet there.
+static void corners(const uint8_t *g, int pitch, int dw, int dh)
+{
+  for (int j = 0; j <= dh; j++) {
+    for (int i = 0; i <= dw; i++) {
+      int sum = 0, n = 0;
+      for (int k = 0; k < 4; k++) {
+        const int x = i - 1 + (k & 1), y = j - 1 + (k >> 1);
+        if (x >= 0 && x < dw && y >= 0 && y < dh) { sum += g[y * pitch + x]; n++; }
+      }
+      s_cor[j][i] = (int16_t)((sum * 32 + n / 2) / n);
+    }
+  }
+}
+
+// The grey a pixel was meant to have, 0..256, between its dot's corners.
+static inline int grey_at(int dx, int dy, int fx, int fy)
+{
+  const int a = s_cor[dy][dx], b = s_cor[dy][dx + 1];
+  const int d = s_cor[dy + 1][dx], e = s_cor[dy + 1][dx + 1];
+  const int left = a * 256 + (d - a) * fy, right = b * 256 + (e - b) * fy;
+  return (left * 256 + (right - left) * fx) >> 16;
+}
+
+// THE DECK'S OWN RULE (docs/wiki/pictures-and-type.md): a grey dot is banded
+// between its corners and cut into the nine tones; a solid or an empty dot is
+// exactly what it is. Bayer, at the pixel's place in the grid.
+static inline bool banded(const uint8_t *g, int pitch, int x, int y)
+{
+  if (x < 0 || x >= W || y < 0 || y >= H) return false;
+  const int dx = s_cdot[x], dy = s_rdot[y];
+  if (dx < 0 || dy < 0) return false;
+  const int t = g[dy * pitch + dx];
+  if (t == 0) return false;
+  if (t >= 8) return true;
+  int lv = (grey_at(dx, dy, s_cfrac[x], s_rfrac[y]) + 16) >> 5;
+  if (lv < 1) lv = 1;
+  if (lv > 7) lv = 7;
+  return BAYER[(y - s_oy) & 3][(x - s_ox) & 3] < 2 * lv;
+}
+
+static inline bool ink(int x, int y) { return s_ink[y][x >> 3] & (0x80 >> (x & 7)); }
+
+static void ink_this_step(void)
+{
+  const uint8_t *g = &s_hist[s_cur][0][0];
+  corners(g, DW_MAX, s_dw, s_dh);
+  memset(s_ink, 0, sizeof s_ink);
+  for (int y = 0; y < H; y++)
+    for (int x = 0; x < W; x++)
+      if (banded(g, DW_MAX, x, y)) s_ink[y][x >> 3] |= 0x80 >> (x & 7);
+}
+
+// ---- type, in the deck's own faces ---------------------------------------
+
+static void glyph12(uint8_t *fb, int x, int y, int ch, int s, uint8_t c)
+{
+  if (ch < DECKFONT_FIRST || ch > DECKFONT_LAST) ch = ' ';
+  const int g = ch - DECKFONT_FIRST;
+  for (int r = 0; r < 24; r++) {
+    const uint16_t bits = (deckfont_12x24[(g * 24 + r) * 2] << 8) | deckfont_12x24[(g * 24 + r) * 2 + 1];
+    if (!bits) continue;
+    for (int k = 0; k < 12; k++) {
+      if (!(bits & (0x8000 >> k))) continue;
+      for (int yy = 0; yy < s; yy++)
+        for (int xx = 0; xx < s; xx++) {
+          const int X = x + k * s + xx, Y = y + r * s + yy;
+          if (X >= 0 && X < W && Y >= 0 && Y < H) fb[Y * W + X] = c;
         }
-      }
     }
   }
 }
 
-// THE LARGEST WHOLE SCALE THAT FITS, of either face. Whole, because a cell is
-// a tile and a tile scaled by 1.7 is not the tile any more; either face,
-// because a small frame at the big face's scale 1 wastes most of the screen
-// that the small face at scale 3 fills.
-static void layout(int w, int h, bool *big, int *s)
+static void glyph6(uint8_t *fb, int x, int y, int ch, uint8_t c)
 {
-  int best = 0;
-  *big = true;
-  *s = 1;
-  for (int f = 0; f < 2; f++) {
-    const int fw = f == 0 ? 12 : 6, fh = f == 0 ? 24 : 12;
-    for (int k = 8; k >= 1; k--) {
-      if (w * fw * k <= SCREEN_W && h * fh * k <= SCREEN_H) {
-        const int area = w * fw * k * h * fh * k;
-        if (area > best) { best = area; *big = (f == 0); *s = k; }
-        break;
-      }
+  if (ch < DECKFONT_FIRST || ch > DECKFONT_LAST) ch = ' ';
+  const int g = ch - DECKFONT_FIRST;
+  for (int r = 0; r < 12; r++) {
+    const uint8_t bits = deckfont_6x12[g * 12 + r];
+    for (int k = 0; k < 6; k++) {
+      const int X = x + k, Y = y + r;
+      if ((bits & (0x80 >> k)) && X >= 0 && X < W && Y >= 0 && Y < H) fb[Y * W + X] = c;
     }
   }
 }
 
-static void show_frame(const uint8_t *cells, int w, int h)
+static int text12(uint8_t *fb, int x, int y, const char *t, int n, int s, uint8_t c)
 {
-  memset(display.getBuffer(), 0, ROW_BYTES * SCREEN_H);
-  bool big;
-  int s;
-  layout(w, h, &big, &s);
-  const int fw = big ? 12 : 6, fh = big ? 24 : 12;
-  const int x0 = (SCREEN_W - w * fw * s) / 2;
-  const int y0 = (SCREEN_H - h * fh * s) / 2;
-  draw_cells(cells, w, h, big, s, x0, y0);
-  display.swap();
+  for (int i = 0; i < n && t[i]; i++) glyph12(fb, x + i * 12 * s, y, (uint8_t)t[i], s, c);
+  return x + n * 12 * s;
+}
+
+static void text6(uint8_t *fb, int x, int y, const char *t, uint8_t c)
+{
+  for (int i = 0; t[i]; i++) glyph6(fb, x + i * 6, y, (uint8_t)t[i], c);
+}
+
+static void fill(uint8_t *fb, int x, int y, int w, int h, uint8_t c)
+{
+  for (int Y = y; Y < y + h; Y++)
+    if (Y >= 0 && Y < H)
+      for (int X = x; X < x + w; X++)
+        if (X >= 0 && X < W) fb[Y * W + X] = c;
+}
+
+// ---- palettes ------------------------------------------------------------
+
+static uint16_t rgb(int r, int g, int b)
+{
+  r = r < 0 ? 0 : r > 255 ? 255 : r;
+  g = g < 0 ? 0 : g > 255 ? 255 : g;
+  b = b < 0 ? 0 : b > 255 ? 255 : b;
+  return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
+}
+
+static void palette(int mode)
+{
+  uint16_t *p = display.getPalette();
+  for (int i = 0; i < 256; i++) p[i] = 0;
+  switch (mode) {
+  case PLAIN: case SCAN:
+    p[1] = rgb(236, 236, 228);
+    break;
+  case PHOSPHOR:                          // a green tube, and its dimmer odd lines
+    for (int i = 0; i < 128; i++) {
+      const float v = i / 127.0f;
+      const int r = (int)(170 * powf(v, 2.6f)), g = (int)(255 * fminf(1.0f, 1.08f * powf(v, 0.75f)));
+      const int b = (int)(120 * powf(v, 2.2f));
+      p[i] = rgb(r, g, b);
+      p[128 + i] = rgb(r * 45 / 100, g * 45 / 100, b * 45 / 100);
+    }
+    break;
+  case FEEDBACK:                          // black, through red and orange, to white
+    for (int i = 0; i < 256; i++) {
+      const float v = i / 255.0f;
+      p[i] = rgb((int)(255 * fminf(1.0f, 1.6f * v)), (int)(255 * fmaxf(0.0f, v - 0.55f) * 2.0f),
+                 (int)(255 * fmaxf(0.0f, v - 0.8f) * 4.0f));
+    }
+    break;
+  case RISO:                              // paper, pink, blue, and both
+    p[0] = rgb(244, 240, 229);
+    p[1] = rgb(255, 72, 176);
+    p[2] = rgb(0, 120, 191);
+    p[3] = rgb(0, 34, 133);
+    break;
+  case POSTER:                            // paper, ink, and a red
+    p[0] = rgb(246, 244, 238);
+    p[1] = rgb(18, 18, 18);
+    p[2] = rgb(228, 0, 43);
+    break;
+  }
+}
+
+// ---- the modes -----------------------------------------------------------
+
+static uint32_t step_of(uint32_t tick) { return tick / 24; }   // 96 to the beat
+
+static void draw_plain(uint8_t *fb)
+{
+  for (int y = 0; y < H; y++)
+    for (int x = 0; x < W; x++) fb[y * W + x] = ink(x, y) ? 1 : 0;
+}
+
+// Each row of cells as one line across the screen, lifted by its greys; each
+// line hides what is behind it. A line only ever rises from its own base, and
+// the lines behind it sit on higher bases, so hiding them means clearing from
+// the line down to its base and no further.
+static void draw_scan(uint8_t *fb)
+{
+  memset(fb, 0, W * H);
+  const int lines = s_dh / 2 > 0 ? s_dh / 2 : 1;
+  const int top = 44, bottom = H - 10, pad = 16, lift = 38;
+  const int span = W - 2 * pad;
+  static int16_t ys[W];
+  for (int k = 0; k < lines; k++) {
+    const uint8_t *row = s_hist[s_cur][k * 2 < s_dh ? k * 2 : s_dh - 1];
+    const int base = top + ((k + 1) * (bottom - top)) / lines;
+    for (int x = pad; x < W - pad; x++) {
+      int pos = (((x - pad) * 2 + 1) * s_dw * 256) / (2 * span) - 128;
+      if (pos < 0) pos = 0;
+      int u0 = pos >> 8, f = pos & 255;
+      if (u0 >= s_dw - 1) { u0 = s_dw - 1; f = 0; }
+      const int u1 = u0 + 1 < s_dw ? u0 + 1 : u0;
+      const int t = row[u0] * (256 - f) + row[u1] * f;          // 0..2048
+      ys[x] = (int16_t)(base - (lift * t) / 2048);
+    }
+    for (int x = pad; x < W - pad; x++)
+      for (int y = ys[x] + 1; y <= base && y < H; y++) fb[y * W + x] = 0;
+    for (int x = pad; x < W - pad - 1; x++) {
+      const int a = ys[x] < ys[x + 1] ? ys[x] : ys[x + 1];
+      const int b = ys[x] < ys[x + 1] ? ys[x + 1] : ys[x];
+      for (int y = a; y <= b; y++) if (y >= 0 && y < H) fb[y * W + x] = 1;
+    }
+  }
+}
+
+// What the beam lit glows, and fades to about half each step; odd lines are
+// the dim half of the palette.
+static void draw_phosphor(uint8_t *fb, const uint8_t *front)
+{
+  for (int y = 0; y < H; y++) {
+    const uint8_t odd = (y & 1) << 7;
+    for (int x = 0; x < W; x++) {
+      int b = front[y * W + x] & 127;
+      b = (b * 70) >> 7;
+      if (ink(x, y)) b = 127;
+      fb[y * W + x] = (uint8_t)(b | odd);
+    }
+  }
+}
+
+// The frame on screen, zoomed and turned about the centre and a little dimmer,
+// with the new picture's greys on top. A full turn every two bars; a zoom that
+// kicks on each beat. It feeds back greys, not dots: a dither turned by a few
+// degrees is noise.
+static void draw_feedback(uint8_t *fb, const uint8_t *front, uint32_t tick)
+{
+  const float z = (step_of(tick) % 4 == 0) ? 1.10f : 1.035f;
+  const float th = 2.0f * (float)M_PI / 32.0f;
+  const int C = (int)(cosf(th) / z * 65536.0f), S = (int)(sinf(th) / z * 65536.0f);
+  const int cx2 = W - 1, cy2 = H - 1;                 // twice the centre
+  for (int y = 0; y < H; y++) {
+    // source = centre + R * (p - centre), in 16.16
+    const int ry = y * 2 - cy2, rx = -cx2;           // doubled offsets from the centre
+    int sx = (cx2 << 15) + (C * rx + S * ry) / 2;
+    int sy = (cy2 << 15) + (-S * rx + C * ry) / 2;
+    const int dy = s_rdot[y];
+    for (int x = 0; x < W; x++, sx += C, sy -= S) {
+      int X = (sx + 32768) >> 16, Y = (sy + 32768) >> 16;
+      X = X < 0 ? 0 : X >= W ? W - 1 : X;
+      Y = Y < 0 ? 0 : Y >= H ? H - 1 : Y;
+      int v = (front[Y * W + X] * 215) >> 8;
+      const int dx = s_cdot[x];
+      if (dx >= 0 && dy >= 0) {
+        const int n = (grey_at(dx, dy, s_cfrac[x], s_rfrac[y]) * 255) >> 8;
+        if (n > v) v = n;
+      }
+      fb[y * W + x] = (uint8_t)v;
+    }
+  }
+}
+
+// Pink is this step; blue is the step before last, its plate drifting with the
+// bar - and a plate carries its own screen with it.
+static void draw_riso(uint8_t *fb, uint32_t tick)
+{
+  const int old = (s_cur + 1) % 3;
+  const uint8_t *g = &s_hist[old][0][0];
+  corners(g, DW_MAX, s_hdw[old], s_hdh[old]);
+  const int step = (int)step_of(tick);
+  const int ddx = (int)lroundf(4.0f * sinf(2.0f * (float)M_PI * (step % 16) / 16.0f)), ddy = 3;
+  const bool have = s_hdw[old] == s_dw && s_hdh[old] == s_dh;
+  for (int y = 0; y < H; y++)
+    for (int x = 0; x < W; x++) {
+      const uint8_t a = ink(x, y) ? 1 : 0;
+      const uint8_t b = (have && banded(g, DW_MAX, x - ddx, y - ddy)) ? 2 : 0;
+      fb[y * W + x] = a | b;
+    }
+}
+
+// THE POSTER. Its name; the section's number in red; the tempo and where the
+// bar is; a rule; the section's name; its lanes with the step each is on, lit
+// red; and the picture, Bayer at the pitch of the rest.
+static void draw_poster(uint8_t *fb, uint32_t tick)
+{
+  memset(fb, 0, W * H);
+  const uint8_t *ch;
+  int from, to;
+  char title[40] = "cYbErDeCk", num[12] = "", name[40] = "", meta[48] = "";
+  int n = view_read_line(&s_rd, 0, &ch, &from, &to);
+  if (n > 0) { n = n < 39 ? n : 39; memcpy(title, ch, n); title[n] = 0; }
+  n = view_read_line(&s_rd, 1, &ch, &from, &to);
+  if (n > 0) {
+    int sp = 0;
+    while (sp < n && ch[sp] != ' ') sp++;
+    if (sp < n && sp < 11) {                            // "II first light"
+      memcpy(num, ch, sp); num[sp] = 0;
+      const int m = n - sp - 1 < 39 ? n - sp - 1 : 39;
+      memcpy(name, ch + sp + 1, m); name[m] = 0;
+    } else {
+      const int m = n < 39 ? n : 39;
+      memcpy(name, ch, m); name[m] = 0;
+    }
+  }
+  n = view_read_line(&s_rd, 2, &ch, &from, &to);
+  if (n > 0) { n = n < 30 ? n : 30; memcpy(meta, ch, n); meta[n] = 0; }
+  const uint32_t step = step_of(s_rd.tick);
+  snprintf(meta + strlen(meta), sizeof meta - strlen(meta), "%sbar %lu  step %lu",
+           meta[0] ? "  " : "", (unsigned long)(step / 16 + 1), (unsigned long)(step % 16 + 1));
+
+  const int nl = (int)strlen(num);
+  const int ns = nl * 36 <= 110 ? 3 : 2;
+  const int numx = W - 12 - nl * 12 * ns;
+  const int room = (numx - 16 - 12) / 24;
+  text12(fb, 12, 6, title, (int)strlen(title) < room ? (int)strlen(title) : room, 2, 1);
+  if (nl) text12(fb, numx, 2, num, nl, ns, 2);
+  text6(fb, 12, 62, meta, 1);
+  for (int s = 0; s < 16; s++) fill(fb, W - 12 - 141 + s * 9, 80, 6, 6, s == (int)(step % 16) ? 2 : 1);
+  fill(fb, 12, 92, W - 24, 4, 1);
+  text12(fb, 12, 100, name, (int)strlen(name) < 24 ? (int)strlen(name) : 24, 1, 1);
+  for (int i = 0; i < 7; i++) {
+    n = view_read_line(&s_rd, 3 + i, &ch, &from, &to);
+    if (n <= 0) break;
+    const int y = 130 + i * 13;
+    for (int k = 0; k < n && k < 25; k++) {
+      const bool lit = k >= from && k < to;
+      if (lit) fill(fb, 12 + k * 6, y, 6, 12, 2);
+      glyph6(fb, 12 + k * 6, y, ch[k], lit ? 0 : 1);
+    }
+  }
+  // the picture: this step's greys, resampled to 36 x 27 dots of 4 pixels
+  static uint8_t small[27][36];
+  for (int j = 0; j < 27; j++)
+    for (int i = 0; i < 36; i++)
+      small[j][i] = s_hist[s_cur][j * s_dh / 27][i * s_dw / 36];
+  const int dw0 = s_dw, dh0 = s_dh, s0 = s_s, ox0 = s_ox, oy0 = s_oy;
+  place(36, 27, 4, W - 12 - 144, 100);
+  corners(&small[0][0], 36, 36, 27);
+  for (int y = 100; y < 208; y++)
+    for (int x = W - 12 - 144; x < W - 12; x++)
+      if (banded(&small[0][0], 36, x, y)) fb[y * W + x] = 1;
+  place(dw0, dh0, s0, ox0, oy0);
+}
+
+// ---- the screen ------------------------------------------------------------
+
+static const uint8_t LABEL_INK[MODES] = { 1, 1, 127, 255, 3, 2 };
+
+static void show(uint32_t tick)
+{
+  if (s_pal_dirty > 0) { palette(s_mode); s_pal_dirty--; }
+  uint8_t *fb = display.getBuffer();
+  const uint8_t *front = (fb == s_base) ? s_base + W * H : s_base;
+  place_fit(s_dw, s_dh);
+  ink_this_step();
+  switch (s_mode) {
+  case SCAN:     draw_scan(fb); break;
+  case PHOSPHOR: draw_phosphor(fb, front); break;
+  case FEEDBACK: draw_feedback(fb, front, tick); break;
+  case RISO:     draw_riso(fb, tick); break;
+  case POSTER:   draw_poster(fb, tick); break;
+  default:       draw_plain(fb); break;
+  }
+  if ((int32_t)(s_label_until - millis()) > 0) {
+    fill(fb, 4, H - 18, 6 * (int)strlen(NAMES[s_mode]) + 4, 14, 0);
+    text6(fb, 6, H - 17, NAMES[s_mode], LABEL_INK[s_mode]);
+  }
+  display.swap(false, false);
 }
 
 // Before the first frame, say what this is and what it is waiting for, in the
 // deck's own face - a black screen is indistinguishable from a broken one.
 static void show_waiting(void)
 {
-  static const char *lines[] = { "cYbErDeCk view", "", "waiting for", "the deck" };
-  static uint8_t cells[4 * 16];
-  memset(cells, ' ', sizeof cells);
-  for (int r = 0; r < 4; r++) {
-    for (int c = 0; lines[r][c] && c < 16; c++) cells[r * 16 + c] = lines[r][c];
+  for (int k = 0; k < 2; k++) {
+    palette(PLAIN);
+    uint8_t *fb = display.getBuffer();
+    memset(fb, 0, W * H);
+    text12(fb, (W - 14 * 12) / 2, 84, "cYbErDeCk view", 14, 1, 1);
+    text6(fb, (W - 20 * 6) / 2, 126, "waiting for the deck", 1);
+    display.swap(false, false);
   }
-  show_frame(cells, 16, 4);
 }
 
 void setup()
@@ -132,6 +498,8 @@ void setup()
     pinMode(LED_BUILTIN, OUTPUT);
     for (;;) digitalWrite(LED_BUILTIN, (millis() / 500) & 1);
   }
+  s_base = display.getBuffer();
+  tones_init();
   show_waiting();
 }
 
@@ -144,18 +512,31 @@ void loop()
   while (n > 0) {
     const int k = Serial.readBytes(buf, n > (int)sizeof buf ? (int)sizeof buf : n);
     for (int i = 0; i < k; i++) {
-      if (view_read_byte(&s_rd, buf[i])) show_frame(s_rd.cells, s_rd.w, s_rd.h);
+      const int got = view_read_byte(&s_rd, buf[i]);
+      if (got & VR_CONTROL) {
+        const int m = s_rd.mode < MODES ? s_rd.mode : PLAIN;
+        if (m != s_mode) {
+          s_mode = m;
+          s_pal_dirty = 2;
+          s_label_until = millis() + 1500;
+        }
+      }
+      if (got & VR_PICTURE) {
+        grid_from_cells(s_rd.cells, s_rd.w, s_rd.h);
+        s_dw = s_hdw[s_cur];
+        s_dh = s_hdh[s_cur];
+        show(s_rd.tick);
+      }
     }
     n = Serial.available();
   }
   // A one-line account every two seconds, for whoever is listening: frames
-  // drawn, frames refused, and the last tick - which is how the far end knows
-  // this node is showing the picture it sent and when it belonged.
+  // drawn, frames refused, the last tick, the size and the mode.
   static uint32_t last;
   if (millis() - last > 2000) {
     last = millis();
-    Serial.printf("view: %lu frames, %lu refused, tick %lu, %ux%u\r\n",
+    Serial.printf("view: %lu frames, %lu refused, tick %lu, %ux%u, %s, %u lines\r\n",
                   (unsigned long)s_rd.frames, (unsigned long)s_rd.refused,
-                  (unsigned long)s_rd.tick, s_rd.w, s_rd.h);
+                  (unsigned long)s_rd.tick, s_rd.w, s_rd.h, NAMES[s_mode], s_rd.nlines);
   }
 }

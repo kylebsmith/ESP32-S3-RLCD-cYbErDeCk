@@ -162,13 +162,14 @@ A picture of more than 1,083 characters overflows the buffer, for example a 60×
 
 | Command | Effect |
 |---|---|
-| `>send view on` | streams at **53×20** (640×480 in the 12×24 face); pins the frame with `viz_out_size`; turns the split on |
-| `>send view WxH` | 4×2 up to 60×24; out of range gives `view is 4x2 to 60x24 cells` |
+| `>send view on` | streams at **80×30** (the node's whole screen, two square dots to a cell); pins the frame with `viz_out_size`; turns the split on; if already on, keeps its size |
+| `>send view <mode>` | on, and the node draws it that way: plain, scan, phosphor, feedback, riso, poster (`docs/VIEW.md`) |
+| `>send view WxH` | 4×2 up to 80×30; out of range gives `view is 4x2 to 80x30 cells` |
 | `>send view off` | stops and unpins (the pane decides the size again) |
-| `>send view` | shows `view is on` / `view is off` |
+| `>send view` | shows `view is on, <mode>` / `view is off` |
 | `>send` | lists destinations; this one's help text is cut to 25 characters: `the picture to an HDMI no` (`view.c:36`, `builtins.c:2071`) |
 
-Other replies: `view on`, `view off`, usage `send view on | off | 53x20`.
+Other replies: `view on, <mode>`, `view off`, usage `send view on|off|80x30|mode` and the six modes.
 
 **Capability.** `send` needs `CMD_CAP_SYSTEM` (`builtins.c:2313`), so it is **refused from the boot document**, which runs as GUIDE (`cmd.c:23-24`, `main.c:315`): `send: not permitted here`.
 
@@ -182,7 +183,7 @@ Other replies: `view on`, `view off`, usage `send view on | off | 53x20`.
 | cells | w·h B | row by row: 32–126 text, 128–155 tiles (`viz_frame`, `viz.c:1063-1075`) |
 | sum | 1 B | XOR of every byte after the magic |
 
-Total length = 11 + w·h (1,071 B at 53×20). `viz_frame` always returns w·h; the header's "0 if nothing has been drawn" (`viz.h:203`) is inaccurate.
+Total length = 11 + w·h (2,411 B at 80×30). A control frame, `'D''K''C''1'`, goes ahead of each - the mode, and the poster's lines (`docs/VIEW.md`). `viz_frame` always returns w·h; the header's "0 if nothing has been drawn" (`viz.h:203`) is inaccurate.
 
 **Transport today** (`view.c:9-14`, `53-76`; `VIEW.md:60-69`):
 - The console carries `ESC ] view;<base64> BEL \n`. `tools/viewrelay.py --deck <port> --view <port>` lifts it out and writes it to the node's USB serial.

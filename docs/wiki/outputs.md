@@ -38,7 +38,7 @@ Registration order is also dispatch order: `ble, mon, din, osc, view, usb` (`mai
 | `mon` | `main.c:545` | off | `>send mon on` | `>send mon off` | console lines tagged `midi` (§1.4) |
 | `din` | `main.c:549` | off | `>din <gpio>` (`builtins.c:222`); `>send din on` only flips the flag and sends nothing until the UART runs | `>din off` stops the UART and the flag (`builtins.c:168-173`); `>send din off` leaves the UART running | raw MIDI bytes on UART1 at 31250 baud (§3) |
 | `osc` | `main.c:553` | off | `>osc <ip> [<port>]` (`builtins.c:2052`) or `>send osc on` | `>send osc off` (the socket stays open) | OSC 1.0 messages over UDP, one datagram per drained tick (§1.6) |
-| `view` | `view.c:36` (from `main.c:556`) | off | `>send view on` or `>send view <W>x<H>` (`builtins.c:2097-2117`) | `>send view off` | its sink ignores events; frames go out from the main loop (§1.7) |
+| `view` | `view.c` (from `main.c:556`) | off | `>send view on`, `>send view <W>x<H>` or `>send view <mode>` (`builtins.c`, `c_send`) | `>send view off` | its sink ignores events; frames go out from the main loop (§1.7) |
 | `usb` | `main.c:669-677`, **USB MIDI mode only** | **on**: the only destination enabled at boot, and only in that mode (`main.c:677`) | automatic | `>send usb off` | USB-MIDI via `tud_midi_stream_write` (§2.4) |
 
 ### 0.2 Who may run what
@@ -134,16 +134,17 @@ See §3.
 ### 1.7 `view`: frames to an HDMI node
 
 - The sink ignores events (`view.c:26-32`). A frame is produced only when the main loop's `viz_service()` returns one (`main.c:870-877`).
-- **Wire format** (`view_wire.h:5-54`): `'D''K''V''1'`, then `tick` u32 little-endian, `w` u8, `h` u8, `w*h` cell bytes (32–126 text, 128–155 tiles), and `sum` u8 = XOR of every byte after the magic. That is 11 + w·h bytes; 53×20 gives **1071 B**, which matches `docs/VIEW.md:74`.
+- **Wire format** (`view_wire.h`; `docs/VIEW.md`): a picture, `'D''K''V''1'`, then `tick` u32 little-endian, `w` u8, `h` u8, `w*h` cell bytes (32–126 text, 128–155 tiles), and `sum` u8 = XOR of every byte after the magic. That is 11 + w·h bytes; 80×30 gives **2,411 B**. Ahead of every picture goes a control frame, `'D''K''C''1'`: the tick, the node's mode, and for the poster up to ten lines with the span each lights.
 - **Transport today** is the console: `ESC ] view;<base64> BEL \n` (`view.c:62`).
   - In serial mode it is one non-blocking `usb_serial_jtag_write_bytes(…,0)`. A frame is sent whole or dropped whole and counted in `view_dropped` (`view.c:66-70`).
   - In USB MIDI mode it goes through `stdout`, which is the CDC interface (`view.c:71-74`).
   - `tools/viewrelay.py` relays it (`docs/VIEW.md:60-69`).
 - Size (`builtins.c:2093-2117`; `viz.h:64-65`):
-  - `on` means 53×20.
-  - `<W>x<H>` accepts 4×2 to 60×24; outside that it prints `view is 4x2 to 60x24 cells`.
+  - `on` means 80×30, unless the view is already on, when it keeps its size.
+  - `<W>x<H>` accepts 4×2 to 80×30; outside that it prints `view is 4x2 to 80x30 cells`.
+  - `<mode>` - plain, scan, phosphor, feedback, riso, poster - turns it on, drawn that way (`viz_out_mode`).
   - `off` restores the preview's own size.
-  - A bad argument prints `send view on | off | 53x20`.
+  - A bad argument prints `send view on|off|80x30|mode` and the six modes.
 - The heartbeat reports `(%u sent, %u dropped)` (`main.c:950-954`).
 - Measured (`docs/VIEW.md:73-86`): 86 frames in about 10.5 s at 124 bpm with 0 refused. The per-frame cost fell from **31 ms** to **0.5 ms**, and the loop ran 199 → 142 → 192 turns/s (view off → view through stdio → after the fix). There were 0 drops in 234. USB MIDI mode is untested (`docs/VIEW.md:88-90`).
 

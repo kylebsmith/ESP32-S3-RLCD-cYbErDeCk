@@ -186,6 +186,34 @@ void viz_out_size(int w, int h)
     }
 }
 
+static int s_out_mode;
+
+void viz_out_mode(int mode)
+{
+    if (mode >= 0 && mode < VIZ_OUT_MODES) {
+        s_out_mode = mode;
+    }
+}
+
+int viz_out_mode_now(void) { return s_out_mode; }
+
+const char *viz_out_mode_name(int mode)
+{
+    static const char *const names[VIZ_OUT_MODES] = {
+        "plain", "scan", "phosphor", "feedback", "riso", "poster" };
+    return (mode >= 0 && mode < VIZ_OUT_MODES) ? names[mode] : NULL;
+}
+
+int viz_out_mode_find(const char *name)
+{
+    for (int m = 0; m < VIZ_OUT_MODES; m++) {
+        if (name != NULL && strcmp(name, viz_out_mode_name(m)) == 0) {
+            return m;
+        }
+    }
+    return -1;
+}
+
 char viz_cell_fit(int x, int y, int pw, int ph)
 {
     if (pw <= 0 || ph <= 0 || s_w <= 0 || s_h <= 0) {
@@ -459,7 +487,7 @@ static void draw_move(int amt, char dir, uint32_t step)
     dx *= n; dy *= n;
     if (dx == 0 && dy == 0) { return; }
 
-    char tmp[VIZ_H][VIZ_W + 1];
+    static char tmp[VIZ_H][VIZ_W + 1];   /* the engine runs on one task; not its stack */
     for (int y = 0; y < s_h; y++) {
         memcpy(tmp[y], s_fb[y], (size_t)s_w + 1);
     }
@@ -486,7 +514,7 @@ static void draw_warp(int amt, char dir, uint32_t step)
     const int span = (amt < 0 ? 9 : amt);
     if (span == 0) { return; }
 
-    char tmp[VIZ_H][VIZ_W + 1];
+    static char tmp[VIZ_H][VIZ_W + 1];   /* the engine runs on one task; not its stack */
     for (int y = 0; y < s_h; y++) {
         memcpy(tmp[y], s_fb[y], (size_t)s_w + 1);
         memset(s_fb[y], TONE_0, (size_t)s_w);
@@ -638,7 +666,7 @@ static void draw_grid(int amt, char dir, uint32_t step)
 static void draw_grow(int amt, char dir, uint32_t step)
 {
     if (amt <= 0) { return; }
-    char tmp[VIZ_H][VIZ_W + 1];
+    static char tmp[VIZ_H][VIZ_W + 1];   /* the engine runs on one task; not its stack */
     for (int y = 0; y < s_h; y++) { memcpy(tmp[y], s_fb[y], (size_t)s_w + 1); }
     for (int y = 0; y < s_h; y++) {
         for (int x = 0; x < s_w; x++) {
@@ -660,7 +688,7 @@ static void draw_grow(int amt, char dir, uint32_t step)
 static void draw_thin(int amt, char dir, uint32_t step)
 {
     if (amt <= 0) { return; }
-    char tmp[VIZ_H][VIZ_W + 1];
+    static char tmp[VIZ_H][VIZ_W + 1];   /* the engine runs on one task; not its stack */
     for (int y = 0; y < s_h; y++) { memcpy(tmp[y], s_fb[y], (size_t)s_w + 1); }
     for (int y = 0; y < s_h; y++) {
         for (int x = 0; x < s_w; x++) {
@@ -705,7 +733,7 @@ static void draw_spin(int amt, char dir, uint32_t step)
 {
     const int turns = (amt < 0 ? 1 : amt) / 3;      /* 0..3 quarter turns */
     if (turns == 0) { return; }
-    char tmp[VIZ_H][VIZ_W + 1];
+    static char tmp[VIZ_H][VIZ_W + 1];   /* the engine runs on one task; not its stack */
     for (int y = 0; y < s_h; y++) { memcpy(tmp[y], s_fb[y], (size_t)s_w + 1); }
     /* THE FRAME IS NOT SQUARE, so a quarter turn cannot be a straight transpose:
      * a 58x10 picture rotated into a 58x10 window has to be scaled back into it.
@@ -834,7 +862,7 @@ static void draw_edge(int amt, char dir, uint32_t step)
      * so 'edge 1' found nothing anywhere. 9 - amt spans the ramp exactly. */
     int drop = 9 - (amt < 1 ? 1 : (amt > 9 ? 9 : amt));
     if (drop < 1) { drop = 1; }
-    char tmp[VIZ_H][VIZ_W + 1];
+    static char tmp[VIZ_H][VIZ_W + 1];   /* the engine runs on one task; not its stack */
     for (int y = 0; y < s_h; y++) { memcpy(tmp[y], s_fb[y], (size_t)s_w + 1); }
     for (int y = 0; y < s_h; y++) {
         for (int x = 0; x < s_w; x++) {

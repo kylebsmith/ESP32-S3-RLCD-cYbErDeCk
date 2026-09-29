@@ -81,13 +81,86 @@ int main(void)
     CHECK(feed(storm, sn) >= 1 && R.tick == 0x01020304u,
           "after %zu bytes of torn frames the next good one is read", sn);
 
-    /* 5. The largest frame the deck can draw fits the reader. */
-    static uint8_t big[60 * 24], bf[60 * 24 + 16];
+    /* 5. The largest frame the deck can draw (VIZ_W x VIZ_H, 80 x 30) fits the
+     *    reader. */
+    static uint8_t big[80 * 30], bf[80 * 30 + 16];
     for (size_t i = 0; i < sizeof big; i++) { big[i] = (uint8_t)(128 + i % 28); }
-    const size_t bn = view_wire_pack(bf, sizeof bf, 7, 60, 24, big);
+    const size_t bn = view_wire_pack(bf, sizeof bf, 7, 80, 30, big);
     memset(&R, 0, sizeof R);
-    CHECK(bn > 0 && feed(bf, bn) == 1 && R.w == 60 && R.h == 24 &&
-          memcmp(R.cells, big, sizeof big) == 0, "a 60x24 frame round-trips");
+    CHECK(bn > 0 && feed(bf, bn) == 1 && R.w == 80 && R.h == 30 &&
+          memcmp(R.cells, big, sizeof big) == 0, "an 80x30 frame round-trips");
+
+    /* 7. The control frame: the mode, and the poster's lines with their spans.
+     *    The deck and the node must agree on the limits, or a long poster is a
+     *    refused frame and a black screen. */
+    CHECK(VIEW_READ_TEXT_MAX == VIEW_TEXT_MAX && VIEW_READ_LINES_MAX == VIEW_LINES_MAX,
+          "deck and node agree on the control frame's limits");
+    const view_line_t lines[3] = {
+        { "ORBITALS", 0, 0 },
+        { "kick 9...8...9...8...", 9, 10 },
+        { "hat ..3...3...3...4.", 30, 31 },         /* a span past the end */
+    };
+    uint8_t c[256];
+    const size_t cn = view_wire_pack_ctl(c, sizeof c, 0x0a0b0c0du, VIEW_MODE_POSTER,
+                                         lines, 3);
+    CHECK(cn > 0 && memcmp(c, "DKC1", 4) == 0 && c[4] == 0x0d && c[8] == VIEW_MODE_POSTER &&
+          c[9] == 3, "a control frame is magic, tick, mode and a count of lines");
+    const size_t tl = (size_t)(c[10] | (c[11] << 8));
+    CHECK(tl == (2 + 8 + 1) + (2 + 21 + 1) + (2 + 20 + 1) && cn == 12 + tl + 1,
+          "then the text's length, the text, and the sum (%zu bytes)", cn);
+    memset(&R, 0, sizeof R);
+    CHECK(feed(c, cn) == VR_CONTROL && R.mode == VIEW_MODE_POSTER && R.nlines == 3 &&
+          R.ctl_tick == 0x0a0b0c0du, "the node reads the mode and the count");
+    const uint8_t *ch = NULL;
+    int from = 0, to = 0;
+    int k = view_read_line(&R, 1, &ch, &from, &to);
+    CHECK(k == 21 && memcmp(ch, "kick 9...8...9...8...", 21) == 0 && from == 9 && to == 10,
+          "and each line with the span it lights");
+    k = view_read_line(&R, 2, &ch, &from, &to);
+    CHECK(k == 20 && from == 0 && to == 0, "a span past the end of its line lights nothing");
+    CHECK(view_read_line(&R, 3, &ch, &from, &to) < 0, "there is no fourth line");
+
+    /* 8. As the deck sends them - a control frame, then its picture - and after
+     *    junk, a torn control frame and a torn picture. */
+    memset(&R, 0, sizeof R);
+    static uint8_t both[2048];
+    size_t bo = 0;
+    memcpy(both + bo, "log line DKC", 12); bo += 12;
+    memcpy(both + bo, c, cn / 2); bo += cn / 2;       /* a control frame cut short */
+    memcpy(both + bo, f, n / 2); bo += n / 2;         /* a picture cut short */
+    memcpy(both + bo, c, cn); bo += cn;
+    memcpy(both + bo, f, n); bo += n;
+    CHECK(feed(both, bo) == (VR_CONTROL | VR_PICTURE) && R.mode == VIEW_MODE_POSTER &&
+          R.tick == 0x01020304u && R.nlines == 3, "both kinds are read after junk and tears");
+
+    /* 9. A control frame with a bit wrong is refused, and the last good one
+     *    stands - the node keeps drawing in the mode it was given. */
+    uint8_t cb[256];
+    const size_t cbn = view_wire_pack_ctl(cb, sizeof cb, 1, VIEW_MODE_SCAN, lines, 1);
+    cb[13] ^= 0x40;
+    const uint32_t before = R.refused;
+    CHECK(feed(cb, cbn) == 0 && R.refused > before && R.mode == VIEW_MODE_POSTER,
+          "a corrupted control frame is refused and the mode stands");
+
+    /* 10. Modes the deck cannot name, and lines that do not fit, are not sent. */
+    CHECK(view_wire_pack_ctl(c, sizeof c, 0, VIEW_MODES, NULL, 0) == 0,
+          "an unknown mode is not packed");
+    CHECK(view_wire_pack_ctl(c, sizeof c, 0, VIEW_MODE_RISO, NULL, 0) == 12 + 1,
+          "a mode alone is thirteen bytes");
+    view_line_t many[VIEW_LINES_MAX + 1];
+    for (int i = 0; i <= VIEW_LINES_MAX; i++) { many[i].text = "x"; many[i].from = many[i].to = 0; }
+    CHECK(view_wire_pack_ctl(c, sizeof c, 0, 0, many, VIEW_LINES_MAX + 1) == 0,
+          "more than %d lines is not packed", VIEW_LINES_MAX);
+    char longl[200];
+    memset(longl, 'y', sizeof longl - 1);
+    longl[sizeof longl - 1] = '\0';
+    const view_line_t cut = { longl, 70, 72 };
+    const size_t ln = view_wire_pack_ctl(c, sizeof c, 0, 0, &cut, 1);
+    memset(&R, 0, sizeof R);
+    feed(c, ln);
+    k = view_read_line(&R, 0, &ch, &from, &to);
+    CHECK(k == VIEW_LINE_MAX && from == 0 && to == 0,
+          "a long line is cut at %d characters and its span past the cut dropped", VIEW_LINE_MAX);
 
     /* 6. Base64 as the console carries it today: RFC 4648's own vectors. */
     static const char *in[] = { "", "f", "fo", "foo", "foob", "fooba", "foobar" };

@@ -216,9 +216,11 @@ that drifts once a bar.
 
 The poster's type is the round face (§6) at four and six times, where its curves show.
 
-**How a piece would choose.** `>send view` already takes `on`, `off` and a size. A mode
-would be one more argument, `>send view scan`, not a new word. Written into a section, it
-changes with the piece, so the performer makes it like everything else.
+**Built, 2026-09-28, and named:** `plain`, `scan`, `phosphor`, `feedback`, `riso`,
+`poster`. A piece chooses with one more argument to the destination it already had,
+`>send view scan`, not a new word. Written into a section, it changes with the piece, so
+the performer makes it like everything else. The wire format, the sizes and what was
+measured are in [VIEW.md](../VIEW.md).
 
 **Not mocked yet, and as cheap:**
 
@@ -229,15 +231,13 @@ changes with the piece, so the performer makes it like everything else.
 - **moiré**: two lanes in two screens, overlapping.
 - **trace**: glowing outlines, as the Vectrex drew.
 
-**Honest limits.** These are mock-ups drawn on a computer from the engine's real frames,
-using only what the node has: a one-bit or an eight-bit buffer, a palette, whole numbers
-and affine lookups. Nothing here runs on the RP2040 yet.
-
-- The memory is estimated, not measured: two eight-bit buffers are 154 KB, beside the
-  58 KB the sketch uses, in 264 KB.
-- Feedback at the step rate is easy; at 60 frames a second it is unmeasured.
-- The poster needs a second kind of frame on the wire, carrying the lines. That frame is
-  not designed.
+**On the node, as built.** All six run at 320 × 240 in eight bits, doubled to 640 × 480,
+from one frame a step; the images above are the mock-ups they were built from, and the
+node follows them rather than matching them pixel for pixel. The poster's lines ride in
+a control frame ahead of each picture. Measured: 2,097 frames and 0 refused through all
+six modes, driven from a computer. **Unverified:** the deck driving them end to end, and
+how any of it looks - the node reports frames, not pixels, and there is no camera here.
+Interpolation between steps is still to build.
 
 ## 3. Proposal B, tried and set aside — smoothing the cells
 
