@@ -196,10 +196,10 @@ Two things to add for this round:
 In the default face the picture pane is 28 × 4 cells, so a disc is drawn as a
 rectangle. The proposal:
 
-1. **4 × 4 square dots**, independent of the text size: 84 × 24 in the default pane,
-   90 × 72 across the whole text area. A dot is one period of the tone matrix and exactly
-   two framebuffer bytes. **Adopt only on a number**: frame time on the deck, jitter
-   unchanged, push unchanged.
+1. **4 × 4 square dots, banded** — decided 2026-09-28. Independent of the text size: 84 ×
+   24 in the default pane, 90 × 72 across the whole text area. A dot is one period of the
+   tone matrix and exactly two framebuffer bytes, so banding is a 13 KB lookup kept in
+   RAM. **Adopt on a number**: frame time on the deck, jitter unchanged, push unchanged.
 2. **`stamp`** — the picture says what played: a routed stamp shows its source's name,
    at the source's strength.
 3. **The type overhaul**, decided by the reading test in [CMF.md](../CMF.md): errors per
@@ -210,7 +210,7 @@ rectangle. The proposal:
 | | what | the deck side | status |
 |---|---|---|---|
 | **hands** | satellites: 4 encoders, 8 buttons, on the six-pin magnetic cable, CAN — and a destination too, so lanes can light their LEDs, as monome's grid decouples its lights from its keys | `>knob1 = knob`, `>pad1 = pad`, routes (exist) | briefed ([SATELLITES.md](../SATELLITES.md)); the owner builds |
-| **eye** | the RP2040 view node on a direct link | the `view` destination (exists) | relayed through a laptop today ([VIEW.md](../VIEW.md)) |
+| **eye** | the RP2040 view node on a direct USB tether, drawing the dots banded at its own resolution, with **frame interpolation as a switch**; later wireless — an RP2040 with an ESP32-S3 companion, or a faster link — joining the ensemble as a follower | the `view` destination (exists): each frame carries its tick | relayed through a laptop today ([VIEW.md](../VIEW.md)) |
 | **ears** | MIDI in: clock follow, notes and CCs as inputs | inputs exist; MIDI in needs an optocoupler | open ([NEXT.md](../NEXT.md) §2) |
 | **voice** | a sound node (ESP32-P4 or Teensy) | a destination like any other | the owner's hardware roadmap; sound stays off the S3 |
 | **friends** | laptops and phones over OSC; other decks over ESP-NOW | OSC in and out; `>sync` (exist) | done |

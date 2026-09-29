@@ -110,6 +110,37 @@ def draw_dots(p, ox, oy, g, s):
                         p.px[X, Y] = INK
 
 
+def draw_banded(p, ox, oy, g, s):
+    """4 x 4 dots, banded - the chosen look. A grey dot is drawn from the tones
+    at its four corners, interpolated across its pixels and cut into the nine
+    tones, so greys meet in curves. A solid or an empty dot is drawn exactly as
+    it is: banding a one-dot line with the paper beside it would grey it out."""
+    h, w = len(g), len(g[0])
+    t = [[tone(c) for c in row] for row in g]
+    cor = [[0.0] * (w + 1) for _ in range(h + 1)]
+    for j in range(h + 1):
+        for i in range(w + 1):
+            vals = [t[y][x] for (x, y) in ((i - 1, j - 1), (i, j - 1), (i - 1, j), (i, j))
+                    if 0 <= x < w and 0 <= y < h]
+            cor[j][i] = sum(vals) / len(vals) / 8.0
+    for y in range(h):
+        for x in range(w):
+            own = t[y][x]
+            a, b, d, e = cor[y][x], cor[y][x + 1], cor[y + 1][x], cor[y + 1][x + 1]
+            for py in range(s):
+                v = (py + 0.5) / s
+                left, right = a + (d - a) * v, b + (e - b) * v
+                for px in range(s):
+                    X, Y = ox + x * s + px, oy + y * s + py
+                    if own in (0, 8):
+                        lv = own
+                    else:
+                        lv = int((left + (right - left) * (px + 0.5) / s) * 8 + 0.5)
+                        lv = min(max(lv, 1), 7)          # a grey dot stays a grey
+                    if BAYER[Y & 3][X & 3] < lv * 2:
+                        p.px[X, Y] = INK
+
+
 def draw_dual(p, ox, oy, g, cw, ch, crisp):
     """A renderer-only alternative, kept to show why it is not proposed: each
     cell drawn from the tones at its four corners (the mean of the cells that
@@ -190,6 +221,19 @@ def main():
              lambda p, x, y, s: draw_dots(p, x, y, Q(s, 56, 16), 6)),
             ('4 x 4 dots: 84 x 24 (proposed)', 336, 96,
              lambda p, x, y, s: draw_dots(p, x, y, Q(s, 84, 24), 4)),
+        ])
+
+        # 1b. The choice, 2026-09-28: 4 x 4 dots, BANDED - each dot drawn from
+        #     the tones at its four corners, interpolated across its sixteen
+        #     pixels and cut into the nine tones. A 4 x 4 dot is one period of
+        #     the dither, so on the deck this is a lookup, not arithmetic.
+        sheet(os.path.join(out, 'pictures-banded.png'), scenes, [
+            ('today: 28 x 4 cells of 12 x 24', 336, 96,
+             lambda p, x, y, s: draw_tiles(p, x, y, R(s, 28, 4), BIG)),
+            ('4 x 4 dots, flat', 336, 96,
+             lambda p, x, y, s: draw_dots(p, x, y, Q(s, 84, 24), 4)),
+            ('4 x 4 dots, banded (chosen)', 336, 96,
+             lambda p, x, y, s: draw_banded(p, x, y, Q(s, 84, 24), 4)),
         ])
 
         # 2. Smoothing the cells instead: it rounds edges, it cannot add rows.

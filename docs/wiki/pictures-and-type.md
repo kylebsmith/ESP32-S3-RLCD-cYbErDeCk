@@ -114,6 +114,31 @@ all be true:
 4 dots on the same pixels. At this size the difference is smaller. The default pane
 above is where it matters.*
 
+### Chosen, 2026-09-28: 4 × 4 dots, banded
+
+![Today, 4 x 4 dots flat, and 4 x 4 dots banded](../img/pictures-banded.png)
+
+**Banded** means a grey dot is drawn from the tones at its four corners, interpolated across
+its sixteen pixels and cut into the nine tones. Greys then meet in curves instead of
+squares. **A solid or an empty dot stays exact.** Banding a one-dot line against the paper
+beside it would turn it grey; the first try did exactly that to the ring, and the rule came
+from it.
+
+**It costs the clock nothing, and on this panel it is a lookup.** A 4 × 4 dot is exactly
+one period of the dither, so how a grey dot looks depends only on its four corner tones:
+9⁴ = 6,561 patterns of two bytes, 13 KB. The table lives in internal RAM, so the
+display core never contends with the clock's code in the flash cache. Drawing a frame is
+still two stores a dot. **Adopt on a number**: the heaviest scene with banding on, the
+clock's jitter histogram beside today's — 6,175 of 6,175 ticks within 100 µs is the bar.
+
+**The view node does it its own way.** The deck sends each frame as tones — dots, not
+pixels — with the tick it belongs to. So the RP2040 on the HDMI tether can band at its own
+resolution, and can **interpolate between frames**, as a switch. It knows exactly when each
+frame was, so it can fill a 60 Hz screen between the deck's frame-a-step without costing
+the deck anything. Later, the same node pairs wirelessly — an RP2040 with an ESP32-S3
+companion on ESP-NOW, or a faster link — and joins the ensemble as a follower, as a second
+deck does.
+
 ## 3. Proposal B, tried and set aside — smoothing the cells
 
 ![Smoothing today's cells](../img/pictures-smoothing.png)
@@ -194,12 +219,12 @@ the classic confusions are answered by design.
   small letters only up to a point.
 - **The size is right.** The cap is 3.39 mm — about 23 arcminutes at 50 cm, the FAA's
   preferred 22–24.
-- **Make the zero narrower than the O.** Today the 0 and the O share one outline and
-  differ only by the dot inside (above). On a dot-matrix display a round zero with a mark
-  inside was misread as O; a narrow plain zero halved the errors (Vartabedian 1969).
-  Readers agreed most on a zero narrower than O (Wendt 1969). The FAA's labelling rules
-  say the same. **This is the one change the evidence asks for directly**: an 8-pixel
-  zero, centred, with the dot kept or dropped by the reading test.
+- **The zero keeps its dot, full width — the owner's call, 2026-09-28.** The research
+  leans the other way: on a dot-matrix display a round zero with a mark inside was misread
+  as O, and a narrow plain zero halved the errors (Vartabedian 1969). Readers agreed most
+  on a zero narrower than O (Wendt 1969), and the FAA's labelling rules say the same. The
+  narrow zero was drawn (the image below) and set aside. The reading test will say whether
+  the dot alone holds 0 and O apart on this panel.
 - **Treat the 6 × 12 as a label face, not a code face.** Its 7-pixel cap is about 10
   arcminutes, the FAA's floor for non-critical text, and its 1-pixel stem is thinner than
   Playdate's minimum. Terminus, a bitmap face that ships exactly these two sizes, carries
@@ -252,10 +277,53 @@ both the text and the picture.
 - **The compact face as a face of its own**, not the small copy of the large one. It lost
   the default for being thin; for `+out`, `>lanes` and `>help` it could carry two-pixel
   verticals wherever five columns allow.
-- **One curve.** The enclosure's corner is a superellipse, n = 3.2 ([CMF.md](../CMF.md)).
-  The same curve could round the letters' bowls and the picture's shapes. Honestly: at
-  12 × 24 a bowl's corner is two or three pixels, so the difference is a pixel. It is a
-  principle, not something anyone will see.
+- **One curve.** The enclosure's corner is a superellipse, n = 3.2 ([CMF.md](../CMF.md)),
+  and the face turns out to be drawn to it already. The programme below makes the curve a
+  rule: at 12 × 24 it moves a pixel or two; drawn larger it is the whole character of the
+  face.
+
+### The face as a programme — speculative, two passes
+
+![Pass 1: today against n = 2.2, 3.2 and 6](../img/type-programme.png)
+
+`tools/type_programme.py` draws the round letters from one rule, the superellipse
+|x/a|ⁿ + |y/b|ⁿ = 1 that cuts the enclosure's corners, and keeps a 2-unit stroke even all
+the way round the curve. Pass 1 varied only n:
+
+- **Today's face is already the case's curve.** At n = 3.2 the programme's `o` comes out
+  pixel for pixel identical to the hand-laid one. The face and the case were drawn to the
+  same corner without anyone deciding it.
+- **At 12 × 24 the exponent moves a pixel or two.** A bowl ten pixels wide has no room
+  for more.
+- **The curves show when the same rule draws larger**: section lines at twice the size,
+  and the view node, which can draw from the rule at whatever size its screen wants. A
+  programme scales; a bitmap laid by hand can only be doubled.
+- **The owner chose n = 2.2**, the round one.
+
+![Pass 2: seven styles on n = 2.2](../img/type-variants.png)
+
+Pass 2 keeps n = 2.2 and draws **the punctuation the language lives on** by the same rule:
+
+- **the dots are beads**, so `x...x...` reads as hits on a string;
+- the chevrons have round joins;
+- `%`, `( )`, `{ }`, `!`, `?`, `~`, `@` and `$` are drawn on the same curve.
+
+Then seven styles on that base, each one idea:
+
+| style | what it does | where it belongs |
+|---|---|---|
+| **round** | the base: n = 2.2, round dots | code, everywhere |
+| **open** | wider apertures; `i j l t` spread across the cell | code, if the reading test finds those letters misread (Beier & Larson 2010) |
+| **traps** | a notch where strokes meet | twice the size and up — at 12 × 24 a trap is a one-pixel nick |
+| **stencil** | bowls and joins broken | titles and the view node: industrial, after Crouwel |
+| **slab** | typewriter serifs | code, if 1 / l / I are confused — the strongest separation there is |
+| **oblique** | slanted one pixel in eight | comments: a second voice without a second face |
+| **inline** | hollow strokes | titles at three times the size and up; a stroke needs six pixels to be hollow |
+
+None of it costs the deck anything to run: the deck keeps a bitmap, whatever drew it.
+Honest limits: this is a first draft of about seventy glyphs, not a finished face. The
+straight letters are still today's, and every style still has to pass the reading test on
+the panel.
 
 ## 7. Around the table — what the best of the others would bring
 
@@ -293,10 +361,17 @@ system's own documentation or its designers' papers, 2026-09-28 (the sources are
 
 ## 8. The owner's decisions
 
-1. **Dots, octants or cells** — 4 × 4 dots (recommended, and cells kept as a grain), or
-   octants if the picture must stay made of characters.
-2. **`stamp`'s text** — the name of what fired it (recommended), or the line's pattern.
-3. **The twelve unused tiles** — become symbols, or go.
-4. **The letters** — draw the narrower zero now, then run the reading test and redraw only
-   what it shows people mistaking.
-5. **Section lines at twice the size** — yes or no.
+**Decided, 2026-09-28:**
+
+- **4 × 4 dots, banded** — adopted once the clock's jitter with it on matches today's.
+- **The zero keeps its dot, full width.**
+- **The face's curve is n = 2.2**, drawn by the programme.
+- **The view node gets frame interpolation as a switch**, and later a wireless link.
+
+**Still open:**
+
+1. **`stamp`'s text** — the name of what fired it (recommended), or the line's pattern.
+2. **The twelve unused tiles** — become symbols, or go.
+3. **Which style for which role** — round for code; oblique for comments; stencil, slab
+   or inline for titles and the view node.
+4. **Section lines at twice the size** — yes or no.
