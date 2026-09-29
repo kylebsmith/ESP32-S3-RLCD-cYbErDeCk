@@ -106,11 +106,15 @@ int main(int argc, char **argv)
     mark("noise", 3, 0); step();
     save("stars", 0);
 
-    /* >echo 8   >turn 2   >spin <0 3 6 9>   - the radar from ORBITALS, night */
+    /* the radar from ORBITALS, night: >echo 8 and four beams taking turns, a
+     * beat each, anticlockwise - >turn u 2..., >turn:2 l ....2..., >turn:3 d
+     * ........2..., >turn:4 r ............2... (tools/mock_frames.c says why it
+     * is no longer a turn under a spin) */
     fresh();
-    for (int s = 0; s < 12; s++) {
-        const int spin[4] = { 0, 3, 6, 9 };
-        mark("echo", 8, 0); mark("turn", 2, 0); mark("spin", spin[s % 4], 0);
+    for (int s = 0; s < 10; s++) {
+        static const char heading[4] = { 'u', 'l', 'd', 'r' };
+        mark("echo", 8, 0);
+        if (s % 4 == 0) { mark("turn", 2, heading[(s / 4) % 4]); }
         step();
     }
     save("radar", 0);

@@ -7,8 +7,10 @@ for the satellites to come
 >swing 50
 >echo 8
 >noise 1
->turn 2
->spin <0 3 6 9>
+>turn u 2...............
+>turn:2 l ....2...........
+>turn:3 d ........2.......
+>turn:4 r ............2...
 >pad = voice 3 ch 3 gate 420
 >pad <[0,2,4] [0,2,5] [2,4,6] [1,3,6]>___ /4
 >play
@@ -20,7 +22,9 @@ for the satellites to come
 -- II first light
 >scale dmin
 >turn
->spin
+>turn:2
+>turn:3
+>turn:4
 >kick 5...4...5...4...
 >box 2...1...2...1...
 >disc 3

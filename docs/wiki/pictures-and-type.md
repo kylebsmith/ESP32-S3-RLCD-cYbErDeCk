@@ -151,7 +151,7 @@ costs, and the clock never sees any of them.
 twice the pitch), lines that thicken, the engraver's diagonals and hatching. The owner's
 verdict, 2026-09-28: **Bayer is the best by a large margin.** The numbers agree. Blur the
 dots and the greys the engine meant alike, as the eye does at arm's length, and measure
-the difference. Bayer's is the smallest; every print screen is 1.5 to 8.5 times further
+the difference. Bayer's is the smallest; every print screen is 1.4 to 8.6 times further
 off.
 
 **Why Bayer wins.** In a 4 × 4 cell its order is the most even there is. At a quarter, a
@@ -173,20 +173,22 @@ the grid inverted. Bayer has all three. Anything else is less even somewhere.
 
 | screen | truth: distance from the intended greys, lower is truer | pixels changing alone: the radar | the orbit |
 |---|---|---|---|
-| **bayer** | **0.015** | 83.8 % | 56.7 % |
-| grain | 0.025 | 86.3 % | 57.2 % |
-| weave | 0.028 | 87.1 % | 57.3 % |
-| wide | 0.030 | 1.6 % | 9.0 % |
-| diagonal | 0.022 | 60.7 % | 44.3 % |
-| hatch | 0.040 | 9.2 % | 16.8 % |
-| halftone | 0.042 | 1.5 % | 6.6 % |
-| lines | 0.067 | 0.3 % | 2.5 % |
-| poster | 0.128 | 8.1 % | 13.3 % |
+| **bayer** | **0.014** | 57.4 % | 56.7 % |
+| grain | 0.023 | 58.2 % | 57.2 % |
+| weave | 0.027 | 58.3 % | 57.3 % |
+| wide | 0.028 | 1.9 % | 9.0 % |
+| diagonal | 0.020 | 51.8 % | 44.3 % |
+| hatch | 0.038 | 21.2 % | 16.8 % |
+| halftone | 0.039 | 1.5 % | 6.6 % |
+| lines | 0.063 | 0.1 % | 2.5 % |
+| poster | 0.121 | 14.7 % | 13.3 % |
 
 *Measured on the engine's own frames by `tools/mock_pictures.py`. Truth is the RMS
 difference over four scenes, both blurred by σ = 1.2 pixels. A pixel changing alone is one
 that changes from one frame to the next with no changed pixel beside it; that is what
-sparkle is.*
+sparkle is. The radar is ORBITALS' as it is now written - four beams taking turns - and
+re-measured 2026-09-28; the first table was taken on the old one, whose corner never
+moved (§ The radar, below).*
 
 **Decided, 2026-09-28: Bayer.** The owner's words: Bayer is the best, and these
 variations are worse. None of ours is as true, and in a 4 × 4 cell none can be. The
@@ -238,6 +240,29 @@ a control frame ahead of each picture. Measured: 2,097 frames and 0 refused thro
 six modes, driven from a computer. **Unverified:** the deck driving them end to end, and
 how any of it looks - the node reports frames, not pixels, and there is no camera here.
 Interpolation between steps is still to build.
+
+### The radar — why a corner stood still
+
+The owner, watching ORBITALS on the screen, 2026-09-28: one corner of the radar never
+moved, and it read as broken rather than as turning. It was `>turn 2` under
+`>spin <0 3 6 9>`. `spin` turns the history — what `echo` laid down from the last
+frame — and never this step's own source, so each fresh wedge landed in the same
+quadrant while only its trails moved. On the deck's engine a quarter of the frame never
+changed. No spin can fix that: turning the trails leaves the fresh wedge where it is,
+and turning everything by one angle lands it in the same place again.
+
+So the beam moves itself: four instances of `turn`, one to a beat, each with its own
+heading written in front.
+
+    >turn u 2...............
+    >turn:2 l ....2...........
+    >turn:3 d ........2.......
+    >turn:4 r ............2...
+
+They step anticlockwise because a `turn` fades clockwise from its leading edge, so each
+trail falls behind its beam, and `echo 8` fades the trails where they were drawn. On the
+deck's engine no inked cell now stays the same over a bar. `spin` keeps its meaning,
+which `lift` relies on: in the olivia jack sketch it turns the feedback on the snare.
 
 ## 3. Proposal B, tried and set aside — smoothing the cells
 

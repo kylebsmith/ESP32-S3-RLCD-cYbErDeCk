@@ -46,6 +46,27 @@ static void at(const char *name, char axis, int amt)
     viz_mark_param(P(name), viz_param_index(axis == 'x' ? "x" : "y"), amt);
 }
 
+/* THE RADAR FROM ORBITALS, one step of it, as the piece is now written:
+ *
+ *   >echo 8
+ *   >turn u 2...............
+ *   >turn:2 l ....2...........
+ *   >turn:3 d ........2.......
+ *   >turn:4 r ............2...
+ *
+ * Four beams taking turns, one to a beat, stepping anticlockwise - a turn fades
+ * clockwise from its leading edge, so anticlockwise leaves each trail behind its
+ * beam - and echo fading them where they were drawn. It was '>turn 2' under
+ * '>spin <0 3 6 9>', and spin turns the history, never this step's source, so the
+ * fresh wedge landed in the same quadrant every step: a corner that never moved,
+ * which the owner saw on the screen as broken. */
+static void radar(int s)
+{
+    static const char heading[4] = { 'u', 'l', 'd', 'r' };
+    mark("echo", 8, 0);
+    if (s % 4 == 0) { mark("turn", 2, heading[(s / 4) % 4]); }
+}
+
 /* One step of the clock: the marks made, then the frame drawn. */
 static void step(void)
 {
@@ -104,8 +125,7 @@ int main(int argc, char **argv)
         char name[32];
         fresh();
         for (int s = 0; s < 32; s++) {
-            static const int spin[4] = { 0, 3, 6, 9 };
-            mark("echo", 8, 0); mark("turn", 2, 0); mark("spin", spin[s % 4], 0);
+            radar(s);
             step();
             snprintf(name, sizeof name, "radar%02d", s);
             bad |= save(name);
@@ -132,11 +152,10 @@ int main(int argc, char **argv)
     fresh(); mark("box", 7, 0); step(); bad |= save("box");
     fresh(); mark("turn", 9, 'u'); step(); bad |= save("turn");
 
-    /* >echo 8 >turn 2 >spin <0 3 6 9> - the radar from ORBITALS */
+    /* the radar from ORBITALS, two beams in: the third beat of its bar */
     fresh();
-    for (int s = 0; s < 12; s++) {
-        static const int spin[4] = { 0, 3, 6, 9 };
-        mark("echo", 8, 0); mark("turn", 2, 0); mark("spin", spin[s % 4], 0);
+    for (int s = 0; s < 10; s++) {
+        radar(s);
         step();
     }
     bad |= save("radar");

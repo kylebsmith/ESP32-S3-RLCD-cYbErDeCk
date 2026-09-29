@@ -712,8 +712,10 @@ threshold, and the threshold is what was missing:
 Now reachable, five of the six for the first time: a ring (`disc` `edge`), a
 rectangle outline (`box` `edge`), spokes (`turn` `edge`), a hard-edged wedge (`turn`
 `mask`), a contour map (`ramp` `edge`), and a **rotating radar sweep** with a fading
-tail (`turn` `spin` `echo`) — which is the one that says the trade was worth making,
-because the old set could not turn anything continuously at all.
+tail (`turn` instances taking turns, and `echo`) — which is the one that says the trade
+was worth making, because the old set could not turn anything continuously at all. It
+was written as `turn` under `spin` until 2026-09-28, which leaves a corner standing
+still; see [VERBS.md](VERBS.md).
 
 **Three in, three out.** `star` (above), `shake` (`warp` with a random displacement
 instead of a smooth one — the same idea stated twice, and reachable by routing `warp`

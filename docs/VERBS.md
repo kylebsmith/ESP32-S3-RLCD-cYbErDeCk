@@ -100,9 +100,20 @@ geometry; `mask` and `edge` cut a shape out of the answer. That is why there is 
 >disc 8  >mask 9   a smaller, harder circle - the level resizes it
 >box 6   >edge 1   a rectangle outline
 >turn 9  >edge 1   spokes
->turn 2  >spin 1   a RADAR SWEEP, and with echo one that trails
 >ramp d  >edge 9   a contour map
 ```
+
+**A radar sweep** is four `turn` instances taking turns, each with its own heading,
+and `echo` to trail them — `orbitals` opens with one:
+
+```
+>turn u 2...  >turn:2 l .2..  >turn:3 d ..2.  >turn:4 r ...2
+```
+
+It used to read `>turn 2  >spin 1`, which never turned: spin's amount goes in quarter
+turns of three (`1` is none), and `spin` turns the history, not the step's own wedge,
+so under a real spin the fresh wedge still lands in one place and a corner stands
+still. Corrected 2026-09-28, when the owner saw that corner on the HDMI screen.
 
 `star` used to be a verb. Its amount was a count of spokes — the only amount in
 this language that was not a magnitude — and nothing composed with it. `turn` is the

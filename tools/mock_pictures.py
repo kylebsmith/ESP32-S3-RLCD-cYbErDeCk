@@ -117,8 +117,9 @@ def _line_screen():
     # Whole rows only: a grey is the weight of a line - one, two or three pixels
     # on a four-pixel pitch (rows 1, then 2, then 0) - never a part-filled row.
     # Part-filled rows were tried both ways: dashed looks like Morse, dotted
-    # flips single pixels in motion (41 % of flips on the radar, against 0.3 %
-    # for whole rows - lone_flips() below). Three greys, and they hold still.
+    # flips single pixels in motion (41 % of flips on the radar as it then was,
+    # against 0.3 % for whole rows - lone_flips() below). Three greys, and they
+    # hold still.
     at = {1: 0, 2: 4, 0: 8, 3: 14}
     return [[at[r]] * 4 for r in range(4)]
 

@@ -161,7 +161,7 @@ So each operator acts on what the stages before it drew, and the classic pairs f
 | `noise` + `mask` | a few bright stars |
 | `echo` + any field | trails: the last frame, a tone fainter |
 | `echo` + `move` | trails that drift; `move` alone moves only what `echo` carried ✱ |
-| `echo` + `spin` + `turn` | the radar of `orbitals`; `spin` without `echo` rotates nothing ✱ |
+| `echo` + `spin` + `turn` | a corner that never moves ✱: `spin` turns the history, not this step's `turn`, so the fresh wedge lands in the same place every step. `orbitals`' radar was this until 2026-09-28; it is now four `turn` instances taking turns ([pictures-and-type.md](pictures-and-type.md)). `spin` without `echo` rotates nothing ✱ |
 | any + `flip` | the negative; `flip 0` on an empty frame fills it ✱ |
 | `turn` + `fold` | a symmetric fan |
 | a routed field | drawn after every unrouted operator — out of their reach ✱ |
