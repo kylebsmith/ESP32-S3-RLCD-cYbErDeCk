@@ -12,6 +12,15 @@ because a USB serial write that nobody reads can block the node's loop.
 
 With '>send view on' on the deck, the node should report frames and no refusals.
 Opening the deck's port resets it, as every serial monitor does.
+
+THE DECK MOVES WHEN IT CHANGES MODE. After '>usb on' it comes back as a USB MIDI
+device whose console is a CDC port with a new name. When the deck's port goes,
+this waits for the deck to come back - at the port it was given, or at the port
+whose USB serial number is the deck's own in that mode, 'deck-0001' - and
+carries on there. Matching by the deck's serial number means it never picks up
+another ESP32 on the same computer. The CDC console only reboots the deck on
+esptool's DTR/RTS pattern, and this opens it with both low, so following the deck
+there does not reset it.
 """
 import argparse
 import base64
@@ -20,6 +29,28 @@ import sys
 import time
 
 import serial
+from serial.tools import list_ports
+
+DECK_USB_SERIAL = 'deck-0001'       # usbdev.c: the deck's serial number in USB MIDI mode
+
+
+def open_deck(port):
+    d = serial.Serial()
+    d.port, d.baudrate, d.timeout = port, 115200, 0
+    d.dtr = d.rts = False
+    d.open()
+    return d
+
+
+def find_deck(given):
+    """The port given, if it is there; else the deck's CDC console in USB MIDI mode."""
+    ports = list(list_ports.comports())
+    if any(p.device == given for p in ports):
+        return given
+    for p in ports:
+        if p.serial_number == DECK_USB_SERIAL:
+            return p.device
+    return None
 
 VIEW = re.compile(rb'\x1b\]view;([A-Za-z0-9+/=]+)\x07')
 
@@ -30,10 +61,7 @@ def main():
     ap.add_argument('--view', required=True, help="the view node's serial port")
     a = ap.parse_args()
 
-    deck = serial.Serial()
-    deck.port, deck.baudrate, deck.timeout = a.deck, 115200, 0
-    deck.dtr = deck.rts = False
-    deck.open()
+    deck = None                        # found and opened in the loop, and again after a move
     node = None
     buf, nbuf = b'', b''
     frames = 0
@@ -44,7 +72,24 @@ def main():
                 print(f'-- view node on {a.view}', flush=True)
             except serial.SerialException:
                 node = None
-        got = deck.read(8192)
+        try:
+            got = deck.read(8192) if deck is not None else b''
+        except (serial.SerialException, OSError):
+            print('-- deck gone (changing mode?); waiting for it to come back', flush=True)
+            try:
+                deck.close()
+            except Exception:
+                pass
+            deck, got = None, b''
+        if deck is None:
+            port = find_deck(a.deck)
+            if port is not None:
+                try:
+                    deck = open_deck(port)
+                    buf = b''
+                    print(f'-- deck on {port}', flush=True)
+                except serial.SerialException:
+                    deck = None
         if got:
             buf += got
             while b'\n' in buf:
