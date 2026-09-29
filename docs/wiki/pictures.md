@@ -66,7 +66,7 @@ Table order is the default draw order (`viz.c:62-68`, `870-876`):
 - The comments at `viz.c:61` and `viz.c:1044` refer to **`order_marks()`, which does not exist.** The function is `chain_ranks()`, as `viz.h:41` correctly says.
 
 **Consequences** [probe]:
-- **`move`, `spin` and `warp` sit before the sources.** Unrouted, they only transform what `echo` laid down from the last frame. Without `echo` or a route they act on an empty frame. `ramp 3 r` + `spin 3` in one frame showed no rotation; with `>route spin ramp` the ramp turned 90°.
+- **`move` and `warp` sit before the sources.** Unrouted, they only transform what `echo` laid down from the last frame. **`spin` sits there too but acts on the sources**: it sets the rate, and each source is turned as it draws. Before 2026-09-29 it turned the whole frame by quarter turns, and cells near the centre, or in a corner the turn mapped onto itself, never moved — the owner's "set of static pixels"; now `spin 3` leaves 0 cells the same from step to step. Without `echo` or a route they act on an empty frame. `ramp 3 r` + `spin 3` in one frame showed no rotation; with `>route spin ramp` the ramp turned 90°.
 - **A route reorders, re-times and re-amounts all at once.** A routed operator fires only with its source, at its source's amount (§1.2). For example, `>turn 2` + `>route spin turn` gives spin amount 2, which is 0 quarter turns: no rotation.
 - **Routing a picture from a non-picture lane moves it to rank 1.** The guide's own `>route disc kick` does this (`ui_text.h:208`). The disc then draws after every unrouted operator, so `fold`, `mask`, `edge`, `grow`, `thin` and `flip` no longer apply to it. [probe: `fold` stopped mirroring a disc once the disc was routed from a `kick` lane]
 
@@ -89,7 +89,7 @@ Notation: *a* = amount 0–9 (`x` = 9); *w*×*h* = live frame; *(px,py)* = posit
 |---|---|---|---|---|---|
 | 0 | **echo** | Lays `s_prev` back down, each tone reduced by *fall*. Writes only where the result > 0 (`viz.c:428-444`) | fall = 1+(9−a)/3: a0 → 4, a1–3 → 3, a4–6 → 2, a7–9 → 1. A solid cell lasts 1/2/3/7 frames | – | – |
 | 1 | **move** | Shifts the whole frame n cells, wrapping (`viz.c:454-473`) | n = (a==9) ? 1 : (a+2)/3: a0 → 0 (no-op), a1–3 → 1, a4–6 → 2, a7–8 → 3, **a9/x → 1** | u up, d down (default), l left, r right | – |
-| 2 | **spin** | Rotates by quarter turns, resampled to fit the non-square frame (`viz.c:704-727`) | turns = a/3: a0–2 none, a3–5 90° clockwise, a6–8 180°, a9 270° clockwise (= 90° counter-clockwise) | – | – |
+| 2 | **spin** | **A rate** (2026-09-29): each step adds a × 10° to a running angle (`draw_spin`), and the pictures that draw this step — noise, disc, box, turn, ramp, grid — are turned by it before the rest of the chain sees them (`turn_sources`); the history `echo` keeps is not turned | a0 holds the angle; a3 is 30° a step, a full turn in 12 steps; a9 is 90° a step | – | – |
 | 3 | **warp** | Slides each column vertically (u/d) or each row horizontally (l/r) by a triangle wave of period 16 cells. Phase is (index + tick) mod 16 (`viz.c:482-507`) | peak shift = ⌊4a/9⌋: a0–2 → 0 (no visible effect), a3–4 → 1, a5–6 → 2, a7–8 → 3, a9 → 4 | **axis only: u ≡ d, l ≡ r** [probe] | – |
 | 4 | **noise** | Writes w·h·a/9 random cells, with replacement (≈63% of cells at a9), as sparkles: 50% speck, 25% star4, 12.5% star8, 12.5% burst (`viz.c:512-529`) | a0 → nothing | – | – |
 | 5 | **disc** | Round field: solid to ⅔r, then tones fading to 1 at the rim (`viz.c:538-563`, `ink_field` `410-419`) | r = a·min(w/2,h)/9. r ≤ 1 → one glyph 147 (so **disc 0 draws a dot**). At 28×4, a0–4 all draw that same glyph; at 58×10, r = 0,1,2,3,4,5,6,7,8,10 | – | yes |
@@ -169,7 +169,7 @@ A picture of more than 1,083 characters overflows the buffer, for example a 60×
 | `>send view` | shows `view is on, <mode>` / `view is off` |
 | `>send` | lists destinations; this one's help text is cut to 25 characters: `the picture to an HDMI no` (`view.c:36`, `builtins.c:2071`) |
 
-Other replies: `view on, <mode>`, `view off`, usage `send view on|off|80x30|mode` and the six modes.
+Other replies: `view on, <mode>`, `view off`, usage `send view on|off|80x30|mode` and the seven modes.
 
 **Capability.** `send` needs `CMD_CAP_SYSTEM` (`builtins.c:2313`), so it is **refused from the boot document**, which runs as GUIDE (`cmd.c:23-24`, `main.c:315`): `send: not permitted here`.
 

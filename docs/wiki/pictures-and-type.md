@@ -238,7 +238,7 @@ from one frame a step; the images above are the mock-ups they were built from, a
 node follows them rather than matching them pixel for pixel. The poster's lines ride in
 a control frame ahead of each picture. The deck's own glyphs — the sparkles, the small
 disc, the arcs — are drawn as themselves over the dots, in its compact face
-([VIEW.md](../VIEW.md)). Measured: 2,097 frames and 0 refused through all six modes,
+([VIEW.md](../VIEW.md)). The seventh, `code`, came 2026-09-29: 167 frames and 0 refused through all seven, from `tools/view_demo.py`. Measured earlier: 2,097 frames and 0 refused through all six modes,
 driven from a computer. **Unverified:** the deck driving them end to end, and
 how any of it looks - the node reports frames, not pixels, and there is no camera here.
 Interpolation between steps is still to build.

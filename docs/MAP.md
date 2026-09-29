@@ -27,7 +27,7 @@ almost anything is useful — it is:
 
 If neither, it is refused, however good it is.
 
-**Thirty-four verbs `[FACT]`**, counted from the command table itself:
+**Thirty-seven verbs `[FACT]`**, counted from the command table itself:
 
 ```
     python3 - <<'EOF'
@@ -97,7 +97,7 @@ wrong. Teach the *binding* about the output.
 
 ## 2. The surface, as it stands `[FACT]`
 
-Thirty-four verbs, grouped by what they actually touch — and the names, which are not
+Thirty-seven verbs, grouped by what they actually touch — and the names, which are not
 verbs.
 
 ### Lanes — no verbs, one command, and the names are yours
@@ -451,7 +451,11 @@ argue against later:
    `edge` in, `star`, `shake` and `tile` out, same number either side. The names
    becoming definitions (§2) was the second, and it went from sixty-nine to
    thirty-six with nothing added; `guide` and `prose`, which did nothing, took it
-   to thirty-four.
+   to thirty-four. **Broken, knowingly, on 2026-09-29:** `toggle`, `clear` and `map`
+   came in at the owner's request — a switch for a block of lanes, a clean slate
+   that keeps the page, and MIDI learn — and deleted nothing: thirty-seven. The debt
+   is on record. `map` is nearly `solo` (it spares the pictures), and `toggle` could
+   be a second meaning of `mute`; merging either pays one back.
 6. **Every verb in one printed page**, because a performer cannot search.
 7. **No verb that exists only to work around another verb.**
 

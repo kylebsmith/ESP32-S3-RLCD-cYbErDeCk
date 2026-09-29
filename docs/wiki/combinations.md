@@ -21,7 +21,7 @@ A line is one of five things, and three things can run it
 | a verb that asks a password (`wifi host ssh`) | the prompt opens | `nothing here can ask` ✱ — the prompt does not exist yet | the prompt opens |
 | a password typed on the line | refused, and the line is cut | refused, **not cut** ✱ | refused, **not cut** ✱ |
 | a definition `>x = …` | defines; re-binds live lanes | defines | defines |
-| a lane `>kick x...` | compiles — or, if unchanged and playing, **mutes** (the re-run toggle) | compiles | compiles; never toggles |
+| a lane `>kick x...` | compiles — or, if unchanged and playing, **removes** it (the re-run) | compiles | compiles; never re-runs |
 | `>density high` | takes effect | overwritten by the editor's start ✱ | takes effect |
 
 ## 2. A mark, and another mark — the step grammar

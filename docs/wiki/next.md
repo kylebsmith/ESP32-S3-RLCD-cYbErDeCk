@@ -181,10 +181,10 @@ Two things to add for this round:
    tables. Tab cycles; Esc puts back what you typed; any other key keeps the word and
    does what it always does, so Enter still means a new line. The status bar shows the
    word's one-line help. There is no new verb and no cost on the clock's core.
-2. **The two open decisions** from 2026-09-26, the owner's to make: a gesture that
-   clears the lanes but keeps the page, and a *run-and-move-to-the-next-line* chord,
+2. **One open decision** from 2026-09-26, the owner's to make: a *run-and-move-to-the-next-line* chord,
    because a wrapped line run top to bottom is run twice today and the second run
-   silences it.
+   removes it. The other — a gesture that clears the lanes but keeps the page — is
+   `>clear` since 2026-09-29.
 3. **Euclid, `x(3,8)`** — the largest piece of Strudel's notation not yet here
    ([MAP.md](../MAP.md) §9.2). The objection on record is that `(3,8)` is a rhythm you
    cannot see. The playhead answers half of that, since it shows each hit as it falls.

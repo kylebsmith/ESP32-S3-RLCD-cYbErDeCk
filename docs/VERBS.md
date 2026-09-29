@@ -1,6 +1,6 @@
 # Every verb, on one page
 
-*The whole language. Thirty-four verbs, counted from the command table itself —
+*The whole language. Thirty-seven verbs, counted from the command table itself —
 if this page and the firmware disagree, the firmware is right and this page is
 stale. [MAP.md](MAP.md) §0 has the snippet that counts them. The lane names are not
 verbs: they are yours, defined in the boot document.*
@@ -41,8 +41,8 @@ it. **Anything else is refused** — the bar says why and the character is boxed
 rather than played as a hit.
 
 `Ctrl+Enter` runs the line. `Enter` always makes a line. Run a line unchanged to
-mute that lane; run it again to bring it back. Type a lane's name alone to delete
-it.
+take that lane out; run it again to bring it back. Type a lane's name alone to delete
+it. Inside `< >`, words of one length take turns whole: `<000 777>`.
 
 ---
 
@@ -173,6 +173,16 @@ routes draws in table order, whatever order the lines were typed.
 
 `Ctrl-L` / `Ctrl-J` walk documents. `Ctrl-O` returns from output. `Ctrl-G` the guide.
 
+## Playing live — 3
+
+| | |
+|---|---|
+| `toggle kick hat` | a block off; the same line brings it back |
+| `clear` | every lane gone; the page stays |
+| `map cut` | only `cut` sends MIDI — learn it in the DAW, then `map` |
+
+`>bass = ch 5` sends the bass that is playing to another synth, same octave and gate.
+
 ## When something is wrong — 7
 
 | | |
@@ -191,8 +201,8 @@ routes draws in table order, whatever order the lines were typed.
 
 1. **A lane is a lane.** `>kick x...x...` and `>disc x...x...` differ only in
    where they go. Everything that works on one works on the other.
-2. **Run a line again to mute it.** The whole performance gesture. Type a name
-   alone to delete the lane.
+2. **Run a line again to take it out.** The whole performance gesture — once more
+   brings it back. Type a name alone to delete the lane.
 3. **`route` is the sidechain, generalised.** `>route disc kick` makes the circle
    fire *on* the kick. It chains: `kick → disc → grow`.
 4. **Rate is per lane.** `/2` on one line is half-time for that line only — which

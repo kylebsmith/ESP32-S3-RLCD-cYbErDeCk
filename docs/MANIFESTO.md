@@ -33,8 +33,10 @@ alternates. A performer under stage light reads shapes, not words.
 **Referential structures nest.** `[x[xx]]` is a group inside a group, to any depth.
 Nesting is the only mechanism for hierarchy, so there is one thing to learn.
 
-**Run a line again to mute it.** The whole performance gesture, and the only one.
-Type a name alone to delete the lane.
+**Run a line again to take it out; once more to bring it back.** The whole
+performance gesture. Type a name alone to delete the lane. To silence lanes and keep
+them, `>toggle` flips a block with one line (2026-09-29; it used to be the re-run
+that muted, and the owner could find no way to be rid of a lane).
 
 **Time is the hinge.** Everything else in this instrument is negotiable. The clock
 is not: 3 µs standard deviation on the local grid, and under 100 µs of phase between
@@ -63,7 +65,7 @@ typo that plays is the one they cannot hear.
   >name = note 36 what a name means - the names are yours
 ```
 
-Thirty-four verbs, all of them on [VERBS.md](VERBS.md). The lane names are not
+Thirty-seven verbs, all of them on [VERBS.md](VERBS.md). The lane names are not
 among them: they are definitions, and the boot document holds sixteen.
 
 ---

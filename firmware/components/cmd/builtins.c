@@ -691,8 +691,8 @@ cmd_status_t cmd_lane(cmd_ctx_t *ctx, const char *word, size_t n)
     /* A BARE NAME MEANS THE LANE IS GONE, not muted. Muting has a word -
      * '>mute kick' - and leaves the slot allocated, which is how a session once
      * filled every lane with names the document no longer mentioned. Re-running
-     * the same line still silences, because that is a performance gesture on a
-     * lane that is still part of the piece. */
+     * the same line removes it too, and once more brings it back (2026-09-29): the
+     * owner found no way to be rid of a lane while the re-run only muted. */
     if (pat[0] == '\0') {
         const bool had = seq_forget(name) == ESP_OK;
         snprintf(ctx->msg, sizeof ctx->msg, had ? "%s gone" : "no %s", name);

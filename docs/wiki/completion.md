@@ -21,7 +21,7 @@ Enter confirms.** Two findings shape it.
    ended. This one lasts until the next key, the status bar says it is on, and a second
    Enter adds the line. §8 keeps the alternative open.
 2. **It is for finding words, not for typing fast.** The first word of a line can be one
-   of 67 words: 34 verbs, 17 boot names and 16 pictures. They average 4.0 letters, so
+   of 67 words (at 34 verbs; 70 since `toggle`, `clear` and `map`): 34 verbs, 17 boot names and 16 pictures. They average 4.0 letters, so
    completion saves an expert about 1.3 keystrokes a word (32 %) at best, and 15 of the 67
    are too short to gain anything. What it gives a newcomer is larger: the deck lists its
    own vocabulary as you type, with a line of help for each word, and you can no longer
@@ -35,7 +35,7 @@ completion can be as precise as the grammar:
 
 | the cursor is in | Tab offers |
 |---|---|
-| the first word after `>` | the 34 verbs, the defined names (17 at boot, up to 32), the 16 pictures, and the addresses of live lanes (`disc:2`, `bass:vel`) |
+| the first word after `>` | the 37 verbs, the defined names (17 at boot, up to 32), the 16 pictures, and the addresses of live lanes (`disc:2`, `bass:vel`) |
 | a word after `name:` | the parts that name can take: `vel` for drums; `vel`, `oct` for voices; `x`, `y` for pictures; and `end` as a route source |
 | the word after `=` in a definition | `note voice cc knob pad` and the 16 pictures |
 | a verb's argument | its own words: `>send` → the destinations, then `on off`; `>sync` → `on off lead follow alone`; `>split`, `>usb` → `on off`; `>open`, `>dump`, `>run` → document names; `>route`, `>mute`, `>solo` → lane addresses (and for a route's source, inputs and `name:end`); `>scale` → after the root, the eleven modes; `>kbd`, `>wifi`, `>ssh` → `forget`; `>flash` → `now`; `>density` → `low high`; `>jitter` → `reset`; `>osc` → `in` |

@@ -3,7 +3,10 @@
 *A reference for the whole instrument: every verb, every character of the language, every
 picture, key, output and document. It also covers how each of them combines with the
 rest, what the code does that the words around it do not, and what to build next. Written
-2026-09-28 from the source at commit `85d1e6a`, plus the swing fix of the same day.*
+2026-09-28 from the source at commit `85d1e6a`, plus the swing fix of the same day.
+Updated 2026-09-29: `toggle`, `clear`, `map`, the re-run that removes, words in `< >`,
+`>name = ch`, spin as a rate, the seventh view, and three findings on the deck
+([errata.md](errata.md) 15–17).*
 
 The deck is a handheld live-coding instrument. You type a line, press Ctrl+Enter, and on
 the next sixteenth note the line is playing: a drum on a MIDI channel, a controller on a
@@ -32,7 +35,7 @@ cites `file:line`. Three marks say how a claim was checked:
 | page | what it covers | the one thing to know |
 |---|---|---|
 | [language.md](language.md) | how a line becomes a lane: every character of a step, groups, stacks, alternation, ties, odds, rates, counts; names, addresses, routes, inputs; what each kind of lane sends; every limit and every refusal, word for word | a digit means "how much", and what "how much" means depends on what the lane is bound to |
-| [verbs.md](verbs.md) | the dispatcher, all 34 verbs in table order — forms, checks, what each prints, what each changes — and a table of which may run from `boot`, which write flash, reboot or use the radio | `boot` and `>run` run as the guide: no SYSTEM verbs, and no password prompt at boot |
+| [verbs.md](verbs.md) | the dispatcher, all 37 verbs in table order — forms, checks, what each prints, what each changes — and a table of which may run from `boot`, which write flash, reboot or use the radio | `boot` and `>run` run as the guide: no SYSTEM verbs, and no password prompt at boot |
 | [combinations.md](combinations.md) | **how every part meets every other**: a line and who runs it, a mark and a mark, a mark and a binding, lane and lane, lane and command, time and time, picture and picture, event and output, editing and playing | only `>new` clears lanes; a route makes a sidechain, and a route plus a count makes a cue |
 | [pictures.md](pictures.md) | the sixteen primitives amount by amount, the pipeline and how `route` changes it, positions, frame and pane sizes, `>frame`, the view node's wire | the frame is rebuilt from nothing each step, so `move`, `spin` and `warp` act only on what `echo` carried |
 | [editor.md](editor.md) | every key and chord, running a line, the status bar, cursor, playhead, wrapping, `+out`, the guide, the password prompt; the text grid, its faces and cache; the panel driver | Enter always inserts a new line; Ctrl+Enter runs the line |
@@ -75,7 +78,7 @@ cites `file:line`. Three marks say how a claim was checked:
 | | | |
 |---|---|---|
 | clock | 96 ticks a beat; a step is 24 ticks; 20–300 bpm | tick s.d. 4–5 µs, 6,175 of 6,175 within 100 µs with pictures running |
-| language | 34 verbs, 16 lanes, 64 slots a cycle, 4 brackets deep, 160 leaves, 96 hits a lane | 32 names, 16 inputs, rates 1–32, counts 1–255, swing 50–75 % |
+| language | 37 verbs, 16 lanes, 64 slots a cycle, 4 brackets deep, 160 leaves, 96 hits a lane | 32 names, 16 inputs, rates 1–32, counts 1–255, swing 50–75 % |
 | pictures | 16 primitives, a frame of at most 60 × 24 cells | about 0.6 ms a frame for seven lanes; about 4 % of core 0 in the heaviest scene |
 | screen | 400 × 300, one bit, reflective; the editor's grid is 30 × 12 or 60 × 24 | a cell costs 3.8 µs to draw; a full frame 4.75 ms to push |
 | documents | 8 buffers, 24 named in the journal, 128 undo steps | a journal write stalls both cores 13–18.6 ms |

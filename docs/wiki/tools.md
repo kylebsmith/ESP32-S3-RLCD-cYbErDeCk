@@ -80,7 +80,7 @@ Most include the **shipping** header, or `#include` the shipping `.c`, rather th
 | zine_art.c | Links viz.c, plays scripted scenes, writes `.cells` frames for zine.py and cmf.py | manual compile |
 | mock_pictures.py / mock_frames.c | The picture mock-ups in `wiki/pictures-and-type.md`, drawn by viz.c and by a square-dot copy of it: dots, banding, the screens, the motion GIF, and each screen's truth and sparkle; needs a C compiler, Pillow and numpy | manual |
 | mock_view.py | The view node's proposed modes (plain, scan, phosphor, feedback, riso, poster) from the engine's real frames, still and moving; needs a C compiler, Pillow and numpy | manual |
-| view_demo.py | Drives a real view node with no deck: the engine's own frames, packed as the deck packs them, through all six modes (`--mode` for one); needs a C compiler and pyserial | manual |
+| view_demo.py | Drives a real view node with no deck: the engine's own frames, packed as the deck packs them, through all seven modes (`--mode` for one); needs a C compiler and pyserial | manual |
 | mock_type.py | The type proposal sheet, from the deck's own faces | manual |
 | type_programme.py | Letters drawn from the superellipse rule: two drafts, set aside for breaking letters | manual |
 | type_round.py | The round face, laid by hand, and `check()`: pieces, corner contacts, strays, spurs, necks, gap ink; exits non-zero on any failure | manual |
@@ -124,7 +124,7 @@ Most include the **shipping** header, or `#include` the shipping `.c`, rather th
 | SUBSTRATE.md | The conceptual core: one data structure (a rectangle of characters), buffer kinds, addressing |
 | TESTING.md | On-device test pass: numbered steps with expected results, drivable over the serial cable |
 | THESIS.md | Running note of decisions made for legibility, for the paper |
-| VERBS.md | All 34 verbs on one page (clock 6, connecting 7, looking 6, documents 8, when-wrong 7) |
+| VERBS.md | All 37 verbs on one page (clock 6, connecting 7, looking 6, documents 8, when-wrong 7, playing live 3) |
 | VIEW.md | RP2040 DVI HDMI view node: size, DKV1 wire format, transport (console relay today), measurements |
 | img/ | 23 PNGs: enclosure and case renders, CMF specimens, graphics mosaic |
 

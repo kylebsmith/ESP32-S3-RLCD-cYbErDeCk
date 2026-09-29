@@ -33,7 +33,7 @@ Source is the truth; this page quotes it. Surprises and disagreements are in
 - A line runs only if its first non-blank character is `>`; `>` followed by nothing or `#` is a no-op (`cmd.c:229-245`).
 - The first word ends at space, tab or `=` (`cmd.c:110-118`). The rest, leading blanks stripped, is `arg`: one unparsed string. **Trailing blanks are kept** (`cmd.c:247-254`); the editor does not trim them (`editor.c:922-941`).
 - `=` decides first: if `arg` starts with `=`, the line is a definition even when the word is a verb (`cmd.c:256-260`, `290-295`). `>conga=note 63` works (`cmd.c:108-109`).
-- Else an exact verb runs (`cmd.c:262-285`); 34 verbs (`builtins.c:2308-2343`).
+- Else an exact verb runs (`cmd.c:262-285`); 37 verbs (`builtins.c:2308-2343` at `85d1e6a`, 34 then; `toggle`, `clear` and `map` since 2026-09-29).
 - Else, if the word's base (up to `:`, at most 8 chars) is a defined name or a picture, the line goes to `cmd_lane` (`cmd.c:290-295`; `builtins.c:499-512`). Definitions and lanes need `CMD_CAP_EDIT` (`cmd.c:287-293`); otherwise `"%.*s: not permitted here"`.
 - Else the old-spelling hints (`cmd.c:179-212`): `"%.*s[%.*s] is %.*s:%.*s now"` (`disc[x]`), `"%.*s is %.*s:%.*s now"` (`disc2`), `"cc is a kind now: >fx = cc 74"`, `"%.*s is gone: > marks a line"` (guide/prose), else `"%.*s? try: help"`. A base longer than 8 is never "known", so a 9-letter lane word gets `"…? try: help"`, not the length message (`builtins.c:503-509`).
 - Line length: the editor reads at most 127 chars of the current line (`editor.c:1040-1041`, `922-941`); `>run` and the boot document split lines longer than 127 into chunks (`builtins.c:113-131`, `main.c:307-319`).
@@ -69,6 +69,7 @@ head character plus what is attached to it (`seq_pattern.h:12-43`).
 - **`[ab]` group**: occupies one step (or one share of its parent) and divides it equally among its items (`seq_pattern.h:30`, `595-622`).
 - **`[a,b,c]` stack**: `,` separates members; every member spans the whole group and starts together (a chord). Members are sequences: `[02,45]` plays 0+4, then 2+5 (`tools/test_seq_pattern.c:190-201`) [sim].
 - **`<ab>` alternation**: every *item* is one alternative; spacing is optional (`<35>` ≡ `<3 5>`) [sim]. Alternative *j* of *k* plays when `(cycle / per) % k == j`, compiled as the class `cycle % (per·k) == ph + per·j` (`seq_pattern.h:502-531`). Nested alternation advances only when chosen: `<0 <1 2>>` → 0, 1, 0, 2 (`seq_pattern.h:49-51`) [sim].
+- **Words in `<>`** (2026-09-29, `seq_pattern_words`): two or more spaced words of one length *k* take *k* steps and are played whole, column by column — `.000.000.000.<000 777>` is sixteen steps, and the last three are `000` one cycle and `777` the next. Words of different lengths are refused, boxed at the word: `"words in < > need one length"`. One word, or words of one step, alternate step by step as before (`<35>` ≡ `<3 5>`), so nothing written earlier reads differently; the Strudel corpus and every piece were checked. `tools/test_seq_pattern.c` §10b. The owner asked for it: `<000 777>` "was sequentially moving through those instead of picking either or".
 - **`,` inside `<>`** stacks alternations: `<0 1, 4 5 6>` plays one of each at once, period 6 [sim] (`seq_pattern.h:356-384`, `491-533`). Not in the header's list.
 - `,` outside brackets → COMMA (`seq_pattern.h:291-293`). Empty group or member (`[]`, `<>`, `[ ]`, `[x,]`, `[x,,x]`) → EMPTY_GROUP (`seq_pattern.h:307-335`) [sim].
 - A group or alternation can take `%NN`; it multiplies into everything inside (§2.9).
@@ -210,6 +211,7 @@ A lowercase letter, then lowercase letters or digits, at most 8 (`LANE_BASE_MAX`
 >name =                            remove the name
 ```
 
+- **Moving a sound: `>name = ch C [gate G]`** (2026-09-29, `lane_def_shift`). A definition that starts with `ch` or `gate` keeps everything else the name had: `>bass = ch 5` sends the bass that is playing to channel 5, same octave, same gate — Bass2 in the DAW — and replies with the whole definition, `bass = voice 2 ch 5 gate 110`. A name that is not a sound: `"%.8s: no sound to move"`. `tools/test_lane_name.c`.
 - `ch` 1–16 and `gate` 1–5000 ms, in any order, repeatable (last wins) [sim] (`lane_name.h:240-257`). `gate` is not accepted on `cc` (`lane_name.h:248`).
 - **Defaults:** note → ch 10, gate 40 ms; voice → ch 1, gate 150 ms; cc → ch 1 (`lane_name.h:218-233`).
 - Kind words are exact lowercase. Words are cut to 15 characters (`lane_name.h:224`, `193-203`).
@@ -309,7 +311,7 @@ Pictures are not definitions: 16 answer to their own names — `echo move spin w
 2. `binding_of` → its error (§5).
 3. Lane name := canonical address.
 4. Empty `arg` → remove (§6.4): `"%s gone"` or `"no %s"`.
-5. Re-run toggle (§6.3) → mute: `"%s silent"`.
+5. Re-run (§6.3) → the lane is removed: `"%s off - again for on"`.
 6. Direction check (§2.5).
 7. `seq_lane_bind` — creates the lane if new; no free lane → `"%d lanes is all there is."` + `"free one: type its name alone"` (`builtins.c:646-652`, `725-727`).
 8. `seq_lane` compile → refusal message, boxed (`builtins.c:653-657`, `728-731`).
@@ -326,9 +328,9 @@ Pictures are not definitions: 16 answer to their own names — `echo move spin w
 - Then `dir` (default `d`), the text as typed (≤ 99 chars kept, `seq.h:124-127`), `src` = FNV-1a hash of the whole argument (`seq.c:1336-1345`; `seq_pattern.h:882-906`), rerank.
 - 16 lanes (`seq.h:32-39`). A new lane starts at ch 10, level 100, gate 40 before binding (`seq.c:1129-1138`); `seq_lane_bind` uses gate 40 when the binding gives 0 (`seq.c:1406`).
 
-### 6.3 The re-run toggle (`builtins.c:594-636`, `695-699`)
+### 6.3 The re-run removes (`rerun_silences`, 2026-09-29)
 
-Ctrl+Enter **mutes** instead of compiling iff all hold:
+Ctrl+Enter **removes the lane** instead of compiling iff all hold:
 
 1. The caller is the owner's hands (`CMD_BY_HANDS`; the editor's run key, `editor.c:1061`) — never the boot document, `>run`, or an agent.
 2. The transport is running.
@@ -336,7 +338,9 @@ Ctrl+Enter **mutes** instead of compiling iff all hold:
 4. It is not muted.
 5. Its `src` equals the FNV-1a hash of `arg` — byte for byte, spacing, direction, trailers and trailing blanks included.
 
-Otherwise the line compiles and (step 9) unmutes, so the same press is self-inverse. Lanes created by `>route` have `src = 0` and never toggle (`seq.c:1443-1444`).
+Then the lane is forgotten (§6.4) and the status says `"%s off - again for on"`: the same line once more compiles it afresh, from its next slot. Otherwise the line compiles and (step 9) unmutes. Lanes created by `>route` have `src = 0` and never re-run (`seq.c:1443-1444`).
+
+**Why it changed.** Until 2026-09-29 the re-run muted and kept the slot. The owner, playing: "there is not concrete way to eliminate lanes". A muted lane still held one of sixteen, and nothing on the page said so. To silence a lane and keep it, there are four words now: `>mute`, `>solo`, `>toggle` (a block, and the same line brings it back) and `>map` (all but one, for MIDI learn); `>clear` drops them all and keeps the page ([verbs.md](verbs.md) §2.24–2.28).
 
 ### 6.4 Removing a lane
 

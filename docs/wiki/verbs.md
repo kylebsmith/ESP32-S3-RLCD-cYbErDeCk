@@ -1,12 +1,14 @@
 # The verbs — every command, from the source
 
 *Part of [the deck, top to bottom](README.md). Snapshot: commit `85d1e6a`, 2026-09-28.
-Surprises and disagreements are in [errata.md](errata.md).*
+Surprises and disagreements are in [errata.md](errata.md). Updated 2026-09-29 for
+`toggle`, `clear`, `map`, the re-run that removes, and `>name = ch`: those parts cite
+functions by name, since the line numbers moved.*
 
 Firmware at `85d1e6a` (branch `claude/pieces-and-satellites`). The source is the truth;
 `docs/` is secondary, and where the two disagree it is listed in §4.
 
-**34 verbs**: the table `s_builtins[]`, `builtins.c:2308-2343`, registered once by
+**37 verbs**: the table `s_builtins[]`, `builtins.c:2308-2343`, registered once by
 `cmd_init()` (`builtins.c:2347-2350`). The count checks out against the snippet in
 `docs/MAP.md:32-37`. Two more command functions are compiled but **not in the table**,
 so they cannot be reached: `c_out` (`builtins.c:383-393`) and `c_usbtest`
@@ -118,12 +120,12 @@ A verb is refused if **any** of its bits is missing from the caller's set (`cmd.
 The check applies to the whole verb, so read-only forms of SYSTEM verbs (a bare `>send`,
 `>kbd`, `>usb` or `>din`) are also refused to `boot` and `>run`.
 
-The 34 verbs by class:
+The 37 verbs by class:
 
 | class | verbs |
 |---|---|
 | READ (7) | battery, dump, lanes, jitter, help, list, open |
-| EDIT (15) | bpm, scale, swing, sync, split, route, play, stop, panic, mute, solo, new, run, close, density |
+| EDIT (18) | bpm, scale, swing, sync, split, route, play, stop, panic, mute, solo, toggle, clear, map, new, run, close, density |
 | EDIT and STORE (1) | name |
 | STORE (1) | save |
 | NET (5) | wifi, host, osc, ssh, frame |
@@ -245,9 +247,11 @@ Refusals and results:
   - `"a voice has :vel and :oct"`, `"a drum has :vel"`, `"%s has no parts"`
 - **A bare name deletes the lane**: status `"%s gone"`, or `"no %s"` if there was none
   (`builtins.c:690-694`).
-- **Re-run toggle** (`builtins.c:594-636`). If the caller is `BY_HANDS`, the transport is
-  running, the lane is not muted, and the pattern text is byte-for-byte what was last
-  compiled, the lane is muted instead of recompiled. Status `"%s silent"`.
+- **Re-run removes** (`rerun_silences`, since 2026-09-29). If the caller is `BY_HANDS`,
+  the transport is running, the lane is not muted, and the pattern text is byte-for-byte
+  what was last compiled, the lane is **removed** (`seq_forget`) instead of recompiled.
+  Status `"%s off - again for on"`: the same line once more compiles it afresh. It used
+  to mute and keep the slot.
 - A direction (`u d l r`) on anything except move, warp, ramp or turn is refused and
   boxed: `"u d l r: move warp ramp turn"` (`builtins.c:700-724`).
 - No free lane (16 in total, `seq.h:39`): `"16 lanes is all there is."` and
@@ -966,7 +970,7 @@ loop saves the current document (`main.c:964-974`, `main.c:984-1002`).
 
 | column | content |
 |---|---|
-| 1 | `-` if the lane is muted (by hand, or by the re-run toggle — but not if it finished its count), otherwise a space |
+| 1 | `-` if the lane is muted (by `mute`, `solo`, `toggle` or `map` — but not if it finished its count), otherwise a space |
 | 2 | the lane's canonical name, padded to 5 |
 | 3 | the pattern, exactly as typed |
 | 4 | `<- source`, if the lane is routed |
@@ -1047,9 +1051,9 @@ a message.
 `all on` when no names were given.
 
 **Interactions**
-- Running a lane line again always unmutes it: the re-run toggle can only silence a lane
-  that is not muted (`builtins.c:627`, `builtins.c:732`).
-- The re-run toggle sets the same mute flag, so `>mute` with no names also brings those
+- Running a muted lane's line again compiles it and unmutes it; only a playing,
+  unchanged line is removed by the re-run (§1.7).
+- `toggle` and `map` set the same mute flag, so `>mute` with no names also brings those
   lanes back.
 - A lane that finished its count is muted (`seq.c:653-657`). `>mute` or `>solo` with no
   names — or `>solo` naming that lane — unmutes it. It then plays another full count from
@@ -1057,7 +1061,41 @@ a message.
 - `>play` does not unmute lanes muted by hand.
 - Muting is not deleting: typing a lane's bare name frees its slot.
 
-### 2.26 `help` · READ · "list the commands" · `builtins.c:42-54`, `builtins.c:879-899`
+### 2.26 `toggle` · EDIT · "toggle kick hat - off, then on" · `c_toggle`
+
+**Forms**
+- `>toggle a b …` flips each named lane: one that plays goes silent, one that is silent
+  comes back. It keeps its slot, its pattern and its place in the bar, so **the line is
+  the switch** — run it for the drop, run it again for the return.
+- No names: `"toggle what? toggle kick hat"`, an error.
+
+**Names** are exact canonical lane names, as for `mute` (`lane_named`).
+
+**Status:** `"toggle: %d off, %d on"`; `"none of those is playing"` (an error) when no
+name matched.
+
+**In a piece** it is the block switch: `>toggle kick clap hat rim arp lead` erases the
+fast lanes for ORBITALS' eclipse, and the same line brings them back
+([pieces/README.md](../../pieces/README.md)).
+
+### 2.27 `clear` · EDIT · "every lane gone; the page stays" · `c_clear`
+
+`>clear` forgets every lane and picture (`seq_forget_all`, `viz_forget_all`) and keeps
+the document on screen — the clean slate `>new` gives, without a new page. Names and
+their definitions stay. Status `"%d lane%s gone"`. It answers the owner's open question
+of 2026-09-26 ([next.md](next.md) §2).
+
+### 2.28 `map` · EDIT · "map cut - only it sends, to learn" · `c_map`
+
+**For MIDI learn.** A DAW learns the next controller it hears; with a set playing it hears
+everything. `>map cut` mutes every lane that sends MIDI except the one named; move it,
+let the DAW learn it, and `>map` alone brings the rest back.
+
+- Pictures keep drawing: they send no MIDI. That is the one difference from `>solo cut`.
+- An unknown name: `"no lane called %s"`, an error, and nothing changes.
+- Status `"map: only %.12s - learn, then >map"`, or `"map off - all back on"`.
+
+### 2.29 `help` · READ · "list the commands" · `builtins.c:42-54`, `builtins.c:879-899`
 
 **Prints**
 - The 34 table rows, as `"%-8s %s"` (name, then help), in table order.
@@ -1067,7 +1105,7 @@ a message.
 
 **Status:** `"%d commands"`, which reads `34 commands`.
 
-### 2.27 `list` · READ · "list open buffers" · `builtins.c:56-73`
+### 2.30 `list` · READ · "list open buffers" · `builtins.c:56-73`
 
 **Prints** one line per resident buffer, from the 8 slots (`docstore.h:22`), as
 `"%c%d %-16s %5u%s"`:
@@ -1083,7 +1121,7 @@ Unnamed, empty slots are skipped unless one is the current buffer.
 
 **Note:** `>open <digit>` takes the slot index shown here.
 
-### 2.28 `new` · EDIT · "a fresh scratch buffer" · `builtins.c:283-300`
+### 2.31 `new` · EDIT · "a fresh scratch buffer" · `builtins.c:283-300`
 
 **Effects**
 - Claims a free slot for an unnamed scratch buffer and switches to it.
@@ -1096,7 +1134,7 @@ Unnamed, empty slots are skipped unless one is the current buffer.
 
 **Interaction:** only `new` clears lanes; `open`, `close` and `run` do not.
 
-### 2.29 `name` · EDIT + STORE · "file this buffer under a name" · `builtins.c:304-317`
+### 2.32 `name` · EDIT + STORE · "file this buffer under a name" · `builtins.c:304-317`
 
 **Form:** `>name <anything>`. The name is the whole rest of the line, spaces included.
 
@@ -1118,7 +1156,7 @@ Unnamed, empty slots are skipped unless one is the current buffer.
 - On the SD card the file is `/sdcard/<name>.txt`, with every character outside
   `[A-Za-z0-9_-]` replaced by `_` (`mirror_path.h:35-50`).
 
-### 2.30 `open` · READ · "switch to a named document" · `builtins.c:319-346`
+### 2.33 `open` · READ · "switch to a named document" · `builtins.c:319-346`
 
 **Forms**
 - **`>open <digit>…`**: only the **first character** is used, as a slot index 0–9, so
@@ -1134,7 +1172,7 @@ Unnamed, empty slots are skipped unless one is the current buffer.
   journal reloads it at the next boot (`journal.c:389`).
 - Lanes are not touched.
 
-### 2.31 `run` · EDIT · "run a document without leaving this one" · `builtins.c:91-149`
+### 2.34 `run` · EDIT · "run a document without leaving this one" · `builtins.c:91-149`
 
 **Forms**
 - `>run` runs the current document.
@@ -1165,7 +1203,7 @@ otherwise `"%d line%s ran"`.
 - An old-style `>wifi <ssid> <pass>` line is refused but **not cut from the document**;
   only the editor path cuts it (`editor.c:1064-1066`).
 
-### 2.32 `save` · STORE · "write this buffer now" · `builtins.c:348-367`
+### 2.35 `save` · STORE · "write this buffer now" · `builtins.c:348-367`
 
 **Effects**
 - If the current buffer's name starts with `+`, nothing is written: status
@@ -1180,7 +1218,7 @@ otherwise `"%d line%s ran"`.
 **Note:** `save` writes immediately, **even while playing**. Autosave deliberately waits
 for stop, because a journal write stalls the clock for 13–18.6 ms (`main.c:984-1002`).
 
-### 2.33 `close` · EDIT · "forget this buffer" · `builtins.c:369-377`
+### 2.36 `close` · EDIT · "forget this buffer" · `builtins.c:369-377`
 
 **Effects:** closes the **current** buffer; any argument is ignored. Its RAM is freed and
 the lowest-numbered remaining buffer becomes current. The journal keeps the last
@@ -1194,7 +1232,7 @@ snapshot.
   `main.c:997-998` says closing journals the document; it does not.
 - The closed document's lanes keep playing.
 
-### 2.34 `density` · EDIT · "low | high (use high to split)" · `builtins.c:401-438`
+### 2.37 `density` · EDIT · "low | high (use high to split)" · `builtins.c:401-438`
 
 **Form:** only the **first character** of the argument matters.
 - `h`, `d` or `6` selects **high**: the 6×12 font, 60 columns.
