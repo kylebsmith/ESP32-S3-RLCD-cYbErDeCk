@@ -14,7 +14,7 @@ synth, a circle on the screen. The clock has one of the chip's two cores to itse
 other job — the editor, the pictures, the radio — runs on the other core.
 
 ```
- keys ─► editor ─► a line ─► the dispatcher ─┬─► a verb         (34 of them)
+ keys ─► editor ─► a line ─► the dispatcher ─┬─► a verb         (37 of them)
  (BLE or cable)    (core 0)                  ├─► a definition   >kick = note 36
                                              └─► a lane         >kick x...x...
                                                    │ compiled once, on core 0
