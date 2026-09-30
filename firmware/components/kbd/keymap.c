@@ -29,7 +29,7 @@ static const pair_t k[] = {
  * On a compact keyboard like the Rii there is no separate number pad, so the
  * digits and punctuation on the Fn layer are sent as KEYPAD usages rather than
  * the main-row ones. The table above stops at 0x38, so those keys produced
- * nothing at all - which is why the owner reported that typing '.' required
+ * nothing at all - which is why I reported that typing '.' required
  * Fn and then did not work. The character is the same; only the usage code
  * differs, and a keypad key is never shifted. */
 static const char keypad[] = {

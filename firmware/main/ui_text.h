@@ -8,7 +8,7 @@
  * the half that says what to do.
  *
  * That is not hypothetical. "not a command - start the line with >" is 37
- * characters and rendered as "not a command - start the line". The owner hit
+ * characters and rendered as "not a command - start the line". I hit
  * it, could not tell why a line would not run, and had to work it out from
  * the text of the line itself. The comment in editor.c claimed this exact
  * failure had been fixed; what was fixed was the pixel renderer clipping
@@ -28,12 +28,12 @@
 #define UI_NOT_A_COMMAND "not a command - start with >"
 /* Enter does NOT run a line - it always inserts, so that a command can have
  * a line added after it. Ctrl+Enter runs. The old hint said "Enter runs a
- * line", which is the opposite of the truth, and an owner who believed it
+ * line", which is the opposite of the truth, and anyone who believed it
  * would split their guide in half instead of running anything. */
 #define UI_GUIDE_HINT    "guide: Ctrl+Enter runs a line"
 #define UI_NO_GUIDE      "no guide buffer"
 
-/* Shown when a command's output moves the view. The owner hit this exactly:
+/* Shown when a command's output moves the view. I hit this exactly:
  * ran a command, was moved somewhere else, and "had no idea how to get back" -
  * so they ran another command, which piled onto the same page. A rescue key
  * nobody is told about is not a design. */
@@ -44,7 +44,7 @@
  * The complaint about live coding environments is not that they are hard, it
  * is that they are hard ON PURPOSE - the syntax is a membrane, and getting
  * through it is treated as the point. This is the opposite choice: the first
- * thing the owner sees is a track that plays, and every line in it is one
+ * thing I see is a track that plays, and every line in it is one
  * they can edit while it is playing.
  *
  * Thirty columns, because that is the grid - and the check below proves it
@@ -52,15 +52,15 @@
 /* THE SETTINGS ARE A DOCUMENT, AND IT IS NOT A NEW CONCEPT.
  *
  * A document named 'boot' is RUN at startup, one line at a time, exactly as
- * if the owner had pressed Ctrl+Enter on each. So the settings file is a
+ * if I had pressed Ctrl+Enter on each. So the settings file is a
  * guide that happens to run by itself - no config format, no parser, no
  * second syntax, and nothing to learn that was not already true of every
  * other line on this device. Edit it like anything else; it takes effect next
  * boot.
  *
- * It runs with GUIDE authority, not the owner's, so it cannot reach the
+ * It runs with GUIDE authority, not my, so it cannot reach the
  * commands that change pairing, power or the USB mode. A settings file that
- * could put the deck into a state the owner then cannot type their way out of
+ * could put the deck into a state I then cannot type my way out of
  * would be the same trap this project has already fallen into twice. */
 /* THE NAMES OF THE LANES ARE LINES IN HERE (docs/MANIFESTO.md §3.8).
  *
@@ -103,8 +103,7 @@
     "# fewer wrapped lines\n"
 
 /* THE GUIDE SAYS WHICH GRAMMAR IT TEACHES. A guide lives in the journal and is
- * only rewritten by ensure_guide_buffer() when it is out of date - it is the
- * owner's menu, and firmware that overwrote it would destroy the thing the
+ * only rewritten by ensure_guide_buffer() when it is out of date - it is my menu, and firmware that overwrote it would destroy the thing the
  * design is for. So the last line is a version, and a guide without this one
  * gets the new text on top with the old kept underneath it.
  *
@@ -221,7 +220,7 @@
  * A DAW learns the next controller it hears, and with a set playing it hears
  * everything: run a line, and its block plays that cc alone for eight bars
  * (a count, so it stops itself) with every other MIDI lane muted by '>map'.
- * The owner, 2026-09-29: "its own persistent page like guide". */
+ * I said, 2026-09-29: "its own persistent page like guide". */
 #define MIDI_MARK "midi 2"
 
 /* "midi 2" adds the lead's and the arp's filters; "midi 1" exactly as the

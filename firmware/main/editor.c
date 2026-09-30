@@ -292,7 +292,7 @@ static void line_at(size_t from, char *out, size_t max);
  * - start the line with >" rendered as "not a command - start the line" and
  * lost the entire point of the sentence. That was "fixed" by moving the clip
  * into the snprintf below - which truncates just as silently, at exactly the
- * same column, and the owner hit it. Fixed messages now live in ui_text.h
+ * same column, and I hit it. Fixed messages now live in ui_text.h
  * behind _Static_assert. See the note at the top of that file. */
 #define STATUS_MAX TEXT_COLS
 
@@ -352,7 +352,7 @@ static void status_bar(void)
      * So during the exact window in which you were just teleported, nothing
      * on the screen said where you had landed.
      *
-     * The owner hit this. They ran a command, were moved into '+out', tried to
+     * I hit this. I ran a command, was moved into '+out', tried to
      * run the lines they could see - which were command OUTPUT, formatted with
      * a line-number prefix - and got "not a command" with no explanation.
      *
@@ -381,7 +381,7 @@ static void status_bar(void)
  * where they are.
  *
  * AND A STEP IS A SPAN (docs/MANIFESTO.md §3.6): 'x%15' lights all four
- * characters, a chord lights from its first note to its last. The owner kept the
+ * characters, a chord lights from its first note to its last. I kept the
  * goal - you can always see what is sounding - and dropped the one-character
  * mechanism that was refusing chords. */
 static bool playhead_span(int line_off, const char *lbuf, int at, int len,
@@ -445,7 +445,7 @@ static bool playhead_span(int line_off, const char *lbuf, int at, int len,
  * cell the cursor sits inside the picture and there is no way to tell.
  *
  * THE PREVIEW HAS A BORDER, and it earns the cell it costs twice over. It marks
- * where the picture ends, which the owner asked for; and, because the border is
+ * where the picture ends, which I asked for; and, because the border is
  * drawn every frame across the pane's full height, the cells below a short
  * frame are written rather than left holding whatever the last layout put
  * there - which is what showed up as static junk in the bottom right. */
@@ -595,7 +595,7 @@ void editor_draw(void)
             }
             /* The playhead gets its OWN attribute rather than sharing the
              * cursor's solid block. Two solid blocks on a one-ink panel are
-             * two things that look identical, and the owner lost their cursor
+             * two things that look identical, and I lost my cursor
              * inside a running lane because of it. They are independent bits,
              * so a cursor sitting on the playhead shows as both.
              *
@@ -823,7 +823,7 @@ static void handle_ctrl(char c)
     }
     /* DOCUMENT SWITCHING WITHOUT A MODE.
      *
-     * The owner could not see what documents existed without '>list', which
+     * I could not see what documents existed without '>list', which
      * moved them somewhere else and left them stranded. Two keys walk the
      * open documents in place: no list to enter, no mode to leave, and the
      * status bar already names where you are. This is cmd-tab, not a file
@@ -1013,7 +1013,7 @@ static bool show_output(size_t from, const char *msg)
     /* SAY HOW TO GET BACK, AND SAY IT LAST.
      *
      * The command's own result is shown first, then the way out, so
-     * the owner reads the answer and then learns the exit. The owner
+     * I read the answer and then learn the exit. I
      * ran a command, was moved here, and "had no idea how to get
      * back" - so they ran another command, which piled onto the same
      * page. Ctrl-O was always the answer and nothing ever said so.
@@ -1162,8 +1162,7 @@ static void run_current_line(void)
     }
 
     /* A result of more than one line shows itself. Reporting "10 commands" at
-     * the bottom of the screen and leaving the actual answer somewhere the
-     * owner has to know to look for is not minimalism, it is hiding. */
+     * the bottom of the screen and leaving the actual answer somewhere I have to know to look for is not minimalism, it is hiding. */
     if (lines > 1 && show_output(out_was, msg)) {
         return;
     }

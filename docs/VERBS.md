@@ -119,7 +119,7 @@ and `echo` to trail them — `orbitals` opens with one:
 It used to read `>turn 2  >spin 1`, which never turned: spin's amount goes in quarter
 turns of three (`1` is none), and `spin` turns the history, not the step's own wedge,
 so under a real spin the fresh wedge still lands in one place and a corner stands
-still. Corrected 2026-09-28, when the owner saw that corner on the HDMI screen.
+still. Corrected 2026-09-28, when I saw that corner on the HDMI screen.
 
 `star` used to be a verb. Its amount was a count of spokes — the only amount in
 this language that was not a magnitude — and nothing composed with it. `turn` is the

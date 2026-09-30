@@ -206,7 +206,7 @@ static void session(ssh_job_t *j)
     say(line);
 
     /* Resolve and connect. Everything below reports through the SAME buffer
-     * the output goes to, so a failure is visible where the owner is already
+     * the output goes to, so a failure is visible where I am already
      * looking rather than only in a log they may not have. */
     struct addrinfo hints = { .ai_family = AF_INET, .ai_socktype = SOCK_STREAM };
     struct addrinfo *res = NULL;

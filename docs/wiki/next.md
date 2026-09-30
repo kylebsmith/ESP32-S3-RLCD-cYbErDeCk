@@ -22,7 +22,7 @@ and then grows the ecosystem.
 4. **Pictures on square 4 × 4 dots, and type as a picture** (§4) — adopted only on a
    number from the deck.
 5. **The satellites and a direct link to the view node** (§5) — the hands and the
-   eye, on hardware the owner is building.
+   eye, on hardware I am building.
 
 ---
 
@@ -69,7 +69,7 @@ the caches of both cores. A journal write was measured at 13–18.6 ms, which is
 documents are not saved while playing (main.c:984-1002). USB MIDI is the native
 transport ([README](../../README.md)), so this runs on the default path.
 
-- **Measure first, per the owner's rule:** a `>jitter` capture across several minutes
+- **Measure first, per my rule:** a `>jitter` capture across several minutes
   of play in USB-MIDI mode. Look for a late tick at the 60-second marks.
 - **Then choose, because it is a real trade.** The record exists to diagnose a
   USB-MIDI hang, and a hang cured by unplugging leaves only what is in flash. Either
@@ -181,7 +181,7 @@ Two things to add for this round:
    tables. Tab cycles; Esc puts back what you typed; any other key keeps the word and
    does what it always does, so Enter still means a new line. The status bar shows the
    word's one-line help. There is no new verb and no cost on the clock's core.
-2. **One open decision** from 2026-09-26, the owner's to make: a *run-and-move-to-the-next-line* chord,
+2. **One open decision** from 2026-09-26, my to make: a *run-and-move-to-the-next-line* chord,
    because a wrapped line run top to bottom is run twice today and the second run
    removes it. The other — a gesture that clears the lanes but keeps the page — is
    `>clear` since 2026-09-29.
@@ -213,10 +213,10 @@ rectangle. The proposal:
 
 | | what | the deck side | status |
 |---|---|---|---|
-| **hands** | satellites: 4 encoders, 8 buttons, on the six-pin magnetic cable, CAN — and a destination too, so lanes can light their LEDs, as monome's grid decouples its lights from its keys | `>knob1 = knob`, `>pad1 = pad`, routes (exist) | briefed ([SATELLITES.md](../SATELLITES.md)); the owner builds |
+| **hands** | satellites: 4 encoders, 8 buttons, on the six-pin magnetic cable, CAN — and a destination too, so lanes can light their LEDs, as monome's grid decouples its lights from its keys | `>knob1 = knob`, `>pad1 = pad`, routes (exist) | briefed ([SATELLITES.md](../SATELLITES.md)); I build |
 | **eye** | the RP2040 view node on a direct USB tether, drawing the dots banded at its own resolution, with **frame interpolation as a switch**; later wireless — an RP2040 with an ESP32-S3 companion, or a faster link — joining the ensemble as a follower | the `view` destination (exists): each frame carries its tick | relayed through a laptop today ([VIEW.md](../VIEW.md)) |
 | **ears** | MIDI in: clock follow, notes and CCs as inputs | inputs exist; MIDI in needs an optocoupler | open ([NEXT.md](../NEXT.md) §2) |
-| **voice** | a sound node (ESP32-P4 or Teensy) | a destination like any other | the owner's hardware roadmap; sound stays off the S3 |
+| **voice** | a sound node (ESP32-P4 or Teensy) | a destination like any other | my hardware roadmap; sound stays off the S3 |
 | **friends** | laptops and phones over OSC; other decks over ESP-NOW | OSC in and out; `>sync` (exist) | done |
 | **memory** | documents as the exchange format: pieces, zines, sets | the SD mirror (exists) | a pieces library and zine #1 are open |
 

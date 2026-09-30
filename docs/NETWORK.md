@@ -103,7 +103,7 @@ data structure.
 An **exec channel** — `ssh host "command"`, output into a buffer — needs no
 emulator, produces text that is already the substrate, and is scrollable,
 searchable, undoable and pipeable by every mechanism the editor already has.
-It is also the shape of the owner's actual workflow: restart a service, read a
+It is also the shape of my actual workflow: restart a service, read a
 log, ask the agent on the Pi to fix something.
 
 Interactive shells are therefore **rejected, with the reason recorded**, not
@@ -124,7 +124,7 @@ has no `esp_wifi` in it at all.
 **Closing this costs one flash and about five minutes.** A probe exists that
 prints free internal heap at six stages — boot, after NimBLE, after
 `esp_wifi_init`, after `esp_wifi_start`, after NAPT, after session init. It
-overwrites the deck, so it is the owner's call.
+overwrites the deck, so it is my call.
 
 Until then: feasible on strong evidence, unproven on this board.
 
@@ -164,7 +164,7 @@ brief named was real, and there were three more.*
 
 **1. The password was a word of the line.** `>ssh user@host pass ls` put it in a
 document line, and a document is journalled, mirrored to the SD card and copied to
-the owner's DGX - ground rule 6. `>wifi <ssid> <pass>` and `>host deck 12345678`,
+my DGX - ground rule 6. `>wifi <ssid> <pass>` and `>host deck 12345678`,
 both taught by the guide, did the same. **Now no command takes a password on its
 line.** A command that needs one asks on the status line; the keys go to a buffer
 shown as stars (`firmware/main/ask.h`), are handed to the command on Enter and wiped
@@ -183,7 +183,7 @@ fingerprint into the deck before the first connection - is a ritual nobody would
 perform. The first connection is still taken on trust, so the deck prints the
 fingerprint exactly as `ssh-keygen -lf` prints it, with the key's type: libssh2's
 mbedTLS backend cannot use ed25519 host keys (*the four things* above), so it is
-the host's ECDSA or RSA key to compare. `>ssh forget <host>` is for a key the owner
+the host's ECDSA or RSA key to compare. `>ssh forget <host>` is for a key I
 changed. The format is checked against a real key's `ssh-keygen` output in
 `tools/test_ask.c`; **the check against a live server is unverified**.
 
@@ -200,8 +200,7 @@ turns a second; a closed port says `connection refused`.
 **4. The reply went to `+ssh`, which nothing ever showed.** It goes to `+out` now,
 shown when the session ends, and Ctrl-O comes back like any other command's output.
 
-**Against a real server, the same day, everything up to the login.** The deck on the
-owner's home network, and on the laptop an OpenSSH 9.9 server started unprivileged on
+**Against a real server, the same day, everything up to the login.** The deck on my home network, and on the laptop an OpenSSH 9.9 server started unprivileged on
 a spare port with a throwaway host key and a configuration under which no login can
 succeed — it admits only a user the laptop does not have, with no PAM and no keys. The
 deck sent a dummy password to be refused. Measured:
@@ -243,8 +242,7 @@ purpose expired. Now the build defines it, CI checks that it does, and the firmw
 warns at run time if the socket is ever blocking after the handshake.
 
 **Proposed, not built: key authentication.** The deck makes its own key pair,
-keeps the private half in NVS and shows the public half, which is not a secret; the
-owner adds it to `authorized_keys` once, and no password is typed at all. That is
+keeps the private half in NVS and shows the public half, which is not a secret; I add it to `authorized_keys` once, and no password is typed at all. That is
 the right end state for "control Claude Code on my laptop from the deck", and it
 needs a reachable sshd to test before it is worth building.
 
@@ -279,7 +277,7 @@ from another deck's network (*SSH, as built*) may be the same thing; that is
 unverified. **Also unverified:** how much longer a keyboard now takes to reconnect
 while Wi-Fi is on — no keyboard was here to time it.
 
-**From a laptop, on a home network** (the owner's, the same day): the deck joined it,
+**From a laptop, on a home network** (my, the same day): the deck joined it,
 listened, and a script on the laptop (`tools/osc_send.py`) moved `knob1`. A phone's
 fader values — 0, 0.25, 0.5, 1.0 — became 0, 32, 64 and 127 on the filter, a plain
 93 stayed 93, and a pad press played a kick exactly one step after a hat. But
@@ -659,8 +657,7 @@ Two things that came out of measuring rather than reasoning, both fixed:
 decision to be written here if the answer was no. It is no, for now, and the reason
 is the licence rather than the engineering: Link is GPLv2+ or commercial from
 Ableton, this repository is MIT, and taking the GPL makes the whole firmware GPL.
-That is a decision about the project that belongs to its owner, and this push did
-not make it on their behalf.
+That is my decision to make about the project, and I have not made it yet.
 
 **Nothing is lost by waiting**, which is what makes "not now" the right answer rather
 than a postponement:
@@ -677,7 +674,7 @@ than a postponement:
   Link replaces the transport under `seq_timebase()` and `seq_nudge_by()` and nothing
   above them changes. Nothing is stubbed to look like Link, and nothing should be.
 
-**What would reopen it:** the owner choosing GPLv2+ for the firmware, or a
+**What would reopen it:** me choosing GPLv2+ for the firmware, or a
 commercial licence from Ableton; or a performance that needs a phone or a laptop
 app that speaks only Link, which neither ESP-NOW nor MIDI clock reaches.
 

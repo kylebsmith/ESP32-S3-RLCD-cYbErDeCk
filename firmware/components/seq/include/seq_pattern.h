@@ -16,7 +16,7 @@
  * The rule used to be one character per step, "so the playhead can sit on the
  * character that is sounding". It was already broken - 'x%15' is four
  * characters for one step - and it was the rule used to refuse chords, note
- * length and per-step velocity. The owner decided it on 2026-09-25: keep the
+ * length and per-step velocity. I decided it on 2026-09-25: keep the
  * GOAL, drop the MECHANISM. A step is a head character and what is attached to
  * it, and the playhead lights the whole span.
  *
@@ -344,7 +344,7 @@ static inline int seq_pattern_measure_seq(const char *base, const char *p,
 /* WORDS IN AN ALTERNATION.
  *
  * '<0 7>' plays 0 one cycle and 7 the next, and '<ab>' has always been a or b.
- * The owner wrote '<000 777>' meaning the same thing a word at a time - three
+ * I wrote '<000 777>' meaning the same thing a word at a time - three
  * 0s one bar, three 7s the next - and heard 0 0 0 7 7 7 walked one per cycle,
  * because every character was its own choice (2026-09-29). So WHERE THE CHOICES
  * ARE SPACED, a word - a run of steps with no space in it - is one choice, and

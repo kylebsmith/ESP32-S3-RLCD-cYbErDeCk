@@ -16,7 +16,7 @@
  *  2. doc_save() refuses to journal a transient '+' buffer, but the caller
  *     went on to mirror it anyway, so command output - the contents of +out -
  *     was written to the card as though it were a document. docs/OS.md is
- *     explicit that machine-written buffers are not archived, and the owner's
+ *     explicit that machine-written buffers are not archived, and my
  *     reason is concrete: these files are copied to a DGX for semantic
  *     analysis, and a corpus salted with command transcripts is a corpus that
  *     has been quietly poisoned. The guard belongs in both places, because

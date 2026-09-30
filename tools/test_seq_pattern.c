@@ -271,7 +271,7 @@ int main(void)
 
     /* 10b. WORDS IN AN ALTERNATION (2026-09-29). Where the choices are spaced,
      *      a word is one choice, played whole, taking as many steps as it has.
-     *      The owner wrote '<000 777>' for "000 one bar, 777 the next" and heard
+     *      I wrote '<000 777>' for "000 one bar, 777 the next" and heard
      *      0 0 0 7 7 7 walked one a cycle, over a one-step group that also cut
      *      their sixteen-step line to fourteen. */
     render_is("<000 777>", 0, "000");

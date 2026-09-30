@@ -8,7 +8,7 @@
  * WHY THIS IS A FUNCTION AND NOT AN EXPRESSION. It was an expression, written
  * twice: once in editor_draw and once in editor_blink. The blink copy dropped
  * the playhead bit, so every time the cursor blinked on a cell the playhead
- * was passing through, THE BAR WAS ERASED FROM THAT CELL. The owner's report
+ * was passing through, THE BAR WAS ERASED FROM THAT CELL. My report
  * was "it's very easy to lose your cursor selection thing" while editing a
  * running lane - which is exactly and only the cell where the two meet.
  *

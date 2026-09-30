@@ -329,7 +329,7 @@ Consequences, derived from the code:
   - A new packet starts when the header changes (every 128 ms) or the packet would exceed `MTU−3` (minimum 5, maximum 64).
   - One notification per flush, which is one per drained tick. Data lengths follow §1.9.
 - `>jitter` prints `ble   %u msgs in %u packets (%u.%02ux)` once any packet has gone out (`builtins.c:1371-1377`).
-- **Measured.** There is no on-device figure for the granted interval or the packing ratio (`STATUS.md:128-129`). `docs/OS.md:371` lists "7.5 ms ±1.8" without a source. `blemidi.h:12` gives "round-trip around 19 ms".
+- **Measured.** There is no on-device figure for the granted interval or the packing ratio. `docs/OS.md:371` lists "7.5 ms ±1.8" without a source. `blemidi.h:12` gives "round-trip around 19 ms".
 - **Comment errors.**
   - `blemidi.c:263-266`: "a header, then up to five timestamped three-byte messages" in 20 B. 1 + 5×4 = 21, so only four fit.
   - `docs/COMMANDS.md:283-286` says `ble` is on at boot. It is not.

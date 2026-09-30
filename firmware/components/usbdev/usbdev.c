@@ -8,7 +8,7 @@
  * not force that trade: CDC-ACM costs 2 IN + 1 OUT and MIDI 1 IN + 1 OUT
  * against five IN TX FIFOs, so both fit and the console moves to CDC.
  *
- * WHY THE STATE MACHINE. If the composite fails to enumerate, the owner loses
+ * WHY THE STATE MACHINE. If the composite fails to enumerate, I lose
  * the console AND the serial keyboard on the same stroke; if the Bluetooth
  * keyboard also happens to be asleep, there is no way left to type '>flash'.
  * So the mode is ARMED for one boot at a time and confirms itself:
@@ -19,7 +19,7 @@
  *   ACTIVE  want=1, armed=0   a host mounted us, so it demonstrably works
  *
  * Confirmation is tud_mount_cb() - objective, instant, and requiring nothing
- * of the owner. There is deliberately no '>usb keep': a confirmation someone
+ * of me. There is deliberately no '>usb keep': a confirmation someone
  * has to type is a second thing that can be forgotten, on exactly the input
  * path this design assumes is unreliable.
  *
@@ -208,8 +208,7 @@ void usbdev_packing(uint32_t *m, uint32_t *p)
  *
  * On failure the key is erased and the write retried - an absent key reads as
  * the default, and for usb_want the default is OFF, which is the safe
- * direction. Every outcome is logged, because a silent failure here costs the
- * owner their console. */
+ * direction. Every outcome is logged, because a silent failure here costs me my console. */
 static void rtc_init_once(void)
 {
     if (s_try_magic != TRY_MAGIC) {
@@ -343,7 +342,7 @@ static void cdc_rx(int itf, cdcacm_event_t *event)
  *
  * Without this, taking the USB peripheral would mean 'idf.py flash' no longer
  * resets the chip - the USB-Serial-JTAG block's reset logic goes with the
- * PHY. '>flash now' would still work, but only if the owner can type, and the
+ * PHY. '>flash now' would still work, but only if I can type, and the
  * whole point of the rule is that flashing must never depend on that.
  *
  * NOT restarted from the callback: this runs on the TinyUSB task and the
@@ -535,7 +534,7 @@ static void usb_event(tinyusb_event_t *ev, void *arg)
      * An earlier version refused to treat this as confirmation, on the theory
      * that a device could enumerate and still carry no data. It can - but the
      * one time that happened it was this firmware hanging in a timer
-     * callback, not the CDC failing, and requiring the owner to TYPE within
+     * callback, not the CDC failing, and requiring me to TYPE within
      * eight seconds to confirm turned a rare path into the normal one. The
      * fix belongs where the bug was. */
     s_attached = true;

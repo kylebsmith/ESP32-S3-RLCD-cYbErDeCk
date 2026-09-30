@@ -28,7 +28,7 @@ cannot confirm it.*
 | **textgrid** | textgrid.c 417 · font12x24.c 2991 · font6x12.c 148 (both generated) · textgrid.h 113 · tgfont.h 44 · font6x12.h 37 · font12x24.h 6 | Character grid on the panel. Enforces cell height/origin-y multiple of 12, width/origin-x even (textgrid.c:53-62). Per-cell dirty bitmap; attributes `TG_INVERSE` cursor, `TG_UNDER` playhead, `TG_OVER` recognised command (textgrid.h:29-61). Draws from a pre-turned glyph cache (36 byte stores a cell) with a per-row fallback (textgrid.c:240-380). Faces 12×24 and 6×12, codes 32-155, 128-155 = tiles | `tg_set_layout/set_font/origin_x/y/cols/rows/cell_w/h/font_name/clear/put/puts/fill/puts_right/render/flush/invalidate/set_turned/draw_text_px/text_width_px` (textgrid.h:71-113); `tg_font_12x24`, `tg_font_6x12` (tgfont.h:41-44) | st7305 |
 | **kbd** | ble_kbd.c 1108 · keymap.c 52 · keymap.h 4 (private) · kbd.h 116 · serialkbd_map.h 100 | Initialises NimBLE and runs a HOGP keyboard central: directed reconnect to the NVS-remembered peer, else scan (ble_kbd.c:956-972). Passkey-entry MITM + SC bonding (ble_kbd.c:1082-1094). Boot-protocol reports, synthesised repeat 400/45 ms (ble_kbd.c:50-52), exit-suspend keep-alive, 60 s dead-link rebuild (ble_kbd.c:76). Scan duty cut to 30 ms/160 ms while Wi-Fi/ESP-NOW is on (ble_kbd.c:898-920). One 256-deep input queue for every key source (ble_kbd.c:1049). Pure serial byte→event mapper | `kbd_set_ble_hooks/init/poll/connected/share_radio/mods/forget_all/bond_count/inject/on_passkey/state_name`, `kbd_event_t` (kbd.h:19-116); `skb_feed` (serialkbd_map.h:47-98) | bt esp_timer nvs_flash esp_hw_support |
 | **blemidi** | blemidi.c 376 · blemidi.h 66 | BLE-MIDI 1.0 GATT peripheral on the same NimBLE host. **Off by default** — no advertising until `>send ble on` (blemidi.c:226-258). One notification per step with clock timestamps (blemidi.c:294-376); requests a 7.5 ms interval | `blemidi_register` (GATT hook), `blemidi_start` (sync hook), `set_enabled/enabled/send/flush/connected/packing` (blemidi.h:25-66) | bt esp_timer |
-| **dinmidi** | dinmidi.c 126 · dinmidi.h 53 | 31,250-baud MIDI out on UART1, on an owner-declared pin (`>din <gpio>`) (dinmidi.c:14-16,32-81). Byte counts from `midi_len.h`, drops 0xF9 (dinmidi.c:106-114) | `dinmidi_start/stop/pin/running/send/bytes` (dinmidi.h:40-53) | esp_driver_uart seq |
+| **dinmidi** | dinmidi.c 126 · dinmidi.h 53 | 31,250-baud MIDI out on UART1, on a declared pin (`>din <gpio>`) (dinmidi.c:14-16,32-81). Byte counts from `midi_len.h`, drops 0xF9 (dinmidi.c:106-114) | `dinmidi_start/stop/pin/running/send/bytes` (dinmidi.h:40-53) | esp_driver_uart seq |
 | **usbmux** | usbmux.c 50 · usbmux.h 56 | Owns the RTC_CNTL USB PHY mux bits; hands the PHY back to USB-Serial-JTAG (usbmux.c:30-40) | `usbmux_release_to_usj`, `usbmux_take_for_otg`, `usbmux_try_count/bump/clear` (usbmux.h:43-56; the try API is unused) | soc hal esp_hw_support |
 | **usbdev** | usbdev.c 580 · usbdev.h 55 | TinyUSB CDC-ACM + MIDI composite, VID 0x303A / PID 0x4001 (usbdev.c:90-137). USB-MIDI intent lives in RTC_NOINIT, so power loss clears it (usbdev.c:149-151); 3 tries max, 8 s trial timer (usbdev.c:85-91). Console moves to CDC (usbdev.c:548-559). The esptool DTR/RTS pattern reboots to the ROM loader (usbdev.c:384-432). Timer callbacks only set flags; `usbdev_poll()` does the work (usbdev.c:343-382) | `usbdev_boot/poll/mounted/midi_send/midi_flush/want/wanted/tries/packing/status` (usbdev.h:15-55) | kbd docstore usbmux esp_timer nvs_flash driver soc espressif__esp_tinyusb |
 | **seq** | seq.c 1640 · seq.h 572 · seq_pattern.h 908 · seq_clock.h 46 · seq_scale.h 121 · midi_len.h 59 | The sequencer. 16 lanes × 64 slots, ≤96 compiled events a lane (seq.h:39-127); bindings note/cc/viz; parts vel/oct; routes; OSC inputs. 96 PPQN clock on a grid-anchored one-shot esp_timer (seq.c:840-958). MIDI clock every 4th tick, SPP, 0xF9 step marker, swing, ensemble follow/adopt. ≤8 destinations drained by the `midi` task (seq.c:193-241). Self-measured clock and transport jitter (seq.h:520-547). Pure headers: pattern compiler, next-tick arithmetic, scales, MIDI lengths | seq.h:199-572 (lanes, bpm/play/stop, timebase/nudge/follow, inputs, `seq_dest_*`, stats, draw/param hooks) | esp_timer |
@@ -46,7 +46,7 @@ cannot confirm it.*
 | main.c 1026 | `app_main`: the boot sequence and main loop; the ble/usb/mon destinations; boot and guide documents; passkey screen; KEY button; autosave; heartbeat; render benchmarks | `app_main` (main.c:432), `kbd_on_passkey` (410), `editor_now_ms` (398) |
 | editor.c 1185 · editor.h 36 | The editor. Two densities: 12×24 gives 30 cols × 11 text rows + status; 6×12 gives 60 × 23 + status (editor.c:167-189). Bounded greedy wrap: 2048 lines, 6000 B window (editor.c:63-69). Status bar, playhead spans, viz split pane, Ctrl chords. Ctrl+Enter runs a line and Enter always inserts (editor.c:1135-1162). `+out` view; secret prompt | editor.h:8-36 |
 | ask.h 105 | Pure secret-prompt state: stars on screen, wiped on Enter and on Esc | `ask_start/feed/render/end/wipe` (ask.h:37-105) |
-| battery.c 176 · battery.h 31 | ADC1 one-shot on an owner-declared GPIO (NVS `bat_gpio`, `bat_div`); 18650 discharge curve; `>battery` scans the free channels | `battery_percent/mv/scan/use` (battery.h:21-31) |
+| battery.c 176 · battery.h 31 | ADC1 one-shot on a declared GPIO (NVS `bat_gpio`, `bat_div`); 18650 discharge curve; `>battery` scans the free channels | `battery_percent/mv/scan/use` (battery.h:21-31) |
 | cell_attr.h 33 | One composition of the cursor, playhead and command bits | `cell_attr()` (cell_attr.h:26-31) |
 | selftest.c 142 · selftest.h 5 | 4-stage journal power-cut test across resets. **Compiled in but disabled** (`DECK_JOURNAL_SELFTEST 0`, main.c:585) | `selftest_run/reset` |
 | serialkbd.c 77 · serialkbd.h 3 | Installs the USB-Serial-JTAG driver (RX 256 / TX 4000) and routes the console through it. Task `serialkbd` → `skb_feed` → `kbd_inject` | `serialkbd_init` |
@@ -84,7 +84,7 @@ cannot confirm it.*
 | 18 | Journal self-test skipped (`DECK_JOURNAL_SELFTEST 0`) | main.c:585-588 |
 | 19 | `sdmirror_init()` — mount `/sdcard`; a missing card is not fatal | main.c:589 |
 | 20 | `report_memory("after docstore")` | main.c:590 |
-| 21 | `ensure_guide_buffer()` — create the `guide`, or prepend new text above the owner's | main.c:592, 327-396 |
+| 21 | `ensure_guide_buffer()` — create the `guide`, or prepend new text above my | main.c:592, 327-396 |
 | 22 | `kbd_set_ble_hooks(blemidi_register, blemidi_start)`; `kbd_init()` — queue, `nimble_port_init`, security, GATT, `nimble_host` and `kbd_repeat` tasks | main.c:594-597; ble_kbd.c:1043-1108 |
 | 23 | KEY (GPIO18) as input with pull-up, 2 ms settle; if held → USB MIDI forced off | main.c:605-635 |
 | 24 | If this boot followed a crash and USB MIDI was wanted → clear the intent | main.c:656-660 |
@@ -221,8 +221,8 @@ The PSRAM malloc threshold is 4096 B; 32,768 B of internal RAM is reserved (sdkc
 
   | Figure | Source |
   |---|---|
-  | 212 KB internal free, 8.25 MB PSRAM free (2026-09-20, before Wi-Fi/SSH existed) | `STATUS.md:85` |
-  | Heartbeat sample `heap 199571` | `STATUS.md:345` |
+  | 212 KB internal free, 8.25 MB PSRAM free (2026-09-20, before Wi-Fi/SSH existed) | measured 2026-09-20 |
+  | Heartbeat sample `heap 199571` | measured 2026-09-20 |
   | ~98 KB internal free before Wi-Fi; 15–16.5 KB with the station up; 14.2 KB with the AP up (2026-09-25) | `docs/NETWORK.md:131-133` |
   | ~16 KB with the station up | ssh.c:39-40 |
 
@@ -278,14 +278,14 @@ Flash above 0x390000 (~12.4 MB) is unallocated.
 | Panel | SCK 11, MOSI 12, CS 40, DC 5, RST 41 | st7305.c:26-30 |
 | KEY button | GPIO18 | main.c:51 |
 | SD (1-bit) | CLK 38, CMD 21, D0 39 | sdmirror.c:41-43 |
-| Battery sense | Unknown; the owner declares it | battery.h:9-20 |
-| DIN MIDI | UART1 on an owner-declared pin | dinmidi.c:14 |
+| Battery sense | Unknown; I declare it | battery.h:9-20 |
+| DIN MIDI | UART1 on a declared pin | dinmidi.c:14 |
 
 The docs describe the vendor code as "SPI3_HOST @ 20 MHz" (docs/HARDWARE.md:61); the firmware runs SPI2 @ 24 MHz (st7305.c:32-33).
 
 ## 7. Flash and NVS writes that can happen while the transport runs
 
-Why it matters: a flash write disables the cache on both cores. `CONFIG_SPI_FLASH_AUTO_SUSPEND` is off (`sdkconfig:2483`), and the tick path runs from flash (`main.c:986-989`; `STATUS.md:391-392`). `docs/GRAPHICS.md:175-179` asks for this list. "Gated" means the write cannot happen while `seq_running()`.
+Why it matters: a flash write disables the cache on both cores. `CONFIG_SPI_FLASH_AUTO_SUSPEND` is off (`sdkconfig:2483`), and the tick path runs from flash (`main.c:986-989`). `docs/GRAPHICS.md:175-179` asks for this list. "Gated" means the write cannot happen while `seq_running()`.
 
 | # | writer (medium) | trigger | path | gated? |
 |---|---|---|---|---|

@@ -497,7 +497,7 @@ int main(void)
           "unrouted, marking order does not matter (%d == %d)",
           a_order, frame_ink());
 
-    /* 7. THE PANE. Two failures the owner saw, both invisible to a lookup test:
+    /* 7. THE PANE. Two failures I saw, both invisible to a lookup test:
      *    a side-by-side split on a thirty-column grid left twelve columns for
      *    the code and wrapped every pattern line, and a frame shorter than its
      *    pane left the cells underneath holding the last layout's glyphs.

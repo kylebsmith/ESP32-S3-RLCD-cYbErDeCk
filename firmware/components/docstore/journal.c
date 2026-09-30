@@ -80,7 +80,7 @@ static uint32_t s_seq;
  *
  * The journal used to keep a write cursor and wrap it to zero when it ran off
  * the end. That is live data loss: sector 0 holds whichever document was
- * written first, and on this device that is the guide - the owner's
+ * written first, and on this device that is the guide - my
  * live-coding preset file. Wrapping erased it to make room for a save of
  * something else, silently, at runtime, with no error anywhere.
  *
@@ -332,7 +332,7 @@ static void journal_scan(char *scratch, size_t scratch_len)
              * that merely cannot be listed. Losing the ability to open a
              * document is bad; overwriting it is unrecoverable. Claim the
              * sectors under a placeholder so find_free_run never returns
-             * them, and say so, loudly, because this is data the owner can
+             * them, and say so, loudly, because this is data I can
              * no longer reach. */
             live_claim("", off, rec_total(h.len, hsz) / SECTOR);
             ESP_LOGE(TAG, "archive full: '%s' is held but unreachable "
@@ -443,7 +443,7 @@ esp_err_t doc_save(void)
     const size_t start = find_free_run(want);
     if (start == (size_t)-1) {
         /* Genuinely full of LIVE documents. Report it; do not make room by
-         * erasing something the owner can still reach. */
+         * erasing something I can still reach. */
         ESP_LOGE(TAG, "journal full: %u of %u sectors hold live documents",
                  (unsigned)(doc_journal_used() / SECTOR),
                  (unsigned)s_nsectors);

@@ -8,7 +8,7 @@ necks. At 12 x 24 a face is made by hand, so this one is.
 
 HOW IT IS MADE. It starts from today's face (tools/font12x24_art.py, via the
 generated font) - clean, 2-pixel strokes, proven on the panel - and changes only
-what the owner asked for: rounder curves, n = 2.2 (2026-09-28). Every bowl, arch
+what I asked for: rounder curves, n = 2.2 (2026-09-28). Every bowl, arch
 and hook takes the same corner, three steps where today's takes two:
 
     today         round

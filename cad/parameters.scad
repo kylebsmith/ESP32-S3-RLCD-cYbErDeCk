@@ -150,7 +150,7 @@ batt_protrusion = board_w_standoff_end - board_w_battery_end;     // = 8.20
 board_w_measured = 92.70;  // [MEASURED] calipers on a real board
 board_h_measured = 69.10;  // [MEASURED] exact agreement with the drawing
 //  SIZED ON THE BOARD THAT EXISTS, not the drawing. board_w is Waveshare's
-//  92.50; the owner's board measures 92.70, so a pocket built on the drawing
+//  92.50; my board measures 92.70, so a pocket built on the drawing
 //  gave 0.400 mm per side in X, not the 0.500 it claimed. Both the datum and
 //  the tolerance now come off the larger of the two, and the clearance is
 //  raised to 0.60 because this is a part that has to SLIDE in past 11 mm of
@@ -355,7 +355,7 @@ mic_w_centre = -0.50;  // [VENDOR] mic body W 0 to -1.00
 batt_bay_w = 77.80;    // [VENDOR] holder body along U
 //  DISPUTED, AND THE CALIPERS WIN. A re-derivation from Waveshare's own STEP
 //  says the holder BODY is 21.10 along V (20.65 through the mid-body), and that
-//  22.10 is not a holder feature. The owner then measured a real board and
+//  22.10 is not a holder feature. I then measured a real board and
 //  confirmed the holder as drawn here. Both readings are kept because they may
 //  be measuring different things - body versus footprint including the skirt -
 //  and because 22.10 is the conservative value in BOTH roles it plays: it makes
@@ -854,7 +854,7 @@ kbd_eject_off_y  = 0.0;    // [DESIGN] centred on the bay's short axis
 // 3. FASTENERS AND FITS
 // ===========================================================================
 
-//  CHASSIS <-> BACK PLATE FASTENERS ARE M2, not M3. Changed on the owner's
+//  CHASSIS <-> BACK PLATE FASTENERS ARE M2, not M3. Changed on my
 //  instruction after handling the parts. It is also the better fit for the
 //  space: the flank strip either side of the board pocket is 8.35 mm and an M3
 //  boss at 7.4 mm very nearly filled it, where an M2 boss at 6.6 leaves room.
@@ -1772,7 +1772,7 @@ case_wall   = 3.60;   // [DESIGN] front and back. WAS 4.00. These two faces are
 
 //  ---- THE WALL IS UNIFORM, AND THAT IS WHY THE FASTENERS CAN GO ROUND -------
 //  v3 put the fasteners in two rectangular rails on the flanks. Two faults,
-//  and the owner named both: "the rectangular shapes where the holes are, plus
+//  and I named both: "the rectangular shapes where the holes are, plus
 //  the squircle-esque shape come together at this weird angle the geometry
 //  clashes ... the screw holes need to also attach all the way around."
 //

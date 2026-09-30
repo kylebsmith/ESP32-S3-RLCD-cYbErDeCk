@@ -1,6 +1,6 @@
 # Pictures and type — the redesign, discussed
 
-*Part of [the deck, top to bottom](README.md). 2026-09-28. A discussion for the owner, not a
+*Part of [the deck, top to bottom](README.md). 2026-09-28. A discussion for me, not a
 build. Every picture on this page was drawn by the deck's own picture engine
 (`firmware/components/viz/viz.c`); only the proposals are mocked, and each image says
 which part. `tools/mock_pictures.py` redraws them all.*
@@ -148,7 +148,7 @@ costs, and the clock never sees any of them.
 ![Bayer and five screens from print](../img/pictures-screens.png)
 
 **First try: the screens print used.** A dot that grows (halftone; poster is the same at
-twice the pitch), lines that thicken, the engraver's diagonals and hatching. The owner's
+twice the pitch), lines that thicken, the engraver's diagonals and hatching. My
 verdict, 2026-09-28: **Bayer is the best by a large margin.** The numbers agree. Blur the
 dots and the greys the engine meant alike, as the eye does at arm's length, and measure
 the difference. Bayer's is the smallest; every print screen is 1.4 to 8.6 times further
@@ -190,7 +190,7 @@ sparkle is. The radar is ORBITALS' as it is now written - four beams taking turn
 re-measured 2026-09-28; the first table was taken on the old one, whose corner never
 moved (§ The radar, below).*
 
-**Decided, 2026-09-28: Bayer.** The owner's words: Bayer is the best, and these
+**Decided, 2026-09-28: Bayer.** My words: Bayer is the best, and these
 variations are worse. None of ours is as true, and in a 4 × 4 cell none can be. The
 originality goes where there is room for it: the view node, next.
 
@@ -198,7 +198,7 @@ originality goes where there is room for it: the view node, next.
 
 ![The view node's five modes and three colour settings, drawn by its own code](../img/view-modes.png)
 
-**Rebuilt 2026-09-29: every pixel the deck's.** The owner found the first modes "blurred and mushed": the node spread each grey over its neighbours and dithered it again, and phosphor and feedback resampled the frame. Now each cell is the deck's own 6×12 tile at 2×2 a pixel, 53×20 cells to the screen, and colour is played on channel 16 ([VIEW.md](../VIEW.md)). What follows is the first design, kept for the record; the picture above is the node's code, not a mock-up.
+**Rebuilt 2026-09-29: every pixel the deck's.** I found the first modes "blurred and mushed": the node spread each grey over its neighbours and dithered it again, and phosphor and feedback resampled the frame. Now each cell is the deck's own 6×12 tile at 2×2 a pixel, 53×20 cells to the screen, and colour is played on channel 16 ([VIEW.md](../VIEW.md)). What follows is the first design, kept for the record; the picture above is the node's code, not a mock-up.
 
 The deck keeps Bayer and sends the node what it sends today: one frame a step, and the
 tick it belongs to. **Everything below happens on the node, so the deck pays nothing for
@@ -247,7 +247,7 @@ Interpolation between steps is still to build.
 
 ### The radar — why a corner stood still
 
-The owner, watching ORBITALS on the screen, 2026-09-28: one corner of the radar never
+Watching ORBITALS on the screen, 2026-09-28: one corner of the radar never
 moved, and it read as broken rather than as turning. It was `>turn 2` under
 `>spin <0 3 6 9>`. `spin` turns the history — what `echo` laid down from the last
 frame — and never this step's own source, so each fresh wedge landed in the same
@@ -267,7 +267,7 @@ They step anticlockwise because a `turn` fades clockwise from its leading edge, 
 trail falls behind its beam, and `echo 8` fades the trails where they were drawn. On the
 deck's engine no inked cell now stays the same over a bar.
 
-**`spin` turns what is drawn, not the whole frame** (2026-09-29). The owner: the spin
+**`spin` turns what is drawn, not the whole frame** (2026-09-29): the spin
 left "a set of static pixels" in every mode. It turned the finished frame round its
 centre, so whatever sat near the centre or in a corner the turn never reached stayed
 put. Now `spin` is a rate: each step adds its amount times ten degrees, and the
@@ -357,7 +357,7 @@ the classic confusions are answered by design.
   small letters only up to a point.
 - **The size is right.** The cap is 3.39 mm — about 23 arcminutes at 50 cm, the FAA's
   preferred 22–24.
-- **The zero keeps its dot, full width — the owner's call, 2026-09-28.** The research
+- **The zero keeps its dot, full width — my call, 2026-09-28.** The research
   leans the other way: on a dot-matrix display a round zero with a mark inside was misread
   as O, and a narrow plain zero halved the errors (Vartabedian 1969). Readers agreed most
   on a zero narrower than O (Wendt 1969), and the FAA's labelling rules say the same. The
@@ -436,7 +436,7 @@ the way round the curve. Pass 1 varied only n:
 - **The curves show when the same rule draws larger**: section lines at twice the size,
   and the view node, which can draw from the rule at whatever size its screen wants. A
   programme scales; a bitmap laid by hand can only be doubled.
-- **The owner chose n = 2.2**, the round one.
+- **I chose n = 2.2**, the round one.
 
 ![Pass 2: seven styles on n = 2.2](../img/type-variants.png)
 
@@ -460,7 +460,7 @@ Then seven styles on that base, each one idea. All seven were set aside with the
 
 None of it costs the deck anything to run: the deck keeps a bitmap, whatever drew it.
 
-**Set aside, 2026-09-28.** The owner's verdict on pass 2: none of it good enough. Letters
+**Set aside, 2026-09-28.** My verdict on pass 2: none of it good enough. Letters
 broken, blobs on the `>`, the `~` broken, the `f` broken in most styles, and most of it
 poorly designed. The programme assembled letters from pieces of curve that did not meet
 at the pixel. What replaced it is below.
@@ -509,7 +509,7 @@ panel yet, and the reading test still decides.
 
 ## 7. Around the table — what the best of the others would bring
 
-The owner's picture: the designers of the systems that matter, around one table, each
+My picture: the designers of the systems that matter, around one table, each
 laying down the one thing their system does best. Each idea below was checked against the
 system's own documentation or its designers' papers, 2026-09-28 (the sources are in
 [research.md](research.md) §4). The right-hand column says what it becomes on the deck.
@@ -541,7 +541,7 @@ system's own documentation or its designers' papers, 2026-09-28 (the sources are
 6. **Definitions with arguments** — Pd's abstractions. Only if the user tests ask; it is
    exactly the kind of depth ixi lang's author warns about.
 
-## 8. The owner's decisions
+## 8. My decisions
 
 **Decided, 2026-09-28:**
 

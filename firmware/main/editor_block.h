@@ -5,7 +5,7 @@
  * block. Ctrl+Enter runs the line and then every line of its block that starts
  * with '>', in order - so a section's heading, run, is the whole section: a
  * scene, one key. A '>toggle' in it lands on the next bar's one
- * (seq_toggle.h), so a scene of toggles lands together. The owner, 2026-09-29:
+ * (seq_toggle.h), so a scene of toggles lands together. I said, 2026-09-29:
  * "run code blocks maybe simply via tabs".
  *
  *   -- drop                 <- ctrl+enter here runs the two lines under it
@@ -103,7 +103,7 @@ static inline const char *block_command(const char *line)
     return (*line == '>') ? line : NULL;
 }
 
-/* RUN AGAIN, A BLOCK IS A SWITCH (2026-09-29, the owner: "code blocks should
+/* RUN AGAIN, A BLOCK IS A SWITCH (2026-09-29, me: "code blocks should
  * themselves be toggleable"). While the clock runs, a block whose every lane
  * line is exactly what its lane already plays takes those lanes out on the
  * next bar's one, and the run after that brings back the ones it took - so a

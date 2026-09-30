@@ -44,13 +44,13 @@ Every command declares what it touches; every caller declares who it is.
 
 | Caller | May reach |
 |---|---|
-| `HANDS` | everything — the owner is holding it |
-| `GUIDE` | READ, EDIT, STORE, NET — the owner, one step removed |
+| `HANDS` | everything — I am holding it |
+| `GUIDE` | READ, EDIT, STORE, NET — me, one step removed |
 | `AGENT` | READ, EDIT, STORE |
 
 The reason is the assistant. `docs/OS.md` demotes an LLM to "a filter in the
 table" — but a filter with access to the command table would otherwise hold
-**exactly the authority of the owner's hands**, including forgetting keyboard
+**exactly the authority of my hands**, including forgetting keyboard
 bonds and re-pointing the radio. Tagging the caller is what makes an on-device
 agent safe to add rather than something that has to be argued about later. It
 also un-forecloses it: without this the honest answer to "can the agent run
@@ -93,7 +93,7 @@ cursor. There is no separate command surface, because the buffer already is
 one. Consequences, all of them the point:
 
 - **A menu is a text file.** Adding a menu item costs typing a line.
-- **The owner writes their own interface**, not "customises" it.
+- **I write my own interface**, not "customises" it.
 - **Documentation is executable** — the example in the manual is the button.
 
 The deck writes a starter guide on first boot, because a device whose commands
@@ -106,7 +106,7 @@ itself require typing a name. That circle has to be broken by a gesture.
 
 ## The save model: scratch by default, save promotes `[JUDGEMENT]`
 
-Decided by the owner, and it is the right way round.
+Decided by me, and it is the right way round.
 
 **Every buffer is journalled and crash-safe from the first keystroke, named or
 not.** Naming a buffer is what files it in the archive; it is *not* what makes
@@ -298,7 +298,7 @@ because the radio is already up for the keyboard.
 
 ### `>flash` — the escape hatch, written before it is needed `[VERIFIED]`
 
-The rule on this project is that the owner is never asked to hold BOOT. Today
+The rule on this project is that I am never asked to hold BOOT. Today
 that holds because the ESP32-S3's USB-Serial-JTAG has reset logic in hardware
 and esptool drives it. **Any firmware that reconfigures the USB peripheral —
 a USB MIDI device, say — takes that hardware away.** So the software route to
@@ -309,7 +309,7 @@ Verified on hardware: `rst:0xc (RTC_SW_CPU_RST), boot:0x2 (DOWNLOAD(USB/UART0))`
 then flashed with `--before no_reset` — nothing in that path uses the
 USB-Serial-JTAG reset logic.
 
-**One property the owner has to know, found by testing rather than reading.**
+**One property I have to know, found by testing rather than reading.**
 `RTC_CNTL_OPTION1_REG` is in the RTC power domain and `esp_restart()` is a CPU
 reset, so the bit *survives*. The deck re-enters download mode on every
 subsequent reset until a full system reset clears it — which is what

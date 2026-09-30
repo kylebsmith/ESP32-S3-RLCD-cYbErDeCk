@@ -2,7 +2,7 @@
 
 *The language first, in as few words as it can be said. Then what is wrong with it,
 from two adversarial readings that were told to be harsh and given no power to change
-anything. §3 was left unimplemented on purpose until the owner had played it; the
+anything. §3 was left unimplemented on purpose until I had played it; the
 first decision against it was made on 2026-09-25, and each entry now says whether it
 is **decided**, with what was measured, or still **open**.*
 
@@ -36,7 +36,7 @@ Nesting is the only mechanism for hierarchy, so there is one thing to learn.
 **Run a line again to take it out; once more to bring it back.** The whole
 performance gesture. Type a name alone to delete the lane. To silence lanes and keep
 them, `>toggle` flips a block with one line (2026-09-29; it used to be the re-run
-that muted, and the owner could find no way to be rid of a lane).
+that muted, and I could find no way to be rid of a lane).
 
 **Time is the hinge.** Everything else in this instrument is negotiable. The clock
 is not: 3 µs standard deviation on the local grid, and under 100 µs of phase between
@@ -151,7 +151,7 @@ grammars are lexically disjoint.
 its position, `disc:2:x` the second one's; `disc:1` is `disc`, so one lane has one
 spelling. `[]` only groups. The old spellings are told their new ones rather than
 refused blankly — `>disc2` answers *disc2 is disc:2 now* — because the documents on
-the owner's boards use them. One thing nobody had noticed: `[` and `]` are pattern
+my boards use them. One thing nobody had noticed: `[` and `]` are pattern
 characters in an OSC address, so `disc[x]` had never been a valid `/deck/` path;
 `:` is.
 
@@ -185,7 +185,7 @@ refusals it justified are void.
 length and velocity together — or `%` goes. Half of each is the worst outcome and is
 the current state.*
 
-**Decided by the owner, 2026-09-25: a step is one character plus optional
+**Decided by me, 2026-09-25: a step is one character plus optional
 modifiers, and the playhead lights the whole span.** The evidence it was decided
 on: of the 258 mini-notation strings in Strudel's own example tunes, parsed by
 Strudel itself, 42 % put a modifier on a step and 23 % stack a chord. `x%15` now
@@ -219,7 +219,7 @@ largest single change available and the one most likely to be right.
 **Decided 2026-09-25 — done, as lines rather than a region.** A name is defined by a
 line like any other: `>kick = note 36`, `>bass = voice 2 ch 1 gate 180`,
 `>cut = cc 74`, `>circle = disc`. The boot document ships sixteen of them, and a
-boot document written before this gets them added at its top, the owner's lines
+boot document written before this gets them added at its top, my lines
 kept below. A *region* — a `:::table` fenced block — was the proposal, and it was
 not followed, for the reason the boot document itself gives: it is "a guide that
 happens to run by itself — no config format, no parser, no second syntax". A

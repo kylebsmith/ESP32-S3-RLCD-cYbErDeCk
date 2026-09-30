@@ -16,7 +16,7 @@
  * noise - which is what a system looks like when nobody has decided what the
  * operations are: a ninth shape buys one more picture and nothing else. The
  * second set fixed half of that, few sources through many operators, but the
- * sources stayed shapes, and the owner put a finger on exactly the right one:
+ * sources stayed shapes, and I put a finger on exactly the right one:
  * "star? wtf is that?" A star is not a primitive. It is one picture, its amount
  * is a COUNT OF SPOKES where every other amount in this language is a magnitude,
  * and nothing composes with it - grow makes it a blob, thin erases it, spin on a
@@ -663,7 +663,7 @@ static void draw_noise(int amt, char dir, uint32_t step)
 
 /* disc: THE ROUND FIELD - euclidean distance from the point, as a tone.
  *
- * The one the owner kept ("diss is fine"), and the only change is that it is now a
+ * The one I kept ("diss is fine"), and the only change is that it is now a
  * field rather than a fill: solid out to two thirds of the radius, falling to the
  * faintest tone at the rim. Alone it looks the same as it did. Through 'mask' it is
  * a disc at any size; through 'edge' it is a ring, which used to be its own name
@@ -838,7 +838,7 @@ static void draw_flip(int amt, char dir, uint32_t step)
  *
  * It used to turn the HISTORY by quarter turns, before the sources drew - so a
  * fresh wedge, a fresh disc, landed in the same place every step and only its
- * trail moved: a corner of the screen that never changed, which the owner saw on
+ * trail moved: a corner of the screen that never changed, which I saw on
  * every mode of the HDMI node and read, rightly, as broken (2026-09-28/29). No
  * amount fixed it: turning the trail leaves the source still, and turning
  * everything by one angle lands the source in one place again.
@@ -1026,8 +1026,8 @@ static void draw_edge(int amt, char dir, uint32_t step)
     }
 }
 
-/* One row per primitive, in the same order as s_names - so the name the owner
- * types and the code that runs cannot drift apart. */
+/* One row per primitive, in the same order as s_names - so the name I
+ * type and the code that runs cannot drift apart. */
 typedef void (*draw_fn)(int amt, char dir, uint32_t step);
 static const draw_fn s_draw[NGEN] = {
     draw_echo,  draw_move, draw_spin, draw_warp,

@@ -324,8 +324,7 @@ static void emit(uint8_t status, uint8_t d1, uint8_t d2)
         /* Make room by dropping the OLDEST NON-CLOCK event.
          *
          * The old code dropped whatever was at the head, which could be a
-         * 0xF8. A lost timing clock makes a DAW's tempo follower hunt - the
-         * owner reported Ableton going "wonky" with sync on - and a late note
+         * 0xF8. A lost timing clock makes a DAW's tempo follower hunt - I reported Ableton going "wonky" with sync on - and a late note
          * is a far smaller crime than a tempo that wobbles. Clock is the one
          * message whose VALUE is its regularity. */
         midi_ev_t drop;
@@ -933,8 +932,8 @@ static void tick(void *arg)
         s_await_ticks--;
     }
 
-    /* Dispatch deviation from the ideal grid. This is the number the owner
-     * is hearing when they say it feels jittery, and it is measured before
+    /* Dispatch deviation from the ideal grid. This is the number I
+     * am hearing when I say it feels jittery, and it is measured before
      * any note is emitted so the measurement cannot be blamed on the notes. */
     if (grid_get() == 0) {
         /* Anchor on the first tick after play, not on the press. The timer is

@@ -400,7 +400,7 @@ This is a real constraint honestly resolved, not a feature quietly dropped.
   keys only read one way up. Worse, mirroring the second window about the bay
   centreline moved the one that matters off the features it exists to reach.
   There is now one window, positioned from the keyboard's **top** edge against
-  measurements taken on the owner's unit: the slide switch starts 10.4 mm down
+  measurements taken on my unit: the slide switch starts 10.4 mm down
   and the USB-C receptacle 29.6 mm, and the window spans 8.2 to 41.8 mm. See
   [DATUMS.md C-22](DATUMS.md#corrections).
 - **Both microphone ports.** The board has a dual-mic array with echo

@@ -5,7 +5,7 @@ Surprises and disagreements are in [errata.md](errata.md). Updated 2026-09-29 fo
 `toggle`, `clear`, `map`, the re-run that removes, and `>name = ch`: those parts cite
 functions by name, since the line numbers moved.*
 
-Firmware at `85d1e6a` (branch `claude/pieces-and-satellites`). The source is the truth;
+Firmware at `85d1e6a`. The source is the truth;
 `docs/` is secondary, and where the two disagree it is listed in §4.
 
 **37 verbs**: the table `s_builtins[]`, `builtins.c:2308-2343`, registered once by
@@ -1092,7 +1092,7 @@ empties ORBITALS for its eclipse on the one, and the same line brings it back;
 
 `>clear` forgets every lane and picture (`seq_forget_all`, `viz_forget_all`) and keeps
 the document on screen — the clean slate `>new` gives, without a new page. Names and
-their definitions stay. Status `"%d lane%s gone"`. It answers the owner's open question
+their definitions stay. Status `"%d lane%s gone"`. It answers my open question
 of 2026-09-26 ([next.md](next.md) §2).
 
 ### 2.28 `map` · EDIT · "map cut - only it sends, to learn" · `c_map`

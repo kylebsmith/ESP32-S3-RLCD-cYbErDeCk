@@ -80,7 +80,7 @@ static void report_memory(const char *when)
 static void orient_save(uint8_t v);
 
 /* The shipped default, used only when nothing has been chosen yet. An
- * orientation the owner set by hand is ALWAYS honoured - a stored value is
+ * orientation I set by hand is ALWAYS honoured - a stored value is
  * evidence about the physical build, which is knowledge this firmware does
  * not have and must not overwrite. */
 #define ORIENT_DEFAULT  ST7305_ORIENT_3
@@ -257,7 +257,7 @@ static int64_t now_ms(void) { return esp_timer_get_time() / 1000; }
 
 /* The menu is a text file (docs/SUBSTRATE.md). If there is no guide yet,
  * write one - a device whose commands are undiscoverable has, in practice,
- * no commands. The owner can edit it like any other document, which is the
+ * no commands. I can edit it like any other document, which is the
  * whole point: adding a menu item costs typing a line. */
 /* Create the boot document if it is missing, then run it. */
 static void run_boot_document(void)
@@ -284,7 +284,7 @@ static void run_boot_document(void)
     }
     /* A BOOT DOCUMENT FROM BEFORE THE NAMES WERE LINES has no names in it, and
      * without them '>kick' means nothing. So the names go in at the TOP - they
-     * must exist before any lane line below them runs - and everything the owner
+     * must exist before any lane line below them runs - and everything I
      * wrote stays exactly as it was, underneath. The mark is the first line of
      * the block; a document that has it is left alone. */
     {
@@ -337,7 +337,7 @@ static void ensure_guide_buffer(void)
             }
             /* Has this guide seen the music layer? '>play' is the marker.
              *
-             * PREPEND, DO NOT REPLACE. The guide is the owner's menu - the
+             * PREPEND, DO NOT REPLACE. The guide is my menu - the
              * whole claim of docs/SUBSTRATE.md is that they write their own
              * interface - so firmware that overwrites it destroys exactly the
              * thing the design is for. The new track goes on top, where it is
@@ -357,7 +357,7 @@ static void ensure_guide_buffer(void)
             }
             /* AND HAS IT SEEN THIS GRAMMAR? A guide from before docs/MANIFESTO.md
              * §3.6 teaches 'X...' and 'x,x?' - lines that are now refused - so it
-             * gets the new text too, on top, with everything the owner wrote kept
+             * gets the new text too, on top, with everything I wrote kept
              * underneath. */
             if (!has_play || !has_mark) {
                 const size_t had = doc_len();
@@ -367,7 +367,7 @@ static void ensure_guide_buffer(void)
                     keep[had] = '\0';
                 }
                 /* UNEDITED, IT IS REPLACED. A guide that is still exactly what
-                 * the firmware wrote holds nothing of the owner's, and keeping it
+                 * the firmware wrote holds nothing of my, and keeping it
                  * underneath is only a longer page to scroll (2026-09-29). */
                 uint32_t h = 2166136261u;
                 for (size_t k = 0; keep != NULL && k < had; k++) {
@@ -406,11 +406,11 @@ static void ensure_guide_buffer(void)
 }
 
 /* THE MIDI PAGE, written if there is none (ui_text.h, MIDI_TEXT): every
- * controller one line, for learning them in a DAW. The owner's to edit after. */
+ * controller one line, for learning them in a DAW. Mine to edit after. */
 static void ensure_midi_buffer(void)
 {
     /* A PAGE THE FIRMWARE WROTE IS THE FIRMWARE'S TO UPDATE: "midi 1" exactly
-     * as written (its hash) becomes the new page; one the owner edited keeps
+     * as written (its hash) becomes the new page; one I edited keeps
      * its text below the new, as the guide does. */
     const int have = doc_buf_find("midi");
     if (have >= 0) {
@@ -466,7 +466,7 @@ int64_t editor_now_ms(void) { return now_ms(); }
  *
  * Drawing it directly raced the main task over the text grid, the framebuffer
  * and the SPI bus - three pieces of shared state with no lock between them -
- * and would have produced a torn screen at exactly the moment the owner most
+ * and would have produced a torn screen at exactly the moment I most
  * needs to read six digits correctly. */
 static volatile uint32_t s_passkey;
 static volatile bool     s_passkey_pending;
@@ -526,7 +526,7 @@ void app_main(void)
     /* WHY DID WE JUST BOOT? Logged first, because after a silent panic reboot
      * this is the only surviving evidence that anything went wrong - and a
      * deck that reboots itself and says nothing is indistinguishable from one
-     * the owner power-cycled. */
+     * I power-cycled. */
     {
         const esp_reset_reason_t r = esp_reset_reason();
         static const char *why[] = {
@@ -602,12 +602,12 @@ void app_main(void)
     /* CHECKED, NOT ASSUMED. Every one of these used to throw its return value
      * away, and when the table filled up the fifth transport vanished with no
      * message anywhere - see SEQ_MAX_DESTS. A destination that fails to
-     * register is a transport the owner will spend an evening debugging with a
+     * register is a transport I will spend an evening debugging with a
      * cable and a DAW, so it says so here, loudly, on the one surface that
      * still works when the console does not. */
     seq_dest_add("ble", dest_ble, blemidi_flush, "BLE MIDI (off by default)");
     seq_dest_add("mon", dest_mon, NULL, "echo notes to console");
-    /* DIN/TRS MIDI. Registered always, so '>send' lists it and the owner can
+    /* DIN/TRS MIDI. Registered always, so '>send' lists it and I can
      * see the option exists; it emits nothing until '>din <gpio>' says which
      * pin, because a pin is a fact about a physical object. */
     seq_dest_add("din", dinmidi_send, NULL, "DIN/TRS MIDI - set >din <gpio>");
@@ -620,7 +620,7 @@ void app_main(void)
     view_init();
     /* BLE MIDI is OFF by default. It is quantised to the connection interval
      * and shares one radio with the keyboard link, so typing contends with
-     * the notes - which is exactly when the owner heard the timing go loose.
+     * the notes - which is exactly when I heard the timing go loose.
      * USB MIDI is the native path. This stays a feature; it is not the
      * default. */
     if (seq_init() != ESP_OK) {
@@ -639,7 +639,7 @@ void app_main(void)
      * It armed itself on any device with an EMPTY journal - which is exactly
      * what a brand new deck is. So flashing a second board produced a deck that
      * refused input, ate its first document and printed FAIL, and every reason
-     * the owner had to read that as a broken board was a good one. A first boot
+     * I had to read that as a broken board was a good one. A first boot
      * has to be an instrument.
      *
      * Flip this to 1 to bench a board, reset it three times, read the log, and
@@ -681,11 +681,10 @@ void app_main(void)
      * that is the point. Every other way out of USB MIDI mode requires being
      * able to type, which requires the very interface that mode replaces. If
      * the composite ever comes up mute again, this is the way back, and it is
-     * a button the owner already knows because it cycles the orientation.
+     * a button I already know because it cycles the orientation.
      *
      * Read here, after the GPIO is configured and before usbdev_boot(), and
-     * only ever used to turn something OFF - so a stuck button can cost the
-     * owner a feature but can never cost them the deck. */
+     * only ever used to turn something OFF - so a stuck button can cost me a feature but can never cost me the deck. */
     /* Let the internal pull-up actually pull. It is ~45 kOhm against the pad
      * and trace capacitance, so sampling immediately after gpio_config can
      * read the pre-config level rather than the pulled one. */
@@ -703,14 +702,14 @@ void app_main(void)
      *
      * USB MIDI mode moves the console onto the composite device's CDC and the
      * intent is held in RTC memory, which survives a reboot on purpose - so
-     * that a restart keeps the mode the owner asked for. The hole that leaves
+     * that a restart keeps the mode I asked for. The hole that leaves
      * is exactly the one that bit: the deck hung in USB MIDI mode, the task
      * watchdog panicked it, it rebooted, it came back in USB MIDI mode, and it
      * hung again. Unreachable, in a loop, with no way in from the cable and no
      * way out but pulling the battery.
      *
-     * So a reboot caused by a panic or a watchdog clears the mode. The owner
-     * loses USB MIDI and gets back a deck they can talk to and flash, which is
+     * So a reboot caused by a panic or a watchdog clears the mode. I
+     * lose USB MIDI and get back a deck I can talk to and flash, which is
      * the right way round every time: the rule this violates otherwise -
      * docs/OS.md, the device must never become unreachable - outranks keeping
      * a transport across a crash it may itself have caused.
@@ -1022,7 +1021,7 @@ void app_main(void)
         }
 
         /* Autosave: on newline, or once typing has paused. Never per
-         * keystroke - docs/HANDOFF.md trap 6. */
+         * keystroke. */
         /* A '+out' buffer is never written, so an autosave of one would log a
          * save that did not happen - and did, until a mirror of command
          * output showed up on the card. Clear the flag and say nothing. */

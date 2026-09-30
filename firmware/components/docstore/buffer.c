@@ -269,7 +269,7 @@ void doc_buf_append(int i, const char *text)
     if (b->gs < b->ge) {
         b->buf[b->gs++] = '\n';
     }
-    /* Leave the cursor where the owner had it if this is their buffer. */
+    /* Leave the cursor where I had it if this is my buffer. */
     if (i != s_cur) {
         while (b->gs > save_gs) { b->buf[--b->ge] = b->buf[--b->gs]; }
     }

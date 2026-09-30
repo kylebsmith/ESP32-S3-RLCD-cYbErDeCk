@@ -1,7 +1,7 @@
 # Satellites — the cable, the bus, and the first two nodes
 
 *A brief to build from: four encoders on one node, eight buttons on another, joined
-to the deck by six-pin magnetic cables and working without them. The owner builds
+to the deck by six-pin magnetic cables and working without them. I build
 these; this page is what to buy, how to wire it, and what goes over the wire. Nothing
 here is built yet.*
 
@@ -43,7 +43,7 @@ a laptop on home Wi-Fi, 280 of 280 messages deck to deck ([NETWORK.md](NETWORK.m
 
 ## The shape `[DECIDED]` 2026-09-26
 
-- **Connector:** six-pin magnetic pogo — the owner's choice.
+- **Connector:** six-pin magnetic pogo — my choice.
 - **Bus:** CAN at 500 kbit/s, daisy-chained from the deck: deck → node → node.
 - **Unplugged:** the same frames over ESP-NOW, on the node's own battery.
 - **USB-C on every node:** charging, flashing, and standing alone as a USB MIDI
@@ -174,7 +174,7 @@ and switches its terminator itself.
   No pairing mode, no button held, nothing typed. A node that has never been plugged
   in joins the way a deck does ([NEXT.md](NEXT.md) §5).
 - **USB-C:** charge, flash, and be a class-compliant USB MIDI controller for a
-  computer on its own — the "USB as an option" the owner asked for.
+  computer on its own — the "USB as an option" I asked for.
 
 | path | from press to the deck | tag |
 |---|---|---|
@@ -268,14 +268,14 @@ called is `[OPEN]`.
 6. `>lanes` showing which node set each input, the way it shows an OSC sender's
    address today.
 
-**The pins are the owner's to declare**, as they are for `>din 17`: a pin is a fact
+**The pins are mine to declare**, as they are for `>din 17`: a pin is a fact
 about a physical object. The deck side needs five — TWAI TX, TWAI RX, SYNC, DETECT on
 an ADC1 pin, and the port's power enable. **Taken, do not use:** 5, 11, 12, 40, 41 (the
 panel), 6 (its tearing signal), 18 (KEY), 21, 38, 39 (the SD card), 19 and 20 (USB),
 the strapping pins 0, 3, 45, 46, and 35–37 (the module's octal PSRAM); 26–32 are the
 flash and are not brought out. The board's audio and battery-sense circuits take
 others — read H6 ([HARDWARE.md](HARDWARE.md) sources) before choosing. **How that
-declaration is spelled is the owner's to decide.**
+declaration is spelled is my to decide.**
 
 **Hardware on the deck side:** an SN65HVD230, a 120 Ω terminator, one port, the power
 switch, and perhaps a boost converter.

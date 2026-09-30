@@ -9,8 +9,7 @@
  * has no USB at all and wants five-pin DIN. BLE MIDI needs a host that speaks
  * BLE MIDI. OSC needs a network and something listening on it.
  *
- * So the deck could not be plugged into a single piece of hardware in the
- * owner's studio without a laptop sitting between them, which is exactly what
+ * So the deck could not be plugged into a single piece of hardware in my studio without a laptop sitting between them, which is exactly what
  * an instrument should not require. MIDI over a UART fixes that for all of it
  * at once, because DIN MIDI has been one protocol on one wire since 1983:
  * 31250 baud, 8N1, the same bytes already being written to the USB endpoint.
@@ -21,12 +20,12 @@
  * become 33 ohms and 10 ohms, or use a buffer to 5 V. TRS Type A puts tip on
  * pin 5, ring on pin 4, sleeve on pin 2. Wire it wrong and the receiver sees
  * nothing; there is no way for this code to tell the difference between wrong
- * wiring and a quiet part, which is why the pin is the owner's to declare.
+ * wiring and a quiet part, which is why the pin is my to declare.
  *
  * THE PIN IS NOT GUESSED. docs/ASSEMBLY.md records that guessing a pin on this
  * board has already cost an afternoon once - the battery sense line - and the
  * conclusion drawn there applies unchanged: a pin is a fact about a physical
- * object, and the only party who can see the object is the owner. '>din 17'
+ * object, and the only party who can see the object is me. '>din 17'
  * says which one.
  */
 #pragma once
@@ -49,5 +48,5 @@ void dinmidi_send(const char *lane, uint8_t status, uint8_t d1, uint8_t d2,
                   uint32_t when_us);
 
 /* Bytes written since the last call, so '>din' can prove the wire is busy
- * without the owner needing a scope. */
+ * without me needing a scope. */
 uint32_t dinmidi_bytes(void);

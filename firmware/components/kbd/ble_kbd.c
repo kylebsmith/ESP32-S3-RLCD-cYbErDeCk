@@ -471,7 +471,7 @@ static int on_ctrl_point_write(uint16_t conn, const struct ble_gatt_error *err,
  * added a periodic version of this write for the same reason.
  *
  * Then read the peer's device name, because "found a keyboard (unnamed)" is
- * not proof that the thing we connected to is the keyboard in the owner's
+ * not proof that the thing we connected to is the keyboard in my
  * hands rather than some other HID peripheral in range. */
 static void after_subscribe(uint16_t conn)
 {

@@ -69,7 +69,7 @@ head character plus what is attached to it (`seq_pattern.h:12-43`).
 - **`[ab]` group**: occupies one step (or one share of its parent) and divides it equally among its items (`seq_pattern.h:30`, `595-622`).
 - **`[a,b,c]` stack**: `,` separates members; every member spans the whole group and starts together (a chord). Members are sequences: `[02,45]` plays 0+4, then 2+5 (`tools/test_seq_pattern.c:190-201`) [sim].
 - **`<ab>` alternation**: every *item* is one alternative; spacing is optional (`<35>` ≡ `<3 5>`) [sim]. Alternative *j* of *k* plays when `(cycle / per) % k == j`, compiled as the class `cycle % (per·k) == ph + per·j` (`seq_pattern.h:502-531`). Nested alternation advances only when chosen: `<0 <1 2>>` → 0, 1, 0, 2 (`seq_pattern.h:49-51`) [sim].
-- **Words in `<>`** (2026-09-29, `seq_pattern_words`): two or more spaced words of one length *k* take *k* steps and are played whole, column by column — `.000.000.000.<000 777>` is sixteen steps, and the last three are `000` one cycle and `777` the next. Words of different lengths are refused, boxed at the word: `"words in < > need one length"`. One word, or words of one step, alternate step by step as before (`<35>` ≡ `<3 5>`), so nothing written earlier reads differently; the Strudel corpus and every piece were checked. `tools/test_seq_pattern.c` §10b. The owner asked for it: `<000 777>` "was sequentially moving through those instead of picking either or".
+- **Words in `<>`** (2026-09-29, `seq_pattern_words`): two or more spaced words of one length *k* take *k* steps and are played whole, column by column — `.000.000.000.<000 777>` is sixteen steps, and the last three are `000` one cycle and `777` the next. Words of different lengths are refused, boxed at the word: `"words in < > need one length"`. One word, or words of one step, alternate step by step as before (`<35>` ≡ `<3 5>`), so nothing written earlier reads differently; the Strudel corpus and every piece were checked. `tools/test_seq_pattern.c` §10b. I asked for it: `<000 777>` "was sequentially moving through those instead of picking either or".
 - **`,` inside `<>`** stacks alternations: `<0 1, 4 5 6>` plays one of each at once, period 6 [sim] (`seq_pattern.h:356-384`, `491-533`). Not in the header's list.
 - `,` outside brackets → COMMA (`seq_pattern.h:291-293`). Empty group or member (`[]`, `<>`, `[ ]`, `[x,]`, `[x,,x]`) → EMPTY_GROUP (`seq_pattern.h:307-335`) [sim].
 - A group or alternation can take `%NN`; it multiplies into everything inside (§2.9).
@@ -332,7 +332,7 @@ Pictures are not definitions: 16 answer to their own names — `echo move spin w
 
 Ctrl+Enter **removes the lane** instead of compiling iff all hold:
 
-1. The caller is the owner's hands (`CMD_BY_HANDS`; the editor's run key, `editor.c:1061`) — never the boot document, `>run`, or an agent.
+1. The caller is my hands (`CMD_BY_HANDS`; the editor's run key, `editor.c:1061`) — never the boot document, `>run`, or an agent.
 2. The transport is running.
 3. A lane with the canonical name exists.
 4. It is not muted.
@@ -340,7 +340,7 @@ Ctrl+Enter **removes the lane** instead of compiling iff all hold:
 
 Then the lane is forgotten (§6.4) and the status says `"%s off - again for on"`: the same line once more compiles it afresh, from its next slot. Otherwise the line compiles and (step 9) unmutes. Lanes created by `>route` have `src = 0` and never re-run (`seq.c:1443-1444`).
 
-**Why it changed.** Until 2026-09-29 the re-run muted and kept the slot. The owner, playing: "there is not concrete way to eliminate lanes". A muted lane still held one of sixteen, and nothing on the page said so. To silence a lane and keep it, there are four words now: `>mute`, `>solo`, `>toggle` (a block, and the same line brings it back) and `>map` (all but one, for MIDI learn); `>clear` drops them all and keeps the page ([verbs.md](verbs.md) §2.24–2.28).
+**Why it changed.** Until 2026-09-29 the re-run muted and kept the slot. Playing, I said: "there is not concrete way to eliminate lanes". A muted lane still held one of sixteen, and nothing on the page said so. To silence a lane and keep it, there are four words now: `>mute`, `>solo`, `>toggle` (a block, and the same line brings it back) and `>map` (all but one, for MIDI learn); `>clear` drops them all and keeps the page ([verbs.md](verbs.md) §2.24–2.28).
 
 ### 6.4 Removing a lane
 

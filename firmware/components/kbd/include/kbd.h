@@ -54,7 +54,7 @@ typedef enum {
  * half the characters on a small layout are reached at all. Treating it as a
  * command modifier meant that typing '>' arrived carrying RALT, was routed
  * into the chord handler, matched no binding, and was DISCARDED IN SILENCE.
- * The keyboard appeared to stop working the moment the owner typed the one
+ * The keyboard appeared to stop working the moment I typed the one
  * character the command syntax requires. */
 #define KBD_COMMAND_MODS (KBD_CTRL | KBD_MOD_LALT)
 
@@ -93,7 +93,7 @@ uint8_t kbd_mods(void);
  * REACHABLE BY TYPING, NOT ONLY BY HOLDING A BUTTON. This was bound solely to a
  * two-second hold on KEY - undiscoverable, silent, all-or-nothing, and on a
  * board whose switch identities are still an OPEN ITEM in docs/ASSEMBLY.md it
- * was a gesture the owner could not reliably perform. '>kbd forget' is the same
+ * was a gesture I could not reliably perform. '>kbd forget' is the same
  * action with a name. The hold stays as the way in when there is no keyboard to
  * type it with, which is the one case that matters. */
 void kbd_forget_all(void);

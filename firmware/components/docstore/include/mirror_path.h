@@ -16,14 +16,14 @@
 #endif
 
 /* True for a machine-written buffer. These are neither journalled nor
- * mirrored: the owner's documents are copied to a DGX for semantic analysis,
+ * mirrored: my documents are copied to a DGX for semantic analysis,
  * and command transcripts in that corpus are contamination, not data. */
 static inline bool mirror_is_transient(const char *name)
 {
     return name != NULL && name[0] == '+';
 }
 
-/* A document name is the owner's, typed with '>name'. It reaches a FAT
+/* A document name is my, typed with '>name'. It reaches a FAT
  * filesystem, so characters FAT cannot hold become '_' rather than being
  * dropped - dropping would silently merge "my file" and "myfile" into one
  * backup, which is the bug this whole file exists to prevent.

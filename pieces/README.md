@@ -90,9 +90,9 @@ crystals still part by a few parts per million.
 Every line is ours, written for this deck; nothing is copied from a recording. The
 vocabulary is shared — a four-on-the-floor kick, a backbeat, a two-step, the
 i – VI – III – VII of a thousand records, power chords — and the forms are ours.
-`.000.000.000.<000 777>` was the owner's line. Until 2026-09-29 the pieces were
+`.000.000.000.<000 777>` was my line. Until 2026-09-29 the pieces were
 sketches after named live coders, genre studies, then one long set with a key
-change a section; the owner found the keys, the dropouts and the screen changes
+change a section; I found the keys, the dropouts and the screen changes
 arbitrary, and this EP replaced them.
 
 **Checked, every line:** `tools/test_pieces.c` runs each track through the deck's

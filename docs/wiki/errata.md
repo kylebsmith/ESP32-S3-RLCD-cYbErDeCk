@@ -177,8 +177,7 @@ deck can settle it. Nothing here was observed on the deck unless it says so.
   `parameters.scad:1168` says `check_golden.py` runs "on every run"; nothing runs it.
 - `tools/requirements.txt` omits Pillow and pyserial, which the zine, CMF, mock-up and
   relay tools need. `tools/corpus/strudel.txt:1` begins with Strudel's console banner.
-- `STATUS.md:81` says the journal wraps; it no longer does. `firmware/README.md` lists
-  4 of 14 components.
+- `firmware/README.md` lists 4 of 14 components.
 - `docs/GRAPHICS.md` §5 gave the picture pane wrong; corrected there 2026-09-28.
 
 **Comments in the firmware** (each is stale, not wrong in effect):
@@ -196,8 +195,7 @@ deck can settle it. Nothing here was observed on the deck unless it says so.
   `editor.c:284-285`, `551-553`: pixel-row status bar, "inverse word"; `editor.c:164-165`:
   density level 1 is high (a typed `1` selects low).
 - `docstore.h:45`: Enter executes in a guide; `docstore.h:109`: the mirror is
-  `notes.txt` (it is one file per document); `docstore.h:9`, `main.c:960` cite
-  `docs/HANDOFF.md` (it is `./HANDOFF.md`); `journal.c:6` omits `kind` and `reserved`.
+  `notes.txt` (it is one file per document); `journal.c:6` omits `kind` and `reserved`.
 - `builtins.c:1533-1544`: the old SSH design; `:1558-1562`: `split` in columns, "a
   third"; `:2178-2181`: a binding column in `>lanes`.
 - `main.c:245-251`: the static assert counts five destinations; six register.

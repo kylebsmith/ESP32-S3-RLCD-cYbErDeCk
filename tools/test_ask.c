@@ -3,7 +3,7 @@
  *
  * Ground rule 6: nothing secret ever enters a document. '>wifi', '>host' and
  * '>ssh' took their password as a word of the line, and a line is a document
- * line - journalled, mirrored to the SD card, copied to the owner's DGX. Now a
+ * line - journalled, mirrored to the SD card, copied to my DGX. Now a
  * command asks, and firmware/main/ask.h takes the answer. This runs that exact
  * code, and the two pure halves beside it:
  *
@@ -12,7 +12,7 @@
  *   - secret_line.h finds where a second word - the old password - starts, so
  *     it can be refused and cut from the line;
  *   - ssh_fp.h prints a host key's fingerprint exactly as `ssh-keygen -lf`
- *     does, so the owner can hold the deck's line against the host's.
+ *     does, so I can hold the deck's line against the host's.
  *
  * The check that fails on the old state is in tools/test_ui_text.c: the guide
  * taught '>wifi <ssid> <pass>' and '>host deck 12345678', and it fails on both.

@@ -11,7 +11,7 @@ PASS 1 found that at the panel's 12 x 24 the exponent moves a pixel or two, and
 that today's hand-laid bowls already sit at about n = 3.2 - the face and the case
 were drawn to the same corner without anyone deciding it. The curves show when the
 same rule draws LARGER: a section line at twice the size, or the view node's screen.
-The owner chose n = 2.2, the round one (2026-09-28).
+I chose n = 2.2, the round one (2026-09-28).
 
 PASS 2 keeps n = 2.2 and asks for more than a rounder corner. Every glyph - the
 punctuation the language lives on included (> . % : [ ] < ! /) - is drawn under a
@@ -32,7 +32,7 @@ a bitmap - 36 bytes and 3.8 us a cell at 12 x 24, 144 bytes at 24 x 48.
 
 Rules every style keeps: the 12 x 24 cell (every size a multiple of it); the body
 in columns 0-9, the gap in 10-11; cap height rows 4-19, x-height 10-19, descenders
-to 22; strokes of 2 units; the dotted zero, full width (the owner's choice).
+to 22; strokes of 2 units; the dotted zero, full width (my choice).
 Anything a style does not draw is today's glyph, scaled.
 
     type-programme.png   pass 1: today against n = 2.2, 3.2 and 6

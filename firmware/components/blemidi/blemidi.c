@@ -249,7 +249,7 @@ void blemidi_start(void)
     ble_hs_id_infer_auto(0, &s_own_addr_type);
     s_synced = true;
     /* Only advertise if it has been asked for. Coming up advertising by
-     * default would put the deck back on the transport the owner rejected,
+     * default would put the deck back on the transport I rejected,
      * and would do it on the radio the keyboard needs. */
     if (s_enabled) {
         advertise();

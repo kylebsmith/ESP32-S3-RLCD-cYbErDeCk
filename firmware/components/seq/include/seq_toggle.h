@@ -7,7 +7,7 @@
  * pending on each lane, and the clock makes it on the first tick of the next
  * bar, before any lane fires (seq.c, tick). Pressing it again before the bar
  * takes the change back. Stopped, it acts at once, so a piece can set itself
- * up before '>play'. The owner, 2026-09-29: variations to "switch back and
+ * up before '>play'. I said, 2026-09-29: variations to "switch back and
  * forth between live", and transitions that do not come in "at not correct
  * timing".
  *

@@ -127,7 +127,7 @@ esp_err_t net_rejoin(void)
     /* The credentials are remembered the moment they are TYPED, not once a
      * join succeeds - so a wrong password, a network that is out of range, or
      * simply walking away from the command still leaves the deck knowing what
-     * it was told. The owner reported typing an SSID and password, backing
+     * it was told. I reported typing an SSID and password, backing
      * out, and finding it gone; that is why. */
     char ssid[33] = "", pass[65] = "";
     nvs_handle_t h;
@@ -189,7 +189,7 @@ esp_err_t net_join(const char *ssid, const char *pass)
     s_hosting = false;
     /* Remembered FIRST. A join can fail for a dozen reasons that have nothing
      * to do with the credentials being wrong, and losing them on every one of
-     * those is how the owner ended up retyping a password repeatedly. */
+     * those is how I ended up retyping a password repeatedly. */
     remember(ssid, pass);
     /* ONE JOIN AT A TIME. A station still trying the last network refuses a new
      * configuration ("still connecting"), and it retries a missing network for

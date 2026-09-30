@@ -153,7 +153,7 @@ def _cluster(n):
     return m
 
 
-# OUR OWN - the owner's verdict on the screens above, 2026-09-28: Bayer is the
+# OUR OWN - my verdict on the screens above, 2026-09-28: Bayer is the
 # best by a large margin, so make one of our own. The constraint, plainly: in a
 # 4 x 4 cell Bayer's order is the most even there is - at a quarter, a half and
 # three quarters there is exactly one best pattern, and Bayer has it. So each of

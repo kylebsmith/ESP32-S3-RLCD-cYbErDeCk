@@ -264,7 +264,7 @@ jobs:
       # The status bar is 30 columns and clips with snprintf, so an over-long
       # message is truncated at the edge of the SENTENCE, not the screen -
       # "not a command - start the line with >" rendered as "not a command -
-      # start the line" and the owner could not tell why a line would not run.
+      # start the line" and I could not tell why a line would not run.
       # This reads the shipping header, not a copy.
       - name: Check the on-device strings fit
         run: |
@@ -284,8 +284,7 @@ jobs:
       # kbd.h's enum, because a renumbering there would silently turn arrows
       # into characters.
       # The cursor is a solid inverse block and the playhead is a bar; they
-      # must compose, because the cell where they meet is exactly the cell the
-      # owner is looking at while editing a running lane. The composition was
+      # must compose, because the cell where they meet is exactly the cell I am looking at while editing a running lane. The composition was
       # an expression written twice and the blink copy dropped the playhead
       # bit, so every blink erased the bar. Now it is one function, and this
       # binds to it.

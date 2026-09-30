@@ -71,7 +71,7 @@ static bool adc_once(void)
         s_cali = NULL;
         ESP_LOGW(TAG, "no ADC calibration; readings are approximate");
     }
-    /* Which channel, if the owner has already identified it. */
+    /* Which channel, if I have already identified it. */
     nvs_handle_t h;
     if (nvs_open("deck", NVS_READONLY, &h) == ESP_OK) {
         int32_t g = 0, d = 0;
@@ -142,7 +142,7 @@ int battery_mv(void)
 
 int battery_percent(void)
 {
-    /* Still -1 until the owner has identified the pin - see battery.h. A
+    /* Still -1 until I have identified the pin - see battery.h. A
      * fabricated percentage on a performance instrument is worse than a blank
      * where the number would be. */
     const int mv = battery_mv();

@@ -6,7 +6,7 @@
  * the newest snapshot and never the document - the previous record is still
  * intact and still the newest one that validates.
  *
- * docs/HANDOFF.md trap 6: the SD card is an export medium, never the source of
+ * The SD card is an export medium, never the source of
  * truth. Losing power during a FAT write can corrupt the directory, not merely
  * truncate a record. So the journal is the truth and the card is a mirror,
  * written .tmp-then-rename, on newline or a 1 s timer, never per keystroke.
@@ -69,7 +69,7 @@ esp_err_t   doc_buf_rename(const char *name);  /* promote current to filed */
 esp_err_t   doc_buf_close(int i);      /* forget it; the journal keeps it  */
 
 /* Find a buffer by name, or make one. A name beginning with '+' marks a
- * buffer the machine wrote rather than the owner: it is a buffer like any
+ * buffer the machine wrote rather than me: it is a buffer like any
  * other - editable, scrollable, undoable - but it is NOT journalled, because
  * an archive that fills with command output is an archive nobody trusts. */
 int         doc_buf_find(const char *name);
@@ -77,7 +77,7 @@ int         doc_buf_ensure(const char *name);
 
 /* Append to a buffer that is not necessarily the current one. This is how
  * command output reaches the substrate without yanking the view away from
- * whatever the owner was doing. */
+ * whatever I was doing. */
 void        doc_buf_append(int i, const char *text);
 
 

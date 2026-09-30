@@ -1,7 +1,7 @@
 /*
  * The boot screen.
  *
- * KILROY. The name is the owner's, and it is right for this object: Kilroy was
+ * KILROY. The name is my, and it is right for this object: Kilroy was
  * wartime graffiti - a line drawing and four words, scratched on walls by
  * people who had been somewhere. It is the least on-the-nose reference
  * available to an early-computer slab, it is monospace by nature, and it says

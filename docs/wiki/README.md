@@ -44,7 +44,7 @@ cites `file:line`. Three marks say how a claim was checked:
 | [system.md](system.md) | the firmware map, the boot sequence, tasks and cores, memory, configuration, the hardware bill; **every flash write that can happen while playing**; the heartbeat and vitals | eighteen things can write flash while playing, and only autosave checks |
 | [tools.md](tools.md) | CI, the nineteen host checks, every script, every document in `docs/` | CI checks everything but the firmware build |
 | [errata.md](errata.md) | everything the five read-throughs found that surprises, contradicts or is dead — sorted by what it costs a performer | the first table is the one to read |
-| [research.md](research.md) | **the owner's question**: fewer words with more parameters, or more words? What the research says, checked against the sources | — |
+| [research.md](research.md) | **my question**: fewer words with more parameters, or more words? What the research says, checked against the sources | — |
 | [completion.md](completion.md) | **Tab completion**, designed: what it offers where, the keys, the costs, the checks | Enter keeps its meaning; any other key keeps the offered word |
 | [pictures-and-type.md](pictures-and-type.md) | **the picture and type redesign**, discussed with mock-ups drawn by the engine: square dots, type as a picture, the tiles, the letters, and what other systems would bring to the table | at the default text size a disc is drawn as a rectangle, and that is fixable for free on the clock |
 | [next.md](next.md) | the next steps, in order, each with what would prove it done | protect the clock first, then test with people, then build |
@@ -58,7 +58,7 @@ cites `file:line`. Three marks say how a claim was checked:
 | **slot** | the finest division a lane's pattern needs; a lane has at most 64 a cycle |
 | **cycle** | one pass through a lane's pattern. The messages call it a "bar"; it is not sixteen steps |
 | **binding** | what a lane drives: a drum (`note`), a voice, a controller (`cc`), a picture |
-| **name** | a word defined to mean a binding: `>kick = note 36`. The names are the owner's; 17 ship |
+| **name** | a word defined to mean a binding: `>kick = note 36`. The names are my; 17 ship |
 | **address** | `name[:instance][:part]` — `disc:2:x`, `bass:vel` |
 | **part** | a lane that sets something about another: `:vel`, `:oct`, `:x`, `:y` |
 | **count** | `!n` at the end of a line: play *n* cycles, then stop and say `name:end` |

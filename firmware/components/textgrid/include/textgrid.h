@@ -35,7 +35,7 @@ enum {
     TG_INVERSE = 1,
     /* A bar across the bottom of the cell, leaving the glyph readable.
      *
-     * The sequencer playhead used TG_INVERSE and the owner's report was
+     * The sequencer playhead used TG_INVERSE and my report was
      * immediate: "it being full black is clashing with the cursor, so when
      * you're trying to edit something while it's running it's very easy to
      * lose your cursor". Two solid blocks on a screen with one ink is two
@@ -51,7 +51,7 @@ enum {
      * The command word was TG_INVERSE - the same solid block as the cursor.
      * The cursor XORs against it, so a cursor sitting on a command word turns
      * that cell back to normal: technically visible, practically lost, and
-     * the owner reported exactly that ("the cursor gets lost navigating those
+     * I reported exactly that ("the cursor gets lost navigating those
      * as well unless it's flashing").
      *
      * Three marks, three distinct treatments, all composable because they are

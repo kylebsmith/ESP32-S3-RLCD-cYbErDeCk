@@ -29,7 +29,7 @@ void blemidi_register(void);
  *
  * DEFAULT: DOWN. BLE MIDI is quantised to the connection interval - 7.5 ms at
  * best, commonly 15-30 ms - and this device runs a SECOND BLE link for its
- * keyboard on the same radio, so typing contends with the notes. The owner's
+ * keyboard on the same radio, so typing contends with the notes. My
  * verdict after playing it: "a cute feature that no professional would ever
  * use, too fragile and too much latency". USB MIDI is the native path; this
  * stays as a feature and is off until asked for.

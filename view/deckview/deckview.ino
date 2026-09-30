@@ -9,7 +9,7 @@
 // EVERY PIXEL IS THE DECK'S (2026-09-29). Each cell is drawn with the deck's own
 // 6 x 12 tile, bit for bit, and each of its pixels is a 2 x 2 block on the HDMI
 // screen: 53 x 20 cells are the whole screen. Nothing is blended, resampled or
-// re-dithered. The owner, looking at the old modes: the smoothing "blurred and
+// re-dithered. me, looking at the old modes: the smoothing "blurred and
 // mushed" the "chunky blocks, rigid ass lovely pixels"; phosphor and feedback,
 // which only worked by resampling, are retired, and their numbers draw plain.
 //
@@ -413,7 +413,7 @@ static int line_of(int i, char *out, int max, int *from, int *to)
   return n;
 }
 
-// THE POSTER, the owner's brief (2026-09-29, and again 2026-09-30: "all
+// THE POSTER, my brief (2026-09-29, and again 2026-09-30: "all
 // clumped", the picture "this random rectangle in the top"). The picture is the
 // page: full bleed, fourteen cells deep, the deck's own pixels. The section's
 // number is printed over its lower left, huge and red. One hairline under it;
@@ -477,7 +477,7 @@ static void draw_poster(uint8_t *fb, uint32_t tick)
   }
 }
 
-// THE CODE, the owner's ask (2026-09-29): a mode that is just the code, the way
+// THE CODE, my ask (2026-09-29): a mode that is just the code, the way
 // live coders put their screens up (TOPLAP: "show us your screens"). The lines
 // round the cursor, in the deck's compact face, over the picture dimmed behind
 // them: a section heading red, a line whose lane is playing bright with its step
@@ -514,7 +514,7 @@ static void draw_code(uint8_t *fb, uint32_t tick)
   }
 }
 
-// LATENT, the owner's ask (2026-09-30): the code "translated and animated and
+// LATENT, my ask (2026-09-30): the code "translated and animated and
 // jumbled like encoded latent space". Every glyph of the code is drawn with
 // its rows turned by a hash of where it is and of the beat, so the page is
 // the code's own marks, scrambled - and where a lane is playing, its step is
@@ -561,7 +561,7 @@ static void draw_latent(uint8_t *fb, uint32_t tick)
   }
 }
 
-// SORT, the owner's ask for "a pixel sorter or something more glitched"
+// SORT, my ask for "a pixel sorter or something more glitched"
 // (2026-09-30). The deck's pixels, cell for cell, then some rows sorted: every
 // inked pixel in the row gathered to one end, so the row becomes a bar as long
 // as the ink it held - the picture as its own histogram - with its tail fading

@@ -10,8 +10,8 @@
 
 static const char *TAG = "cmd";
 
-/* What each caller is permitted to reach. The owner's hands are unrestricted;
- * a guide line is the owner one step removed and may not change pairing or
+/* What each caller is permitted to reach. My hands are unrestricted;
+ * a guide line is me one step removed and may not change pairing or
  * power state without them meaning to; an agent may read, edit and store but
  * may not touch the radio or the device's own configuration. Tightening this
  * later is easy, and loosening it is a decision somebody has to make on
@@ -84,7 +84,7 @@ void cmd_out(cmd_ctx_t *ctx, const char *fmt, ...)
     /* A RULE BETWEEN COMMANDS.
      *
      * Output accumulates in one buffer, so several runs ran together into an
-     * unreadable wall - the owner described these pages as jumbled. One thin
+     * unreadable wall - I described these pages as jumbled. One thin
      * line per command is enough to see where one answer ends and the next
      * begins, and it costs one row. */
     if (s_out_lines == 0) {
@@ -175,7 +175,7 @@ const cmd_t *cmd_recognise(const char *line, int *word_at, int *word_len)
 }
 
 /* AN OLD SPELLING GETS THE NEW ONE. Documents written before the address grammar
- * say 'disc2' and 'disc[x]', and the boards on the owner's desk carry them. An
+ * say 'disc2' and 'disc[x]', and the boards on my desk carry them. An
  * unknown word that is one of those says what it is now, instead of "try: help". */
 static void old_spelling(cmd_ctx_t *ctx, const char *w, size_t n)
 {

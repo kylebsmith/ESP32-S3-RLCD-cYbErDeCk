@@ -10,7 +10,7 @@ not argue them again.*
 ## The claim
 
 A laptop performer projects their code to prove they are doing anything — the
-overhead camera of live coding. The owner's diagnosis is that this answers a lack of
+overhead camera of live coding. My diagnosis is that this answers a lack of
 causal understanding in the audience. The claim this device tests is that **a
 handheld deck makes agency visible without projection**: the gesture and its result
 are in the same place, so the audience gets causality for free instead of being
@@ -28,7 +28,7 @@ legibility* when it changes what one of them can tell apart.
 **The playhead lights the whole step.** A step is one character and its modifiers,
 and the mark that shows which step is sounding covers all of it — so the running
 position is visible *in the text the performer wrote*, not in a separate display.
-The owner's decision; [MANIFESTO.md](MANIFESTO.md) §3, entry 6.
+My decision; [MANIFESTO.md](MANIFESTO.md) §3, entry 6.
 
 **A chord lights from its first note to its last.** `,` stopped being a ghost note
 and became a chord, and the mark follows. Entry 1.
@@ -54,7 +54,7 @@ because routed lanes had ignored the source's amount; [MAP.md](MAP.md) §9.7.
 deck's frames in the deck's glyphs, generated from the same art as the panel
 ([VIEW.md](VIEW.md)). What the room sees is the instrument's output, not a rendering
 of the performer's code — the opposite of the overhead camera. Light ink on black,
-kept after the owner's first look: "an inverted version of the display."
+kept after my first look: "an inverted version of the display."
 
 **Nothing secret is ever on the screen.** A password is asked for on the status line
 and shown as stars, and never becomes a line ([NETWORK.md](NETWORK.md), *SSH, as
@@ -88,6 +88,6 @@ can see: the framebuffer is byte-identical, which is what its check proves.
 
 **Three marks, three treatments.** The solid block belongs to the cursor and nothing
 else; the playhead is a bar under the cell; a recognised command word is a bar over
-it. They compose, so a cursor on the playhead shows both. Made from the owner's
+it. They compose, so a cursor on the playhead shows both. Made from my
 reports of losing the cursor while a lane ran —
 `firmware/components/textgrid/include/textgrid.h`.

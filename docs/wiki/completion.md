@@ -1,7 +1,7 @@
 # Tab completion — a proposal
 
 *Part of [the deck, top to bottom](README.md). 2026-09-28. A design, not built. It answers
-the owner's question: press Tab to fill in a word, Tab again to step through the
+my question: press Tab to fill in a word, Tab again to step through the
 possibilities, Enter to confirm — possible, and reasonable?*
 
 ## The answer
@@ -126,7 +126,7 @@ learning them.
 - no path ever inserts `\t`;
 - the order is the same on every call.
 
-The owner's rule — every change comes with a check that fails on the old code — is met
+My rule — every change comes with a check that fails on the old code — is met
 by the editor-level cases: today, Tab after `>ki` inserts two spaces.
 
 ## 6. What it is not
@@ -190,7 +190,7 @@ Checked against the sources on 2026-09-28; the full entries are in
     manual needs an extra paragraph to explain it. That is the reason the deck's Enter
     means one thing while a word is offered, and the status bar says so.
 
-## 8. The owner's decisions
+## 8. My decisions
 
 1. **What Enter does to an offer.** *Recommended, and asked for:* Enter keeps the word and
    inserts nothing. *Alternative:* Enter keeps the word and inserts its new line, so the

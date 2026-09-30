@@ -452,7 +452,7 @@ argue against later:
    becoming definitions (§2) was the second, and it went from sixty-nine to
    thirty-six with nothing added; `guide` and `prose`, which did nothing, took it
    to thirty-four. **Broken, knowingly, on 2026-09-29:** `toggle`, `clear` and `map`
-   came in at the owner's request — a switch for a block of lanes, a clean slate
+   came in at my request — a switch for a block of lanes, a clean slate
    that keeps the page, and MIDI learn — and deleted nothing: thirty-seven. The debt
    is on record. `map` is nearly `solo` (it spares the pictures), and `toggle` could
    be a second meaning of `mute`; merging either pays one back.
@@ -682,7 +682,7 @@ not have?*
 
 Two adversarial reviews — [MANIFESTO.md](MANIFESTO.md) §2 — were given the docs and
 the firmware and told to find what was wrong. They reached the same two conclusions
-separately, and the owner had already reached one of them unaided: *"star? wtf is
+separately, and I had already reached one of them unaided: *"star? wtf is
 that? we should be going more fundamental to allow for more expressive
 possibilities."*
 
@@ -759,7 +759,7 @@ not state before, and nothing that worked before behaves differently.
 ### 9.7 Finite repetition — `!4`, and what an ending is for `[FACT]` — done
 
 **A lane that plays n times and then stops** ([NEXT.md](NEXT.md) §4). The spelling
-was the owner's to choose, 2026-09-25, from four with real collisions: `!4`, because
+was my to choose, 2026-09-25, from four with real collisions: `!4`, because
 `!` already means *repeat* to anyone arriving from Tidal or Strudel and only the scope
 differs — the whole lane, over time, rather than one step squeezed into its space.
 `@4` read as "at" and is Strudel's note length, which `_` now is here; a bare `4`

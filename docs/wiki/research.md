@@ -1,6 +1,6 @@
 # Research — fewer words with parameters, or more words?
 
-*Part of [the deck, top to bottom](README.md). 2026-09-28. The owner's question, in their
+*Part of [the deck, top to bottom](README.md). 2026-09-28. My question, in my
 words: "is there research about that distinction of more typing and more layered functions
 with parameters versus individual, but more functions?" Every source below was checked
 against its publisher's record or the authors' own copy on 2026-09-28. Each entry says what
@@ -54,7 +54,7 @@ general ones.**
   ([NEXT.md](../NEXT.md) §3.10).
 - **Operations on lanes are verb plus object**, the structure Scapin measured:
   `>mute kick`, `>solo bass`, `>route disc kick`.
-- **The names are the owner's**: `>conga = note 63`, `>circle = disc`. That is the
+- **The names are my**: `>conga = note 63`, `>circle = disc`. That is the
   aliasing Furnas et al. recommend.
 - **It has made this move once before**: turning names into data took the verb table from
   sixty-nine to thirty-four, and added power ([NEXT.md](../NEXT.md) §3.8).

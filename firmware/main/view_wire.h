@@ -79,7 +79,7 @@ static inline size_t view_wire_pack(uint8_t *out, size_t max, uint32_t tick,
  * picks; it is a controller the performer plays: '>ink = cc 1 ch 16', then
  * '>ink 0123456789 /16' sweeps it, '>route ink kick' makes it follow the kick,
  * '>toggle ink' holds it. The same controllers go to every MIDI output too
- * (2026-09-29, the owner: colour "to toggle and have continuous controls"). */
+ * (2026-09-29, me: colour "to toggle and have continuous controls"). */
 enum {
     VIEW_MODE_PLAIN, VIEW_MODE_SCAN, VIEW_MODE_PHOSPHOR, VIEW_MODE_FEEDBACK,
     VIEW_MODE_RISO, VIEW_MODE_POSTER, VIEW_MODE_CODE, VIEW_MODES

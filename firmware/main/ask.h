@@ -2,7 +2,7 @@
  * Asking for a secret without a document ever seeing it.
  *
  * docs/NEXT.md ground rule 6: nothing secret ever enters a document. Documents
- * are journalled, mirrored to the SD card and copied to the owner's DGX - and a
+ * are journalled, mirrored to the SD card and copied to my DGX - and a
  * command line IS a document line. '>wifi home hunter2' put the password into
  * the journal and onto the card the moment autosave ran, and '>ssh' and '>host'
  * did the same. No command takes a password on its line any more.

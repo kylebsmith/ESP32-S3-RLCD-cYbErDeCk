@@ -59,7 +59,7 @@
 
 /* THE MAXIMUM frame, not the frame. The live size is whatever the preview pane
  * can show - see viz_size() - because a fixed 32x12 frame drawn into a pane of
- * another shape is cropped on two sides and stale on the others, and the owner
+ * another shape is cropped on two sides and stale on the others, and I
  * saw exactly that: half a picture with junk under it. */
 /* 80 x 30 is the view node's frame (docs/VIEW.md): a cell is twice as tall as
  * wide, so on the node it is two square dots, and 80 x 30 cells are 80 x 60
@@ -69,8 +69,7 @@
 #define VIZ_H 30
 /* THE VIEW NODE'S OWN GRID, one to one: 53 x 20 cells of the deck's 6 x 12
  * tiles are 318 x 240, the node's whole screen, and on HDMI every one of the
- * deck's pixels is a 2 x 2 block. What '>send view on' gives (2026-09-29, the
- * owner: the node's smoothing "blurred and mushed" the pixels). */
+ * deck's pixels is a 2 x 2 block. What '>send view on' gives (2026-09-29, me: the node's smoothing "blurred and mushed" the pixels). */
 #define VIZ_VIEW_W 53
 #define VIZ_VIEW_H 20
 

@@ -3,7 +3,7 @@
  *
  * "not a command - start the line with >" is 37 characters against a 30-column
  * status bar, so it rendered as "not a command - start the line" and the half
- * that says what to do never reached the glass. The owner hit exactly that:
+ * that says what to do never reached the glass. I hit exactly that:
  * a line would not run and the deck would not say why.
  *
  * This includes the SHIPPING header, not a copy of it - the same arrangement
@@ -62,7 +62,7 @@ static void guide_lines(void)
  * The guide went on teaching 'star', 'shake' and 'tile' after all three had been
  * removed, and was playing its own comments - '>echo 8    then add:' compiled
  * nine more hits. A tutorial whose lines are refused is worse than none, because
- * the owner trusts it. So every command line in it must be a verb the firmware
+ * I trust it. So every command line in it must be a verb the firmware
  * has - read from the command table, as docs/MAP.md counts verbs - or a lane
  * whose NAME exists and whose pattern compiles under the compiler that ships.
  *
@@ -165,7 +165,7 @@ static int check_line(const char *what, int ln, const char *line)
     while (*rest == ' ') { rest++; }
     /* NO PASSWORD ON A LINE. "guide 2" taught '>wifi <ssid> <pass>' and
      * '>host deck 12345678': a password typed into a document, which is
-     * journalled, mirrored to the card and copied to the owner's DGX. Both take
+     * journalled, mirrored to the card and copied to my DGX. Both take
      * one word now and ask for the password (firmware/main/ask.h), so a line
      * that gives them a second word is teaching the old habit. */
     if (wl == 4 && (strncmp(w, "wifi", 4) == 0 || strncmp(w, "host", 4) == 0)) {
@@ -336,14 +336,14 @@ int main(void)
 
     /* The hint must not claim Enter runs a line. It does not - Enter always
      * inserts so that a line can be added after a command, and Ctrl+Enter
-     * runs. The old hint said the opposite, and an owner who believed it
+     * runs. The old hint said the opposite, and anyone who believed it
      * would split their guide in half instead of running anything. */
     if (strstr(UI_GUIDE_HINT, "Ctrl+Enter") == NULL) {
         printf("[FAIL] the guide hint must name Ctrl+Enter, not Enter\n");
         fails++;
     }
 
-    /* The message a stuck owner reads must tell them what to DO, not only
+    /* The message a stuck player reads must tell them what to DO, not only
      * that something is wrong. */
     if (strchr(UI_NOT_A_COMMAND, '>') == NULL) {
         printf("[FAIL] 'not a command' must say what a command starts with\n");

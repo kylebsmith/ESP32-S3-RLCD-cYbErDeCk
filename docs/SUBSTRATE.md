@@ -212,7 +212,7 @@ rule is the last one: **a bare word degrades to a literal search.** It never
 fails, never reports "unrecognised", never makes the user guess a syntax. Worst
 case it shows you where else that word appears, which is rarely useless.
 
-Because the rules are a text file, the owner extends the system without a
+Because the rules are a text file, I extend the system without a
 firmware rebuild. That is the same move as the guide file, applied to
 selection instead of to lines.
 
@@ -269,4 +269,4 @@ pitch.
 | 2 | What is the minimum viable `table` kind? It may just be `guide` with columns, in which case there are three kinds, not four. |
 | 3 | How are multiple patches in one document scheduled — all running, or one active? This is a musical question as much as a technical one. |
 | 4 | Retrieval at scale. Thousands of files, no mouse: frecency plus full-text plus the palette is the cheap answer, but it is unproven at that size on this hardware. |
-| 5 | Does the fence syntax survive round-tripping through the tools the owner actually uses? Worth testing early with a real file and a real laptop. |
+| 5 | Does the fence syntax survive round-tripping through the tools I actually use? Worth testing early with a real file and a real laptop. |

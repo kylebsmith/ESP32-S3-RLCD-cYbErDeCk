@@ -24,7 +24,7 @@
  * written blocking and the run loop would have to be torn up to fix it.
  *
  * CAPABILITIES exist for the same reason. An agent given the command table
- * would otherwise hold exactly the authority of the owner's hands on the
+ * would otherwise hold exactly the authority of my hands on the
  * device. The caller is tagged, each command declares what it touches, and
  * the dispatcher refuses combinations that were never intended.
  */
@@ -47,14 +47,13 @@ typedef enum {
 #define CMD_CAP_NET     0x08u   /* reaches off the device              */
 #define CMD_CAP_SYSTEM  0x10u   /* changes device state: pairing, power */
 
-/* Who is asking. The owner's hands may do anything; a guide line is still the
- * owner, one step removed; an agent is not the owner and is bounded here
+/* Who is asking. My hands may do anything; a guide line is still me, one step removed; an agent is not me and is bounded here
  * rather than by hoping its prompt holds. */
 typedef enum {
     CMD_BY_HANDS = 0,
     CMD_BY_GUIDE,
     CMD_BY_AGENT,
-    /* The owner's hands running a block (editor_block.h): anything the hands
+    /* My hands running a block (editor_block.h): anything the hands
      * may do, but a line run again is run again - a scene launched twice must
      * not take its own lanes out, as a line run twice by hand does. */
     CMD_BY_BLOCK,
@@ -126,7 +125,7 @@ int cmd_last_secret_col(void);
 
 /* ASKING FOR A SECRET. Ground rule 6: nothing secret ever enters a document -
  * and a command line is a document line, journalled, mirrored to the card and
- * copied to the owner's DGX. So a command that needs a password never reads it
+ * copied to my DGX. So a command that needs a password never reads it
  * from its line. It asks here and returns; whoever holds the keyboard shows the
  * question, takes the next line typed as stars, and calls `fn` with it - in the
  * task commands run in - then wipes it (firmware/main/ask.h). `fn` writes its

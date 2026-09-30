@@ -3,7 +3,7 @@
  *
  * THE FIRST KEY A HOST SHOWS IS KEPT, AND A DIFFERENT ONE IS REFUSED before any
  * password is sent - docs/NETWORK.md has the decision. The fingerprint is
- * printed exactly as `ssh-keygen -lf` prints it, so the owner can hold the
+ * printed exactly as `ssh-keygen -lf` prints it, so I can hold the
  * deck's line up against the host's own and see that they match. Pure, so
  * tools/test_ask.c runs this exact code.
  */

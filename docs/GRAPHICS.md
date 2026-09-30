@@ -4,7 +4,7 @@
 it must never cost, what the sixteen picture primitives really are, where the deck
 sits among live-coding systems, and what to test before anything is added.*
 
-The premise, from the owner: the processing belongs to the robustness and
+The premise, from me: the processing belongs to the robustness and
 determinism of the control system — the language, the clock, the output — and the
 constraints are where this instrument lives. So every number below is either
 measured on the deck (and says where) or labelled an estimate.
@@ -97,7 +97,7 @@ beat instead of the step, halves it.
 
 ## 4. The sixteen are macros
 
-The owner's observation is right, and it can be made exact. Sixteen names reduce to
+My observation is right, and it can be made exact. Sixteen names reduce to
 **five operations on a grid of tones**:
 
 | operation | what it is | the names that are it |
@@ -170,7 +170,7 @@ Text and pictures are cells on one grid, in one set of glyphs, and the view node
 sent **cells** — 1,071 bytes a frame — and turns them into pixels itself. That is the
 right division of labour: the deck decides, something else rasterises.
 
-So letters as image — the Swiss Punk move the owner asked for — is structurally free
+So letters as image — the Swiss Punk move I asked for — is structurally free
 here. A **stamp** operation writes glyph codes into the picture grid: the cheapest
 primitive there could be, one store a cell and no field at all. With sub-cell blocks,
 the 6 × 12 face's own bitmap becomes big type, one font pixel to one block (the right

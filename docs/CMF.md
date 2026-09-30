@@ -111,7 +111,7 @@ Three sentences decide most of what follows:
 | Grid | **12 × 24 cells → 33 × 12** (the default) · 6 × 12 → 66 × 25 (dense) |
 
 The 6 × 12 cell was the arithmetic's recommendation and did not survive contact: on
-the real panel a 5 × 7 body is too small and too thin. The owner: *"with such a
+the real panel a 5 × 7 body is too small and too thin. I said: *"with such a
 naturally low contrast screen we gotta have sexy chunky letters."* The grid rule
 that made the change free — cell height a multiple of 12, width only even — is in
 [HARDWARE.md](HARDWARE.md).
@@ -209,14 +209,14 @@ the room.
 | one bit throughout | it is what the panel is | HARDWARE.md |
 | 12 × 24 default | the 6 × 12 was too thin to read on the panel | HARDWARE.md |
 | 2 px stems | thin strokes vanish on a reflective panel | font12x24_art.py |
-| strict monospace | ASCII art is load-bearing | owner, 2026-09-20 |
+| strict monospace | ASCII art is load-bearing | me, 2026-09-20 |
 | nine tones | a trail fades through eight visible stages | viz.c |
 | fields, not shapes | a threshold makes the shapes; a star was a dead end | viz.c, VERBS.md |
 | playhead a sixth of the cell | one row vanishes; a third reads as a block | textgrid.c |
 
 ## Open — the type overhaul
 
-The owner, 2026-09-27: **redraw both faces — more elegant, one bit, extremely legible,
+I said, 2026-09-27: **redraw both faces — more elegant, one bit, extremely legible,
 and aligned with what is sometimes called Swiss Punk — and let text take part in the
 picture.** What the redesign starts from:
 
@@ -237,7 +237,7 @@ numbers. At least 2 px of stem on the panel.
 4. **Confusable pairs.** 0 O, 1 l I, 5 S, 8 B, rn m — to be checked on the panel, at
    arm's length, in poor light.
 
-**How it will be measured, not admired:** the owner reads random strings off the
+**How it will be measured, not admired:** I read random strings off the
 panel at arm's length, in daylight and indoors, with the current faces and the new;
 errors per hundred characters, by glyph. A face that looks better and reads worse
 does not ship.

@@ -34,7 +34,7 @@
  * It was eight music lanes AND thirteen visual primitives, counted separately,
  * which meant a piece that leaned visual was penalised for it while eight drum
  * slots sat empty. One table means the player decides the mix, and sixteen is
- * what the owner's own first piece wanted: seven sounding lanes and six
+ * what my own first piece wanted: seven sounding lanes and six
  * drawing ones. */
 #define SEQ_MAX_LANES 16
 /* SIXTY-FOUR, BECAUSE ALTERNATION SPENDS SLOTS.
@@ -516,7 +516,7 @@ void seq_all_notes_off(void);
 
 /* SELF-MEASUREMENT.
  *
- * The owner perceives timing jitter, and the first rule of this project is
+ * I perceive timing jitter, and the first rule of this project is
  * that nothing is claimed without evidence. The sequencer knows exactly when
  * each tick SHOULD have fired - the grid is t0 + n*period - and exactly when
  * it did, so it can measure its own clock without any external instrument.

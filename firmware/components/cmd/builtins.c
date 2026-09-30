@@ -132,7 +132,7 @@ static cmd_status_t c_run(cmd_ctx_t *ctx)
     }
     running = false;
 
-    /* ALWAYS COME BACK TO WHERE THE OWNER WAS STANDING, named or not.
+    /* ALWAYS COME BACK TO WHERE I WAS STANDING, named or not.
      *
      * Running a page is not navigation. This did leave you on the named page,
      * on the reasoning that naming it was half a request to see it - and the
@@ -158,9 +158,9 @@ static cmd_status_t c_run(cmd_ctx_t *ctx)
  * at all. Two devices cannot talk. DIN MIDI is one wire and has been the same
  * wire since 1983, so this is what lets the deck drive hardware directly.
  *
- * THE PIN IS THE OWNER'S TO DECLARE. Guessing one on this board has already
+ * THE PIN IS MINE TO DECLARE. Guessing one on this board has already
  * cost an afternoon - the battery sense line - and the reason has not changed:
- * a pin is a fact about a physical object and only the owner can see it.
+ * a pin is a fact about a physical object and only I can see it.
  *
  * The wiring is in dinmidi.h and it is not optional: a MIDI output is a current
  * loop, not a logic level. */
@@ -185,7 +185,7 @@ static cmd_status_t c_din(cmd_ctx_t *ctx)
         }
         /* BYTES, NOT A BOOLEAN. "din on GPIO17" is true of a deck with nothing
          * attached and of one driving a drum machine, and those are the two
-         * cases the owner needs to tell apart without a scope. */
+         * cases I need to tell apart without a scope. */
         const uint32_t n = dinmidi_bytes();
         cmd_out(ctx, "din GPIO%d, %u bytes sent", dinmidi_pin(), (unsigned)n);
         cmd_out(ctx, n ? "the wire is busy" : "nothing sent since last asked");
@@ -214,7 +214,7 @@ static cmd_status_t c_din(cmd_ctx_t *ctx)
     /* SAY WHICH ERROR. "GPIO17 refused" was true of a pin the chip cannot use
      * and of a driver call that failed for a reason having nothing to do with
      * the pin - and it was the second one. A refusal that does not name its
-     * cause sends the owner to rewire hardware that was never wrong. */
+     * cause sends me to rewire hardware that was never wrong. */
     const esp_err_t de = dinmidi_start(gpio);
     if (de != ESP_OK) {
         cmd_out(ctx, "GPIO%d refused: %s", gpio, esp_err_to_name(de));
@@ -231,8 +231,8 @@ static cmd_status_t c_din(cmd_ctx_t *ctx)
  * one earns its place by deleting a GESTURE: dropping a keyboard bond was
  * reachable only by holding KEY for two seconds - undiscoverable, silent,
  * all-or-nothing, and on a board whose switch identities are still an open item
- * in docs/ASSEMBLY.md, a hold the owner could not reliably perform. The project
- * has one rule about buttons and it is that the owner should never be asked to
+ * in docs/ASSEMBLY.md, a hold I could not reliably perform. The project
+ * has one rule about buttons and it is that I should never be asked to
  * hold one.
  *
  * It also answers a question nothing else could: a deck with no keyboard and a
@@ -598,7 +598,7 @@ static bool binding_of(const lane_name_t *ln, seq_binding_t *b, char *why,
  * the lane, EXCEPT when the transport is running and the line is byte-for-byte
  * what you last ran for that lane, in which case the lane goes.
  *
- * IT USED TO MUTE, and a muted lane kept its slot: the owner toggled '>bass
+ * IT USED TO MUTE, and a muted lane kept its slot: I toggled '>bass
  * 1.1.1.1.' off, found it still there, and had no way to see why sixteen lanes
  * filled up (2026-09-29). Off now means gone - the slot is free, '>lanes' does
  * not list it - and the same key brings it back, compiled fresh. Muting has its
@@ -721,8 +721,7 @@ cmd_status_t cmd_lane(cmd_ctx_t *ctx, const char *word, size_t n)
     /* A BARE NAME MEANS THE LANE IS GONE, not muted. Muting has a word -
      * '>mute kick' - and leaves the slot allocated, which is how a session once
      * filled every lane with names the document no longer mentioned. Re-running
-     * the same line removes it too, and once more brings it back (2026-09-29): the
-     * owner found no way to be rid of a lane while the re-run only muted. */
+     * the same line removes it too, and once more brings it back (2026-09-29): I found no way to be rid of a lane while the re-run only muted. */
     if (pat[0] == '\0') {
         const bool had = seq_forget(name) == ESP_OK;
         snprintf(ctx->msg, sizeof ctx->msg, had ? "%s gone" : "no %s", name);
@@ -1111,7 +1110,7 @@ static cmd_status_t c_sync(cmd_ctx_t *ctx)
  * THIS COMMAND IS A PRECONDITION FOR EVERYTHING ELSE THIS DEVICE MIGHT DO
  * WITH ITS USB PORT, and it is written before any of it.
  *
- * The one hard rule on this project is that the owner is never asked to hold
+ * The one hard rule on this project is that I am never asked to hold
  * BOOT. Today that holds because the ESP32-S3's USB-Serial-JTAG has reset
  * logic in hardware and esptool drives it over DTR/RTS. Any firmware that
  * reconfigures the USB peripheral - a USB MIDI device, say - takes that
@@ -1126,7 +1125,7 @@ static cmd_status_t c_sync(cmd_ctx_t *ctx)
  * The buffer is written first. A command that reboots the machine and loses
  * the document is not a convenience.
  *
- * ONE PROPERTY THE OWNER HAS TO KNOW, found by testing it rather than by
+ * ONE PROPERTY I HAVE TO KNOW, found by testing it rather than by
  * reading about it. RTC_CNTL_OPTION1_REG is in the RTC power domain, and
  * esp_restart() is a CPU reset - rst:0xc, RTC_SW_CPU_RST - which does not
  * touch that domain. So the bit SURVIVES, and the deck re-enters download
@@ -1266,7 +1265,7 @@ static cmd_status_t c_dump(cmd_ctx_t *ctx)
     /* A LINE LONGER THAN THE CONSOLE'S goes on in the next, marked '+' where
      * a new line is marked '|', so the text comes back exactly. It used to be
      * cut into two numbered lines and the character at the cut was lost -
-     * found reading the owner's edited pieces back, 2026-09-29, where a long
+     * found reading my edited pieces back, 2026-09-29, where a long
      * pattern would have come back one character short. */
     char line[96];
     size_t k = 0;
@@ -1372,7 +1371,7 @@ static cmd_status_t c_usbtest(cmd_ctx_t *ctx)
 
 /* '>jitter' - what the clock is actually doing, in microseconds.
  *
- * The owner reports perceptible timing jitter. Before optimising anything,
+ * I report perceptible timing jitter. Before optimising anything,
  * measure it: the sequencer knows when each tick should have fired and when
  * it did. CLOCK is dispatch deviation from the ideal grid; XPORT is how long
  * a note waited between the clock queueing it and the transport being handed
@@ -1480,7 +1479,7 @@ static cmd_status_t c_jitter(cmd_ctx_t *ctx)
  * Both directions reboot, and neither can lose a document: every dirty buffer
  * is written first. Turning it ON is the risky direction and is ARMED rather
  * than set - if no host mounts the deck within eight seconds it reverts by
- * itself, and three failed boots give up permanently. The owner is never
+ * itself, and three failed boots give up permanently. I am never
  * asked to confirm anything, because the confirmation that matters is a host
  * actually attaching, and the deck can see that for itself. */
 static cmd_status_t c_usb(cmd_ctx_t *ctx)
@@ -1527,7 +1526,7 @@ static cmd_status_t c_usb(cmd_ctx_t *ctx)
      * rather than suffered - see vitals.h. */
     vitals_goodbye(was_usb, false, seq_position());
     /* Say REBOOTING. This command deliberately restarts the deck, which cuts
-     * the console off mid-sentence - and the owner reported '>usb on' as a
+     * the console off mid-sentence - and I reported '>usb on' as a
      * crash, because that is exactly what a deliberate reboot looks like from
      * a serial terminal. */
     cmd_announce(on ? "USB MIDI - rebooting now"
@@ -1566,7 +1565,7 @@ static void two_words(const char *arg, char *a, size_t an, char *b, size_t bn)
  * made up. */
 static cmd_status_t c_battery(cmd_ctx_t *ctx)
 {
-    /* '>battery use 4' once the owner knows which channel moved, optionally
+    /* '>battery use 4' once I know which channel moved, optionally
      * with the divider ratio x10 - 'use 4 20' is a 2:1 network. Persisted, so
      * it is a one-time act, and 'use 0' forgets it. */
     if (strncmp(ctx->arg, "use", 3) == 0) {
@@ -1607,7 +1606,7 @@ static cmd_status_t c_battery(cmd_ctx_t *ctx)
  * The password is on the line, which is a real trade-off stated plainly: it is
  * typed on a thumb keyboard by someone holding the device, it goes into a
  * document, and '+ssh' is TRANSIENT so that document is never journalled and
- * never reaches the SD mirror or the owner's DGX. The alternative - a key in
+ * never reaches the SD mirror or my DGX. The alternative - a key in
  * NVS - is better and is the next step; this is the version that works today
  * without a key-management design nobody has agreed yet.
  *
@@ -1659,7 +1658,7 @@ static cmd_status_t c_split(cmd_ctx_t *ctx)
         return CMD_DONE;
     }
     /* Say the SHAPE, not just a number. The direction is decided by arithmetic
-     * on the grid - see viz_pane() - so the one thing the owner cannot work out
+     * on the grid - see viz_pane() - so the one thing I cannot work out
      * for themselves is which way it went and how big the picture ended up. */
     snprintf(ctx->msg, sizeof ctx->msg, "view %dx%d below", viz_cols(),
              viz_rows());
@@ -1759,8 +1758,7 @@ static cmd_status_t c_route(cmd_ctx_t *ctx)
     } else if (from[0] != '\0' && seq_lane_find(from, -1) == NULL &&
                !input_named(from)) {
         /* An INPUT is a source with no lane behind it ('>knob1 = knob'), so
-         * this said "no lane 'knob1' yet" about a route that worked - the
-         * owner's first try of OSC in, 2026-09-25. */
+         * this said "no lane 'knob1' yet" about a route that worked - my first try of OSC in, 2026-09-25. */
         cmd_out(ctx, "nothing called %s yet -", from);
         cmd_out(ctx, "silent until a lane or input is");
     }
@@ -1772,7 +1770,7 @@ static cmd_status_t c_route(cmd_ctx_t *ctx)
 static cmd_status_t c_frame(cmd_ctx_t *ctx)
 {
     /* If visuals are running, THE FRAME IS THE FRAME. Sending the document
-     * instead would be sending the source when the owner asked for the
+     * instead would be sending the source when I asked for the
      * picture. With no visual lanes it falls back to the document, which is
      * how a hand-drawn ASCII frame gets out. */
     if (ctx->arg[0] == '\0' && viz_active()) {
@@ -1910,7 +1908,7 @@ static cmd_status_t c_ssh(cmd_ctx_t *ctx)
         }
         const esp_err_t e = ssh_forget(host, port);
         /* A line, not only the status bar: forgetting a key is a decision
-         * about trust, and it should leave a record where the owner reads. */
+         * about trust, and it should leave a record where I read. */
         cmd_out(ctx, "%s %.20s:%d", e == ESP_OK ? "key forgotten:"
                                                 : "no key kept for", host, port);
         snprintf(ctx->msg, sizeof ctx->msg, "%s", e == ESP_OK ? "key forgotten"
@@ -2132,7 +2130,7 @@ static cmd_status_t c_send(cmd_ctx_t *ctx)
          *
          * This printed name, state and help on one line - 39 characters into
          * a 30-column grid, so every line wrapped mid-word and ran into the
-         * next. The owner's report was that these pages are "jumbled in a
+         * next. My report was that these pages are "jumbled in a
          * funky way that's not very legible", and they were right: output
          * that does not fit the screen is output nobody can read, which makes
          * every command that produces it useless as a diagnostic. */
@@ -2157,7 +2155,7 @@ static cmd_status_t c_send(cmd_ctx_t *ctx)
         return CMD_ERROR;
     }
     /* A CONTROLLER, SENT A VALUE NOW: '>send cut 3'. A track sets where its
-     * controllers start before it plays - the owner, 2026-09-29: end a song
+     * controllers start before it plays - me, 2026-09-29: end a song
      * on a high drive and the next one starts there - and a lane to do it
      * would hold a slot a track does not have. Nothing plays; the value goes
      * out once, on the controller's own channel, 0-9 as on a lane. */

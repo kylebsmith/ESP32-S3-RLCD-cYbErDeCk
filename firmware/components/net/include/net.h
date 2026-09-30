@@ -4,11 +4,11 @@
  * WHY THIS IS OFF UNTIL ASKED. The ESP32-S3 has ONE radio. Wi-Fi and BLE
  * coexist through a scheduler, and the deck already runs two BLE links - a HID
  * central for the keyboard and, when enabled, a MIDI peripheral. Adding Wi-Fi
- * is adding a third claimant to the same airtime, and the owner has already
+ * is adding a third claimant to the same airtime, and I have already
  * heard what radio contention does to timing. So it is a command, not a
  * default, and USB MIDI remains the path with a measured 0.03 ms of jitter.
  *
- * TWO MODES, for two situations the owner named:
+ * TWO MODES, for two situations I named:
  *
  *   JOIN  a network that exists - a studio, a venue, home.
  *   HOST  its own - an installation with no infrastructure, or a performance
@@ -26,8 +26,7 @@
 #include "esp_err.h"
 
 /* Join an existing network. Credentials go to NVS, not to a document - a
- * password in a document would be mirrored to the SD card and copied to the
- * owner's DGX with the rest of their writing. */
+ * password in a document would be mirrored to the SD card and copied to my DGX with the rest of my writing. */
 esp_err_t net_join(const char *ssid, const char *pass);
 
 /* Host one. Open if `pass` is NULL or shorter than 8 characters, because WPA2

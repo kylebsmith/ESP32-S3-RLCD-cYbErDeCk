@@ -19,7 +19,7 @@ a circle, a eurorack module and a knob on somebody else's desk.
 >   relay on the laptop), §8 (OSC in, as §5's mechanism: `>knob1 = knob`), §7 (Link
 >   not integrated, for the licence), §9, §10 (the defect, and three more).
 > - **Waiting on hardware:** §5's satellites, the direct deck-to-node link, MIDI in.
->   The satellites' cable, bus and frames are briefed, 2026-09-26, for the owner to
+>   The satellites' cable, bus and frames are briefed, 2026-09-26, for me to
 >   build: [SATELLITES.md](SATELLITES.md).
 > - **Two claims in this brief did not survive measurement.** §2's "two decks in
 >   phase within 35 µs" was the grids, not the notes: a follower's ticks drifted 2 ppm
@@ -37,13 +37,13 @@ a circle, a eurorack module and a knob on somebody else's desk.
 1. **Never claim something is tested when it is not.** Say "unverified" in those words.
 2. **Every fix ships with a check that provably fails on the old state.** If you cannot
    write one, you have not understood the bug.
-3. **Never ask the owner to hold a button.** Every flash is button-free. Two routes exist;
+3. **Never ask me to hold a button.** Every flash is button-free. Two routes exist;
    see [HARDWARE.md](HARDWARE.md).
 4. **No hangs. The device must never become unreachable.** If you are stuck in a
    troubleshooting loop, confirm the issue is not blocking, mark it for later, and move on.
-5. **Commits carry no co-author trailer.** The owner's instruction.
+5. **Commits carry no co-author trailer.** My instruction.
 6. **Secrets never enter a document.** A document mirrors to the SD card and is copied to
-   the owner's home DGX with their writing. This is why §10 is a defect report and not a
+   my home DGX with my writing. This is why §10 is a defect report and not a
    feature request.
 7. **Measure before you claim.** Three times this week a confident causal story was
    backwards, and each time a counter or a histogram settled it in one step where
@@ -88,7 +88,7 @@ sounding*. It is the rule used to refuse chords, note length and per-step veloci
 `x%15` is four characters for one step, so **the rule is already broken and the refusals
 it justified are void.** Half of each is the worst of both and is the current state.
 
-**Recommendation, with the reasoning, for the owner to accept or reject.** Keep the
+**Recommendation, with the reasoning, for me to accept or reject.** Keep the
 *goal* — you can always see what is sounding — and drop the *mechanism*. A step becomes
 **one character plus optional modifiers**, and the playhead highlights the **span** rather
 than the character. `seq_pattern_item_span()` already computes spans; the editor's
@@ -137,12 +137,12 @@ computed. A reversal with a reason is worth more than a feature.
 
 ## 4. Finite repetition — new requirement
 
-A lane that plays **n times and then stops**, not forever. Owner's words. It has to
+A lane that plays **n times and then stops**, not forever. My words. It has to
 compose with `/2 *2`, with `<a b>`, and with `%`.
 
 The count is a property of the **lane**, not of a step, so it belongs where the rate
 already lives: at the end of the line. What it should be *spelled* is a real decision with
-real collisions, and it needs the owner:
+real collisions, and it needs me:
 
 | candidate | cost |
 |---|---|
@@ -186,7 +186,7 @@ Requirements that follow:
   deck, so that unplugging a satellite does not lose the patch and two satellites can
   share a parameter.
 - **A satellite must be able to say what it is**, so `>lanes` can show `knob1 → cut` and
-  the owner can tell a dead battery from a bad binding.
+  I can tell a dead battery from a bad binding.
 - Latency: a knob is a gesture, so tens of milliseconds is fine — do **not** spend the
   clock's accuracy budget on it. A *button that triggers a musical event* is different and
   should be quantised to the grid, not fired on arrival.
@@ -195,7 +195,7 @@ Requirements that follow:
 
 ## 6. The visualization node — RP2040 with DVI
 
-The owner has the Adafruit RP2040 DVI board. It becomes the HDMI output: tethered over
+I have the Adafruit RP2040 DVI board. It becomes the HDMI output: tethered over
 UART or SPI now, and later an RP2040 with an ESP32 companion so it joins the ensemble
 wirelessly and shares the same grid.
 
@@ -211,14 +211,14 @@ Specifically:
   join the ensemble as a follower rather than invent a second sync.
 - Size and aspect must be **settable and must not change the deck's own preview**, which
   is an approximation of the output and was explicitly asked to stay that way.
-- Answer the power question the owner raised: can the RP2040 run off the deck's battery
+- Answer the power question I raised: can the RP2040 run off the deck's battery
   over USB-C, and what does that cost in runtime? Measure it, do not estimate it.
 
 ---
 
 ## 7. Ableton Link — the licence gate comes first
 
-**Get a decision from the owner before writing any code.** Link is dual-licensed GPLv2+
+**Get a decision from me before writing any code.** Link is dual-licensed GPLv2+
 or commercial from Ableton, and this is a project-level choice about the whole repository,
 not a technical one.
 
@@ -241,7 +241,7 @@ encoder on a satellite. If those two end up as two mechanisms, one of them is wr
 
 ## 9. Optimization — with a rule
 
-The owner wants every ounce out of this board, in the spirit of small chips doing
+I want every ounce out of this board, in the spirit of small chips doing
 absurdly complex things. Agreed, with one rule: **no optimization lands without a
 before-and-after number.** An "obvious" speed-up that nobody measured is how the frame
 generator ended up inside the clock callback four separate times.
@@ -266,12 +266,11 @@ is almost certainly the budget, not the drawing.
 
 ## 10. SSH — test it, and fix the defect it has
 
-`>ssh user@host pass <command>` exists, is untested, and the reply lands in `+ssh`. The
-owner has offered their laptop as the target.
+`>ssh user@host pass <command>` exists, is untested, and the reply lands in `+ssh`. I have offered my laptop as the target.
 
 **Before testing, understand that the verb as written violates ground rule 6.** The
 password is a positional argument on a line that lives in a document, and documents mirror
-to the SD card and are copied to the owner's DGX. So:
+to the SD card and are copied to my DGX. So:
 
 1. **Do not test it with a real password on a real account.** Use a throwaway account, or
    key-based auth, or a local sshd.
@@ -287,7 +286,7 @@ language is not finished.
 
 ## 11. Strudel — build the corpus, not the compiler
 
-The owner asked, and flagged it as possibly nonsense. It is not nonsense, but the
+I asked, and flagged it as possibly nonsense. It is not nonsense, but the
 tractable version is not the one that first comes to mind.
 
 **A full Strudel compiler is not possible and should not be attempted.** Strudel is
@@ -315,7 +314,7 @@ would not trust. And it costs the device **nothing** — no verb, no bytes, no r
 
 If a paste-in path is still wanted afterwards, it is a script on a laptop that converts
 the subset and *tells you what it dropped*, never a silent translation. And the
-philosophical objection the owner half-raised is right: this device is the brain of an
+philosophical objection I half-raised is right: this device is the brain of an
 ecosystem, not a client of somebody else's language. Take the notation, refuse the
 combinators, and say so out loud.
 
@@ -323,7 +322,7 @@ combinators, and say so out loud.
 
 ## 12. The thesis — write it down while you build
 
-The owner's aside is the sharpest thing in the whole conversation and it is a research
+My aside is the sharpest thing in the whole conversation and it is a research
 contribution, not a digression:
 
 > a laptop performer has to overlay their code to prove they are doing anything, like the

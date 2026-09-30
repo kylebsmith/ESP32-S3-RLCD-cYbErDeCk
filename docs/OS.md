@@ -46,7 +46,7 @@ look reasonable. All are established in HARDWARE.md.
 | Constraint | Consequence |
 |---|---|
 | No MMU `[FACT]` | No Linux, no processes, no memory isolation. Reliability comes from *ownership discipline*, not from hardware protection. |
-| BLE only, no Bluetooth Classic `[FACT]` | The keyboard is a BLE HID (HOGP) peripheral. Confirmed against the owner's unit, which advertises the HID service. |
+| BLE only, no Bluetooth Classic `[FACT]` | The keyboard is a BLE HID (HOGP) peripheral. Confirmed against my unit, which advertises the HID service. |
 | One USB-OTG peripheral, sharing a PHY with USB-Serial/JTAG `[FACT]` | The port is *either* MIDI *or* the console. USB host is off the table. |
 | EP0 + 4-5 IN, 6 OUT `[MEASURED]` | **This number has now been wrong twice and the second version was mine.** It was `[FACT]` citing HARDWARE.md, which has no endpoint budget; then `[MEASURED]` claiming `in_eps[6]`/`out_eps[6]` *include* EP0 for "five usable each way". Both halves of that were wrong. `soc/esp32s3/include/soc/usb_dwc_struct.h:1137` declares `diepctl0_reg` as a **separate member at 0x900**, so `in_eps[6]` at 0x920 is EP1–EP6 and the arrays **exclude** EP0. And the array size is not the binding constraint: the IN limit is TX FIFOs, `soc/esp32s3/include/soc/usb_dwc_cfg.h:36` `OTG_NUM_IN_EPS 5`, which TinyUSB enforces as `ep_in_count = 5` with `TU_ASSERT(allocated_epin_count < ep_in_count)` in `dcd_dwc2.c`. **CDC-ACM costs 2 IN + 1 OUT and USB MIDI 1 IN + 1 OUT, so a CDC + MIDI composite fits** — that conclusion survived both errors, which is exactly why nobody checked the number. Whether EP0 itself counts against the 5 is the one part not settled from source, so the headroom is **at least one** further IN endpoint and possibly two; CDC + MIDI + HID is at or past the ceiling and must not be assumed. |
 | 1 bpp, strictly `[FACT]` | No antialiasing, ever. Hand-hinted bitmap faces only; any TTF rasteriser producing coverage values produces mush. |
@@ -215,7 +215,7 @@ best-designed version of this in the prior art. Adopt it.
 
 ### Solving "the arrow keys are cramped"
 
-The owner's own verdict on this keyboard's arrow cluster matches the reviews.
+My own verdict on this keyboard's arrow cluster matches the reviews.
 The answer is not to use them.
 
 - **Meta mode** — one tap of a dedicated key turns the alpha block into
@@ -421,7 +421,7 @@ for a 2D language and the only composition mechanism Orca has.
 ## The SD mirror, and what a backup is for
 
 The journal in flash is the source of truth. The SD card is an **export
-medium**: the owner copies it to a DGX at home and runs semantic analysis over
+medium**: I copy it to a DGX at home and run semantic analysis over
 the corpus, so what lands on that card is training and retrieval input, not
 just a safety copy. Two properties follow, and neither was true until they were
 found on hardware.
@@ -496,7 +496,7 @@ Stated so they do not get relitigated:
 - **No gutting the keyboard.** An earlier analysis recommended desoldering the
   Rii's radio and driving its matrix from an I²C scanner. That recommendation
   rested on the premise that the keyboard is Bluetooth-Classic-only, **which
-  is false** — the owner's unit advertises BLE HID. The robustness argument
+  is false** — my unit advertises BLE HID. The robustness argument
   survives on its own merits as a *preference*, but it is irreversible and no
   longer forced by anything. **Do not gut a working BLE keyboard.**
 

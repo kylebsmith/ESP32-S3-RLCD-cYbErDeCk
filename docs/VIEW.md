@@ -19,7 +19,7 @@ pictures.
 **Every pixel is the deck's** (2026-09-29). The node draws each cell with the deck's
 own 6×12 tile, bit for bit, and each of its pixels is a 2×2 block on the screen:
 **53×20 cells fill it**, and that is what `>send view on` sends. Nothing is blended,
-resampled or re-dithered. The owner, looking at the first modes: the node's smoothing
+resampled or re-dithered. My note on the first modes: the node's smoothing
 "blurred and mushed" the "chunky blocks, rigid ass lovely pixels". It was the node's
 own doing — `plain` spread each grey across its neighbours before dithering it again,
 and `feedback` zoomed and turned the frame — so the smoothing is gone, and phosphor
@@ -171,7 +171,7 @@ transport in `firmware/main/view.c` changes: the bytes are already the wire form
 
 ## The wire — deck to node with no computer `[PLAN]` 2026-09-29
 
-The owner wants the deck to power the node and send it everything over a short
+I want the deck to power the node and send it everything over a short
 cable from the pins on the deck's back. **A UART is the link:** one data wire from
 the deck to the node, plus ground and power. It is simpler than USB host, faster
 than the relay, and deterministic, because a byte on a UART always takes the same
@@ -197,8 +197,7 @@ target while its cores are busy making DVI; a UART lands in a hardware FIFO and 
 DMA channel, which is enough.
 
 **The deck's back header** is P1 on the vendor schematic (H4): 2 × 8 pins at
-2.54 mm, lying horizontally on the back, with ESP32_SCL at the top right (the
-owner, 2026-09-29). Seen that way:
+2.54 mm, lying horizontally on the back, with ESP32_SCL at the top right (me, 2026-09-29). Seen that way:
 
 ```
   top    VBUS  GND  USB'_N  USB'_P  U0TXD  U0RXD  SDA     SCL        pins 2 4 6 ... 16
@@ -242,7 +241,7 @@ corner.
   into the Feather's QT port. The QT port is wired for I2C (GPIO2/3), which the
   RP2040's hardware UART cannot use, but a **PIO UART** can: PicoDVI takes one of
   the two PIO blocks and the other is free. One keyed cable carries power,
-  ground and a 2 Mbaud UART, with no soldering on the node. The owner's word
+  ground and a 2 Mbaud UART, with no soldering on the node. My word
   for it: "insane". The cable's colours on P1: black to pin 3, red to pin 1,
   blue (SDA) to pin 15, and yellow (SCL) to pin 9 if the return line is used.
 
@@ -300,7 +299,7 @@ schematic stays the vendor's: this page names its pins and does not copy it.
   are gone.
 - `tools/test_view_wire.c` reads DKC2 with its colours, DKC1 with none, refuses a
   colour with a bit wrong, and does not compile against the reader before it.
-- **In USB MIDI mode, measured live** while the owner played, 80×30 riso through the
+- **In USB MIDI mode, measured live** while I played, 80×30 riso through the
   relay: **4.1 frames a second of 8.27, and each held the editor's loop 30.4 ms**
   (1.25 s of every 10); the loop fell to 166 turns a second. Stdio waited on the CDC's
   512-byte transmit buffer until the host had every byte. Fixed in the firmware, not
@@ -329,7 +328,7 @@ schematic stays the vendor's: this page names its pins and does not copy it.
   of the frame grey smudge, on the panel as on the screen; with the sparkles left
   to twinkle it is 28 %, all of it the radar's own trail. The small disc must
   keep fading — on a small pane it is ORBITALS' planet, and its trail is the
-  comet — so the change on offer is for the four sparkles only. The owner's call.
+  comet — so the change on offer is for the four sparkles only. My call.
 
 ## Measured, 2026-09-28 — the six modes
 
@@ -368,7 +367,7 @@ schematic stays the vendor's: this page names its pins and does not copy it.
 deck's battery. It needs the direct link and a way to power the node from the deck
 (above).
 
-**Unverified:** anything about how the picture looks, beyond the owner's first
+**Unverified:** anything about how the picture looks, beyond my first
 look above — there is no camera here. The node reports frames drawn and refused,
 not pixels.
 

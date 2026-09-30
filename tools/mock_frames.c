@@ -63,7 +63,7 @@ static void at(const char *name, char axis, int amt)
  * beam - and echo fading them where they were drawn. It was '>turn 2' under
  * '>spin <0 3 6 9>', and spin turns the history, never this step's source, so the
  * fresh wedge landed in the same quadrant every step: a corner that never moved,
- * which the owner saw on the screen as broken. */
+ * which I saw on the screen as broken. */
 static void radar(int s)
 {
     static const char heading[4] = { 'u', 'l', 'd', 'r' };

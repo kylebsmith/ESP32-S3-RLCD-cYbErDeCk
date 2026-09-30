@@ -10,7 +10,7 @@ Dieter Rams read organically: one radius system, nothing applied, a single
 perforated element — but with curvature continuity everywhere a surface turns,
 so it reads as grown rather than extruded.
 
-[![validate](https://github.com/kylebsmith/ESP32-S3-RLCD-cYbErDeCk/actions/workflows/ci.yml/badge.svg?branch=claude/cyberdeck-enclosure-design-4vzwq6)](https://github.com/kylebsmith/ESP32-S3-RLCD-cYbErDeCk/actions/workflows/ci.yml)
+[![validate](https://github.com/kylebsmith/ESP32-S3-RLCD-cYbErDeCk/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kylebsmith/ESP32-S3-RLCD-cYbErDeCk/actions/workflows/ci.yml)
 
 <p align="center">
   <img src="docs/img/render-exploded.png" width="84%" alt="Exploded assembly">
@@ -121,8 +121,7 @@ document that runs at startup.
 Timing is measured rather than asserted. The sequencer's clock holds 99.6 % of
 ticks within 100 µs of the grid; end to end over USB the standard deviation is
 0.03 ms, against roughly 6 ms for an audible displacement of a percussive
-onset. What is *not* measured is stated as such, here and in
-[STATUS.md](STATUS.md).
+onset. What is *not* measured is stated as such.
 
 ## Print it
 
@@ -300,7 +299,6 @@ counted among the audited rows.
 | **[SUBSTRATE.md](docs/SUBSTRATE.md)** | the conceptual core: one data structure, one noun, three verbs |
 | **[CASE.md](docs/CASE.md)** | the carry case: how it guides, holds and prints |
 | **[CONCRETE.md](docs/CONCRETE.md)** | the cast concrete jacket, its mould, and the mix |
-| **[HANDOFF.md](HANDOFF.md)** | briefing for a session with the hardware in front of it |
 | **[CMF.md](docs/CMF.md)** | colour, material, finish: the object, the panel, both faces and every glyph, the pictures, and each decision |
 | **[zine/](zine/README.md)** | *hello*, zine #0: getting started, sixteen pages set in the deck's own faces, to print, fold and hand on |
 | **[GRAPHICS.md](docs/GRAPHICS.md)** | drawing on this panel: what it costs, what it must never cost, and where the deck sits among live-coding systems |

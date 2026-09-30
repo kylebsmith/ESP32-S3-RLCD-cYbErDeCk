@@ -237,7 +237,7 @@ says it cannot matter. The push is the term to watch now, and at about 2.3 ms fo
 grounds that it is aligned on both axes and cheapest per character. Both facts
 hold. The recommendation still failed, for a reason arithmetic could not
 reach: on the real panel, at 0.212 mm pixel pitch and with no backlight, a
-5 x 7 glyph body is too small and too thin to read comfortably. The owner's
+5 x 7 glyph body is too small and too thin to read comfortably. My
 first look at it was "the text is too small ... with such a naturally low
 contrast screen we gotta have sexy chunky letters."
 
@@ -403,7 +403,7 @@ keyboard-first writing device.
    input standoff, 2.5 A, no sense resistor - and names no OTG or boost, where its
    sibling the ETA6095 names one. Read from the vendor's feature list and a
    distributor's summary; the datasheet's own pin table is still unread. It now
-   matters: the owner wants the HDMI view node powered from the deck over USB-C
+   matters: I want the HDMI view node powered from the deck over USB-C
    ([VIEW.md](VIEW.md)), and without a boost the deck cannot send 5 V down the
    cable.
 4. **Schematic net names** have not been fully cross-read against the pin map above;
@@ -451,9 +451,9 @@ and it is what an SP404 MkII and most modern gear use:
 Type B swaps tip and ring. If a device does not respond, that is the first thing
 to try, and it cannot damage anything.
 
-**The pin is the owner's to declare.** `>din 17` — the same rule as the battery
+**The pin is my to declare.** `>din 17` — the same rule as the battery
 sense line, for the same reason: a pin is a fact about a physical object, and
-the only party who can see the object is the owner. GPIO 5, 11, 12, 18, 40 and
+the only party who can see the object is me. GPIO 5, 11, 12, 18, 40 and
 41 are refused by name, because they are the panel and the KEY button and taking
 one would look like a MIDI fault.
 
