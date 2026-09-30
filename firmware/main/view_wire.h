@@ -85,8 +85,8 @@ enum {
     VIEW_MODE_RISO, VIEW_MODE_POSTER, VIEW_MODE_CODE, VIEW_MODES
 };
 #define VIEW_LINES_MAX    12
-#define VIEW_LINE_MAX     60
-#define VIEW_TEXT_MAX     1024
+#define VIEW_LINE_MAX     96   /* a whole pattern, left to right, on the poster */
+#define VIEW_TEXT_MAX     1280
 #define VIEW_PARAMS       8
 #define VIEW_PARAM_UNSET  255
 #define VIEW_CTL_HEAD_LEN (VIEW_MAGIC_LEN + 8)

@@ -27,7 +27,7 @@
 #define VIEW_MAX_W 100
 #define VIEW_MAX_H 40
 /* The deck's view_wire.h says the same; tools/test_view_wire.c holds them to it. */
-#define VIEW_READ_TEXT_MAX  1024
+#define VIEW_READ_TEXT_MAX  1280
 #define VIEW_READ_LINES_MAX 12
 #define VIEW_RAW_MAX (4 + 6 + VIEW_MAX_W * VIEW_MAX_H + 1)
 

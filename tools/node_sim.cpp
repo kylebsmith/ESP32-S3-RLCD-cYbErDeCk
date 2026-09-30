@@ -45,7 +45,7 @@ static void dump(const char *path)
 int main(int argc, char **argv)
 {
     if (argc < 5) { fprintf(stderr, "node_sim CELLS PATTERN MODE OUT.ppm [p0..p7]\n"); return 2; }
-    const char *names[] = { "plain", "scan", "", "", "riso", "poster", "code" };
+    const char *names[] = { "plain", "scan", "sort", "latent", "riso", "poster", "code" };
     int mode = -1;
     for (int m = 0; m < 7; m++) if (names[m][0] && strcmp(argv[3], names[m]) == 0) mode = m;
     if (mode < 0) { fprintf(stderr, "no mode %s\n", argv[3]); return 2; }
@@ -55,6 +55,7 @@ int main(int argc, char **argv)
         { "ORBITALS", 0, 0 }, { "II first light", 0, 0 }, { "124 bpm  dmin", 0, 0 },
         { "kick 9...8...9...8...", 7, 8 }, { "box 2...1...2...1...", 6, 7 },
         { "disc:x 8876532111235678", 9, 10 }, { "hat ..3...3...3...4.", 6, 7 },
+        { "pad <[0,2,4] [0,2,5] [2,4,6] [1,3,6] [0,3,5] [2,5,7] [1,4,7] [0,2,4]> /16", 4, 11 },
     };
     const view_line_t code[] = {
         { "orbitals", 0, 0 }, { "124 bpm  dmin", 0, 0 }, { "-- II first light", 0, 0 },
@@ -78,8 +79,8 @@ int main(int argc, char **argv)
         fclose(f);
         const uint32_t tick = (uint32_t)k * 24;
         uint8_t ctl[VIEW_CTL2_HEAD_LEN + VIEW_TEXT_MAX + 1];
-        const size_t cn = mode == 5 ? view_wire_pack_ctl2(ctl, sizeof ctl, tick, mode, par, lines, 7)
-                        : mode == 6 ? view_wire_pack_ctl2(ctl, sizeof ctl, tick, mode, par, code, 9)
+        const size_t cn = mode == 5 ? view_wire_pack_ctl2(ctl, sizeof ctl, tick, mode, par, lines, 8)
+                        : (mode == 6 || mode == 3) ? view_wire_pack_ctl2(ctl, sizeof ctl, tick, mode, par, code, 9)
                         : view_wire_pack_ctl2(ctl, sizeof ctl, tick, mode, par, NULL, 0);
         std::vector<uint8_t> stream(ctl, ctl + cn);
         std::vector<uint8_t> pic(VIEW_HEAD_LEN + cells.size() + 1);

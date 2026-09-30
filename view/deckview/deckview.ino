@@ -37,6 +37,7 @@
 #include <PicoDVI.h>
 #include <math.h>
 #include "deckfont.h"
+#include "tinyfont.h"
 #include "view_read.h"
 
 typedef struct { int r, g, b; } col_t;       // a colour, 0-255 a channel
@@ -52,8 +53,8 @@ DVIGFX8 display(DVI_RES_320x240p60, true, adafruit_feather_dvi_cfg);
 #define ROWS (H / CH)                          // 20
 
 // The modes, numbered as the deck's firmware/main/view_wire.h numbers them.
-enum { PLAIN, SCAN, PHOSPHOR, FEEDBACK, RISO, POSTER, CODE, MODES };
-static const char *const NAMES[MODES] = { "plain", "scan", "plain", "plain",
+enum { PLAIN, SCAN, SORT, LATENT, RISO, POSTER, CODE, MODES };
+static const char *const NAMES[MODES] = { "plain", "scan", "sort", "latent",
                                           "riso", "poster", "code" };
 
 static view_reader_t s_rd;
@@ -186,6 +187,24 @@ static void text6(uint8_t *fb, int x, int y, const char *t, uint8_t c)
   for (int i = 0; t[i]; i++) glyph6(fb, x + i * 6, y, (uint8_t)t[i], c);
 }
 
+// The small face, tinyfont.h: 3 x 5 in a 4 x 6 cell, for a whole pattern on a line.
+static void tiny(uint8_t *fb, int x, int y, int ch, uint8_t c)
+{
+  if (ch < 32 || ch > 126) ch = '?';
+  const uint16_t g = tinyfont_3x5[ch - 32];
+  for (int r = 0; r < 5; r++)
+    for (int k = 0; k < 3; k++)
+      if (g & (0x4000 >> (r * 3 + k))) {
+        const int X = x + k, Y = y + r;
+        if (X >= 0 && X < W && Y >= 0 && Y < H) fb[Y * W + X] = c;
+      }
+}
+
+static void tiny_text(uint8_t *fb, int x, int y, const char *t, int n, uint8_t c)
+{
+  for (int i = 0; i < n && t[i]; i++) tiny(fb, x + i * 4, y, (uint8_t)t[i], c);
+}
+
 static void fill(uint8_t *fb, int x, int y, int w, int h, uint8_t c)
 {
   for (int Y = y; Y < y + h; Y++)
@@ -278,7 +297,9 @@ static void palette(int mode)
     p[2] = set(5) ? p[2] : rgb(228, 0, 43);
     p[3] = rgb(150, 148, 142);
     if (set(5)) { const col_t a = hsv(par(5), 255, 220); put(p, 2, a); }
-  } else if (mode == CODE) {                           // black, the picture dimmed, text, red, grey
+  } else if (mode == SORT) {                           // a ramp, ink to paper, for the streaks
+    for (int k = 0; k < 8; k++) put(p, 6 + k, mix(ink, paper, 32 + k * 28));
+  } else if (mode == CODE || mode == LATENT) {         // black, a grey, text, red, grey
     p[0] = rgb(0, 0, 0);
     p[1] = rgb(58, 58, 54);
     p[2] = rgb(236, 236, 228);
@@ -392,13 +413,14 @@ static int line_of(int i, char *out, int max, int *from, int *to)
   return n;
 }
 
-// THE POSTER, the owner's brief (2026-09-29): the title and the tempo took half
-// the screen, and it should be far more Swiss punk. So the picture takes the
-// page, bleeding off the top and the right; the section's number is huge, red,
-// printed over it; the piece's name runs up a black spine; the section's name is
-// reversed out of a black bar; tempo, key, bar and step are set small and tight,
-// over sixteen blocks for the bar; and the lanes stand in a column, the step
-// each is on lit red.
+// THE POSTER, the owner's brief (2026-09-29, and again 2026-09-30: "all
+// clumped", the picture "this random rectangle in the top"). The picture is the
+// page: full bleed, fourteen cells deep, the deck's own pixels. The section's
+// number is printed over its lower left, huge and red. One hairline under it;
+// the section's name and the bar's sixteen steps on it; then every lane, a
+// whole pattern to a line in the small face, left to right, the step each is
+// on lit red. The piece's name and its tempo are tags at the picture's top
+// corners. One grid: 6 pixels across, and every line of type on it.
 static void draw_poster(uint8_t *fb, uint32_t tick)
 {
   (void)tick;
@@ -415,36 +437,42 @@ static void draw_poster(uint8_t *fb, uint32_t tick)
     if (sp < sn && sp < 5) { memcpy(num, sect, sp); num[sp] = 0; strcpy(name, sect + sp + 1); }
     else strcpy(name, sect);
   }
+  for (char *c = title; *c; c++) if (*c >= 'a' && *c <= 'z') *c -= 32;
   for (char *c = meta; *c; c++) if (*c >= 'a' && *c <= 'z') *c -= 32;
+  for (char *c = name; *c; c++) if (*c >= 'a' && *c <= 'z') *c -= 32;
   const uint32_t step = step_of(s_rd.tick);
 
-  cells_at(fb, s_cur, W - 222, 2, 37, 12, 1, 2, false);   // cell for cell, top right
-  fill(fb, 0, 0, 22, H, 1);                               // the spine
-  for (int i = 0; title[i] && 8 + i * 12 < H; i++) glyph12up(fb, 5, H - 8 - i * 12, (uint8_t)title[i], 0);
-  const int nl = (int)strlen(num);
-  if (nl) text12(fb, 28, 4, num, nl, nl <= 3 ? 5 : 4, 2); // over the picture
-  const int nn = (int)strlen(name) < 11 ? (int)strlen(name) : 11;
-  if (nn) {
-    fill(fb, 28, 156, nn * 12 + 10, 26, 1);
-    text12(fb, 33, 157, name, nn, 1, 0);
+  cells_at(fb, s_cur, 1, 0, COLS, 14, 1, 2, false);      // the picture: the page
+  const int nl = (int)strlen(num);                        // the number, over it
+  if (nl) {
+    const int sc = nl <= 2 ? 3 : 2;
+    text12(fb, 6, 168 - 20 * sc, num, nl, sc, 2);
   }
-  text6(fb, 28, 190, meta, 1);
-  char bar[24];
-  snprintf(bar, sizeof bar, "BAR %lu  %2lu/16", (unsigned long)(step / 16 + 1),
-           (unsigned long)(step % 16 + 1));
-  text6(fb, 28, 203, bar, 1);
-  for (int st = 0; st < 16; st++)
-    fill(fb, 28 + st * 9, 220, 7, 14, st == (int)(step % 16) ? 2 : (st % 4 == 0 ? 1 : 3));
-  for (int i = 0; i < 7; i++) {
+  const int tl = (int)strlen(title);                      // the name: a tag, top left
+  fill(fb, 0, 0, tl * 4 + 9, 11, 1);
+  tiny_text(fb, 5, 3, title, tl, 0);
+  char tag[48];                                           // tempo and bar: top right
+  snprintf(tag, sizeof tag, "%s  BAR %lu", meta, (unsigned long)(step / 16 + 1));
+  const int gl = (int)strlen(tag);
+  fill(fb, W - gl * 4 - 9, 0, gl * 4 + 9, 11, 1);
+  tiny_text(fb, W - gl * 4 - 4, 3, tag, gl, 0);
+
+  fill(fb, 0, 168, W, 1, 1);                              // the hairline
+  const int nn = (int)strlen(name) < 30 ? (int)strlen(name) : 30;
+  if (nn) text6(fb, 6, 172, name, 1);
+  for (int st = 0; st < 16; st++)                         // the bar, right
+    fill(fb, W - 6 - (16 - st) * 8 + 2, 175, 6, 6,
+         st == (int)(step % 16) ? 2 : (st % 4 == 0 ? 1 : 3));
+  for (int i = 0; i < 7; i++) {                           // the lanes, whole
     const uint8_t *ch;
     const int n = view_read_line(&s_rd, 3 + i, &ch, &from, &to);
     if (n <= 0) break;
-    const int y = 154 + i * 12;
-    for (int k = 0; k < n && k < 23; k++) {
-      const int x = W - 142 + k * 6;
+    const int y = 190 + i * 7;
+    for (int k = 0; k < n && k < 78; k++) {
+      const int x = 6 + k * 4;
       const bool lit = k >= from && k < to;
-      if (lit) fill(fb, x, y, 6, 11, 2);
-      glyph6(fb, x, y - 1, ch[k], lit ? 0 : 1);
+      if (lit) fill(fb, x - 1, y - 1, 4, 7, 2);
+      tiny(fb, x, y, ch[k], lit ? 0 : 1);
     }
   }
 }
@@ -457,12 +485,7 @@ static void draw_poster(uint8_t *fb, uint32_t tick)
 static void draw_code(uint8_t *fb, uint32_t tick)
 {
   (void)tick;
-  memset(fb, 0, W * H);                                   // black
-  {                                                       // the picture, dim, cell for cell
-    int x0, y0, cols, rows;
-    screen_box(s_cur, &x0, &y0, &cols, &rows);
-    cells_at(fb, s_cur, x0, y0, cols, rows, 1, 1, false);
-  }
+  memset(fb, 0, W * H);                                   // black, and only the code
   int from, to;
   char title[40], meta[40];
   line_of(0, title, 24, &from, &to);
@@ -472,9 +495,9 @@ static void draw_code(uint8_t *fb, uint32_t tick)
   char right[48];
   snprintf(right, sizeof right, "%s  BAR %lu  %2lu/16", meta, (unsigned long)(step / 16 + 1),
            (unsigned long)(step % 16 + 1));
-  text12(fb, 12, 6, title, (int)strlen(title), 1, 2);
-  text6(fb, W - 12 - 6 * (int)strlen(right), 12, right, 4);
-  fill(fb, 12, 36, W - 24, 2, 3);
+  text12(fb, 6, 6, title, (int)strlen(title), 1, 2);
+  text6(fb, W - 6 - 6 * (int)strlen(right), 12, right, 4);
+  fill(fb, 6, 36, W - 12, 1, 3);
   for (int i = 0; i < 10; i++) {
     const uint8_t *ch;
     const int n = view_read_line(&s_rd, 2 + i, &ch, &from, &to);
@@ -482,11 +505,87 @@ static void draw_code(uint8_t *fb, uint32_t tick)
     const int y = 46 + i * 18;
     const bool head = n >= 2 && ch[0] == '-' && ch[1] == '-';
     const bool live = from < to;
-    for (int k = 0; k < n && k < 49; k++) {
-      const int x = 12 + k * 6;
+    for (int k = 0; k < n && k < 51; k++) {
+      const int x = 6 + k * 6;
       const bool lit = k >= from && k < to;
       if (lit) fill(fb, x, y, 6, 12, 3);
       glyph6(fb, x, y, ch[k], lit ? 0 : head ? 3 : live ? 2 : 4);
+    }
+  }
+}
+
+// LATENT, the owner's ask (2026-09-30): the code "translated and animated and
+// jumbled like encoded latent space". Every glyph of the code is drawn with
+// its rows turned by a hash of where it is and of the beat, so the page is
+// the code's own marks, scrambled - and where a lane is playing, its step is
+// drawn plain, in red: the music decodes what it plays. The picture's tone
+// under a letter says how far its rows are turned, so the texture moves with
+// the music too. The same lines as the code; nothing is invented.
+static void draw_latent(uint8_t *fb, uint32_t tick)
+{
+  memset(fb, 0, W * H);
+  const uint32_t step = step_of(tick), beat = step / 4;
+  int x0, y0, cols, rows;
+  screen_box(s_cur, &x0, &y0, &cols, &rows);
+  int from, to;
+  for (int i = 0; i < 12; i++) {
+    const uint8_t *ch;
+    const int n = view_read_line(&s_rd, 2 + i, &ch, &from, &to);
+    if (n < 0) break;
+    const int y = 6 + i * 19;
+    for (int k = 0; k < n && k < 51; k++) {
+      const int x = 6 + k * 6;
+      const uint8_t c = ch[k];
+      if (c < DECKFONT_FIRST || c > DECKFONT_LAST || c == ' ') continue;
+      const bool lit = k >= from && k < to;
+      if (lit) { fill(fb, x, y, 6, 12, 3); glyph6(fb, x, y, c, 0); continue; }
+      const int cx = (x - x0) / CW, cy = (y - y0) / CH;
+      const int tone = (cx >= 0 && cx < cols && cy >= 0 && cy < rows)
+                       ? s_tone_of[s_cells[s_cur][(s_ch[s_cur] - rows) / 2 + cy]
+                                              [(s_cw[s_cur] - cols) / 2 + cx]] : 0;
+      uint32_t h = (uint32_t)(k * 73856093u) ^ (uint32_t)(i * 19349663u) ^ (beat * 83492791u);
+      const int g = c - DECKFONT_FIRST;
+      for (int r = 0; r < 12; r++) {
+        h = h * 1103515245u + 12345u;
+        const int turn = (int)((h >> 16) % (1 + tone)) - (int)(tone / 2);
+        const uint8_t bits = deckfont_6x12[g * 12 + ((r + (int)(h >> 29)) % 12)];
+        for (int b = 0; b < 6; b++) {
+          const int bb = ((b + turn) % 6 + 6) % 6;
+          if (bits & (0x80 >> bb)) {
+            const int X = x + b, Y = y + r;
+            if (X >= 0 && X < W && Y >= 0 && Y < H) fb[Y * W + X] = (h >> 27) & 1 ? 2 : 4;
+          }
+        }
+      }
+    }
+  }
+}
+
+// SORT, the owner's ask for "a pixel sorter or something more glitched"
+// (2026-09-30). The deck's pixels, cell for cell, then some rows sorted: every
+// inked pixel in the row gathered to one end, so the row becomes a bar as long
+// as the ink it held - the picture as its own histogram - with its tail fading
+// down a ramp in the palette. Which rows sort is a hash of the row and the
+// step, how many is cc 7, so it moves with the music and never twice alike.
+static void draw_sort(uint8_t *fb, uint32_t tick)
+{
+  draw_plain(fb);
+  const uint32_t step = step_of(tick);
+  const int amt = set(6) ? par(6) : 48;
+  for (int y = 0; y < H; y++) {
+    const uint32_t h = ((uint32_t)(y / 3) * 2654435761u) ^ (step * 40503u) ^ (step >> 4) * 97u;
+    if ((int)((h >> 24) & 127) >= amt) continue;
+    uint8_t *r = fb + y * W;
+    int n = 0;
+    for (int x = 0; x < W; x++) n += (r[x] == 1 || r[x] == 2);
+    if (n == 0) continue;
+    const bool left = (h >> 9) & 1;
+    for (int x = 0; x < W; x++) {
+      const int d = left ? x : W - 1 - x;
+      uint8_t v = 0;
+      if (d < n) v = 1;
+      else if (d < n + 16) v = (uint8_t)(6 + (d - n) / 2);
+      r[x] = v;
     }
   }
 }
@@ -505,6 +604,8 @@ static void show(uint32_t tick)
   uint8_t *fb = display.getBuffer();
   switch (s_mode) {
   case SCAN:   draw_scan(fb);         break;
+  case SORT:   draw_sort(fb, tick);   break;
+  case LATENT: draw_latent(fb, tick); break;
   case RISO:   draw_riso(fb, tick);   break;
   case POSTER: draw_poster(fb, tick); break;
   case CODE:   draw_code(fb, tick);   break;

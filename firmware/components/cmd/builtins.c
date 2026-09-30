@@ -2219,6 +2219,7 @@ static cmd_status_t c_send(cmd_ctx_t *ctx)
             viz_out_param_set(par, (uint8_t)(v * 127 / 9));
             snprintf(ctx->msg, sizeof ctx->msg, "view %s %d", state, v);
         }
+        viz_poke();
         return CMD_DONE;
     }
     if (view && sscanf(state, "%dx%d", &vw, &vh) == 2) {
@@ -2255,9 +2256,12 @@ static cmd_status_t c_send(cmd_ctx_t *ctx)
             viz_out_size(VIZ_VIEW_W, VIZ_VIEW_H);
             viz_split(true);
         }
-        if (mode >= 0) {
+        if (mode >= 0 && seq_running() && seq_dest_is_on("view")) {
+            viz_out_mode_at(mode, (seq_position() / 16 + 1) * 16);   /* on the one */
+        } else if (mode >= 0) {
             viz_out_mode(mode);
         }
+        viz_poke();                 /* the node hears it now, playing or not */
         tg_invalidate();
     }
     if (seq_dest_enable(name, on) != ESP_OK) {

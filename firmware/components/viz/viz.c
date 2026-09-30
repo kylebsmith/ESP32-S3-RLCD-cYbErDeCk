@@ -194,10 +194,13 @@ void viz_out_size(int w, int h)
 }
 
 static int s_out_mode;
+static volatile int8_t   s_mode_pend = -1;      /* a mode waiting for its one */
+static volatile uint32_t s_mode_at;
 
 void viz_out_mode(int mode)
 {
     if (mode >= 0 && mode < VIZ_OUT_MODES) {
+        s_mode_pend = -1;
         s_out_mode = mode;
     }
 }
@@ -206,11 +209,12 @@ int viz_out_mode_now(void) { return s_out_mode; }
 
 const char *viz_out_mode_name(int mode)
 {
-    /* Phosphor and feedback are retired (2026-09-29): both resampled the
-     * deck's pixels, and the owner wants them rigid. Their numbers stay taken
-     * on the wire, and the node draws them plain. */
+    /* 2 and 3 were phosphor and feedback, retired 2026-09-29 for resampling
+     * the deck's pixels. They are sort - each row of the picture gathered into
+     * its own bar - and latent - the code encoded, decoded where it plays -
+     * since 2026-09-30, drawn by the node (view/deckview). */
     static const char *const names[VIZ_OUT_MODES] = {
-        "plain", "scan", NULL, NULL, "riso", "poster", "code" };
+        "plain", "scan", "sort", "latent", "riso", "poster", "code" };
     return (mode >= 0 && mode < VIZ_OUT_MODES) ? names[mode] : NULL;
 }
 
@@ -234,6 +238,22 @@ static const char *const s_par_names[VIZ_OUT_PARAMS] = {
  * drawn for that step or later carries it - so a scene's toggles and its
  * colour change on the same downbeat. -1 is nothing pending. */
 static volatile int16_t  s_par_pend[VIZ_OUT_PARAMS] = { -1, -1, -1, -1, -1, -1, -1, -1 };
+/* A MODE WAITS FOR THE ONE TOO, so '>send view plain' in a scene changes the
+ * screen on the downbeat its toggles land on. */
+void viz_out_mode_at(int mode, uint32_t at)
+{
+    if (mode >= 0 && mode < VIZ_OUT_MODES) {
+        s_mode_at = at;
+        s_mode_pend = (int8_t)mode;
+    }
+}
+
+/* A frame now, whatever is drawing: a mode or a colour set while nothing
+ * plays still reaches the node - the end card after '>stop'. */
+void viz_poke(void)
+{
+    s_pending = true;
+}
 static volatile uint32_t s_par_at[VIZ_OUT_PARAMS];
 
 void viz_out_param_set(int i, uint8_t v)
@@ -254,6 +274,11 @@ void viz_out_param_at(int i, uint8_t v, uint32_t at)
 
 void viz_out_params_land(uint32_t step)
 {
+    const int8_t m = s_mode_pend;
+    if (m >= 0 && (step >= s_mode_at || s_mode_at - step > 16)) {
+        s_out_mode = m;
+        s_mode_pend = -1;
+    }
     for (int i = 0; i < VIZ_OUT_PARAMS; i++) {
         const int16_t v = s_par_pend[i];
         /* A change is set at most a bar ahead; further ahead than that, the

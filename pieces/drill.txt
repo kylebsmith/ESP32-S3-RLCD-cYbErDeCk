@@ -1,7 +1,7 @@
 DRILL
 
 -- set
-  >send view plain
+  >send view code
   >bpm 165
   >scale ephr
   >swing 50
@@ -30,6 +30,7 @@ DRILL
 
 -- in
   >toggle snare hat bass
+  >send view plain
 
 -- riff
   >toggle lead flip
@@ -81,9 +82,11 @@ DRILL
 -- drop, lead on ch 7
   >toggle kick snare hat box
   >send view inv 9
+  >send view sort
   >lead = ch 7
 
 -- out
   >clear
   >send view off
+  >send view poster
   >stop

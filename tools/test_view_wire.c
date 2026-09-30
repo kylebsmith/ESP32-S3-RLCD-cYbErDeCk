@@ -154,7 +154,7 @@ int main(void)
     char longl[200];
     memset(longl, 'y', sizeof longl - 1);
     longl[sizeof longl - 1] = '\0';
-    const view_line_t cut = { longl, 70, 72 };
+    const view_line_t cut = { longl, VIEW_LINE_MAX + 10, VIEW_LINE_MAX + 12 };
     const size_t ln = view_wire_pack_ctl(c, sizeof c, 0, 0, &cut, 1);
     memset(&R, 0, sizeof R);
     feed(c, ln);

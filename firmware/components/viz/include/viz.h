@@ -92,7 +92,7 @@ void viz_out_size(int w, int h);
  * control frame ahead of every picture - and the node does the drawing, so no
  * mode costs the deck anything. Numbered as firmware/main/view_wire.h numbers
  * them. */
-enum { VIZ_OUT_PLAIN, VIZ_OUT_SCAN, VIZ_OUT_PHOSPHOR, VIZ_OUT_FEEDBACK, VIZ_OUT_RISO,
+enum { VIZ_OUT_PLAIN, VIZ_OUT_SCAN, VIZ_OUT_SORT, VIZ_OUT_LATENT, VIZ_OUT_RISO,
        VIZ_OUT_POSTER, VIZ_OUT_CODE, VIZ_OUT_MODES };
 void        viz_out_mode(int mode);
 int         viz_out_mode_now(void);
@@ -109,6 +109,8 @@ void        viz_out_param_set(int i, uint8_t v);
  * with the first frame drawn for that step or later: viz_out_params_land(). */
 void        viz_out_param_at(int i, uint8_t v, uint32_t at);
 void        viz_out_params_land(uint32_t step);
+void        viz_out_mode_at(int mode, uint32_t at);
+void        viz_poke(void);
 uint8_t     viz_out_param(int i);
 int         viz_out_param_find(const char *name);   /* -1 if there is none */
 const char *viz_out_param_name(int i);

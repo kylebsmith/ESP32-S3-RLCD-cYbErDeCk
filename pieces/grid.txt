@@ -1,7 +1,7 @@
 GRID
 
 -- set
-  >send view plain
+  >send view code
   >send view day 9
   >send view lines 3
   >bpm 124
@@ -40,6 +40,7 @@ GRID
 
 -- in
   >toggle hat clap bass
+  >send view plain
 
 -- hook
   >toggle lead
@@ -122,4 +123,5 @@ GRID
 -- out
   >clear
   >send view off
+  >send view poster
   >stop

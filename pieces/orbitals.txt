@@ -53,12 +53,14 @@ for the satellites to come
   >toggle kick hat clap lead roll arp
   >scale dphr
   >send view glint 6
+  >send view latent
 
 -- VI return
   >toggle kick hat clap lead roll arp
   >toggle pad pad:2
   >scale dmin
   >send view glint 0
+  >send view poster
   >arp = ch 4
 
 -- VII night
@@ -93,4 +95,5 @@ for the satellites to come
 -- out
   >clear
   >send view off
+  >send view poster
   >stop

@@ -99,7 +99,7 @@ static bool view_emit(const uint8_t *frame, size_t n)
  * the picture and this must go out together through a 4,000-byte ring: at most
  * about 600 bytes here, against the picture's 3,225. */
 #define POSTER_LANES 7
-#define POSTER_COLS  32
+#define POSTER_COLS  96
 
 static int poster_lines(view_line_t *out, char text[][VIEW_LINE_MAX + 1])
 {
@@ -165,7 +165,7 @@ static int poster_lines(view_line_t *out, char text[][VIEW_LINE_MAX + 1])
  * muted, and playing exactly what this line says - so the screen lights what the
  * panel lights and nothing else. Lines longer than CODE_COLS light only within
  * what is sent. */
-#define CODE_COLS 40
+#define CODE_COLS 52
 
 static void line_span(const char *line, size_t n, uint8_t *from, uint8_t *to)
 {
@@ -290,7 +290,7 @@ void view_frame(void)
     static char text[VIEW_LINES_MAX][VIEW_LINE_MAX + 1];
     const int mode = viz_out_mode_now();
     const int nl = (mode == VIZ_OUT_POSTER) ? poster_lines(lines, text)
-                 : (mode == VIZ_OUT_CODE)   ? code_lines(lines, text) : 0;
+                 : (mode == VIZ_OUT_CODE || mode == VIZ_OUT_LATENT) ? code_lines(lines, text) : 0;
     uint8_t par[VIEW_PARAMS];
     viz_out_params_land(tick / 24);           /* a colour waiting for its one */
     for (int i = 0; i < VIEW_PARAMS; i++) {

@@ -371,3 +371,23 @@ deck's battery. It needs the direct link and a way to power the node from the de
 **Unverified:** anything about how the picture looks, beyond the owner's first
 look above — there is no camera here. The node reports frames drawn and refused,
 not pixels.
+
+## Sort and latent, and the poster's grid (2026-09-30)
+
+Modes 2 and 3, phosphor and feedback until they were retired, are now:
+
+- **`sort`** — the deck's pixels, then some rows sorted: every inked pixel in the
+  row gathered to one end, so the row is a bar as long as the ink it held, its
+  tail fading down a palette ramp. Which rows is a hash of the row and the step;
+  how many is cc 7 (`>send view skew 0-9`).
+- **`latent`** — the code, each glyph's rows turned by a hash of its place and the
+  beat, by as much as the picture under it is dark; a playing step is drawn plain
+  in red. The music decodes what it plays.
+
+`code` is only the code now, no picture behind it. The **poster** is the picture
+full bleed, fourteen cells deep, with the section's number over its lower left;
+under one hairline the section's name and the bar's steps; then every lane whole,
+up to 78 characters, in the node's small 3 x 5 face (`tinyfont.h`). Lines on the
+wire are up to 96 characters. A mode, like a colour, waits for the next bar's one
+while the deck plays, and any `>send view` sends a frame at once, so a poster set
+after `>stop` still reaches the screen.
