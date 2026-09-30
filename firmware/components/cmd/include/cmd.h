@@ -54,6 +54,10 @@ typedef enum {
     CMD_BY_HANDS = 0,
     CMD_BY_GUIDE,
     CMD_BY_AGENT,
+    /* The owner's hands running a block (editor_block.h): anything the hands
+     * may do, but a line run again is run again - a scene launched twice must
+     * not take its own lanes out, as a line run twice by hand does. */
+    CMD_BY_BLOCK,
 } cmd_caller_t;
 
 typedef struct cmd_ctx cmd_ctx_t;

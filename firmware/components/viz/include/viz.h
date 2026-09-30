@@ -99,6 +99,21 @@ int         viz_out_mode_now(void);
 const char *viz_out_mode_name(int mode);   /* NULL past the last */
 int         viz_out_mode_find(const char *name);   /* -1 if there is none */
 
+/* THE VIEW'S COLOURS, 0-127 or 255 unset: ink, paper, sat, day, inv, glint,
+ * skew, lines - what controllers 1-8 on channel 16 set, and what '>send view
+ * day 9' sets without a lane (docs/VIEW.md). Here, not in the view's own file,
+ * so the command and the MIDI path share one copy. */
+#define VIZ_OUT_PARAMS 8
+void        viz_out_param_set(int i, uint8_t v);
+/* Set while playing, a colour lands on the sixteenth `at` (seq_position()),
+ * with the first frame drawn for that step or later: viz_out_params_land(). */
+void        viz_out_param_at(int i, uint8_t v, uint32_t at);
+void        viz_out_params_land(uint32_t step);
+uint8_t     viz_out_param(int i);
+int         viz_out_param_find(const char *name);   /* -1 if there is none */
+const char *viz_out_param_name(int i);
+void        viz_out_params_clear(void);
+
 /* The cell to show at (x, y) of a pane pw x ph: the frame's own cell when the
  * two are the same size, its nearest when the output is bigger. */
 char viz_cell_fit(int x, int y, int pw, int ph);

@@ -560,6 +560,59 @@ int main(void)
     CHECK(inside > 0 && outside == 0,
           "noise drew %d cells inside and %d outside", inside, outside);
 
+    /* 9. A POSITION FOLLOWS THE MUSIC. A step where only a position fires -
+     *    the bass moving the square between kicks - keeps the picture on
+     *    show, and a higher ':y' is higher on the screen, so a melody routed
+     *    to it rises when it rises (2026-09-29). */
+    printf("\n-- a position moves the next drawing --\n");
+    blank();
+    viz_size(40, 20);
+    no_lanes();
+    mark("box", 1, 'd');
+    viz_service(); snap();
+    const int before = frame_ink();
+    viz_mark_param(viz_prim_index("box"), VIZ_PARAM_X, 2);
+    viz_service(); snap();
+    CHECK(before > 0 && frame_ink() == before,
+          "a lone position keeps the frame (%d inked, then %d)", before, frame_ink());
+    int top_row = -1, low_row = -1;
+    viz_mark_param(viz_prim_index("box"), VIZ_PARAM_Y, 9);
+    mark("box", 0, 'd');
+    viz_service(); snap();
+    for (int y = 0; y < viz_rows() && top_row < 0; y++) {
+        if (row_at(y)[strspn(row_at(y), " ")] != '\0') { top_row = y; }
+    }
+    viz_mark_param(viz_prim_index("box"), VIZ_PARAM_Y, 0);
+    mark("box", 0, 'd');
+    viz_service(); snap();
+    for (int y = 0; y < viz_rows() && low_row < 0; y++) {
+        if (row_at(y)[strspn(row_at(y), " ")] != '\0') { low_row = y; }
+    }
+    CHECK(top_row >= 0 && low_row > top_row,
+          ":y 9 draws above :y 0 (rows %d and %d)", top_row, low_row);
+
+    /* 10. A COLOUR WAITS FOR THE ONE. '>send view day 9' while playing is
+     *     held for the next bar's first step, so it changes with the toggles
+     *     run beside it; a restart lands it at once; a set now overrides. */
+    printf("\n-- a colour lands on the one --\n");
+    viz_out_params_clear();
+    viz_out_param_at(3, 127, 32);
+    viz_out_params_land(20);
+    const uint8_t early = viz_out_param(3);
+    viz_out_params_land(31);
+    const uint8_t late = viz_out_param(3);
+    viz_out_params_land(32);
+    CHECK(early == 255 && late == 255 && viz_out_param(3) == 127,
+          "held through steps 20 and 31, set on 32 (%d %d %d)", early, late, viz_out_param(3));
+    viz_out_param_at(4, 127, 48);
+    viz_out_params_land(0);
+    CHECK(viz_out_param(4) == 127, "a clock started again lands it now");
+    viz_out_param_at(7, 10, 64);
+    viz_out_param_set(7, 90);
+    viz_out_params_land(64);
+    CHECK(viz_out_param(7) == 90, "a colour set now replaces one waiting (%d)", viz_out_param(7));
+    viz_out_params_clear();
+
     printf("\n%s (%d problems)\n",
            fails ? "VIZ CHECKS FAILED" : "ALL VIZ CHECKS PASS", fails);
     return fails ? 1 : 0;

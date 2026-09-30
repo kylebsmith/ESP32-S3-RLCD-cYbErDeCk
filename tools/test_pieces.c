@@ -42,6 +42,10 @@ const seq_lane_t *seq_lanes(int *count)
 #define LINE_MAX_RUN 127     /* c_run's line buffer, less its terminator */
 #define WIDE       30        /* the chunky face's columns */
 
+/* A line inside a block - indented, run by its heading (editor_block.h) - is
+ * run as a block runs it: again is again, never the re-run that removes. */
+static bool s_in_block;
+
 static char s_verbs[MAX_VERBS][12];
 static int  s_nverbs;
 
@@ -62,7 +66,7 @@ typedef struct {
     char       text[LINE_MAX_RUN + 1];   /* the pattern as last run */
     /* the clock's state, for the score - seq.c's names */
     bool       trig, idle, done;
-    int        trig_val, vel, oct, rank;
+    int        trig_val, trig_deg, vel, oct, rank;   /* trig_deg -1: none */
     uint32_t   origin;
 } lane_t;
 static lane_t s_lane[SEQ_MAX_LANES];
@@ -281,7 +285,7 @@ static void do_lane(const char *word, size_t n, const char *pat)
      * twice, or a sketch that repeats the one before it, mutes where it meant
      * to play. A piece mutes with '>mute' or '>toggle'. */
     lane_t *was = lane_find(ln.canon);
-    if (was != NULL && was->has_pat && !was->muted && strcmp(was->text, pat) == 0) {
+    if (!s_in_block && was != NULL && was->has_pat && !was->muted && strcmp(was->text, pat) == 0) {
         fail("'%s' is what %s already plays - by hand it removes it", pat, ln.canon);
         return;
     }
@@ -540,6 +544,11 @@ static void do_verb(const char *w, const char *arg)
         sscanf(arg, "%15s %15s", what, mode);
         if (strcmp(what, "view") != 0) {
             fail("'send %s' does not belong in a piece", what, NULL);
+        } else if (viz_out_param_find(mode) >= 0) {
+            int v = -1;
+            if (sscanf(arg, "%*s %*s %d", &v) != 1 || v < 0 || v > 9) {
+                fail("send view %s: 0-9", mode, NULL);
+            }
         } else if (viz_out_mode_find(mode) < 0 && strcmp(mode, "on") != 0 &&
                    strcmp(mode, "off") != 0) {
             fail("send view %s: no such mode", mode, NULL);
@@ -559,6 +568,7 @@ static void do_verb(const char *w, const char *arg)
 static void run_line(const char *line)
 {
     const char *p = line;
+    s_in_block = (line[0] == ' ' || line[0] == '\t');
     while (*p == ' ' || *p == '\t') { p++; }
     if (*p != '>') { return; }
     p++;
@@ -600,7 +610,6 @@ static void run_line(const char *line)
 static char s_ev[2048];
 static double s_now_ms;              /* the tick being scored, in ms      */
 static double s_end_ms[16][128];     /* when each channel's note ends     */
-static int s_cuts;
 
 static void say(const lane_t *l, const char *what, bool maybe)
 {
@@ -608,13 +617,15 @@ static void say(const lane_t *l, const char *what, bool maybe)
     snprintf(s_ev + u, sizeof s_ev - u, "  %s:%s%s", l->name, what, maybe ? "?" : "");
 }
 
-static void published(const lane_t *src, int value)
+/* seq.c published(): the value, and the degree when a voice played it */
+static void published(const lane_t *src, int value, int deg)
 {
     for (int j = 0; j < SEQ_MAX_LANES; j++) {
         lane_t *d = &s_lane[j];
         if (d->used && d->route[0] != '\0' && strcmp(d->route, src->name) == 0) {
             d->trig = true;
             d->trig_val = value;
+            d->trig_deg = deg;
         }
     }
 }
@@ -628,6 +639,7 @@ static void publish_end(const lane_t *src)
         if (d->used && strcmp(d->route, end) == 0) {
             d->trig = true;
             d->trig_val = 127;
+            d->trig_deg = -1;
         }
     }
 }
@@ -669,17 +681,21 @@ static void fire(lane_t *l, const seq_leaf_t *e, bool routed, bool maybe)
         }
         snprintf(t, sizeof t, "%d", amt);
         say(l, t, maybe);
-        published(l, (amt < 0 ? 9 : amt) * 127 / 9);
+        published(l, (amt < 0 ? 9 : amt) * 127 / 9, -1);
         return;
     }
     if (l->kind == LD_DRAW) {
-        int amt = routed ? (l->trig_val * 9 + 63) / 127 : (val == SEQ_VAL_X ? 9 : val);
+        /* a position routed from a voice goes to the degree it played */
+        const bool at = (l->part == 'x' || l->part == 'y');
+        int amt = routed ? ((at && l->trig_deg >= 0) ? l->trig_deg
+                                                     : (l->trig_val * 9 + 63) / 127)
+                         : (val == SEQ_VAL_X ? 9 : val);
         if (amt > 9) { amt = 9; }
         /* the step's way, else the lane's, as the deck's fire_event picks it */
         snprintf(t, sizeof t, "%c%d", (e && e->dir) ? e->dir : (l->c.dir ? l->c.dir : '#'),
                  amt);
         say(l, t, maybe);
-        published(l, amt * 127 / 9);
+        published(l, amt * 127 / 9, -1);
         return;
     }
     if (l->kind == LD_CC) {
@@ -687,7 +703,7 @@ static void fire(lane_t *l, const seq_leaf_t *e, bool routed, bool maybe)
         const int v = routed ? (l->trig_val & 0x7F) : (val * 127) / 9;
         snprintf(t, sizeof t, "=%d", v);
         say(l, t, maybe);
-        published(l, v);
+        published(l, v, -1);
         return;
     }
     const bool melodic = (l->kind == LD_VOICE);
@@ -706,15 +722,17 @@ static void fire(lane_t *l, const seq_leaf_t *e, bool routed, bool maybe)
         } else {
             snprintf(t, sizeof t, "%s%d", nm[n % 12], n / 12 - 1);
         }
-        /* A NOTE-OFF IS SCHEDULED, NOT PAIRED (seq.c schedule_off): a held
-         * note whose gate runs past the next note of the same pitch on the
-         * same channel ends THAT one, early. A gate is milliseconds, so this
-         * depends on the tempo, and only the score can see it. */
+        /* A NOTE-OFF IS PAIRED (seq_offs.h): a note still sounding when its
+         * pitch starts again on its channel ends there, and the new one keeps
+         * its whole gate. Before 2026-09-29 the old one's off landed inside
+         * the new note and cut it, at a point the gate set; this score marked
+         * those '!cut', and the EP had hundreds. It marks '^' now where a
+         * note ends an earlier one of its pitch: right for a pad re-voicing a
+         * common tone, wrong for a drone under a roll on its own channel. */
         const int ch = (l->chan - 1) & 15;
         if (s_end_ms[ch][n] > s_now_ms + 0.5) {
             const size_t u = strlen(t);
-            snprintf(t + u, sizeof t - u, "!cut%.0fms", s_end_ms[ch][n] - s_now_ms);
-            s_cuts++;
+            snprintf(t + u, sizeof t - u, "^");
         }
         const double step_ms = 60000.0 / s_bpm / 4.0;
         const double hold = (e && l->c.div) ? (double)(e->len - e->width) * l->c.rden /
@@ -724,7 +742,7 @@ static void fire(lane_t *l, const seq_leaf_t *e, bool routed, bool maybe)
         snprintf(t, sizeof t, "%d", vel);
     }
     say(l, t, maybe);
-    published(l, vel);
+    published(l, vel, melodic ? (val == SEQ_VAL_X ? 0 : (val > 9 ? 9 : val)) : -1);
 }
 
 static void rerank(void)
@@ -826,6 +844,7 @@ static void score(int bars, const char *title)
         if (!l->used) { continue; }
         nl++;
         l->trig = false;
+        l->trig_deg = -1;
         l->idle = (l->c.count != 0);
         l->done = false;
         l->vel = 100;
@@ -851,10 +870,6 @@ static void score(int bars, const char *title)
         printf("  %-8s%s\n", at, s_ev);
     }
     memcpy(s_lane, saved, sizeof saved);
-    if (s_cuts > 0) {
-        printf("  ** %d note(s) cut short by an earlier note-off of the same pitch\n", s_cuts);
-        s_cuts = 0;
-    }
 }
 
 /* ---------------------------------------------------------------- main */

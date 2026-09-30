@@ -29,7 +29,7 @@ proposals for what the pictures should become are in
    4. It returns `true`, which triggers a pane redraw and a view frame (`main.c:872-877`).
 4. **Consequences** [probe]:
    - **The frame is rebuilt from nothing on every serviced step.** A primitive that did not fire on this step is absent unless `echo` fired and carried it.
-   - **A step on which only a position lane (`:x`/`:y`) fires produces a blank frame.** `viz_service` still returns true (`disc 9` then a lone `disc:x` mark left 0 inked cells).
+   - **A step on which only a position lane (`:x`/`:y`) fires draws nothing:** the position waits for the next drawing (fixed 2026-09-29; it used to blank the frame).
    - Two marks of one primitive in one frame draw twice, in arrival order (`viz.c:1051-1056`).
    - The comment at `viz.c:77-79` says a second mark overwrites the first. That is stale.
 5. **`viz_active()`** becomes true on the first frame in which anything drew. Only `viz_forget_all()` clears it (`viz.c:243-245`, `1059`, `290-299`), and that runs only on `>new` (`builtins.c:296-297`).
@@ -108,7 +108,7 @@ The "0 is none … 9 is full" rule (`viz.c:309-331`) does not hold for `disc`, `
 
 ### 1.6 Positions (`:x`, `:y`)
 
-- **Address and scale.** `>disc:x 0..9..` is a parameter lane (`VIZ_PARAM_X`/`_Y`, `viz.h:142-171`; grammar `lane_name.h:10-13`). It sets the position as a cell: x = a·(w−1)/9, y = a·(h−1)/9. 0 is the left or top edge and 9 (or `x`) is the right or bottom (`viz.c:1033-1037`) [probe].
+- **Address and scale.** `>disc:x 0..9..` is a parameter lane (`VIZ_PARAM_X`/`_Y`, `viz.h:142-171`; grammar `lane_name.h:10-13`). It sets the position as a cell: x = a·(w−1)/9, y = a·(h−1)/9. 0 is the left or bottom edge and 9 (or `x`) is the right or top, so a higher note routed to `:y` is higher (2026-09-29; 0 was the top). Routed from a voice, a position takes the degree played (`viz.c:1033-1037`) [probe].
 - **Shared by instances.** Positions are stored per primitive, in `s_place[NGEN]` (`viz.c:104-111`), not per lane. `disc`, `disc:2` and `disc:2:x` all share one position.
 - **Default and persistence.** The default is the centre, (w/2, h/2) (`viz.c:338-348`). A position persists until `>new` (`viz.c:294`).
 - **Only three primitives read it:** `disc`, `box` and `turn` (`place_x()` calls at `viz.c:540`, `742`, `772`).

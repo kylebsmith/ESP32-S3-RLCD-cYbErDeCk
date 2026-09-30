@@ -924,14 +924,18 @@ static void list_names(cmd_ctx_t *ctx)
 
 static cmd_status_t c_scale(cmd_ctx_t *ctx)
 {
-    if (ctx->arg[0] != '\0' && seq_scale(ctx->arg) != ESP_OK) {
+    if (ctx->arg[0] != '\0' && seq_scale_on_one(ctx->arg) != ESP_OK) {
         cmd_out(ctx, "a root a-g, then # or b, then one of:");
         cmd_out(ctx, "  maj min dor phr lyd mix loc");
         cmd_out(ctx, "  pent maj5 blues chrom");
         cmd_out(ctx, "e.g. dmin  c  f#mix  apent  ebblues");
         return CMD_ERROR;
     }
-    snprintf(ctx->msg, sizeof ctx->msg, "key of %s", seq_scale_name());
+    if (ctx->arg[0] != '\0' && seq_running()) {
+        snprintf(ctx->msg, sizeof ctx->msg, "key of %.11s - on the one", ctx->arg);
+    } else {
+        snprintf(ctx->msg, sizeof ctx->msg, "key of %s", seq_scale_name());
+    }
     return CMD_DONE;
 }
 
@@ -2129,6 +2133,32 @@ static cmd_status_t c_send(cmd_ctx_t *ctx)
      * the drawing (docs/VIEW.md); the deck only names it, so a mode is one more
      * argument to the destination and not a new word. */
     const int mode = view ? viz_out_mode_find(state) : -1;
+    /* AND A COLOUR, without a lane: '>send view day 9' holds the screen at
+     * black on paper; a lane on channel 16 plays it instead (docs/VIEW.md). */
+    const int par = view ? viz_out_param_find(state) : -1;
+    if (par >= 0) {
+        int v = -1;
+        if (sscanf(ctx->arg, "%*s %*s %d", &v) != 1) {
+            const uint8_t now = viz_out_param(par);
+            snprintf(ctx->msg, sizeof ctx->msg, now == 255 ? "view %s is unset" : "view %s is %d",
+                     state, now == 255 ? 0 : (now * 9 + 63) / 127);
+            return CMD_DONE;
+        }
+        if (v < 0 || v > 9) {
+            cmd_out(ctx, "send view %s 0-9", state);
+            return CMD_ERROR;
+        }
+        /* PLAYING, IT WAITS FOR THE ONE, as '>toggle' does, so a scene's
+         * colour and its toggles land together; stopped, it is set now. */
+        if (seq_running()) {
+            viz_out_param_at(par, (uint8_t)(v * 127 / 9), (seq_position() / 16 + 1) * 16);
+            snprintf(ctx->msg, sizeof ctx->msg, "view %s %d - on the one", state, v);
+        } else {
+            viz_out_param_set(par, (uint8_t)(v * 127 / 9));
+            snprintf(ctx->msg, sizeof ctx->msg, "view %s %d", state, v);
+        }
+        return CMD_DONE;
+    }
     if (view && sscanf(state, "%dx%d", &vw, &vh) == 2) {
         if (vw < 4 || vh < 2 || vw > VIZ_W || vh > VIZ_H) {
             cmd_out(ctx, "view is 4x2 to %dx%d cells", VIZ_W, VIZ_H);
@@ -2144,6 +2174,8 @@ static cmd_status_t c_send(cmd_ctx_t *ctx)
             cmd_out(ctx, "send view on|off|53x20|mode");
             cmd_out(ctx, "modes: plain scan riso");
             cmd_out(ctx, "  poster code");
+            cmd_out(ctx, "colour: day ink paper sat");
+            cmd_out(ctx, "  inv glint skew lines, 0-9");
         } else {
             cmd_out(ctx, "send <name> on | off");
         }
@@ -2407,7 +2439,9 @@ static cmd_status_t c_map(cmd_ctx_t *ctx)
     bool found = all;
     const seq_lane_t *l = seq_lanes(&n);
     for (int i = 0; i < SEQ_MAX_LANES; i++) {
-        if (!l[i].used || l[i].bind == SEQ_BIND_VIZ) {
+        /* '>map' alone brings back what was playing - not a lane that has
+         * finished its count, like the MIDI page's eight bars of each cc. */
+        if (!l[i].used || l[i].bind == SEQ_BIND_VIZ || (all && l[i].done)) {
             continue;
         }
         const bool named = !all && lane_named(ctx->arg, l[i].name);

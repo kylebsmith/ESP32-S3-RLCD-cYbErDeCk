@@ -1,54 +1,78 @@
 DRILL
 
 -- set
->send view scan
->inv = cc 5 ch 16
->inv ....90......90..
->bpm 165
->scale ephr
->swing 50
->kick 9.9.......99....
->snare ....9..3.9.39...
->hat 7575757575757575
->bass = voice 1 ch 6 gate 70
->bass 00000001 11111112 22222223 11111110 /2
->bass:2 55555556 66666660 00000000 00000077 /2
->pad = voice 3 ch 3 gate 260
->pad <[0,4,7] [1,5,8] [2,6,9] [1,5,8]>__. /4
->pad:2 <[5,9] [3,6] [0,4,7] [0,4,7]>__. /4
->lead = voice 4 ch 2 gate 90
->lead 7.7.8.7. 7.7.9.8. /2
->noise 3
->flip ....9.......9...
->toggle inv snare hat flip bass bass:2 pad:2 lead
->play
+  >send view scan
+  >bpm 165
+  >scale ephr
+  >swing 50
+  >kick 9.9.......99....
+  >snare ....9..3.9.39...
+  >hat 7575757575757575
+  >bass = voice 1 ch 6 gate 70
+  >bass <00000001 11111112 22222223 11111110 00000001 11111113 33333332 22222220> /2
+  >bass:2 <55555556 66666660 00000000 00000077> /2
+  >pad = voice 3 ch 3 gate 990
+  >pad <[0,4,7] [1,5,8] [2,6,9] [1,5,8] [0,4,7] [1,5,8] [3,7] [2,6,9]> /16
+  >pad:2 <[5,9] [3,6] [0,4,7] [0,4,7]> /16
+  >lead = voice 4 ch 2 gate 90
+  >lead <7.7.[78]7.. 7.7.9.[98]7 7.7.[78]7.[87] 9_[98]7.5.4> /2
+  >drive = cc 20 ch 6
+  >echo 6
+  >box 7.7.......77....
+  >route box:x bass
+  >route noise hat
+  >route flip snare
+  >warp r
+  >route warp lead
+  >toggle snare hat bass bass:2 pad:2 lead flip
+  >play
 
 -- in
->toggle snare hat
->toggle bass
+  >toggle snare hat bass
 
 -- riff
->toggle lead flip
+  >toggle lead flip
 
 -- turn
->toggle pad pad:2 bass bass:2 lead
+  >toggle pad pad:2 bass bass:2 lead
+  >route box:x bass:2
 
--- hat
->hat 75[75]575[75]575[75]575[75]5
->hat 7575757575757575
+-- home
+  >toggle pad pad:2 bass bass:2 lead
+  >route box:x bass
 
--- kick
->kick 9...9...9...9...
->kick 9.9.......99....
+-- fill, on its one
+  >tom 9.9.9.99.9.99999 !1
+
+-- drive it
+  >drive <3 5 7 9> /4
+
+-- ease off
+  >drive 2 /16
+
+-- kick four
+  >kick 9...9...9...9...
+  >box 7...7...7...7...
+
+-- kick drill
+  >kick 9.9.......99....
+  >box 7.7.......77....
+
+-- hats burst
+  >hat 75[75]575[75]575[75]575[75]5
+
+-- hats straight
+  >hat 7575757575757575
 
 -- cut
->toggle kick snare hat
+  >toggle kick snare hat box
 
--- drop
->toggle kick snare hat inv
+-- drop, lead on ch 7
+  >toggle kick snare hat box
+  >send view inv 9
+  >lead = ch 7
 
 -- out
->toggle kick snare hat inv flip
->clear
->send view off
->stop
+  >clear
+  >send view off
+  >stop

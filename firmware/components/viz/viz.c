@@ -225,6 +225,74 @@ int viz_out_mode_find(const char *name)
     return -1;
 }
 
+static volatile uint8_t s_out_par[VIZ_OUT_PARAMS] = { 255, 255, 255, 255, 255, 255, 255, 255 };
+static const char *const s_par_names[VIZ_OUT_PARAMS] = {
+    "ink", "paper", "sat", "day", "inv", "glint", "skew", "lines" };
+
+/* A COLOUR WAITS FOR THE ONE, as a toggle does (seq_toggle.h): set while the
+ * clock runs, it is held for the sixteenth it lands on, and the first frame
+ * drawn for that step or later carries it - so a scene's toggles and its
+ * colour change on the same downbeat. -1 is nothing pending. */
+static volatile int16_t  s_par_pend[VIZ_OUT_PARAMS] = { -1, -1, -1, -1, -1, -1, -1, -1 };
+static volatile uint32_t s_par_at[VIZ_OUT_PARAMS];
+
+void viz_out_param_set(int i, uint8_t v)
+{
+    if (i >= 0 && i < VIZ_OUT_PARAMS) {
+        s_out_par[i] = (v == 255) ? 255 : (uint8_t)(v & 0x7F);
+        s_par_pend[i] = -1;
+    }
+}
+
+void viz_out_param_at(int i, uint8_t v, uint32_t at)
+{
+    if (i >= 0 && i < VIZ_OUT_PARAMS) {
+        s_par_at[i] = at;
+        s_par_pend[i] = (int16_t)(v & 0x7F);
+    }
+}
+
+void viz_out_params_land(uint32_t step)
+{
+    for (int i = 0; i < VIZ_OUT_PARAMS; i++) {
+        const int16_t v = s_par_pend[i];
+        /* A change is set at most a bar ahead; further ahead than that, the
+         * clock has started again from the top, and it lands now. */
+        if (v >= 0 && (step >= s_par_at[i] || s_par_at[i] - step > 16)) {
+            s_out_par[i] = (uint8_t)v;
+            s_par_pend[i] = -1;
+        }
+    }
+}
+
+uint8_t viz_out_param(int i)
+{
+    return (i >= 0 && i < VIZ_OUT_PARAMS) ? s_out_par[i] : 255;
+}
+
+int viz_out_param_find(const char *name)
+{
+    for (int i = 0; name != NULL && i < VIZ_OUT_PARAMS; i++) {
+        if (strcmp(name, s_par_names[i]) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+const char *viz_out_param_name(int i)
+{
+    return (i >= 0 && i < VIZ_OUT_PARAMS) ? s_par_names[i] : NULL;
+}
+
+void viz_out_params_clear(void)
+{
+    for (int i = 0; i < VIZ_OUT_PARAMS; i++) {
+        s_out_par[i] = 255;
+        s_par_pend[i] = -1;
+    }
+}
+
 char viz_cell_fit(int x, int y, int pw, int ph)
 {
     if (pw <= 0 || ph <= 0 || s_w <= 0 || s_h <= 0) {
@@ -988,16 +1056,27 @@ int viz_param_index(const char *name)
     return VIZ_PARAM_NONE;
 }
 
+/* A POSITION MOVES THE NEXT DRAWING; IT DRAWS NOTHING ITSELF. It used to ask
+ * for a frame, and a frame starts empty, so a step where only a position
+ * fired - the bass moving the square between two kicks - blanked the screen
+ * (docs/wiki/pictures.md, 1.2). One pending mark per primitive and axis, the
+ * latest, so steps with no drawing cannot fill the table. */
 void viz_mark_param(int prim, int param, int amt)
 {
     if (prim < 0 || prim >= NGEN || param == VIZ_PARAM_NONE) { return; }
+    const uint8_t a = (uint8_t)(amt < 0 ? 0 : (amt > 9 ? 9 : amt));
     const uint8_t n = s_npmark;
+    for (uint8_t i = 0; i < n; i++) {
+        if (s_pmark[i].prim == (uint8_t)prim && s_pmark[i].param == (uint8_t)param) {
+            s_pmark[i].amt = a;
+            return;
+        }
+    }
     if (n >= MARK_MAX) { return; }
     s_pmark[n].prim  = (uint8_t)prim;
     s_pmark[n].param = (uint8_t)param;
-    s_pmark[n].amt   = (uint8_t)(amt < 0 ? 0 : (amt > 9 ? 9 : amt));
+    s_pmark[n].amt   = a;
     s_npmark = (uint8_t)(n + 1);
-    s_pending = true;
 }
 
 void viz_mark(int prim, int amt, char dir, uint32_t tick)
@@ -1108,10 +1187,13 @@ bool viz_service(void)
     for (int i = 0; i < np; i++) {
         const int prim = s_pmark[i].prim;
         const int amt  = s_pmark[i].amt;
+        /* 0 is the left and the BOTTOM, 9 the right and the top: a higher
+         * note routed to ':y' is higher on the screen. It was 0 at the top
+         * until 2026-09-29, when positions began to follow the notes. */
         if (s_pmark[i].param == VIZ_PARAM_X) {
             s_place[prim].x = (int8_t)(amt * (s_w - 1) / 9);
         } else {
-            s_place[prim].y = (int8_t)(amt * (s_h - 1) / 9);
+            s_place[prim].y = (int8_t)((9 - amt) * (s_h - 1) / 9);
         }
     }
 

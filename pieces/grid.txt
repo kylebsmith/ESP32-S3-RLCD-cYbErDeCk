@@ -1,56 +1,92 @@
 GRID
 
 -- set
->send view plain
->lines = cc 8 ch 16
->lines 5 /16
->bpm 124
->scale fmin
->swing 50
->kick 9...9...9...9...
->hat ..7...7...7...7.
->clap ....8.......8...
->bass = voice 1 ch 1 gate 110
->bass .0.0.0.0 .5.5.5.5 .2.2.2.2 .6.6.6.6 /2
->bass:2 .3.3.3.3 .4.4.4.4 .5.5.5.5 .6.6.6.6 /2
->pad = voice 3 ch 3 gate 1800
->pad <[0,2,4,6,8] [4,5,7,9] [2,4,6,8] [1,3,6,7]>___ /4
->pad:2 <[3,5,7] [4,6,8] [5,7,9] [3,6,8]>___ /4
->lead = voice 4 ch 2 gate 160
->lead 4.2...1. 0_______ 6.4..... 3...1... /2
->lead:2 5.0..... 6.1..... 7.2..... 8.3.8.9. /2
->grid 6...6...6...6...
->box ....9.......9...
->toggle hat clap box bass bass:2 pad:2 lead lead:2
->play
+  >send view plain
+  >send view day 9
+  >send view lines 3
+  >bpm 124
+  >scale fmin
+  >swing 52
+  >kick 9...9...9...9...
+  >hat ..5...5...5...5.
+  >clap ....8.......8...
+  >bass = voice 1 ch 1 gate 140
+  >bass <0..0.0.7 0..0.07. 5..5.5.7 5..5.54. 3..3.3.7 3..3.35. 4..4.4.8 4..4.43.> /2
+  >bass:2 <3..3.3.7 4..4.4.8 5..5.5.9 6..6.6.8> /2
+  >pad = voice 3 ch 3 gate 2000
+  >pad <[0,2,6,8] [2,4,6,8] [4,5,7,9] [4,5,7,8] [3,5,7,9] [3,5,7,8] [3,4,7,8] [4,6,8]> /16
+  >pad:2 <[3,5,7,9] [3,4,6,8] [4,5,7,9] [1,3,6,7]> /16
+  >lead = voice 4 ch 2 gate 170
+  >lead <4.2.1[21]0. 0___..6. 7.5.4[54]2. 2___..1. 3.5.7_5. 5___..8%60. 8.7.[87]4_. 4___....> /2
+  >lead:2 <5.0.[01]3.. 6.1.[12]4.. 7.2.[23]5.. 8.3.[34]9__> /2
+  >cut = cc 74 ch 1
+  >echo 5
+  >box 4...4...4...4...
+  >route box:x bass
+  >route box:y lead
+  >route edge clap
+  >ramp u
+  >route ramp pad
+  >toggle hat clap bass bass:2 pad:2 lead lead:2
+  >play
 
 -- in
->toggle hat clap box
->toggle bass
+  >toggle hat clap bass
 
 -- hook
->toggle lead
+  >toggle lead
 
 -- lift
->toggle pad pad:2 bass bass:2 lead lead:2
+  >toggle pad pad:2 bass bass:2 lead lead:2
+  >route box:x bass:2
+  >route box:y lead:2
+  >route ramp pad:2
+  >send view lines 9
 
--- kick
->kick 9..9..9...9.....
->kick 9...9...9...9...
+-- back
+  >toggle pad pad:2 bass bass:2 lead lead:2
+  >route box:x bass
+  >route box:y lead
+  >route ramp pad
+  >send view lines 3
 
--- hat
->hat 3535753535357535
->hat ..7...7...7...7.
+-- open the bass
+  >cut <2 3 4 5 6 7 8 9> /16
 
--- strip
->toggle kick hat clap box
+-- close it
+  >cut 3 /16
+
+-- lead to ch 7
+  >lead = ch 7
+
+-- lead to ch 2
+  >lead = ch 2
+
+-- kick broken
+  >kick 9..9..9...9..9..
+  >box 4..4..4...4..4..
+
+-- kick straight
+  >kick 9...9...9...9...
+  >box 4...4...4...4...
+
+-- hats rolling
+  >hat 3535753535357535
+
+-- hats open
+  >hat ..5...5...5...5.
+
+-- break
+  >toggle kick hat clap box
+  >send view inv 9
+  >send view lines 0
 
 -- drop
->toggle kick hat clap box
->lines 0 /16
+  >toggle kick hat clap box
+  >send view inv 0
+  >send view lines 3
 
 -- out
->toggle kick hat clap box
->clear
->send view off
->stop
+  >clear
+  >send view off
+  >stop

@@ -1,59 +1,63 @@
 # Pieces
 
-An EP of four tracks, each a document on the deck. Open one and run it top to
-bottom, a line at a time. Every track ends in silence, so any can follow any.
+An EP of four tracks, each a document on the deck. Open one and run its
+headings top to bottom. Every track ends in silence, so any can follow any.
 
 | document | tempo, key | what it is | the screen |
 |---|---|---|---|
-| `grid` | 124, F minor | Swiss techno: a strict kick, offbeat hats, a rolling bass and a hook over F minor 9 – D♭ maj 7 – A♭ maj 7 – E♭; the lift climbs B♭m – Cm – D♭ – E♭ | `plain`, with the deck's own cell grid drawn on it until the drop |
-| `offset` | 132, A dorian | broken two-step, swung: the dorian vamp A m9 – D9, then C maj7 – Bm7 – Em7 – D7 falling back; the bass on Bass2 | `riso`, the plates slipping on the snare |
-| `drill` | 165, E phrygian | punk drill'n'bass: power chords E – F – G – F, a pumping bass on Bass3, a riff; the turn goes C – D – E | `scan`, the screen flipping on the snare from the drop |
-| `orbitals` | 124, D minor | the piece: a radar, a planet and a sun that never leaves D. Night, first light, a day that lifts the harmony, an eclipse, and night again | `poster` throughout, the paper brightening with the day |
+| `grid` | 124, F minor | Swiss techno. A: Fm9 – A♭maj7/F – D♭maj7 – D♭maj7♯11 – B♭m7 – B♭m6 – C7sus4 – Cm, a bar each; the lift climbs B♭m7 – Cm7 – D♭maj7 – E♭ | `plain`, black on paper: a square on the beat stands where the bass is (across) and as high as the lead; the clap outlines it; each chord lights the floor; the lift brings the grid forward, the break turns the page negative |
+| `offset` | 132, A dorian | broken two-step: Am9 – Am7 – D7 – D9 – Em7 – Em7 – Cmaj7 – D6; the turn walks down C – B – A – G, the lead on Lead2 | `riso`: a dot on the kick, at the bass and the lead, its trail slipped right by the snare; the turn pulls the plates apart |
+| `drill` | 165, E phrygian | punk drill'n'bass: power chords E – F – G – F – E – F – A – G, a pumping bass on Bass3, a riff | `scan`: hats are grain, the kick a plateau at the bass, the riff bends the lines, the snare flips it; the drop inverts, lead on Lead2 |
+| `orbitals` | 124, D minor | a radar, a planet, a sun over a D pedal. Seven sections, numbered, so the poster prints them; the one key change on the EP is the eclipse | `poster`: the planet goes where the arp and the lead go; the eclipse turns the accent blue |
 
 ## How a track plays
 
-**Everything is written before `>play`**, so nothing drops out by accident. After
-that a section is one line, and it **lands on the next bar's first beat**, however
-early it is run: `>toggle` waits for the one (`seq_toggle.h`).
+**A heading runs its section.** Put the cursor on `-- lift` and press ctrl+enter:
+every `>` line indented under it runs, top to bottom. The `-- set` block sets the
+whole track up and starts it; after that each heading is a scene.
 
-- **One key a track.** Harmony moves by progression, with the voices led, not by
-  changing key. The only key change on the EP is ORBITALS' eclipse and its return.
-- **Two versions of the harmony.** `pad`, `bass` and `lead` each have a second,
-  `pad:2` and so on, and one line swaps the whole song between them — `>toggle pad
-  pad:2 bass bass:2 lead lead:2` — and the same line swaps it back.
-- **Drums are one lane a part.** A break is `>toggle kick hat clap`, and the same
-  line brings them back. Their variations are written as a second line under a
-  heading: run it to switch, run the first to switch back. A drum switch carries
-  on from the step it is on.
-- **Every lane is a bar or four bars long,** so nothing drifts against the bar;
-  the planet's orbit in ORBITALS is the only thing at twelve, and it is a picture.
-- **The screen is chosen once a track,** and it moves only with the music: the
-  grid leaves at GRID's drop, the plates slip on OFFSET's snare, DRILL's screen
-  flips on its snare after the drop, and ORBITALS' paper lightens at first light
-  and darkens in the eclipse.
+**A scene lands on the one.** `>toggle`, `>scale` and `>send view <colour>` wait for
+the next bar's first beat while playing, so run a scene any time in the bar
+before and its sound, its key and its picture change together.
+
+- **One key a track**, harmony moving by progression; ORBITALS' eclipse is the
+  only key change.
+- **Two versions of the harmony.** `-- lift` / `-- back` (and `-- turn` / `-- back`,
+  `-- turn` / `-- home`) swap `pad`, `bass`, `lead` for `pad:2` and so on, and move
+  the picture's routes with them.
+- **Variations are headings too**: `-- kick broken` / `-- kick straight` change the
+  kick and its picture together, from the step they are on.
+- **Fills count**: `>tom … !1` waits for the bar, plays once and ends.
+- **Voices move**: `>lead = ch 7` plays the lead on another synth, `= ch 2` back.
+  ORBITALS moves the arp to 8 for the day.
+- **Controllers** are the MIDI page's names: `cut`, `glow`, `bite`, `drive` sweep
+  over eight bars (`<2 3 4 5 6 7 8 9> /16`) and settle back.
+- **Blocks nest**: a heading indented under another runs with it, and alone.
+- **Tab indents**, two spaces; a line run inside a block is never the second run
+  that removes a lane, so a scene can be run again safely.
 
 ## What to plug in
 
 | channel | what |
 |---|---|
-| 1 | Bass1: `bass` in `grid` and `orbitals` |
-| 2 | lead |
+| 1 | Bass1: `bass` in `grid` and `orbitals`, and ORBITALS' `roll` |
+| 2 | Lead1 |
 | 3 | pad |
-| 4 | arp |
+| 4 | Arp1 |
 | 5 | Bass2: `bass` in `offset` |
 | 6 | Bass3: `bass` in `drill` |
+| 7 | Lead2: the lead after `>lead = ch 7` |
+| 8 | Arp2: ORBITALS' arp in the day |
 | 10 | a General MIDI drum kit |
-| 16 | **the HDMI screen's colour**: `lines`, `skew`, `inv` and `day` are controllers here ([VIEW.md](../docs/VIEW.md)) |
+| 16 | the HDMI screen's colour, and the `midi` page's learn lines |
 
-Each track defines its own voices, because octave and gate are part of the sound.
-**More voices:** any new name is another part on another channel, for example
-`>bass2 = voice 1 ch 7`; `>bass = ch 5` moves a playing part. The deck holds 16
-lanes and 32 names at once.
+The deck holds 16 lanes; each track uses at most 16, pictures included.
 
-**Timing, measured 2026-09-29:** the deck's MIDI at 165 bpm with 32nd hats, ratchets
-and the view on landed within 0.11 ms of the grid (0.03 ms rms). If a dense
-passage sounds loose in a DAW, look at the DAW's audio buffer first: it plays
-incoming MIDI in chunks of its buffer, 10–20 ms at 512–1024 samples.
+**Timing.** Measured 2026-09-29: the deck's MIDI lands within 0.11 ms of the grid.
+What did fall apart was note length: a note-off was scheduled for its pitch, not
+its note, so a held note ended the next note of the same pitch early - the pad's
+common tones, ORBITALS' roll under its own drone (573 notes on the old EP). A
+note-off now ends only its own note (`seq_offs.h`, `tools/test_offs.c`).
 
 ## Whose is it
 

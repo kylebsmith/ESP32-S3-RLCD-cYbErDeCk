@@ -19,7 +19,7 @@
 #include "esp_err.h"
 
 #define DOC_CAPACITY (128 * 1024)
-#define DOC_MAX_BUFFERS 8
+#define DOC_MAX_BUFFERS 12        /* the EP, boot, guide, midi, scratch and +out, with room */
 #define DOC_NAME_MAX    24
 
 /* ---- buffers --------------------------------------------------------------

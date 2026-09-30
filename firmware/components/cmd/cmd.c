@@ -20,6 +20,7 @@ static uint32_t caller_caps(cmd_caller_t who)
 {
     switch (who) {
     case CMD_BY_HANDS: return 0xFFFFFFFFu;
+    case CMD_BY_BLOCK: return 0xFFFFFFFFu;
     case CMD_BY_GUIDE: return CMD_CAP_READ | CMD_CAP_EDIT | CMD_CAP_STORE |
                               CMD_CAP_NET;
     case CMD_BY_AGENT: return CMD_CAP_READ | CMD_CAP_EDIT | CMD_CAP_STORE;

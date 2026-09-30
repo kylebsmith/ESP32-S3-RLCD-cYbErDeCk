@@ -22,6 +22,7 @@
  * dumped.
  */
 #include "editor.h"
+#include "editor_block.h"
 #include "battery.h"
 #include "cell_attr.h"
 #include "viz.h"
@@ -1035,16 +1036,22 @@ void editor_show_output(size_t from, const char *msg)
     }
 }
 
+/* The block, copied before any of it runs: a line in it may switch the page. */
+static char s_block[BLOCK_MAX_LINES][BLOCK_LINE_MAX];
+
 static void run_current_line(void)
 {
     char line[128];
     current_line(line, sizeof line);
-
-    const char *p = line;
-    while (*p == ' ' || *p == '\t') {
-        p++;
+    size_t start = doc_cursor() < doc_len() ? doc_cursor() : doc_len();
+    while (start > 0 && doc_at(start - 1) != '\n') {
+        start--;
     }
-    if (*p != '>') {
+    /* A LINE AND ITS BLOCK (editor_block.h): the lines indented under this one
+     * run after it, so a section's heading runs the section. */
+    const int nb = block_collect(doc_at, doc_len(), start, s_block, BLOCK_MAX_LINES);
+    const char *head = block_command(line);
+    if (head == NULL && nb == 0) {
         snprintf(s_msg, sizeof s_msg, "%s", UI_NOT_A_COMMAND);
         s_msg_until = editor_now_ms() + 3000;
         return;
@@ -1058,23 +1065,44 @@ static void run_current_line(void)
     const size_t out_was = outb >= 0 ? doc_buf_len(outb) : 0;
 
     char msg[96] = "";
-    cmd_run_line(line, CMD_BY_HANDS, msg, sizeof msg);
-    /* A PASSWORD TYPED ON THE LINE, the old way, is cut before anything can
-     * save it: the command refused it and said where it starts. */
-    if (cmd_last_secret_col() >= 0) {
-        cut_line_from(cmd_last_secret_col());
-    }
-    const int lines = cmd_last_output_lines();
-    {
+    int lines = 0;
+    if (head != NULL) {
+        cmd_run_line(line, CMD_BY_HANDS, msg, sizeof msg);
+        /* A PASSWORD TYPED ON THE LINE, the old way, is cut before anything can
+         * save it: the command refused it and said where it starts. */
+        if (cmd_last_secret_col() >= 0) {
+            cut_line_from(cmd_last_secret_col());
+        }
+        lines = cmd_last_output_lines();
         /* Only when the view stays here: a result long enough to move to
          * '+out' would otherwise box a character of the output page. */
-        const int col = (lines > 1) ? -1 : cmd_last_error_col();
+        const int col = (lines > 1 || nb > 0) ? -1 : cmd_last_error_col();
         if (col >= 0) {
-            size_t ls = doc_cursor();
-            while (ls > 0 && doc_at(ls - 1) != '\n') {
-                ls--;
+            s_err_off = (int)start + col;
+        }
+    }
+    int ran = head != NULL ? 1 : 0, refused = 0;
+    char first[64] = "";
+    for (int i = 0; i < nb; i++) {
+        if (block_command(s_block[i]) == NULL) {
+            continue;
+        }
+        char m2[96] = "";
+        if (cmd_run_line(s_block[i], CMD_BY_BLOCK, m2, sizeof m2) != CMD_DONE) {
+            if (refused++ == 0) {
+                snprintf(first, sizeof first, "%s", m2);
             }
-            s_err_off = (int)ls + col;
+        }
+        ran++;
+        if (cmd_last_output_lines() > 1) {
+            lines = 2;
+        }
+    }
+    if (nb > 0) {
+        if (refused > 0) {
+            snprintf(msg, sizeof msg, "%d ran, %d refused: %.40s", ran, refused, first);
+        } else if (ran > 0) {
+            snprintf(msg, sizeof msg, "block: %d ran", ran);
         }
     }
 

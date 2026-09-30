@@ -184,6 +184,7 @@ typedef struct {
     uint8_t  last_val;      /* what this lane last played, 0-9                 */
     volatile bool    trig;  /* the source fired; set in the clock callback      */
     volatile uint8_t trig_val;   /* the source's level, 0-127: what a routed lane plays at */
+    volatile uint8_t trig_deg;   /* the degree a routed voice played, 0-9, or 0xFF */
     /* HOW MANY ROUTE HOPS from a lane that follows nothing. The clock fires
      * lower ranks first, so a routed lane hears its source on the same tick
      * whatever order the lines were typed in. */
@@ -248,6 +249,8 @@ int seq_lane_pass(const seq_lane_t *l);
  * the moment it sounds. That is a feature, and it is why the resolution is
  * not done at compile time. */
 esp_err_t   seq_scale(const char *spec);
+/* Playing, the key changes on the next bar's one; stopped, now. */
+esp_err_t   seq_scale_on_one(const char *spec);
 const char *seq_scale_name(void);
 
 /* WHERE A LANE GOES, all of it at once.

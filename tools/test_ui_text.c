@@ -184,7 +184,12 @@ static int check_line(const char *what, int ln, const char *line)
     const int ne = lane_name_parse(w, wl, &nm);
     if (*rest == '=') {
         lane_def_t d;
-        lane_def_parse(rest + 1, &d);
+        /* '>bass = ch 5' moves a sound it already is (lane_def_shift); a name
+         * the boot document or an earlier line defined is one. */
+        const lane_def_t sound = { .kind = LD_VOICE, .num = 2, .chan = 1, .gate = 150 };
+        char full[80];
+        const int sh = lane_def_shift(rest + 1, &sound, full, sizeof full);
+        lane_def_parse(sh == 1 && ne == LN_OK && is_name(nm.base) ? full : rest + 1, &d);
         if (ne != LN_OK || d.kind == LD_ERROR || d.kind == LD_REMOVE ||
             (d.kind == LD_DRAW && !is_name(d.draw))) {
             printf("[FAIL] %s line %d does not define a name: %s (%s)\n",
@@ -222,8 +227,11 @@ static int check_text(const char *what, const char *text)
     while (*text != '\0') {
         const char *nl = strchr(text, '\n');
         const size_t n = nl ? (size_t)(nl - text) : strlen(text);
-        char line[64];
-        snprintf(line, sizeof line, "%.*s", (int)n, text);
+        char buf[64];
+        snprintf(buf, sizeof buf, "%.*s", (int)n, text);
+        /* A block's lines are indented (editor_block.h); they run the same. */
+        const char *line = buf;
+        while (*line == ' ') { line++; }
         if (line[0] == '>' && strstr(line, "   ") != NULL) {
             /* The cheat-sheet style - '>sync on    MIDI clock out' - made the
              * comment part of the argument, so the line failed when it was run:
@@ -262,6 +270,27 @@ static void guide_runs(void)
         strncmp(BOOT_NAMES, BOOT_MARK, sizeof BOOT_MARK - 1) != 0) {
         printf("[FAIL] the names block must start with its mark '%s'\n", BOOT_MARK);
         fails++;
+    }
+    /* The MIDI page runs the same way, and every line of it fits. */
+    check_text("midi", MIDI_TEXT);
+    {
+        const char *m = MIDI_TEXT;
+        int ln = 1;
+        while (*m) {
+            const char *nl = strchr(m, '\n');
+            const size_t n = nl ? (size_t)(nl - m) : strlen(m);
+            if (n > UI_NARROW_COLS) {
+                printf("[FAIL] MIDI_TEXT line %d is %zu chars\n", ln, n);
+                fails++;
+            }
+            if (!nl) { break; }
+            m = nl + 1;
+            ln++;
+        }
+        if (strstr(MIDI_TEXT, MIDI_MARK) == NULL) {
+            printf("[FAIL] the midi page has no mark\n");
+            fails++;
+        }
     }
     const int checked = check_text("guide", GUIDE_TEXT);
     /* and every picture the firmware can draw is mentioned, so adding one

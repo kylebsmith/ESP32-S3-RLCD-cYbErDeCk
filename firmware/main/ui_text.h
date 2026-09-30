@@ -115,107 +115,164 @@
  * "guide 3": a password is asked for and never typed on a line (ask.h), so the
  * '>wifi <ssid> <pass>' and '>host deck 12345678' that "guide 2" taught are
  * refused - and cut - now. */
-#define GUIDE_MARK "guide 3"
+#define GUIDE_MARK "guide 4"
+
+/* "guide 4", 2026-09-29: the sections are blocks - a heading run is its
+ * section run (editor_block.h) - and the guide says what changed: a line run
+ * unchanged is gone, toggle waits for the bar, a sound moves channel. A guide
+ * that is still "guide 3" exactly as the firmware wrote it, which is how it is
+ * known unedited, is replaced outright; an edited one keeps its text below. */
+#define GUIDE3_FNV 0xe79bb7f4u
 
 #define GUIDE_TEXT \
-    "Ctrl+Enter runs a line.\n" \
-    "Enter always makes a line.\n" \
-    "Ctrl-L / Ctrl-J switch docs.\n" \
-    "Ctrl-O returns from output.\n" \
+    "GUIDE. ctrl+enter runs a line\n" \
+    "and the lines tabbed under it,\n" \
+    "so a heading runs its section.\n" \
+    "enter makes a line, tab\n" \
+    "indents it. ctrl-l / ctrl-j:\n" \
+    "next document. ctrl-o: output\n" \
+    "and back. ctrl-g: here.\n" \
     "\n" \
-    "RUN THESE, TOP TO BOTTOM\n" \
-    ">bpm 124\n" \
-    ">scale dmin\n" \
-    ">kick 9...x...9...x...\n" \
-    ">hat x3x3x3x3x3x3x3x%50\n" \
-    ">bass 0__.3_..5__.3...\n" \
-    ">pad [0,2,4]___[3,5,7]___\n" \
-    ">cut 0..3..6..9..6.\n" \
+    "-- a beat\n" \
+    "  >bpm 124\n" \
+    "  >scale dmin\n" \
+    "  >kick 9...8...9...8...\n" \
+    "  >hat ..7...7...7...7.\n" \
+    "  >bass 0__.3_..5__.3...\n" \
+    "  >pad [0,2,4]___[3,5,7]___\n" \
+    "  >play\n" \
+    "\n" \
+    "-- steps\n" \
+    "  x hits. . rests. 0-9 is how\n" \
+    "  hard on a drum, the degree\n" \
+    "  on bass lead pad arp, the\n" \
+    "  value on a cc. _ holds it.\n" \
+    "  x%15: 15 times in 100.\n" \
+    "  [xx] two in a step. [0,4,7]\n" \
+    "  a chord. <3 5> one a bar.\n" \
+    "  <000 777> a word a bar.\n" \
+    "  /2 half. *2 double. !2\n" \
+    "  twice, then it stops.\n" \
+    "  >hat ..7...7...7.[77]%50.7.\n" \
+    "\n" \
+    "-- change it live\n" \
+    "  edit a line, run it: it\n" \
+    "  changes. run it unchanged:\n" \
+    "  gone. once more: back. a\n" \
+    "  name alone: gone.\n" \
+    "  >bass 0__.5_..7__.5...\n" \
+    "\n" \
+    "-- on the one\n" \
+    "  toggle waits for the bar.\n" \
+    "  run it again: back.\n" \
+    "  >toggle hat bass\n" \
+    "\n" \
+    "-- names\n" \
+    "  make one, or move one to\n" \
+    "  another midi channel:\n" \
+    "  >conga = note 63\n" \
+    "  >conga ..x..x..x..x.x..\n" \
+    "  >bass = ch 5\n" \
+    "  >bass = ch 1\n" \
+    "\n" \
+    "-- endings\n" \
+    "  a lane that ends starts\n" \
+    "  another:\n" \
+    "  >tom x.x.x.x. !2\n" \
+    "  >crash x !1\n" \
+    "  >route crash tom:end\n" \
+    "\n" \
+    "-- pictures\n" \
+    "  a picture is a lane. fields:\n" \
+    "  noise disc box turn ramp\n" \
+    "  grid. levels: mask edge.\n" \
+    "  bends: echo move spin warp\n" \
+    "  grow thin flip fold.\n" \
+    "  >echo 8\n" \
+    "  >route disc kick\n" \
+    "  >route disc:x bass\n" \
+    "  >noise 2.4.2.4.\n" \
+    "  >send view on\n" \
+    "\n" \
+    "-- stop\n" \
+    "  >clear\n" \
+    "  >stop\n" \
+    "\n" \
+    "-- more\n" \
+    "  >lanes\n" \
+    "  >send\n" \
+    "  >usb on\n" \
+    "  >list\n" \
+    "  >help\n" \
+    "  midi learn: the midi page.\n" \
+    "guide 4\n" \
+    ""
+
+/* THE MIDI PAGE: every controller the deck and its pieces send, one line each.
+ * A DAW learns the next controller it hears, and with a set playing it hears
+ * everything: run a line, and its block plays that cc alone for eight bars
+ * (a count, so it stops itself) with every other MIDI lane muted by '>map'.
+ * The owner, 2026-09-29: "its own persistent page like guide". */
+#define MIDI_MARK "midi 1"
+
+#define MIDI_TEXT \
+    "MIDI LEARN. put the DAW in\n" \
+    "map mode, pick a control, run\n" \
+    "a line: that cc plays alone\n" \
+    "for 8 bars. learn it, run the\n" \
+    "next. >map at the end.\n" \
     ">play\n" \
-    "\n" \
-    "x hits. . rests.\n" \
-    "0-9 is how much: on a drum\n" \
-    "how hard, on bass lead pad\n" \
-    "arp the degree (0 the root),\n" \
-    "on a cc lane the value.\n" \
-    "_ holds the note before it.\n" \
-    "x%15 plays 15% of the time.\n" \
-    "[xx] two in one step.\n" \
-    "[0,2,4] all at once - chord.\n" \
-    "<3 5> one each time round.\n" \
-    "x.x. /2 half speed, *2 double.\n" \
-    "!2 at the end: twice, then\n" \
-    "it stops - and a lane that\n" \
-    "stops can start another:\n" \
-    ">tom x.x.x.x. !2\n" \
-    ">snare ..x. !4\n" \
-    ">route snare tom:end\n" \
-    ">route crash tom:end\n" \
-    "\n" \
-    "The names are lines in the\n" \
-    "boot doc. Make another:\n" \
-    ">conga = note 63\n" \
-    ">conga x..x..x.\n" \
-    "A part is a lane too: how\n" \
-    "hard, and which octave -\n" \
-    ">bass:vel 9...3...\n" \
-    ">bass:oct <2 3>...\n" \
-    "\n" \
-    "Edit any line, run it again\n" \
-    "- it changes live. Run it\n" \
-    "unchanged to silence it.\n" \
-    "A mistake is refused: the\n" \
-    "bar says why, and the wrong\n" \
-    "character is boxed.\n" \
-    "\n" \
-    ">swing 58\n" \
-    ">scale fmin\n" \
-    ">stop\n" \
-    "\n" \
-    "mute some, solo one, then\n" \
+    ">cut = cc 74 ch 1\n" \
+    "  >cut 1357 /2 !16\n" \
+    "  >map cut\n" \
+    ">res = cc 71 ch 1\n" \
+    "  >res 1357 /2 !16\n" \
+    "  >map res\n" \
+    ">mod = cc 1 ch 1\n" \
+    "  >mod 1357 /2 !16\n" \
+    "  >map mod\n" \
+    ">rev = cc 91 ch 1\n" \
+    "  >rev 1357 /2 !16\n" \
+    "  >map rev\n" \
+    ">glow = cc 74 ch 3\n" \
+    "  >glow 1357 /2 !16\n" \
+    "  >map glow\n" \
+    ">bite = cc 74 ch 5\n" \
+    "  >bite 1357 /2 !16\n" \
+    "  >map bite\n" \
+    ">drive = cc 20 ch 6\n" \
+    "  >drive 1357 /2 !16\n" \
+    "  >map drive\n" \
+    "the screen, channel 16:\n" \
+    ">ink = cc 1 ch 16\n" \
+    "  >ink 1357 /2 !16\n" \
+    "  >map ink\n" \
+    ">paper = cc 2 ch 16\n" \
+    "  >paper 1357 /2 !16\n" \
+    "  >map paper\n" \
+    ">sat = cc 3 ch 16\n" \
+    "  >sat 1357 /2 !16\n" \
+    "  >map sat\n" \
+    ">day = cc 4 ch 16\n" \
+    "  >day 1357 /2 !16\n" \
+    "  >map day\n" \
+    ">inv = cc 5 ch 16\n" \
+    "  >inv 1357 /2 !16\n" \
+    "  >map inv\n" \
+    ">glint = cc 6 ch 16\n" \
+    "  >glint 1357 /2 !16\n" \
+    "  >map glint\n" \
+    ">skew = cc 7 ch 16\n" \
+    "  >skew 1357 /2 !16\n" \
+    "  >map skew\n" \
+    ">lines = cc 8 ch 16\n" \
+    "  >lines 1357 /2 !16\n" \
+    "  >map lines\n" \
     "all back on:\n" \
-    ">mute hat bass\n" \
-    ">solo kick\n" \
-    ">mute\n" \
-    "MIDI clock out:\n" \
-    ">sync on\n" \
-    "what plays, and where to:\n" \
-    ">lanes\n" \
-    ">send\n" \
-    "one cable to a DAW:\n" \
-    ">usb on\n" \
-    "a network. it asks for the\n" \
-    "password - a password never\n" \
-    "goes on a line:\n" \
-    ">wifi <ssid>\n" \
-    ">host deck\n" \
-    ">osc 192.168.4.2 9000\n" \
-    "\n" \
-    "PICTURES - same document,\n" \
-    "same clock. each one is a\n" \
-    "lane, exactly like a drum.\n" \
-    "fields: noise disc box turn\n" \
-    "  ramp grid\n" \
-    "levels: mask edge\n" \
-    "bends: echo move spin warp\n" \
-    "  grow thin flip fold\n" \
-    "disc:2 disc:3, more of one.\n" \
-    ">echo 8\n" \
-    "then add these:\n" \
-    ">noise 2.4.2.4.\n" \
-    ">move d\n" \
-    "trails fall.\n" \
-    ">route disc kick\n" \
-    "u d l r say which way.\n" \
-    "preview on or off:\n" \
-    ">split\n" \
-    "send the picture over osc:\n" \
-    ">frame\n" \
-    "your documents, and all\n" \
-    "the commands:\n" \
-    ">list\n" \
-    ">help\n" \
-    "guide 3\n"
+    ">map\n" \
+    ">stop\n" \
+    "midi 1\n" \
+    ""
 
 #ifndef UI_TEXT_NO_ASSERTS
 _Static_assert(sizeof(UI_NOT_A_COMMAND) - 1 <= UI_NARROW_COLS, "status message is cut");

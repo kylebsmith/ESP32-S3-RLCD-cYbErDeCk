@@ -366,9 +366,19 @@ static void ensure_guide_buffer(void)
                     doc_read(keep, had);
                     keep[had] = '\0';
                 }
+                /* UNEDITED, IT IS REPLACED. A guide that is still exactly what
+                 * the firmware wrote holds nothing of the owner's, and keeping it
+                 * underneath is only a longer page to scroll (2026-09-29). */
+                uint32_t h = 2166136261u;
+                for (size_t k = 0; keep != NULL && k < had; k++) {
+                    h = (h ^ (uint8_t)keep[k]) * 16777619u;
+                }
+                if (keep != NULL && h == GUIDE3_FNV) {
+                    keep[0] = '\0';
+                }
                 doc_set_text(GUIDE_TEXT);
                 doc_move_to(doc_len());     /* append, not prepend */
-                if (keep != NULL && had > 0) {
+                if (keep != NULL && keep[0] != '\0') {
                     static const char sep[] = "\n-- previously in this guide --\n";
                     for (const char *q = sep; *q != '\0'; q++) { doc_insert(*q); }
                     for (const char *q = keep; *q != '\0'; q++) { doc_insert(*q); }
@@ -391,6 +401,26 @@ static void ensure_guide_buffer(void)
     if (doc_buf_rename("guide") == ESP_OK) {
         doc_save();
         ESP_LOGI(TAG, "wrote a starter guide buffer");
+    }
+    doc_buf_select(was);
+}
+
+/* THE MIDI PAGE, written if there is none (ui_text.h, MIDI_TEXT): every
+ * controller one line, for learning them in a DAW. The owner's to edit after. */
+static void ensure_midi_buffer(void)
+{
+    if (doc_buf_find("midi") >= 0) {
+        return;
+    }
+    const int was = doc_buf_current();
+    if (doc_buf_new() != ESP_OK) {
+        return;
+    }
+    doc_set_text(MIDI_TEXT);
+    doc_buf_set_kind(DOC_KIND_GUIDE);
+    if (doc_buf_rename("midi") == ESP_OK) {
+        doc_save();
+        ESP_LOGI(TAG, "wrote the midi page");
     }
     doc_buf_select(was);
 }
@@ -590,6 +620,7 @@ void app_main(void)
     report_memory("after docstore");
 
     ensure_guide_buffer();
+    ensure_midi_buffer();
 
     kbd_set_ble_hooks(blemidi_register, blemidi_start);
     if (kbd_init() != ESP_OK) {

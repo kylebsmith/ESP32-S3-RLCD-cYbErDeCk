@@ -1,4 +1,5 @@
 #include "seq.h"
+#include "seq_offs.h"
 #include "seq_toggle.h"
 #include "seq_clock.h"
 #include "seq_pattern.h"
@@ -22,7 +23,6 @@ static seq_param_hook_t s_on_param;
 
 static seq_lane_t s_lanes[SEQ_MAX_LANES];
 static int        s_bpm = 120;
-static bool       s_running;
 /* volatile: written by the clock on the esp_timer task, read by the editor
  * task to place the playhead. Aligned 32-bit does not tear on Xtensa, so this
  * is about the compiler not hoisting the read out of the draw loop. */
@@ -264,6 +264,41 @@ esp_err_t seq_scale(const char *spec)
     return ESP_OK;
 }
 
+/* A KEY CHANGE WAITS FOR THE ONE while the clock runs, as a toggle does
+ * (seq_toggle.h): run a beat early in a scene, it moved the arp into the new
+ * key a beat before the toggles beside it landed. Held as one word - root,
+ * and the mode's place in the table - so the clock's core reads it whole; -1
+ * is nothing waiting. */
+static volatile int s_key_pend = -1;
+static char         s_key_pend_name[12];
+static bool         s_running;
+
+esp_err_t seq_scale_on_one(const char *spec)
+{
+    int pc = 0;
+    const seq_mode_t *m = NULL;
+    if (seq_scale_parse(spec, &pc, &m) != 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (!s_running) {
+        return seq_scale(spec);
+    }
+    snprintf(s_key_pend_name, sizeof s_key_pend_name, "%s", spec);
+    __atomic_store_n(&s_key_pend, pc | ((int)(m - seq_modes) << 8), __ATOMIC_RELEASE);
+    return ESP_OK;
+}
+
+/* The clock, on a bar's first tick, before any lane fires. */
+static void key_land(void)
+{
+    const int k = __atomic_exchange_n(&s_key_pend, -1, __ATOMIC_ACQ_REL);
+    if (k >= 0) {
+        s_root = k & 0xFF;
+        s_mode = &seq_modes[k >> 8];
+        memcpy(s_scale_name, s_key_pend_name, sizeof s_scale_name);
+    }
+}
+
 static uint8_t degree_note(uint8_t deg, int octave)
 {
     return seq_degree_note(s_root, s_mode, deg, octave);
@@ -273,13 +308,8 @@ static uint8_t degree_note(uint8_t deg, int octave)
  * leave a note hanging: there is no "on" a performer could forget to pair.
  * docs/OS.md's own warning about stuck notes is that midi.on/midi.off as a
  * PAIR manufactures the problem that panic then exists to clean up. */
-typedef struct {
-    int64_t     due_us;
-    const char *lane;       /* who scheduled it, for whatever reads the event */
-    uint8_t     status, d1;
-    bool        armed;
-} pending_off_t;
-static pending_off_t s_offs[SEQ_MAX_LANES * 4];
+static seq_off_t s_offs[SEQ_MAX_LANES * 4];
+#define N_OFFS ((int)(sizeof s_offs / sizeof s_offs[0]))
 
 static const char *s_emitting;   /* the lane fire_lanes is currently serving */
 
@@ -318,24 +348,29 @@ static void emit(uint8_t status, uint8_t d1, uint8_t d2)
 static void schedule_off(uint8_t chan, uint8_t note, uint32_t us)
 {
     const int64_t due = esp_timer_get_time() + (int64_t)us;
-    for (size_t i = 0; i < sizeof s_offs / sizeof s_offs[0]; i++) {
-        if (!s_offs[i].armed) {
-            s_offs[i].armed  = true;
-            s_offs[i].due_us = due;
-            s_offs[i].lane   = s_emitting;
-            s_offs[i].status = (uint8_t)(0x80 | (chan & 0x0F));
-            s_offs[i].d1     = note;
-            return;
-        }
+    if (seq_off_arm(s_offs, N_OFFS, due, s_emitting, chan, note) < 0) {
+        /* Table full: send the off immediately rather than lose it. A dropped
+         * note-off is a stuck note, which is the one failure an audience hears. */
+        emit((uint8_t)(0x80 | (chan & 0x0F)), note, 0);
     }
-    /* Table full: send the off immediately rather than lose it. A dropped
-     * note-off is a stuck note, which is the one failure an audience hears. */
-    emit((uint8_t)(0x80 | (chan & 0x0F)), note, 0);
+}
+
+/* A note about to start on a pitch still sounding: end the old one now, so
+ * its off cannot land inside this one (seq_offs.h). */
+static void retrigger(uint8_t chan, uint8_t note)
+{
+    const int i = seq_off_take(s_offs, N_OFFS, chan, note);
+    if (i >= 0) {
+        const char *was = s_emitting;
+        s_emitting = s_offs[i].lane;
+        emit(s_offs[i].status, s_offs[i].d1, 0);
+        s_emitting = was;
+    }
 }
 
 static void service_offs(int64_t now)
 {
-    for (size_t i = 0; i < sizeof s_offs / sizeof s_offs[0]; i++) {
+    for (int i = 0; i < N_OFFS; i++) {
         if (s_offs[i].armed && now >= s_offs[i].due_us) {
             s_offs[i].armed = false;
             /* An off belongs to the lane that played the note, not to whichever
@@ -390,7 +425,7 @@ static inline uint32_t rng_next(void)
  * table. Before the collapse the music half published nothing and the visual
  * half kept its own copy of this loop, so a kick could drive a circle and a
  * circle could drive nothing. */
-static void published(seq_lane_t *src, uint8_t value)
+static void published(seq_lane_t *src, uint8_t value, uint8_t deg)
 {
     src->last_val = (uint8_t)((value * 9 + 63) / 127);
     for (int j = 0; j < SEQ_MAX_LANES; j++) {
@@ -401,6 +436,10 @@ static void published(seq_lane_t *src, uint8_t value)
              * routed from a kick carries the kick's velocity to the wire as it
              * was, and only a picture needs the nine steps. */
             d->trig_val = value;
+            /* AND WHICH NOTE: a voice says the degree it played, so a picture's
+             * position can follow the music and not only how hard it is -
+             * '>route disc:x bass' puts the planet where the bass is. */
+            d->trig_deg = deg;
         }
     }
     if (s_on_play != NULL) {
@@ -480,7 +519,7 @@ static void fire_event(seq_lane_t *l, const seq_ev_t *e, bool routed,
                 p->octave = (int8_t)((amt < 0) ? p->oct0 : (amt > 8 ? 8 : amt));
             }
         }
-        published(l, (uint8_t)((amt < 0 ? 9 : amt) * 127 / 9));
+        published(l, (uint8_t)((amt < 0 ? 9 : amt) * 127 / 9), 0xFF);
         return;
     }
     /* A DRAWING LANE. The value is an amount 0-9 and the destination is a
@@ -489,7 +528,10 @@ static void fire_event(seq_lane_t *l, const seq_ev_t *e, bool routed,
      * is an esp_timer callback - docs/OS.md forbids acting here. The main
      * loop replays the marks in primitive order. */
     if (l->bind == SEQ_BIND_VIZ) {
-        int amt = routed ? ((int)l->trig_val * 9 + 63) / 127
+        /* A position routed from a voice goes to the degree it played. */
+        int amt = routed ? ((l->param != 0 && l->trig_deg != 0xFF)
+                                ? (int)l->trig_deg
+                                : ((int)l->trig_val * 9 + 63) / 127)
                          : (e->val == SEQ_VAL_X ? 9 : (int)e->val);
         if (amt < 0) { amt = 0; }
         if (amt > 9) { amt = 9; }
@@ -504,7 +546,7 @@ static void fire_event(seq_lane_t *l, const seq_ev_t *e, bool routed,
         } else if (s_on_draw != NULL) {
             s_on_draw((int)l->prim, amt, dir, tick);
         }
-        published(l, (uint8_t)(amt * 127 / 9));
+        published(l, (uint8_t)(amt * 127 / 9), 0xFF);
         return;
     }
     if (l->ctrl) {
@@ -522,7 +564,7 @@ static void fire_event(seq_lane_t *l, const seq_ev_t *e, bool routed,
         const uint8_t v = routed ? (uint8_t)(l->trig_val & 0x7F)
                                  : (uint8_t)((e->val * 127) / 9);
         emit((uint8_t)(0xB0 | (l->chan & 0x0F)), l->cc, v);
-        published(l, v);
+        published(l, v, 0xFF);
         return;
     }
     /* On a melodic lane an 'x' is the ROOT, not MIDI note 0 - which would emit
@@ -540,8 +582,10 @@ static void fire_event(seq_lane_t *l, const seq_ev_t *e, bool routed,
                      : (l->melodic ? l->vel : vel_of(l, e->val));
     if (vel < 1)   { vel = 1; }
     if (vel > 127) { vel = 127; }
+    retrigger(l->chan, note);
     emit((uint8_t)(0x90 | (l->chan & 0x0F)), note, (uint8_t)vel);
-    published(l, (uint8_t)vel);
+    published(l, (uint8_t)vel,
+              l->melodic ? (uint8_t)(e->val == SEQ_VAL_X ? 0 : (e->val > 9 ? 9 : e->val)) : 0xFF);
     schedule_off(l->chan, note, gate_us(l, e->hold));
 }
 
@@ -560,6 +604,7 @@ static void publish_end(seq_lane_t *src)
             strcmp(d->route + n, ":end") == 0) {
             d->trig = true;
             d->trig_val = 127;
+            d->trig_deg = 0xFF;
         }
     }
 }
@@ -812,6 +857,7 @@ static void publish_input(const char *name, uint8_t value)
         if (d->used && d->route[0] != '\0' && strcmp(d->route, name) == 0) {
             d->trig = true;
             d->trig_val = value;
+            d->trig_deg = 0xFF;
         }
     }
 }
@@ -943,6 +989,7 @@ static void tick(void *arg)
      * exchange is atomic because the command that set it runs on the other
      * core; a press between the read and the clear is never lost. */
     if (seq_toggle_at_bar(s_tick)) {
+        key_land();
         for (int i = 0; i < SEQ_MAX_LANES; i++) {
             seq_lane_t *l = &s_lanes[i];
             const int p = __atomic_exchange_n(&l->pend_mute, (int8_t)SEQ_PEND_NONE,
@@ -1604,7 +1651,7 @@ void seq_stop(void)
 
 void seq_all_notes_off(void)
 {
-    for (size_t i = 0; i < sizeof s_offs / sizeof s_offs[0]; i++) {
+    for (int i = 0; i < N_OFFS; i++) {
         if (s_offs[i].armed) {
             s_offs[i].armed = false;
             emit(s_offs[i].status, s_offs[i].d1, 0);

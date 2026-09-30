@@ -1,63 +1,64 @@
 ORBITALS
 for the satellites to come
 
--- night
->send view poster
->day = cc 4 ch 16
->day 0 /16
->bpm 124
->scale dmin
->swing 50
->echo 8
->turn u...l...d...r...
->pad = voice 3 ch 3 gate 420
->pad <[0,2,4] [0,2,5] [2,4,6] [1,3,6]>___ /4
->pad:2 <[3,5,7] [4,6,8] [5,7,9] [4,6,8]>___ /4
->arp = voice 5 ch 4 gate 90
->arp 0..7..4..9..7..2
->bass = voice 2 ch 1 gate 1800
->bass 0 /16
->bass:2 .000.000.000.000
->kick 9...8...9...8...
->hat ..3...3...3...4.
->clap ....7.......7...
->lead = voice 4 ch 2 gate 200
->lead 7___9___8_7_4___ /4
->disc 3
->disc:x 8876532111235678
->disc:y 568886531113
->toggle pad:2 bass:2 kick hat clap lead disc disc:x disc:y
->play
+-- I night
+  >send view poster
+  >bpm 124
+  >scale dmin
+  >swing 50
+  >pad = voice 3 ch 3 gate 1870
+  >pad <[0,2,4] [0,2,5] [2,4,6] [1,3,6] [0,3,5] [2,5,7] [1,4,7] [0,2,4]> /16
+  >pad:2 <[3,5,7] [4,6,8] [5,7,9] [1,3,6]> /16
+  >arp = voice 5 ch 4 gate 90
+  >arp 0..7..4..9%70..7..2%50
+  >bass = voice 2 ch 1 gate 1800
+  >bass 0 /16
+  >roll = voice 2 ch 1 gate 100
+  >roll <.000.000.000.000 .000.000.000.777>
+  >kick 9...8...9...8...
+  >hat ..3...3...3...4.
+  >clap ....7.......7...
+  >lead = voice 4 ch 2 gate 200
+  >lead <7___9___8_7_4___ 7___9___[98]_7_4___> /4
+  >glow = cc 74 ch 3
+  >echo 8
+  >turn u...l...d...r...
+  >disc 3
+  >route disc:x arp
+  >route disc:y lead
+  >box 2...1...2...1...
+  >toggle pad:2 roll kick hat clap lead disc box
+  >play
 
--- first light
->toggle turn kick disc disc:x disc:y
->day 0011223344556677 /16
+-- II first light
+  >toggle turn kick disc box
 
--- accretion
->toggle bass bass:2 hat clap
->toggle lead
+-- III accretion
+  >toggle bass roll hat clap lead
+  >glow <2 3 4 5 6 7 8 9> /16
 
--- day
->toggle pad pad:2
->day 9 /16
+-- IV day
+  >toggle pad pad:2
+  >arp = ch 8
 
--- eclipse
->toggle kick hat clap lead bass:2 arp
->scale dphr
->day 1 /16
+-- V eclipse
+  >toggle kick hat clap lead roll arp
+  >scale dphr
+  >send view glint 6
 
--- return
->scale dmin
->toggle kick hat clap lead bass:2 arp
->toggle pad pad:2
->day 5 /16
+-- VI return
+  >toggle kick hat clap lead roll arp
+  >toggle pad pad:2
+  >scale dmin
+  >send view glint 0
+  >arp = ch 4
 
--- night again
->toggle kick hat clap lead bass bass:2 disc disc:x disc:y
->toggle turn
->day 0 /16
+-- VII night
+  >toggle kick hat clap lead roll bass disc box
+  >toggle turn
+  >glow 2 /16
 
 -- out
->clear
->send view off
->stop
+  >clear
+  >send view off
+  >stop

@@ -32,14 +32,9 @@ _Static_assert((int)VIZ_OUT_MODES == (int)VIEW_MODES &&
                (int)VIZ_OUT_CODE == (int)VIEW_MODE_CODE,
                "the engine and the wire number the view's modes the same way");
 
-/* THE VIEW'S PARAMETERS: the last value of controllers 1-8 on MIDI channel
- * 16, sent to the node with every control frame (view_wire.h). The clock's task
- * writes them and the editor's loop reads them; a byte is one store, and a
- * frame that catches one mid-change shows it a step later. */
-static volatile uint8_t s_par[VIEW_PARAMS] = {
-    VIEW_PARAM_UNSET, VIEW_PARAM_UNSET, VIEW_PARAM_UNSET, VIEW_PARAM_UNSET,
-    VIEW_PARAM_UNSET, VIEW_PARAM_UNSET, VIEW_PARAM_UNSET, VIEW_PARAM_UNSET };
-
+/* THE VIEW'S PARAMETERS live in the picture engine (viz_out_param): the last
+ * value of controllers 1-8 on MIDI channel 16, or what '>send view day 9' set,
+ * sent to the node with every control frame (view_wire.h). */
 static void view_sink(const char *lane, uint8_t status, uint8_t d1, uint8_t d2,
                       uint32_t when_us)
 {
@@ -49,7 +44,7 @@ static void view_sink(const char *lane, uint8_t status, uint8_t d1, uint8_t d2,
     (void)lane; (void)when_us;
     if ((status & 0xF0) == 0xB0 && (status & 0x0F) == VIEW_PARAM_CHANNEL - 1 &&
         d1 >= 1 && d1 <= VIEW_PARAMS) {
-        s_par[d1 - 1] = d2 & 0x7F;
+        viz_out_param_set(d1 - 1, d2 & 0x7F);
     }
 }
 
@@ -275,9 +270,7 @@ void view_frame(void)
     static bool was_on;
     if (!seq_dest_is_on("view")) {
         if (was_on) {
-            for (int i = 0; i < VIEW_PARAMS; i++) {
-                s_par[i] = VIEW_PARAM_UNSET;
-            }
+            viz_out_params_clear();
         }
         was_on = false;
         return;
@@ -299,8 +292,9 @@ void view_frame(void)
     const int nl = (mode == VIZ_OUT_POSTER) ? poster_lines(lines, text)
                  : (mode == VIZ_OUT_CODE)   ? code_lines(lines, text) : 0;
     uint8_t par[VIEW_PARAMS];
+    viz_out_params_land(tick / 24);           /* a colour waiting for its one */
     for (int i = 0; i < VIEW_PARAMS; i++) {
-        par[i] = s_par[i];
+        par[i] = viz_out_param(i);
     }
     const size_t cn = view_wire_pack_ctl2(ctl, sizeof ctl, tick, mode, par, lines, nl);
     if (cn > 0) {

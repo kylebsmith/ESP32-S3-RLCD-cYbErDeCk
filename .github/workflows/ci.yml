@@ -177,6 +177,14 @@ jobs:
       # naive one (step index == character offset) that every UNSPACED
       # pattern makes look right by accident - which is every pattern in the
       # shipped guide. Run against the naive version it fails 13 ways.
+      # Ctrl+Enter runs a line and the lines indented under it: the rule in
+      # editor_block.h that the editor runs, on headings, nesting and tabs.
+      - name: Check that a line runs its block
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror -I firmware/main \
+             -o /tmp/test_block tools/test_block.c
+          /tmp/test_block
+
       # '>toggle' lands on the next bar's first tick, not when it is pressed:
       # the rule in seq_toggle.h that the clock runs, played out over ticks.
       - name: Check that a toggle lands on the one
@@ -184,6 +192,15 @@ jobs:
           cc -std=c11 -Wall -Wextra -Werror -I firmware/components/seq/include \
              -o /tmp/test_toggle tools/test_toggle.c
           /tmp/test_toggle
+
+      # A note-off ends its own note: a note that starts while its pitch is
+      # still pending an off sends that off first (seq_offs.h). The old queue
+      # is run too and must cut notes, so the check tells the two apart.
+      - name: Check that a note-off ends its own note
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror -I firmware/components/seq/include \
+             -o /tmp/test_offs tools/test_offs.c
+          /tmp/test_offs
 
       - name: Check the pattern geometry
         run: |
