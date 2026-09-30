@@ -31,7 +31,7 @@ it — but the meaning of the patch lives where every other meaning on this devi
 
 ## What already exists `[FACT]`
 
-A satellite's controls are **input names** ([MAP.md](MAP.md) §9.8): `>knob1 = knob`
+A satellite's controls are **input names**: `>knob1 = knob`
 holds a value 0–127 on the deck, `>pad1 = pad` fires on a press, and `route` connects
 either to anything. A knob acts on the next tick; a pad lands on the next step, swing
 included, because a button that plays a note must land on the grid. The value lives on
@@ -172,7 +172,7 @@ and switches its terminator itself.
 - **Plugging in is pairing.** The first time a node is on the cable, the deck tells it
   its own address. From then on the node knows where to send when the cable is out.
   No pairing mode, no button held, nothing typed. A node that has never been plugged
-  in joins the way a deck does ([NEXT.md](NEXT.md) §5).
+  in joins the way a deck does.
 - **USB-C:** charge, flash, and be a class-compliant USB MIDI controller for a
   computer on its own — the "USB as an option" I asked for.
 
@@ -213,13 +213,13 @@ claiming one bank: `>lanes` says so, and the second is ignored until one moves.
 
 **An encoder sends how far it turned; the deck keeps the value.** TURN carries
 *deltas*, so the deck adds them to the held value and clamps at 0 and 127 — the value
-still lives on the deck, as [NEXT.md](NEXT.md) §5 asked. **Acceleration is the node's
+still lives on the deck. **Acceleration is the node's
 job:** only the node knows how fast the hand moved, so a slow turn sends 1 a detent
 and a flick sends up to 8, and the full range is under one turn when you want it and
 127 careful detents when you do not.
 
 **The document still defines the names** — a packet creates nothing, as with OSC
-([MAP.md](MAP.md) §9.8). `[OPEN]` **Two nodes are twelve names, and that is most of
+. `[OPEN]` **Two nodes are twelve names, and that is most of
 the room:** the deck holds 32 names and the boot document uses 16; it holds 16 inputs.
 A third node will move one of those limits.
 
@@ -243,7 +243,7 @@ A third node will move one of those limits.
 - **Pins:** 8 switches, 1 LED chain under the keys (WS2812-type, one data pin), 2 CAN,
   1 SYNC, 1 END — **13**.
 - A plain switch has no velocity: it sends 127, and a routed lane plays at its
-  source's level ([MAP.md](MAP.md) §9.7), so the pad is simply full.
+  source's level, so the pad is simply full.
 
 ### Later — bend sensors, piano tabs
 

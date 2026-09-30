@@ -448,7 +448,7 @@ running `>frame` again is the whole of visual coding on this device.
 
 **Tested against real OpenSSH servers, through the login and a command's reply** -
 see [NETWORK.md](NETWORK.md), *SSH, as built*. Use a throwaway account on the laptop,
-never a real password, as docs/NEXT.md §10 asks. Turn on Remote Login (macOS: Settings → General → Sharing). Then with the
+never a real password. Turn on Remote Login (macOS: Settings → General → Sharing). Then with the
 deck on the same network:
 
 ```
@@ -559,7 +559,7 @@ loop, not a logic level. See [HARDWARE.md](HARDWARE.md). `>din off` stops it.
 completed from that mode — it runs shutdown handlers and TinyUSB's teardown
 deadlocks — so `>usb off` saved every document and then stopped dead, and only a
 PWR hold recovered it. It reboots without the handlers now, and the `>usb on` →
-`>usb off` round trip works. See [OS.md](OS.md).
+`>usb off` round trip works.
 
 Still open: **`>flash now` from USB MIDI mode** has the same deadlock and cannot
 use the same fix, because it needs a CPU-only reset to preserve

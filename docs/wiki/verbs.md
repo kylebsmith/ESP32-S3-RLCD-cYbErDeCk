@@ -1,7 +1,7 @@
 # The verbs — every command, from the source
 
 *Part of [the deck, top to bottom](README.md). Snapshot: commit `85d1e6a`, 2026-09-28.
-Surprises and disagreements are in [errata.md](errata.md). Updated 2026-09-29 for
+Updated 2026-09-29 for
 `toggle`, `clear`, `map`, the re-run that removes, and `>name = ch`: those parts cite
 functions by name, since the line numbers moved.*
 
@@ -9,8 +9,7 @@ Firmware at `85d1e6a`. The source is the truth;
 `docs/` is secondary, and where the two disagree it is listed in §4.
 
 **37 verbs**: the table `s_builtins[]`, `builtins.c:2308-2343`, registered once by
-`cmd_init()` (`builtins.c:2347-2350`). The count checks out against the snippet in
-`docs/MAP.md:32-37`. Two more command functions are compiled but **not in the table**,
+`cmd_init()` (`builtins.c:2347-2350`). The count checks out. Two more command functions are compiled but **not in the table**,
 so they cannot be reached: `c_out` (`builtins.c:383-393`) and `c_usbtest`
 (`builtins.c:1236-1300`).
 
@@ -913,8 +912,7 @@ Reading the count resets it (`dinmidi.c:25-30`).
   bit at boot (`main.c:477`).
 - **From USB MIDI mode** this still uses `esp_restart()`, which `builtins.c:1090-1113`
   says never finishes in that mode. The docs record this as an open problem — run
-  `>usb off` first (`docs/OS.md:656-661`; `docs/TESTING.md:527-529`;
-  `docs/NEXT.md:74`).
+  `>usb off` first (`docs/TESTING.md:527-529`).
 
 ### 2.18 `dump` · READ · "print a document to the console" · `builtins.c:1176-1234`
 
@@ -1023,7 +1021,7 @@ Status: `"clock sd %d us over %u ticks"`.
 **Interactions**
 - `>play` and `>bpm N` also reset the statistics (`seq.c:1547`, `seq.c:1519`).
 - On a following deck, sd includes the deliberate grid corrections
-  (`docs/NEXT.md:76-77`).
+ .
 
 ### 2.23 `panic` · EDIT · "silence everything" · `builtins.c:2300-2306`
 
@@ -1093,7 +1091,7 @@ empties ORBITALS for its eclipse on the one, and the same line brings it back;
 `>clear` forgets every lane and picture (`seq_forget_all`, `viz_forget_all`) and keeps
 the document on screen — the clean slate `>new` gives, without a new page. Names and
 their definitions stay. Status `"%d lane%s gone"`. It answers my open question
-of 2026-09-26 ([next.md](next.md) §2).
+of 2026-09-26.
 
 ### 2.28 `map` · EDIT · "map cut - only it sends, to learn" · `c_map`
 

@@ -1,7 +1,6 @@
 # Documents — buffers, the journal, autosave, undo
 
-*Part of [the deck, top to bottom](README.md). Snapshot: commit `85d1e6a`, 2026-09-28.
-Surprises are in [errata.md](errata.md).*
+*Part of [the deck, top to bottom](README.md). Snapshot: commit `85d1e6a`, 2026-09-28.*
 
 ## 1. Documents (`docstore/`, `main.c`, `builtins.c`)
 
@@ -84,7 +83,7 @@ Consequences that follow from the code (**UNVERIFIED** on hardware):
 - **Rule:** `(force || Δlen ≥ 24 || idle ≥ 6 s) && !seq_running()`, and then `idle ≥ 1 s` (`main.c:999-1003`).
 - On success it logs `saved %u bytes, seq %u, %lld us` and mirrors to the SD card. On failure: `JOURNAL FULL - free a document` or `SAVE FAILED`.
 - A dirty transient buffer is only marked clean (`main.c:976-978`).
-- **Why not while playing** (`main.c:984-998`): a journal write was **measured at 13 000–18 600 µs**, with both cores' caches off and the clock callback in flash. That is the only term above the ~6 ms at which a percussive onset is heard as displaced (see also `docs/GRAPHICS.md:175-179`: "saved 59 bytes, seq 205, 16219 us" caused the one late tick in 3008).
+- **Why not while playing** (`main.c:984-998`): a journal write was **measured at 13 000–18 600 µs**, with both cores' caches off and the clock callback in flash. That is the only term above the ~6 ms at which a percussive onset is heard as displaced.
   - Edits made while playing stay in RAM until `>stop`. The stop edge is detected in the main loop; the comment's "`seq_stop()` forces the save" (`main.c:996-997`) is not literally true.
 - **Only the current buffer is autosaved.** Switching documents (Ctrl-L, Ctrl-J, `>open`) saves nothing (`editor.c:948-970`; `builtins.c:319-346`). A buffer left dirty stays in RAM until it is current again, or until `>usb`, `>flash now` or an esptool reset runs `doc_save_all_dirty`. `saved_len` is one variable shared by all buffers (`main.c:723,978,1008`).
 

@@ -1,9 +1,7 @@
 # The pictures — sixteen primitives, the frame, the view
 
 *Part of [the deck, top to bottom](README.md). Snapshot: commit `85d1e6a`, 2026-09-28.
-Source is the truth; surprises and disagreements are in [errata.md](errata.md). The
-proposals for what the pictures should become are in
-[pictures-and-type.md](pictures-and-type.md).*
+Source is the truth.*
 
 **Path shorthand.** `viz.c` and `viz.h` are `firmware/components/viz/{viz.c,include/viz.h}`. `textgrid.*`, `tgfont.h` and `font*` are under `firmware/components/textgrid/`. `st7305*` is under `firmware/components/st7305/`. `editor.c`, `main.c`, `cell_attr.h`, `ui_text.h`, `ask.h`, `view.*`, `view_wire.h` and `serialkbd.c` are under `firmware/main/`. `builtins.c`, `cmd.c` and `lane_name.h` are under `firmware/components/cmd/`. `seq.c`, `seq.h` and `seq_pattern.h` are under `firmware/components/seq/`. `kbd.h`, `ble_kbd.c` and `serialkbd_map.h` are under `firmware/components/kbd/`. `buffer.c` and `docstore.h` are under `firmware/components/docstore/`. `VIEW.md` and `HARDWARE.md` are in `docs/`.
 

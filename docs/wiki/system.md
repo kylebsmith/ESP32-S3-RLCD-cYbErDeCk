@@ -2,8 +2,7 @@
 
 *Part of [the deck, top to bottom](README.md). Snapshot: commit `85d1e6a`, 2026-09-28,
 ESP-IDF 5.5.4. Every claim cites `file:line`; a bare file name (`seq.c:1072`) is unique
-under `firmware/`. Source is the truth: where a comment or a document disagrees, the
-disagreement is listed in [errata.md](errata.md). UNVERIFIED means the repository alone
+under `firmware/`. Source is the truth. UNVERIFIED means the repository alone
 cannot confirm it.*
 
 ## The shape in one picture
@@ -164,7 +163,7 @@ The autosave journal write is suppressed while the transport runs. The reason gi
 | heartbeat (10 s) | `alive: doc…, undo…, kbd…, push/B, render, heap <internal free>`; `usb: …`; **`loop: N/s; us in 10 s: pictures, view (sent, dropped), draw, push`** | main.c:933-957 |
 | autosave | Save when not playing, ≥1 s idle, and (newline, or ≥24 chars changed, or ≥6 s idle). Mirrored to SD after the save. `+out` is never written | main.c:967-1024, 53-59 |
 
-Recorded heartbeat samples, docs say: idle 199 turns/s; heaviest scene 192 turns/s, 52 ms pictures / 40 ms view / 150 ms draw / 189 ms push per 10 s (`docs/GRAPHICS.md:57-65`).
+Recorded heartbeat samples, docs say: idle 199 turns/s; heaviest scene 192 turns/s, 52 ms pictures / 40 ms view / 150 ms draw / 189 ms push per 10 s.
 
 ### 3.5 Watchdog and crash handling
 
@@ -285,7 +284,7 @@ The docs describe the vendor code as "SPI3_HOST @ 20 MHz" (docs/HARDWARE.md:61);
 
 ## 7. Flash and NVS writes that can happen while the transport runs
 
-Why it matters: a flash write disables the cache on both cores. `CONFIG_SPI_FLASH_AUTO_SUSPEND` is off (`sdkconfig:2483`), and the tick path runs from flash (`main.c:986-989`). `docs/GRAPHICS.md:175-179` asks for this list. "Gated" means the write cannot happen while `seq_running()`.
+Why it matters: a flash write disables the cache on both cores. `CONFIG_SPI_FLASH_AUTO_SUSPEND` is off (`sdkconfig:2483`), and the tick path runs from flash (`main.c:986-989`). "Gated" means the write cannot happen while `seq_running()`.
 
 | # | writer (medium) | trigger | path | gated? |
 |---|---|---|---|---|
@@ -371,7 +370,7 @@ The loop also logs `FAULT: rendered %u cells, pushed 0 bytes` (`main.c:908-911`)
 - **What it reports.** At boot it logs up to 4 lines, plus `  ticks %u, reset then %d, now %d`. `>jitter` prints the same lines (`builtins.c:1384-1395`). The lines come from `vitals_verdict.h:26-62`:
   - `no previous run recorded`
   - `last run: serial, not watched` + `  only USB MIDI runs are`
-  - `last run: <s>s, USB MIDI|serial`, `  <n> loops/s, <n>K heap`, then one of `  STOPPED DEAD - see OS.md`, `  RESTART HUNG - see OS.md` or `  restarted on purpose`
+  - `last run: <s>s, USB MIDI|serial`, `  <n> loops/s, <n>K heap`, then one of `  STOPPED DEAD`, `  RESTART HUNG` or `  restarted on purpose`
   - `tools/test_vitals.c` passed when built here.
 - **Gap.** The esptool reboot (`usbdev.c:318-341`) and the trial revert (`usbdev.c:367-373`) write no goodbye. The next boot will therefore report a flash or revert from USB MIDI mode as `STOPPED DEAD` (inferred).
 
@@ -401,7 +400,7 @@ The loop also logs `FAULT: rendered %u cells, pushed 0 bytes` (`main.c:908-911`)
   4. The panel shows `DOWNLOAD MODE - flash now`, then a 600 ms wait.
   5. `usbmux_release_to_usj()`, set `RTC_CNTL_FORCE_DOWNLOAD_BOOT`, `esp_restart()`.
 - The bit survives a CPU reset and is cleared by esptool's default system reset (`builtins.c:1071-1087`).
-- **Deadlocks from USB MIDI mode**; use `>usb off` first (`docs/OS.md:656-661`; `docs/TESTING.md:527-529,549-550`).
+- **Deadlocks from USB MIDI mode**; use `>usb off` first (`docs/TESTING.md:527-529,549-550`).
 - `docs/COMMANDS.md:296` still describes plain `>flash`.
 - `>usbtest` (`builtins.c:1236-1300`) is compiled but not in the command table.
 

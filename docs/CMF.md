@@ -161,7 +161,7 @@ first question in the overhaul.
 
 Six fields and ten operators, and no shapes: a field answers *how far is this cell
 from the thing* in its own geometry, and a threshold cuts a shape out of the answer
-([VERBS.md](VERBS.md), [MAP.md](MAP.md) §9.5). Every specimen below was drawn by
+([VERBS.md](VERBS.md)). Every specimen below was drawn by
 `viz.c`:
 
 ![The sixteen primitives](img/cmf-pictures.png)

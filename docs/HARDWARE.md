@@ -173,7 +173,7 @@ is even the right way round are open below.
 
 ### The drawing was the budget, not the push `[MEASURED]`
 
-*2026-09-25. `docs/NEXT.md` §9 expected the opposite - "the panel push is almost
+*2026-09-25. The plan expected the opposite - "the panel push is almost
 certainly the budget, not the drawing" - and said to profile first. The profile
 disagreed.*
 

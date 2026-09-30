@@ -89,7 +89,7 @@ int main(void)
     const size_t l0 = strlen(L[0]), l1 = strlen(L[1]);
     CHECK(n <= VITALS_LINES && l0 >= 8 && strcmp(L[0] + l0 - 8, "USB MIDI") == 0 &&
           l1 >= 6 && strcmp(L[1] + l1 - 6, "K heap") == 0 &&
-          strcmp(L[2], "  RESTART HUNG - see OS.md") == 0,
+          strcmp(L[2], "  RESTART HUNG") == 0,
           "a month's uptime and the largest counters are not cut: '%s' / '%s'",
           L[0], L[1]);
 

@@ -1,6 +1,6 @@
 # The view node — the deck's picture on HDMI
 
-*[NEXT.md](NEXT.md) §6. An Adafruit Feather RP2040 DVI draws the deck's picture on
+*An Adafruit Feather RP2040 DVI draws the deck's picture on
 any HDMI screen, from frames the deck sends. The sketch is `view/deckview`; this
 page is its wire format and what is and is not yet true of it.*
 

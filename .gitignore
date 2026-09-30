@@ -47,3 +47,19 @@ firmware/components/ssh/vendor/.git/
 # Finder metadata. Tracked once, and it silently aborted a history rewrite
 # twice in one session because filter-branch refuses to run with a dirty tree.
 .DS_Store
+
+# my research, paper and planning notes: kept on my machine, not published
+/docs/THESIS.md
+/docs/METHODOLOGY.md
+/docs/MANIFESTO.md
+/docs/SUBSTRATE.md
+/docs/MAP.md
+/docs/OS.md
+/docs/GRAPHICS.md
+/docs/NEXT.md
+/docs/wiki/research.md
+/docs/wiki/next.md
+/docs/wiki/errata.md
+/docs/wiki/completion.md
+/docs/wiki/pictures-and-type.md
+/docs/wiki/combinations.md

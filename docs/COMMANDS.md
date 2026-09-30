@@ -1,6 +1,6 @@
 # Commands, buffers and the archive
 
-*How the deck is driven. Downstream of [SUBSTRATE.md](SUBSTRATE.md), which
+*How the deck is driven. Downstream of which
 argues that there is one data structure; this is what acts on it.*
 
 Claims are tagged `[FACT]` (verified on the hardware), `[JUDGEMENT]` (a
@@ -48,7 +48,7 @@ Every command declares what it touches; every caller declares who it is.
 | `GUIDE` | READ, EDIT, STORE, NET — me, one step removed |
 | `AGENT` | READ, EDIT, STORE |
 
-The reason is the assistant. `docs/OS.md` demotes an LLM to "a filter in the
+The reason is the assistant. The design demotes an LLM to "a filter in the
 table" — but a filter with access to the command table would otherwise hold
 **exactly the authority of my hands**, including forgetting keyboard
 bonds and re-pointing the radio. Tagging the caller is what makes an on-device
@@ -61,7 +61,7 @@ on purpose, which is the point.
 
 ## Buffer kinds: one bit of interpretation `[FACT]`
 
-`SUBSTRATE.md` says the kind of a buffer decides exactly one thing — what
+The design says the kind of a buffer decides exactly one thing — what
 Enter does. That is implemented literally:
 
 **Superseded, and recorded rather than rewritten.** The kind used to decide
@@ -82,7 +82,7 @@ the text, the machine can tell a command from prose by reading, and does not
 need a mode; two mechanisms for one distinction was one too many.
 
 The kind survives because it still has to decide prose-versus-grid reflow for
-Orca patches, which is the distinction `SUBSTRATE.md` actually cares about —
+Orca patches, which is the distinction that actually matters —
 does Enter reflow, or does it move? That question is still live. "Does Enter
 execute?" is not.
 
@@ -159,7 +159,7 @@ difference between this and a terminal.
 
 A terminal's scrollback is the one thing on the machine that is *not* a
 document: you cannot edit it, undo it, name it, search it with the same keys,
-or pipe a piece of it anywhere. `SUBSTRATE.md` claims there is one data
+or pipe a piece of it anywhere. The design claims there is one data
 structure; if command output lived in a log or a scrollback, the claim would
 simply be false.
 
@@ -183,8 +183,7 @@ later. A guide buffer is **not a mode, a shell, a REPL or a place you go.**
 - It can be renamed, archived, or turned back into prose with one command.
 
 The *only* difference between a guide and a page of prose is which of Enter
-and Ctrl+Enter runs the line. One bit. That is precisely what `SUBSTRATE.md`
-specifies when it says prose and grid "differ in exactly one bit of
+and Ctrl+Enter runs the line. One bit. That is precisely the design, which says prose and grid "differ in exactly one bit of
 interpretation, and that bit decides one thing."
 
 What this keeps from a terminal: text in, text out; a command you can edit
@@ -215,8 +214,7 @@ on another board. A step is one character and what is attached to it.
 It used to be "`.` `-` `_` rest, and anything else is a hit", so that nobody had
 to remember which character hits. The kindness had a price nobody saw until it
 was looked for: every typo was a note, an unclosed bracket was a septuplet, and
-the shipped guide was playing its own comments. See
-[MANIFESTO.md](MANIFESTO.md) §3.2.
+the shipped guide was playing its own comments.
 
 ```
 >bpm 124

@@ -2,12 +2,10 @@
 
 *The whole language. Thirty-seven verbs, counted from the command table itself —
 if this page and the firmware disagree, the firmware is right and this page is
-stale. [MAP.md](MAP.md) §0 has the snippet that counts them. The lane names are not
+stale. The lane names are not
 verbs: they are yours, defined in the boot document.*
 
-*For what was wrong with this language and what replaced it, see
-[MANIFESTO.md](MANIFESTO.md) — two adversarial reviews, and which of their
-proposals have been decided. Coming from Strudel: [STRUDEL.md](STRUDEL.md).*
+*Coming from Strudel: [STRUDEL.md](STRUDEL.md).*
 
 A performer cannot search. That is the entire reason this page has to fit on one:
 if it does not, the language is too big, and that is a design failure rather than
@@ -77,7 +75,7 @@ up to eight letters and cannot be a verb or a picture.
 **Inputs are names too.** `>knob1 = knob` holds a value, `>pad1 = pad` fires on a
 press, and `>route cut knob1` makes the filter follow it. With `>osc in 9000`, OSC to
 `/deck/knob1` sets it — a phone, a laptop, another deck. A pad lands on the next
-step; a knob on the next tick. [MAP.md](MAP.md) §9.8.
+step; a knob on the next tick.
 
 **Sixteen lanes at once**, any mix. `route` connects any two.
 

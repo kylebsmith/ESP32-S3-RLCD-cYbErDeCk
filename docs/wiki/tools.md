@@ -114,21 +114,13 @@ Most include the **shipping** header, or `#include` the shipping `.c`, rather th
 | CONCRETE.md | Cast concrete jacket over the printed chassis (`cad/concrete.scad`): mould, mix, procedure |
 | DATUMS.md | Dimensional datum sheet D-01…D-09 with provenance; 49 corrections (C-); 9 open items (O-); measure-before-print list |
 | DESIGN.md | Enclosure rationale: footprint, one form, form language, material, back loading, battery cowl, fasteners, rig points |
-| GRAPHICS.md | 2026-09-27 analysis and brief: panel cost model, where the cycles go, the 16 primitives, live-coding landscape, next steps |
 | HARDWARE.md | Board reference: SoC/memory, ST7305 (window addressing, CASET mirroring), prior art, open questions, DIN-MIDI wiring |
-| MANIFESTO.md | The syntax on one page, two adversarial reviews, and which proposals were decided |
-| MAP.md | Every verb and what it touches; the subtractive map; unification and nesting done; proposals judged |
 | MEASURE.md | Caliper checklist (10 items) for someone holding the real board and keyboard |
-| METHODOLOGY.md | How datums were measured and validated, how to reproduce them, limits |
 | NETWORK.md | Wi-Fi AP/STA feasibility and numbers, SSH as built, OSC in vs keyboard scan, ESP-NOW ensemble |
-| NEXT.md | The next development push: ground rules, step decision, repetition, satellites, view node, Link, OSC in, optimisation, SSH, Strudel, thesis |
-| OS.md | Firmware design: thesis, hardware constraints, IDF 5.5 base, architecture, display, input, editing, discovery, voice, MIDI/network, SD mirror |
 | PROVENANCE.md | What was taken from whom (reference enclosure, Waveshare, Riitek, standards); licence |
 | SATELLITES.md | Brief for satellite nodes: 6-pin magnetic cable, CAN 500 kbit/s, frames, 4-encoder and 8-button nodes (none built) |
 | STRUDEL.md | Coming from Strudel: what transfers, what is spelled differently, measured coverage |
-| SUBSTRATE.md | The conceptual core: one data structure (a rectangle of characters), buffer kinds, addressing |
 | TESTING.md | On-device test pass: numbered steps with expected results, drivable over the serial cable |
-| THESIS.md | Running note of decisions made for legibility, for the paper |
 | VERBS.md | All 37 verbs on one page (clock 6, connecting 7, looking 6, documents 8, when-wrong 7, playing live 3) |
 | VIEW.md | RP2040 DVI HDMI view node: size, DKV1 wire format, transport (console relay today), measurements |
 | img/ | 23 PNGs: enclosure and case renders, CMF specimens, graphics mosaic |

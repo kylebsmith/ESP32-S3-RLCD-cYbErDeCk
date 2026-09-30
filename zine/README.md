@@ -67,7 +67,7 @@ Every figure in the zine is measured on the deck or read from its source:
 | 51 of 51 corpus patterns play what Strudel 1.2.6 plays | [docs/STRUDEL.md](../docs/STRUDEL.md), *Measured*; `tools/test_corpus.c` in CI |
 | 96 ticks a beat, 16 lanes, 37 verbs | `seq.h`, `SEQ_MAX_LANES`; the verb table in `builtins.c` |
 | 16 steps against 12 come home every 3 bars | lcm(16, 12) = 48 steps |
-| a value survives a lost phone | [docs/MAP.md](../docs/MAP.md) §9.8 |
+| a value survives a lost phone | the input stays at its last value (`seq.h`, inputs) |
 
 ## References
 
@@ -95,6 +95,6 @@ archives and the authors' own pages; notes say where a claim needed care.
 19. Schloss, W. A. (2003). Using contemporary technology in live performance: The dilemma of the performer. *Journal of New Music Research*, 32(3), 239–242. https://doi.org/10.1076/jnmr.32.3.239.16866 — cause and effect between gesture and sound matter to an audience; checked against the author's pre-press copy.
 20. Spiegel, L. (1986). *Music Mouse – An Intelligent Instrument* [Macintosh software]. Revision history (archived): https://web.archive.org/web/20221218033319/http://retiary.org/ls/progs/mm_revision_history.html
 21. TOPLAP (2004). ManifestoDraft ("Lubeck 04"). https://toplap.org/wiki/ManifestoDraft.html — printed in Ward, A., Rohrhuber, J., Olofsson, F., McLean, A., Griffiths, D., Collins, N., & Alexander, A. (2004). Live algorithm programming and a temporary organisation for its promotion. In O. Goriunova & A. Shulgin (Eds.), *read_me: Software Art & Cultures* (pp. 243–261). Aarhus: Digital Aesthetics Research Centre. https://doi.org/10.5281/zenodo.7139247 — "Show us your screens", p. 247.
-22. Toussaint, G. (2005). The Euclidean algorithm generates traditional musical rhythms. In R. Sarhangi & R. V. Moody (Eds.), *Renaissance Banff: Mathematics, Music, Art, Culture* (Bridges 2005), 47–56. https://archive.bridgesmathart.org/2005/bridges2005-47.html — Euclidean rhythm is still an open item in this language ([docs/MAP.md](../docs/MAP.md) §9.2).
+22. Toussaint, G. (2005). The Euclidean algorithm generates traditional musical rhythms. In R. Sarhangi & R. V. Moody (Eds.), *Renaissance Banff: Mathematics, Music, Art, Culture* (Bridges 2005), 47–56. https://archive.bridgesmathart.org/2005/bridges2005-47.html — Euclidean rhythm is still an open item in this language.
 23. Weingart, W. (2000). *Typography: My Way to Typography / Wege zur Typographie*. Baden: Lars Müller. That his Basel work is sometimes called Swiss Punk: Sauer, Z. (2026, 13 April). Legacies of Swiss Style, Part 2 — Wolfgang Weingart. Letterform Archive. The zine says "sometimes", because no stronger source says more.
 24. Xenakis, I. (1971). *Formalized Music: Thought and Mathematics in Composition*. Bloomington: Indiana University Press. Revised edition, Pendragon Press, 1992.

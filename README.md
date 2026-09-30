@@ -6,6 +6,9 @@ A single-form, overbuilt, minimum-footprint handheld terminal enclosure for the
 Built for live use — musical live coding, control surfaces, and as a portable
 node on a local network — rather than for a desk.
 
+Built with AI coding agents under my direction; the design, the testing and the
+music are mine.
+
 Dieter Rams read organically: one radius system, nothing applied, a single
 perforated element — but with curvature continuity everywhere a surface turns,
 so it reads as grown rather than extruded.
@@ -296,17 +299,12 @@ counted among the audited rows.
 | **[wiki/](docs/wiki/README.md)** | the deck, top to bottom: every verb, mark, picture, key and output, how each combines with the rest, what the code does that the words do not, and the next steps |
 | **[DATUMS.md](docs/DATUMS.md)** | every dimension, its provenance, forty-nine recorded corrections, nine open items |
 | **[HARDWARE.md](docs/HARDWARE.md)** | the board itself: panel, controller, pin map, USB and power, all traced to vendor sources |
-| **[SUBSTRATE.md](docs/SUBSTRATE.md)** | the conceptual core: one data structure, one noun, three verbs |
 | **[CASE.md](docs/CASE.md)** | the carry case: how it guides, holds and prints |
 | **[CONCRETE.md](docs/CONCRETE.md)** | the cast concrete jacket, its mould, and the mix |
 | **[CMF.md](docs/CMF.md)** | colour, material, finish: the object, the panel, both faces and every glyph, the pictures, and each decision |
 | **[zine/](zine/README.md)** | *hello*, zine #0: getting started, sixteen pages set in the deck's own faces, to print, fold and hand on |
-| **[GRAPHICS.md](docs/GRAPHICS.md)** | drawing on this panel: what it costs, what it must never cost, and where the deck sits among live-coding systems |
 | **[SATELLITES.md](docs/SATELLITES.md)** | the satellites: the six-pin magnetic cable, the CAN bus and the first two nodes, to build from |
-| **[OS.md](docs/OS.md)** | the firmware design: what it runs, why, and what it deliberately will not do |
-| **[THESIS.md](docs/THESIS.md)** | the running note for the paper: each decision made for legibility, as it was made |
 | **[DESIGN.md](docs/DESIGN.md)** | form language, why it is shaped this way, material and finish |
-| **[METHODOLOGY.md](docs/METHODOLOGY.md)** | how the numbers were obtained and how to reproduce them |
 | **[MEASURE.md](docs/MEASURE.md)** | caliper checklist for someone holding the actual hardware |
 | **[ASSEMBLY.md](docs/ASSEMBLY.md)** | BOM, print settings, build order |
 | **[PROVENANCE.md](docs/PROVENANCE.md)** | what was taken from whom, and on what basis |

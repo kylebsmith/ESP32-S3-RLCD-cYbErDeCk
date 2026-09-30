@@ -52,9 +52,9 @@ static inline int vitals_verdict(const vitals_t *p, bool power_on,
      * worked arrives as a software or USB reset; one that hung was recovered by
      * a power cycle. */
     if (!p->deliberate) {
-        snprintf(out[n++], VITALS_COLS, "  STOPPED DEAD - see OS.md");
+        snprintf(out[n++], VITALS_COLS, "  STOPPED DEAD");
     } else if (power_on) {
-        snprintf(out[n++], VITALS_COLS, "  RESTART HUNG - see OS.md");
+        snprintf(out[n++], VITALS_COLS, "  RESTART HUNG");
     } else {
         snprintf(out[n++], VITALS_COLS, "  restarted on purpose");
     }

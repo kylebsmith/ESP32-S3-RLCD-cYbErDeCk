@@ -1,8 +1,7 @@
 # The language — lines, steps, names, lanes, routes
 
 *Part of [the deck, top to bottom](README.md). Snapshot: commit `85d1e6a`, 2026-09-28.
-Source is the truth; this page quotes it. Surprises and disagreements are in
-[errata.md](errata.md).*
+Source is the truth; this page quotes it.*
 
 **Conventions**
 

@@ -2,7 +2,7 @@
 
 *Part of [the deck, top to bottom](README.md). Snapshot: commit `85d1e6a`, 2026-09-28.
 Documents are on [documents.md](documents.md); every flash write that can happen while
-playing is in [system.md](system.md) §7; surprises are in [errata.md](errata.md).*
+playing is in [system.md](system.md) §7.*
 
 **Conventions**
 
@@ -229,7 +229,7 @@ Consequences, derived from the code:
 2. `doc_save_all_dirty()` runs: journal and SD mirror. This happens **before** `seq_stop()` (`builtins.c:1453-1454`).
 3. `seq_stop()`, then `vitals_goodbye(was_usb,…)`.
 4. The panel announces `USB MIDI - rebooting now` (or `serial console - rebooting now`) and waits 600 ms.
-5. `esp_rom_software_reset_system()` resets without running shutdown handlers (`builtins.c:1090-1118`). This is the fix recorded in `docs/OS.md:550-597`.
+5. `esp_rom_software_reset_system()` resets without running shutdown handlers (`builtins.c:1090-1118`).
 
 `>usb` with no argument prints (`builtins.c:1426-1440`):
 
@@ -299,17 +299,17 @@ Consequences, derived from the code:
 - `ui_text.h:61-64` agrees with the code.
 - If it were allowed, `>usb on` reboots unconditionally, so the deck would loop.
 
-**Hang risk.** `esp_restart()` from USB MIDI mode can deadlock (`docs/OS.md:550-597`).
+**Hang risk.** `esp_restart()` from USB MIDI mode can deadlock.
 
-- The docs record it as fixed for `>usb` and still open for `>flash now` (`docs/OS.md:656-661`; `docs/TESTING.md:527-529`).
+- The docs record it as fixed for `>usb` and still open for `>flash now` (`docs/TESTING.md:527-529`).
 - `esp_restart()` is **also** still used by the esptool path (`usbdev.c:340`) and by the trial revert (`usbdev.c:372`). No doc mentions these two. Whether they hang is **UNVERIFIED**.
 
 **Measured (docs):**
 
-- Jitter at the host, end to end, is 0.03 ms (`README.md:106,121-124`; `docs/GRAPHICS.md:208`; `net.h:9`).
-- An untouched deck in USB MIDI mode ran 5 min: 18,601 messages at 62.0/s with no drift (`docs/OS.md:608-610`).
-- 49.600 clocks/s for 124 bpm (`docs/NETWORK.md:673-674`). It cites `docs/OS.md`, which does not contain the figure.
-- The class-of-device ~4 ms latency figure is marked `[UNMEASURED]` (`docs/OS.md:369`).
+- Jitter at the host, end to end, is 0.03 ms (`README.md:106,121-124`; `net.h:9`).
+- An untouched deck in USB MIDI mode ran 5 min: 18,601 messages at 62.0/s with no drift.
+- 49.600 clocks/s for 124 bpm (`docs/NETWORK.md:673-674`).
+- The class-of-device ~4 ms latency figure is marked `[UNMEASURED]`.
 
 ### 2.5 BLE MIDI (`blemidi.c`, `blemidi.h`)
 
@@ -329,7 +329,7 @@ Consequences, derived from the code:
   - A new packet starts when the header changes (every 128 ms) or the packet would exceed `MTU−3` (minimum 5, maximum 64).
   - One notification per flush, which is one per drained tick. Data lengths follow §1.9.
 - `>jitter` prints `ble   %u msgs in %u packets (%u.%02ux)` once any packet has gone out (`builtins.c:1371-1377`).
-- **Measured.** There is no on-device figure for the granted interval or the packing ratio. `docs/OS.md:371` lists "7.5 ms ±1.8" without a source. `blemidi.h:12` gives "round-trip around 19 ms".
+- **Measured.** There is no on-device figure for the granted interval or the packing ratio. `blemidi.h:12` gives "round-trip around 19 ms".
 - **Comment errors.**
   - `blemidi.c:263-266`: "a header, then up to five timestamped three-byte messages" in 20 B. 1 + 5×4 = 21, so only four fit.
   - `docs/COMMANDS.md:283-286` says `ble` is on at boot. It is not.
@@ -374,8 +374,7 @@ Consequences, derived from the code:
   - MIDI **in** needs an optocoupler (6N138) and is not built.
 - **Measured**:
   - "80 bytes from a four-step kick pattern, verified on the bench" (`docs/HARDWARE.md:409-411`; `docs/TESTING.md:513-514`).
-  - "1491 bytes verified" (`docs/NEXT.md:68`).
-  - `docs/OS.md:370` gives "0.96 ms, deterministic", a class figure.
+  - "1491 bytes verified".
 
 ## 4. Network (`net.c`, `osc.c`)
 

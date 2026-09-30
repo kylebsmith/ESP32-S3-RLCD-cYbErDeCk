@@ -50,9 +50,9 @@ machine's own ESP-IDF v5.5.4**, the version the project pins:
 The app partition is 3 MB with ~600 KB used, so an SSH client is about 3 % of
 the flash that is already spare.
 
-## A correction to `docs/OS.md` `[MEASURED]`
+## TLS memory, measured `[MEASURED]`
 
-`OS.md` states: *"TLS ≈ 40–50 KB free internal heap … **exactly one TLS
+The design assumed: *"TLS ≈ 40–50 KB free internal heap … **exactly one TLS
 session at a time**"*, and treats that as a hard constraint on anything
 networked.
 
@@ -97,7 +97,7 @@ and each is cheap to fix *if known in advance*.
 
 A VT100 wants 80 columns; the deck has 30. An interactive PTY would mean
 writing a terminal emulator, carrying a scrollback model that is not the
-document model, and contradicting `SUBSTRATE.md`'s claim that there is one
+document model, and contradicting the claim that there is one
 data structure.
 
 An **exec channel** — `ssh host "command"`, output into a buffer — needs no
@@ -159,7 +159,7 @@ the Debian trixie `sshd_config(5)` for OpenSSH 1:10.0p1.
 
 ## SSH, as built — what was wrong, what was decided `[BUILT]` `[OPEN]`
 
-*2026-09-25, docs/NEXT.md §10: "test it, and fix the defect it has". The defect the
+*2026-09-25: "test it, and fix the defect it has". The defect the
 brief named was real, and there were three more.*
 
 **1. The password was a word of the line.** `>ssh user@host pass ls` put it in a
@@ -253,7 +253,7 @@ get an address by DHCP after associating.
 
 ## OSC in, and the keyboard scan that deafened the radio `[BUILT]` `[MEASURED]` 2026-09-25
 
-**OSC in is a lane source** ([NEXT.md](NEXT.md) §8, [MAP.md](MAP.md) §9.8):
+**OSC in is a lane source**:
 `>osc in 9000` listens, and `/deck/<name>` sets the input called `<name>` —
 `>knob1 = knob`, `>pad1 = pad` — whose routes follow it. The reader
 (`osc_parse.h`) takes a message, a bundle, or messages end to end, which is what this
@@ -529,7 +529,7 @@ toward the ensemble while the ticks went on firing at the timer's own phase, on 
 follower's own crystal. `seq.h` described the follower "trimming its own period";
 nothing did.
 
-It was found through the report [NEXT.md](NEXT.md) §2 asked to have fixed — a
+It was found through a report I asked to have fixed — a
 following deck's `>jitter` sd of 231 µs beside a histogram that put every tick inside
 100 µs. The brief read that as the sd counting deliberate grid slides, and said to fix
 the reporting and not the clock. The sd *was* counting the slides — because the ticks
@@ -653,8 +653,7 @@ Two things that came out of measuring rather than reasoning, both fixed:
 
 ### Ableton Link: not in this push, and why `[DECIDED]` 2026-09-25
 
-**Not integrated.** [NEXT.md](NEXT.md) §7 made the licence the gate and asked for the
-decision to be written here if the answer was no. It is no, for now, and the reason
+**Not integrated.** The licence is the gate. It is no, for now, and the reason
 is the licence rather than the engineering: Link is GPLv2+ or commercial from
 Ableton, this repository is MIT, and taking the GPL makes the whole firmware GPL.
 That is my decision to make about the project, and I have not made it yet.
@@ -668,7 +667,7 @@ than a postponement:
   grid and a follower plays in the leader's count (*A correction* and *And the
   count*, above).
 - **With a DAW**, MIDI clock already does it over USB: 49.600 clocks a second for a
-  requested 124 bpm, measured at the host (docs/OS.md).
+  requested 124 bpm, measured at the host.
 - **The seam is ready.** The ensemble shares Link's *model* — a local timer
   corrected slowly from round trips — so if the licence question is ever settled,
   Link replaces the transport under `seq_timebase()` and `seq_nudge_by()` and nothing

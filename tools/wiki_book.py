@@ -36,9 +36,8 @@ sys.path.insert(0, HERE)
 import deck_extra      # noqa: E402
 import deck_webfont    # noqa: E402
 
-ORDER = ['README', 'language', 'verbs', 'combinations', 'pictures', 'editor', 'outputs',
-         'documents', 'system', 'tools', 'errata', 'research', 'completion',
-         'pictures-and-type', 'next']
+ORDER = ['README', 'language', 'verbs', 'pictures', 'editor', 'outputs',
+         'documents', 'system', 'tools']
 VERBS = {'help', 'lanes', 'list', 'dump', 'new', 'name', 'open', 'play', 'stop', 'map',
          'clear', 'toggle', 'mute', 'solo', 'send', 'route', 'split', 'save', 'close', 'run'}
 TILE = 0xE000

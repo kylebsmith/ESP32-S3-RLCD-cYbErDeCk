@@ -1,6 +1,6 @@
 # cYbErDeCk OS — firmware
 
-Steps 1–4 of the build order in [../docs/OS.md](../docs/OS.md): display, text
+The firmware's first four steps: display, text
 grid, BLE HID keyboard, and a text buffer that survives power loss.
 
 ## Build and flash
