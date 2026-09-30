@@ -126,6 +126,43 @@ lives in RTC memory, so there is no setting that can fail to save.
 In Ableton: Preferences → Link/Tempo/MIDI, enable **Sync** on the cyberdeck
 input, set the transport to External.
 
+## 8b. The clock against the tempo on the screen
+
+```
+>sync on
+```
+
+then, with the deck playing:
+
+```
+python3 tools/clock_audit.py capture 240 run.json
+python3 tools/clock_audit.py report run.json 124
+```
+
+Every earlier timing check measured the deck against its own grid, and a grid
+fitted to the notes absorbs any tempo error whole. This one measures the MIDI
+clock against the **nominal** tempo, with CoreMIDI's own receive times: the
+tempo actually played in ppm and ms a minute, the Allan deviation from a beat
+to 64 bars (loop-to-loop wander), every bar's length, and every note against
+the clock by how many notes share its tick.
+
+Measured 2026-09-29, a dense ORBITALS state with the poster streaming, four
+minutes at 124, before and after the fix:
+
+| | before | after |
+|---|---|---|
+| tempo against 124 exactly | **+58.8 ppm, 3.5 ms a minute fast**: the tick was rounded down to 5,040 µs | **−5.4 ppm**, 0.3 ms a minute: the two crystals, deck and Mac |
+| bar lengths | ±0.24 ms, sd 0.125 ms | ±0.14 ms, sd 0.051 ms |
+| Allan deviation, a beat → 16 bars | 2.4e-4 → 2.9e-6 | 2.6e-4 → 3.3e-6, falling as 1/τ: no wander |
+| notes, one alone / six at once | +0.16 / +0.51 ms after the clock | +0.17 / +0.63 ms: the same |
+
+The last row is the host, not the deck: a step's events arrive about 0.09 ms
+apart whether the deck sends them in one USB transfer or several, and the
+deck's own counters for the same run (`>jitter`) put every tick within 0.25 ms
+of the exact grid (sd 6 µs) and every event on its way to USB within 0.5 ms of
+its tick. What is left is the crystals: sync the DAW to the deck (section 8),
+or the two part by a few parts per million.
+
 ## 9. Network
 
 ```

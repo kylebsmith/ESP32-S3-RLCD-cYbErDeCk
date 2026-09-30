@@ -144,6 +144,7 @@ void cmd_init(void);
  * is one, and hands the line to the one lane command or to a definition. The
  * grammar is lane_name.h. */
 bool         cmd_lane_known(const char *word, size_t n);
+bool         cmd_is_verb(const char *word, size_t n);
 cmd_status_t cmd_lane(cmd_ctx_t *ctx, const char *word, size_t n);
 cmd_status_t cmd_define(cmd_ctx_t *ctx, const char *word, size_t n);
 
@@ -154,3 +155,11 @@ cmd_status_t cmd_define(cmd_ctx_t *ctx, const char *word, size_t n);
 typedef void (*cmd_announce_t)(const char *line);
 void cmd_set_announce(cmd_announce_t fn);
 void cmd_announce(const char *line);
+
+/* WHAT A LINE WOULD DO TO ITS LANE, for a block deciding whether running it
+ * again is a toggle (editor_block.h): not a lane line - a verb, a definition,
+ * prose, a name alone, a count ('!n' is a cue, it plays again) - or a lane it
+ * would change or make, or the lane exactly as it plays, going on or off.
+ * `name` gets the lane's address. The values are editor_block.h's. */
+enum { CMD_LANE_OTHER = 0, CMD_LANE_CHANGE = 1, CMD_LANE_ON = 2, CMD_LANE_OFF = 3 };
+int cmd_line_lane(const char *line, char *name, size_t n);

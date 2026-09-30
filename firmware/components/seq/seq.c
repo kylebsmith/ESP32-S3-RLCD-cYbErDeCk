@@ -889,8 +889,7 @@ static void arm_next(int64_t tick_began)
     const int64_t g = grid_get();
     const bool on_grid = s_running && g != 0;
     const int64_t wait = seq_clock_wait(esp_timer_get_time(), tick_began,
-                                        on_grid, g, s_tick,
-                                        (int64_t)period_us());
+                                        on_grid, g, s_tick, s_bpm);
     (void)esp_timer_start_once(s_clock, (uint64_t)wait);
 }
 
@@ -915,8 +914,9 @@ static void tick(void *arg)
         s_adopt_pending = false;
         if (d != 0) {
             /* This tick keeps its time; only its number changes. */
+            const uint32_t was = s_tick;
             s_tick += (uint32_t)d;
-            grid_slide(-(int64_t)d * (int64_t)period_us());
+            grid_slide(seq_clock_at(was, s_bpm) - seq_clock_at(s_tick, s_bpm));
             /* A counted lane waits for its next downbeat in the new count,
              * as it does after '>play', so "four times" stays four. */
             for (int i = 0; i < SEQ_MAX_LANES; i++) {
@@ -941,7 +941,7 @@ static void tick(void *arg)
          * free-running, so the gap between the two is an arbitrary constant
          * phase - real, but not jitter, and reporting it as jitter buries the
          * signal under a 6 ms offset. */
-        grid_set(now - (int64_t)s_tick * (int64_t)period_us());
+        grid_set(now - seq_clock_at(s_tick, s_bpm));
         s_settle  = SEQ_SETTLE_TICKS;
     }
     if (s_settle > 0) {
@@ -958,7 +958,7 @@ static void tick(void *arg)
          * event. What is thrown away is only its contribution to the spread. */
         s_settle--;
     } else {
-        const int64_t ideal = grid_get() + (int64_t)s_tick * (int64_t)period_us();
+        const int64_t ideal = grid_get() + seq_clock_at(s_tick, s_bpm);
         int64_t d = now - ideal;
         if (d >  1000000) { d =  1000000; }
         if (d < -1000000) { d = -1000000; }
@@ -1019,12 +1019,13 @@ static void tick(void *arg)
     arm_next(now);
 }
 
+/* One internal tick, rounded: 5,040 us at 124 bpm. For a gate or a folding
+ * margin, never for WHEN a tick is due - that is seq_clock_at(), exactly. */
 static uint64_t period_us(void)
 {
-    /* One internal tick. 60,000,000 / bpm / 96. At 124 bpm that is 5,040 us,
-     * and a sixteenth is 24 of them - 120,967 us. */
-    return (uint64_t)(60000000.0 / (double)s_bpm / (double)SEQ_PPQN);
+    return (uint64_t)seq_clock_at(1, s_bpm);
 }
+_Static_assert(SEQ_PPQN == SEQ_CLOCK_PPQN, "seq_clock.h counts the same pulses");
 
 void seq_timebase(uint32_t *tick, int64_t *tick_due_us, int *bpm)
 {
@@ -1037,7 +1038,7 @@ void seq_timebase(uint32_t *tick, int64_t *tick_due_us, int *bpm)
         /* 0 until the first tick after '>play' has anchored the grid: before
          * that there is no "when" to report. */
         const int64_t g = grid_get();
-        *tick_due_us = g != 0 ? g + (int64_t)s_tick * (int64_t)period_us() : 0;
+        *tick_due_us = g != 0 ? g + seq_clock_at(s_tick, s_bpm) : 0;
     }
 }
 
@@ -1066,7 +1067,7 @@ int32_t seq_nudge(uint32_t tick, int64_t due_us, int bpm)
         seq_bpm(bpm);
     }
     /* Where WE think that pulse was due, against where the ensemble says. */
-    const int64_t ours = grid_get() + (int64_t)tick * (int64_t)period_us();
+    const int64_t ours = grid_get() + seq_clock_at(tick, s_bpm);
     int64_t err = due_us - ours;
 
     /* A whole-pulse disagreement is not a phase error, it is a different bar -
@@ -1147,7 +1148,7 @@ esp_err_t seq_init(void)
     /* The timer runs even when stopped, so scheduled note-offs still drain
      * after a stop and nothing is left sounding. One-shot, re-armed by every
      * tick: seq_clock.h. */
-    return esp_timer_start_once(s_clock, period_us());
+    return esp_timer_start_once(s_clock, (uint64_t)seq_clock_at(1, s_bpm));
 }
 
 static seq_lane_t *lane_find(const char *name, int len)
@@ -1188,15 +1189,27 @@ static seq_lane_t *find(const char *name, bool create)
     if (!create) {
         return NULL;
     }
-    for (int i = 0; i < SEQ_MAX_LANES; i++) {
-        if (!s_lanes[i].used) {
+    /* A free slot, else one a finished count left: a counted lane that has
+     * played its passes has gone quiet for good ('>lanes' says done), and
+     * holding its place would make a one-shot - '>cut 3 !1' setting a
+     * controller before the music, a fill - cost a lane for the rest of the
+     * piece. Its name is still a source for 'name:end', and it plays again
+     * if it is written again. */
+    for (int pass = 0; pass < 2; pass++) {
+        for (int i = 0; i < SEQ_MAX_LANES; i++) {
             seq_lane_t *l = &s_lanes[i];
+            if (pass == 0 ? l->used : !(l->used && l->done && l->count != 0)) {
+                continue;
+            }
+            /* out of the clock's sight while it is rewritten: a lane that is
+             * not used, then one with no slots, is one the tick skips */
+            __atomic_store_n(&l->used, false, __ATOMIC_RELEASE);
             memset(l, 0, sizeof *l);
-            l->used = true;
             snprintf(l->name, SEQ_NAME_MAX, "%s", name);
             l->chan = 9;             /* channel 10, where drums live */
             l->vel = 100;
             l->gate_ms = 40;
+            __atomic_store_n(&l->used, true, __ATOMIC_RELEASE);
             return l;
         }
     }
@@ -1562,6 +1575,21 @@ esp_err_t seq_toggle(const char *name, bool *will_mute)
     return ESP_OK;
 }
 
+void seq_cc_now(uint8_t chan, uint8_t cc, uint8_t value)
+{
+    emit((uint8_t)(0xB0 | (chan & 0x0F)), (uint8_t)(cc & 0x7F), (uint8_t)(value & 0x7F));
+}
+
+esp_err_t seq_hold(const char *name, bool held)
+{
+    seq_lane_t *l = find(name, false);
+    if (l == NULL) {
+        return ESP_ERR_NOT_FOUND;
+    }
+    l->held = held;
+    return ESP_OK;
+}
+
 void seq_bpm(int bpm)
 {
     if (bpm < 20)  { bpm = 20; }
@@ -1589,8 +1617,7 @@ void seq_bpm(int bpm)
      * measured 2026-09-25, while sd said 5 us. Now the grid is the ticks
      * (seq_clock.h), and the tick already armed is armed again. */
     if (s_running && grid_get() != 0) {
-        grid_set(seq_clock_reanchor(s_last_tick_us, s_tick,
-                                    (int64_t)period_us()));
+        grid_set(seq_clock_reanchor(s_last_tick_us, s_tick, s_bpm));
     } else if (!s_running) {
         grid_set(0);
         s_tick = 0;

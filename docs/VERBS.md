@@ -44,6 +44,12 @@ rather than played as a hit.
 take that lane out; run it again to bring it back. Type a lane's name alone to delete
 it. Inside `< >`, words of one length take turns whole: `<000 777>`.
 
+**A line runs the lines tabbed under it**, so a heading runs its section — a scene,
+one key. **Run a block again, unchanged, and its lanes go out on the next bar's
+one; once more and the ones it took come back** — a drum kit, a layer, a whole
+scene, in and out like a single line. Stopped, a block always runs, so `-- set`
+twice before `>play` just sets up. A count (`!n`) in a block plays again instead.
+
 ---
 
 ## Lanes — the names are yours
@@ -130,8 +136,8 @@ routes draws in table order, whatever order the lines were typed.
 
 | | |
 |---|---|
-| `bpm 124` | tempo |
-| `scale dmin` | `c` `f#mix` `apent` `ebblues` — root, then a mode |
+| `bpm 124` | tempo, exactly: tick *n* is due at *n* × 60,000,000 / (bpm × 96) µs, so a loop never walks away from a DAW at the same tempo |
+| `scale dmin` | `c` `f#mix` `apent` `ebblues` — root, then a mode. Playing, it changes on the next bar's one |
 | `swing 58` | 50 straight, 67 triplet |
 | `sync on` | MIDI clock out |
 | `play` `stop` | |
@@ -143,6 +149,7 @@ routes draws in table order, whatever order the lines were typed.
 | `route disc kick` | the circle fires on the kick, at its velocity. Any two lanes. Chains. |
 | `send` | list destinations; `send mon on` |
 | `send view on` | **the picture on HDMI**, from an RP2040 DVI node — `send view 40x12` for a size. [VIEW.md](VIEW.md) |
+| `send cut 3` | **a controller, set now**, 0-9 — no lane. A track's first block sets where its controllers start |
 | `usb on` | be a USB MIDI device — needs a computer. Reboots. |
 | `din 17` | **MIDI on a wire — needs no computer.** Drives an SP404, a eurorack brain, anything with MIDI IN. Wire it first: [HARDWARE.md](HARDWARE.md) |
 | `osc 10.0.0.5 9000` | `/deck/<lane>` over the network; `osc in 9000` listens for inputs |
@@ -178,6 +185,7 @@ routes draws in table order, whatever order the lines were typed.
 | | |
 |---|---|
 | `toggle kick hat` | a block off **on the next bar's one**; the same line brings it back. `toggle pad pad:2` swaps two versions |
+| `cut <2 3 4 5 6 7 8 9> /16 !8` | a sweep that **ends by itself** — eight bars up, then its lane is free again |
 | `clear` | every lane gone; the page stays |
 | `map cut` | only `cut` sends MIDI — learn it in the DAW, then `map` |
 

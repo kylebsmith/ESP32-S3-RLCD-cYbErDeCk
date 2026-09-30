@@ -102,3 +102,35 @@ static inline const char *block_command(const char *line)
     }
     return (*line == '>') ? line : NULL;
 }
+
+/* RUN AGAIN, A BLOCK IS A SWITCH (2026-09-29, the owner: "code blocks should
+ * themselves be toggleable"). While the clock runs, a block whose every lane
+ * line is exactly what its lane already plays takes those lanes out on the
+ * next bar's one, and the run after that brings back the ones it took - so a
+ * scene of five lanes is one key, in and out, like a single line is. A block
+ * with any line that would change or make a lane runs as written; lines that
+ * are not lanes - toggles, colours, keys, definitions, cues ('!n') - run only
+ * then. Stopped, a block always runs: '-- set' twice before '>play' sets up.
+ *
+ * What each line would do (cmd.h CMD_LANE_*, the same numbers): */
+enum { BLOCK_LANE_OTHER = 0, BLOCK_LANE_CHANGE = 1, BLOCK_LANE_ON = 2, BLOCK_LANE_OFF = 3 };
+/* and what the run does: */
+enum { BLOCK_RUN = 0, BLOCK_OFF = 1, BLOCK_ON = 2 };
+
+static inline int block_plan(const int *st, int n, bool running)
+{
+    if (!running) {
+        return BLOCK_RUN;
+    }
+    int lanes = 0, on = 0;
+    for (int i = 0; i < n; i++) {
+        if (st[i] == BLOCK_LANE_CHANGE) {
+            return BLOCK_RUN;
+        }
+        if (st[i] == BLOCK_LANE_ON || st[i] == BLOCK_LANE_OFF) {
+            lanes++;
+            on += (st[i] == BLOCK_LANE_ON);
+        }
+    }
+    return lanes == 0 ? BLOCK_RUN : (on > 0 ? BLOCK_OFF : BLOCK_ON);
+}

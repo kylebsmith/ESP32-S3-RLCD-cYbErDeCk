@@ -26,7 +26,9 @@ static int fails;
 #define CHECK(cond, ...) do { if (!(cond)) { printf("[FAIL] " __VA_ARGS__); \
     printf("\n"); fails++; } else { printf("[ ok ] " __VA_ARGS__); printf("\n"); } } while (0)
 
-#define PER      5040           /* period_us() at 124 bpm */
+#define PER      5040           /* one pulse at 124 bpm, rounded: the counting tests */
+#define BPM      124
+#define PE       (60e6 / (BPM * 96.0))   /* one pulse at 124 bpm, exactly */
 #define PPM      2.0
 #define HOUR_US  3600000000.0
 #define PACKET   125000.0       /* leader microseconds between corrections */
@@ -51,7 +53,7 @@ static result_t run(int on_grid)
     double tick_at = first;                    /* local time of tick k       */
     double next_packet = PACKET;
     for (uint32_t k = 0; ; k++) {
-        const double lead = (double)k * PER;   /* the leader's tick k */
+        const double lead = (double)k * PE;    /* the leader's tick k */
         if (lead > HOUR_US) {
             break;
         }
@@ -60,25 +62,25 @@ static result_t run(int on_grid)
         if (lead > 10e6) {                     /* after ten seconds to settle */
             const double e = fabs(at - lead);
             if (e > r.worst_tick) { r.worst_tick = e; }
-            const double ge = fabs(to_leader((double)grid + (double)k * PER) - lead);
+            const double ge = fabs(to_leader((double)grid + (double)seq_clock_at(k, BPM)) - lead);
             if (ge > r.worst_grid) { r.worst_grid = ge; }
         }
         /* Corrections that arrive before the next tick. */
         while (next_packet <= to_leader(tick_at)) {
-            const uint32_t K = (uint32_t)(next_packet / PER);
-            const double due_local = to_local((double)K * PER);
-            double err = due_local - ((double)grid + (double)K * PER);
-            while (err >  PER / 2) { err -= PER; }
-            while (err < -PER / 2) { err += PER; }
+            const uint32_t K = (uint32_t)(next_packet / PE);
+            const double due_local = to_local((double)K * PE);
+            double err = due_local - ((double)grid + (double)seq_clock_at(K, BPM));
+            while (err >  PE / 2) { err -= PE; }
+            while (err < -PE / 2) { err += PE; }
             grid += (int64_t)(err / 8);
             next_packet += PACKET;
         }
         /* The next tick. */
         if (on_grid) {
             const int64_t now = (int64_t)llround(tick_at);
-            tick_at += (double)seq_clock_wait(now, now, true, grid, k + 1, PER);
+            tick_at += (double)seq_clock_wait(now, now, true, grid, k + 1, BPM);
         } else {
-            tick_at = first + (double)(k + 1) * PER;
+            tick_at = first + (double)(k + 1) * PE;
         }
     }
     return r;
@@ -101,10 +103,10 @@ int main(void)
 
     /* A new tempo takes over from the last tick: the next one is due exactly
      * one new period after it, whatever the old grid was. */
-    const int64_t last = 987654321, np = 4807;           /* 130 bpm */
+    const int64_t last = 987654321, np = seq_clock_at(1, 130);   /* 130 bpm */
     const uint32_t next = 12345;
-    const int64_t g = seq_clock_reanchor(last, next, np);
-    CHECK(g + (int64_t)next * np == last + np,
+    const int64_t g = seq_clock_reanchor(last, next, 130);
+    CHECK(g + seq_clock_at(next, 130) == last + np,
           "after a tempo change the next tick is due one new period after the last");
     /* The anchor this replaced said "due now" and restarted a periodic timer,
      * which fired a period later: the tick a whole pulse off its own grid. */
@@ -116,10 +118,36 @@ int main(void)
           (long long)np);
 
     /* A grid slid past now fires at once and late, never early or not at all. */
-    CHECK(seq_clock_wait(1000, 1000, true, 0, 0, PER) == SEQ_WAIT_MIN_US,
+    CHECK(seq_clock_wait(1000, 1000, true, 0, 0, BPM) == SEQ_WAIT_MIN_US,
           "a tick already due fires in %d us", SEQ_WAIT_MIN_US);
-    CHECK(seq_clock_wait(1000, 900, false, 0, 7, PER) == 900 + PER - 1000,
+    CHECK(seq_clock_wait(1000, 900, false, 0, 7, BPM) == 900 + seq_clock_at(1, BPM) - 1000,
           "a stopped clock keeps its period, for the note-offs");
+
+    /* THE TEMPO ON THE SCREEN, FOR AN HOUR. Tick n is due n x 60,000,000 /
+     * (bpm x 96) us after the grid's origin, to within the half microsecond it
+     * is rounded to. The period this replaced was rounded down once and then
+     * multiplied, so the deck ran fast by a fixed fraction and its loops walked
+     * away from a DAW at the same tempo; that model must fail here, by name. */
+    {
+        static const int tempos[] = { 124, 132, 165, 90, 120, 177 };
+        long double worst_new = 0, worst_old = 0;
+        for (size_t t = 0; t < sizeof tempos / sizeof tempos[0]; t++) {
+            const int b = tempos[t];
+            const uint32_t hour = (uint32_t)(3600.0 * b * 96 / 60.0);
+            const int64_t trunc = (int64_t)(60000000.0 / b / 96.0);
+            for (uint32_t n = 0; n <= hour; n += 997) {
+                const long double exact = (long double)n * 60000000.0L / ((long double)b * 96.0L);
+                const long double dn = fabsl((long double)seq_clock_at(n, b) - exact);
+                const long double dold = fabsl((long double)((int64_t)n * trunc) - exact);
+                if (dn > worst_new) { worst_new = dn; }
+                if (dold > worst_old) { worst_old = dold; }
+            }
+        }
+        CHECK(worst_old > 100000.0L,
+              "the rounded-down period ends an hour %.0Lf ms off the tempo", worst_old / 1000.0L);
+        CHECK(worst_new <= 0.5L,
+              "every tick of an hour is due within %.2Lf us of the tempo, at six tempos", worst_new);
+    }
 
     /* ---- the count, which the phase cannot see (ens_count.h) ------------ */
     /* The leader is at pulse T at `their`; this deck's count is D behind, and

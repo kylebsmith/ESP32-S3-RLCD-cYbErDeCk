@@ -1038,6 +1038,10 @@ void editor_show_output(size_t from, const char *msg)
 
 /* The block, copied before any of it runs: a line in it may switch the page. */
 static char s_block[BLOCK_MAX_LINES][BLOCK_LINE_MAX];
+_Static_assert((int)CMD_LANE_OTHER == (int)BLOCK_LANE_OTHER &&
+               (int)CMD_LANE_CHANGE == (int)BLOCK_LANE_CHANGE &&
+               (int)CMD_LANE_ON == (int)BLOCK_LANE_ON && (int)CMD_LANE_OFF == (int)BLOCK_LANE_OFF,
+               "cmd.h and editor_block.h name the same four answers");
 
 static void run_current_line(void)
 {
@@ -1055,6 +1059,57 @@ static void run_current_line(void)
         snprintf(s_msg, sizeof s_msg, "%s", UI_NOT_A_COMMAND);
         s_msg_until = editor_now_ms() + 3000;
         return;
+    }
+
+    /* RUN AGAIN, A BLOCK IS A SWITCH (editor_block.h): every lane line as its
+     * lane already plays, and the block takes them out on the one - the run
+     * after brings back the ones it took. Nothing else in it runs then. */
+    if (nb > 0) {
+        static int  st[BLOCK_MAX_LINES + 1];
+        static char nm[BLOCK_MAX_LINES + 1][SEQ_NAME_MAX];
+        int k = 0;
+        for (int i = -1; i < nb; i++) {
+            const char *l = (i < 0) ? (head != NULL ? line : NULL) : s_block[i];
+            if (l == NULL || block_command(l) == NULL) {
+                continue;
+            }
+            st[k] = cmd_line_lane(l, nm[k], sizeof nm[k]);
+            for (int j = 0; j < k; j++) {
+                if (st[k] != BLOCK_LANE_OTHER && strcmp(nm[j], nm[k]) == 0) {
+                    st[k] = BLOCK_LANE_OTHER;        /* one lane, counted once */
+                }
+            }
+            k++;
+        }
+        const int plan = block_plan(st, k, seq_running());
+        if (plan != BLOCK_RUN) {
+            bool any_held = false;
+            for (int j = 0; j < k && plan == BLOCK_ON; j++) {
+                const seq_lane_t *ln = st[j] == BLOCK_LANE_OFF ? seq_lane_find(nm[j], -1) : NULL;
+                any_held |= (ln != NULL && ln->held);
+            }
+            int moved = 0;
+            for (int j = 0; j < k; j++) {
+                if (plan == BLOCK_OFF && st[j] == BLOCK_LANE_ON) {
+                    seq_toggle(nm[j], NULL);
+                    seq_hold(nm[j], true);
+                    moved++;
+                } else if (plan == BLOCK_ON && st[j] == BLOCK_LANE_OFF) {
+                    const seq_lane_t *ln = seq_lane_find(nm[j], -1);
+                    if (!any_held || (ln != NULL && ln->held)) {
+                        seq_toggle(nm[j], NULL);
+                        seq_hold(nm[j], false);
+                        moved++;
+                    }
+                }
+            }
+            snprintf(s_msg, sizeof s_msg, "block %s: %d lane%s - on the one",
+                     plan == BLOCK_OFF ? "off" : "back", moved, moved == 1 ? "" : "s");
+            s_msg_until = editor_now_ms() + 4000;
+            editor_invalidate();
+            tg_invalidate();
+            return;
+        }
     }
 
     /* Where the output buffer ended BEFORE the command, so the view can land

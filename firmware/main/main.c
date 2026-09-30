@@ -373,7 +373,7 @@ static void ensure_guide_buffer(void)
                 for (size_t k = 0; keep != NULL && k < had; k++) {
                     h = (h ^ (uint8_t)keep[k]) * 16777619u;
                 }
-                if (keep != NULL && h == GUIDE3_FNV) {
+                if (keep != NULL && (h == GUIDE3_FNV || h == GUIDE4_FNV)) {
                     keep[0] = '\0';
                 }
                 doc_set_text(GUIDE_TEXT);
@@ -409,7 +409,41 @@ static void ensure_guide_buffer(void)
  * controller one line, for learning them in a DAW. The owner's to edit after. */
 static void ensure_midi_buffer(void)
 {
-    if (doc_buf_find("midi") >= 0) {
+    /* A PAGE THE FIRMWARE WROTE IS THE FIRMWARE'S TO UPDATE: "midi 1" exactly
+     * as written (its hash) becomes the new page; one the owner edited keeps
+     * its text below the new, as the guide does. */
+    const int have = doc_buf_find("midi");
+    if (have >= 0) {
+        const int was = doc_buf_current();
+        if (doc_buf_select(have) != ESP_OK) {
+            return;
+        }
+        const size_t had = doc_len();
+        char *keep = malloc(had + 1);
+        if (keep == NULL) {
+            doc_buf_select(was);
+            return;
+        }
+        doc_read(keep, had);
+        keep[had] = '\0';
+        if (strstr(keep, MIDI_MARK "\n") == NULL) {
+            uint32_t h = 2166136261u;
+            for (size_t k = 0; k < had; k++) {
+                h = (h ^ (uint8_t)keep[k]) * 16777619u;
+            }
+            doc_set_text(MIDI_TEXT);
+            if (h != MIDI1_FNV) {
+                static const char sep[] = "\n-- previously on this page --\n";
+                doc_move_to(doc_len());
+                for (const char *q = sep; *q != '\0'; q++) { doc_insert(*q); }
+                for (const char *q = keep; *q != '\0'; q++) { doc_insert(*q); }
+            }
+            doc_buf_set_kind(DOC_KIND_GUIDE);
+            doc_save();
+            ESP_LOGW(TAG, "midi page updated to " MIDI_MARK);
+        }
+        free(keep);
+        doc_buf_select(was);
         return;
     }
     const int was = doc_buf_current();

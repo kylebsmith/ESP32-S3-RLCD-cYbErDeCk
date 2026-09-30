@@ -239,31 +239,71 @@ esp_err_t usbdev_want(bool on)
  * throttled reporter, never logged from this path: this runs on the MIDI
  * task, and logging that the transport is behind is a good way to put it
  * further behind. */
+/* A TICK GOES IN ONE TRANSFER. Each message used to be written on its own,
+ * and TinyUSB starts a transfer the moment its FIFO holds anything, so a step
+ * left in pieces - and past sixteen events its 64-byte FIFO refused the rest,
+ * which were counted as dropped. Now the messages of a burst are gathered
+ * here and handed over in one write at the flush, which the midi task calls
+ * once per step (seq.c, midi_task).
+ *
+ * What this did NOT change, measured at the host with tools/clock_audit.py on
+ * 2026-09-29: a step's notes still arrive about 0.09 ms apart, one after
+ * another, exactly as before - the host timestamps each event of a packet on
+ * its own. The deck's side of it, from '>jitter' over the same run: every
+ * event left for USB within 0.5 ms of its tick, mean 0.11 ms. */
+static uint8_t  s_batch[3 * 64];
+static size_t   s_batch_n;
+static uint32_t s_batch_msgs;
+
 void usbdev_midi_send(uint8_t status, uint8_t d1, uint8_t d2)
 {
     if (!usbdev_mounted() || status == 0xF9) {
         return;          /* 0xF9 is the deck's own step marker, not MIDI */
     }
-    const uint8_t msg[3] = { status, d1, d2 };
     /* System real-time messages are a single byte. Sending three would inject
      * two zero bytes, which a receiver reads as a note-off on channel 1. */
-    const uint32_t n = (status >= 0xF8) ? 1 : ((status == 0xF2) ? 3 : 3);
-    if (tud_midi_stream_write(0, msg, n) != n) {
-        s_dropped++;
-    } else {
-        s_msgs++;
+    const size_t n = (status >= 0xF8) ? 1 : 3;
+    if (s_batch_n + n > sizeof s_batch) {
+        usbdev_midi_flush();                 /* a full batch goes now, whole */
     }
+    s_batch[s_batch_n] = status;
+    if (n == 3) {
+        s_batch[s_batch_n + 1] = d1;
+        s_batch[s_batch_n + 2] = d2;
+    }
+    s_batch_n += n;
+    s_batch_msgs++;
 }
 
 void usbdev_midi_flush(void)
 {
-    /* USB MIDI has no packet the way BLE does - the stack coalesces into the
-     * 64-byte endpoint buffer itself and ships it on the next 1 ms frame. The
-     * hook exists so the destination table has one shape, and so the packet
-     * count means the same thing in '>jitter' for both transports. */
-    if (s_msgs != 0) {
-        s_packets++;
+    if (s_batch_n == 0) {
+        return;
     }
+    /* The FIFO is 64 bytes, sixteen events, and CFG_TUD_MIDI_TX_BUFSIZE is a
+     * hard define in the component. A step with more waits a frame for the
+     * first transfer to drain - late by a millisecond rather than lost, which
+     * is the only trade USB full speed offers - and only past three frames of
+     * waiting is the rest counted as dropped. */
+    size_t at = 0;
+    int waited = 0;
+    while (at < s_batch_n && usbdev_mounted()) {
+        at += tud_midi_stream_write(0, s_batch + at, (uint32_t)(s_batch_n - at));
+        if (at < s_batch_n) {
+            if (++waited > 3) {
+                break;
+            }
+            vTaskDelay(1);
+        }
+    }
+    if (at < s_batch_n) {
+        s_dropped += s_batch_msgs;           /* whole messages, conservatively */
+    } else {
+        s_msgs += s_batch_msgs;
+    }
+    s_packets++;
+    s_batch_n = 0;
+    s_batch_msgs = 0;
 }
 
 /* ------------------------------------------------------------- the console

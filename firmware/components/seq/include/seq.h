@@ -155,6 +155,7 @@ typedef struct {
     bool     used;
     bool     muted;
     int8_t   pend_mute;     /* a '>toggle' waiting for the bar: seq_toggle.h */
+    bool     held;          /* silenced by its block's second run, to come back */
     bool     melodic;
     bool     ctrl;          /* a controller lane: digits are VALUES, not notes */
     uint8_t  cc;
@@ -321,6 +322,13 @@ esp_err_t seq_mute(const char *name, bool mute);
 /* '>toggle': flip where the lane is going, at the next bar (seq_toggle.h) -
  * at once if the clock is stopped. *will_mute says which way it goes. */
 esp_err_t seq_toggle(const char *name, bool *will_mute);
+
+/* Mark a lane as one a block silenced, so the block's next run brings back
+ * exactly the lanes it took out (editor_block.h). */
+esp_err_t seq_hold(const char *name, bool held);
+
+/* A controller value, out now through the clock's own queue: '>send cut 3'. */
+void seq_cc_now(uint8_t chan, uint8_t cc, uint8_t value);
 
 /* FORGET A LANE, WHICH IS NOT THE SAME AS MUTING ONE.
  *

@@ -227,15 +227,22 @@ static bool bind(const lane_name_t *ln, lane_t *l, char *why, size_t wn)
     return true;
 }
 
+/* seq.c find(): a free slot, else one a finished count left. The score has
+ * no clock between lines, so a counted lane is taken as finished when the
+ * table is full - on the deck a fill still playing would refuse the lane. */
 static lane_t *lane_slot(const char *name)
 {
     lane_t *l = lane_find(name);
-    for (int i = 0; i < SEQ_MAX_LANES && l == NULL; i++) {
-        if (!s_lane[i].used) {
-            l = &s_lane[i];
-            memset(l, 0, sizeof *l);
-            snprintf(l->name, sizeof l->name, "%s", name);
-            l->used = true;
+    for (int pass = 0; pass < 2 && l == NULL; pass++) {
+        for (int i = 0; i < SEQ_MAX_LANES && l == NULL; i++) {
+            lane_t *c = &s_lane[i];
+            if (pass == 0 ? !c->used
+                          : (c->used && c->has_pat && c->c.count != 0 && c->route[0] == '\0')) {
+                l = c;
+                memset(l, 0, sizeof *l);
+                snprintf(l->name, sizeof l->name, "%s", name);
+                l->used = true;
+            }
         }
     }
     return l;
@@ -542,7 +549,13 @@ static void do_verb(const char *w, const char *arg)
          * not the piece's. The mode must be one the engine knows. */
         char what[16] = "", mode[16] = "";
         sscanf(arg, "%15s %15s", what, mode);
-        if (strcmp(what, "view") != 0) {
+        const alias_t *ca = alias_find(what);
+        if (ca != NULL && ca->kind == LD_CC) {
+            /* a controller, sent a value now (builtins.c c_send) */
+            if (mode[0] < '0' || mode[0] > '9' || mode[1] != '\0') {
+                fail("send %s: 0-9", what, NULL);
+            }
+        } else if (strcmp(what, "view") != 0) {
             fail("'send %s' does not belong in a piece", what, NULL);
         } else if (viz_out_param_find(mode) >= 0) {
             int v = -1;

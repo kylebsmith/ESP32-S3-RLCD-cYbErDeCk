@@ -65,6 +65,20 @@ int main(void)
     const char *text = "   explained\n     >kick 9...\n";
     n = block_of(text, 0, b, sizeof b);
     CHECK(n == 1, "a line of words has a block too, and the block runs");
+
+    /* RUN AGAIN, A BLOCK IS A SWITCH: out when every lane line is as it plays
+     * and one of them is sounding, back when none is, as written otherwise. */
+    const int all_on[] = { BLOCK_LANE_ON, BLOCK_LANE_OTHER, BLOCK_LANE_ON };
+    const int half[]   = { BLOCK_LANE_OFF, BLOCK_LANE_ON };
+    const int all_off[] = { BLOCK_LANE_OFF, BLOCK_LANE_OTHER, BLOCK_LANE_OFF };
+    const int edited[] = { BLOCK_LANE_ON, BLOCK_LANE_CHANGE };
+    const int no_lane[] = { BLOCK_LANE_OTHER, BLOCK_LANE_OTHER };
+    CHECK(block_plan(all_on, 3, true) == BLOCK_OFF, "a scene run again, playing: out on the one");
+    CHECK(block_plan(half, 2, true) == BLOCK_OFF, "partly playing: out, the part that plays");
+    CHECK(block_plan(all_off, 3, true) == BLOCK_ON, "run once more: back");
+    CHECK(block_plan(edited, 2, true) == BLOCK_RUN, "an edited line: the block runs as written");
+    CHECK(block_plan(no_lane, 2, true) == BLOCK_RUN, "toggles and colours alone: they run");
+    CHECK(block_plan(all_on, 3, false) == BLOCK_RUN, "stopped, a block always runs: set up twice");
     printf(fails ? "[FAIL] %d check(s) failed\n" : "[PASS] a line runs its block\n", fails);
     return fails != 0;
 }

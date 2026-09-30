@@ -313,6 +313,16 @@ cmd_status_t cmd_run_line(const char *line, cmd_caller_t caller,
     return CMD_ERROR;
 }
 
+bool cmd_is_verb(const char *word, size_t n)
+{
+    for (int i = 0; i < s_count; i++) {
+        if (strlen(s_table[i].name) == n && strncmp(s_table[i].name, word, n) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static cmd_announce_t s_announce;
 
 void cmd_set_announce(cmd_announce_t fn) { s_announce = fn; }

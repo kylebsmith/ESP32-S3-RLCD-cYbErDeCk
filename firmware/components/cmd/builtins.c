@@ -17,6 +17,7 @@
 #include "seq.h"
 #include "blemidi.h"
 #include "seq_pattern.h"
+#include "seq_toggle.h"
 #include "lane_name.h"
 #include "secret_line.h"
 
@@ -641,6 +642,35 @@ static bool rerun_silences(const cmd_ctx_t *ctx)
     return rerun_silences_named(ctx->name, ctx->arg);
 }
 
+int cmd_line_lane(const char *line, char *name, size_t n)
+{
+    while (*line == ' ' || *line == '\t') { line++; }
+    if (*line != '>') { return CMD_LANE_OTHER; }
+    line++;
+    while (*line == ' ' || *line == '\t') { line++; }
+    size_t w = 0;
+    while (line[w] != '\0' && line[w] != ' ' && line[w] != '\t') { w++; }
+    const char *pat = line + w;
+    while (*pat == ' ' || *pat == '\t') { pat++; }
+    if (w == 0 || *pat == '\0' || *pat == '=' || cmd_is_verb(line, w) ||
+        !cmd_lane_known(line, w)) {
+        return CMD_LANE_OTHER;
+    }
+    lane_name_t ln;
+    if (lane_name_parse(line, w, &ln) != LN_OK) { return CMD_LANE_OTHER; }
+    snprintf(name, n, "%s", ln.canon);
+    static seq_comp_t c;
+    if (seq_pattern_compile(pat, &c) == SEQ_PAT_OK && c.count != 0) {
+        return CMD_LANE_OTHER;               /* a cue plays again; it is not held */
+    }
+    const seq_lane_t *l = seq_lane_find(ln.canon, -1);
+    if (l == NULL || l->src != seq_pattern_hash(pat)) {
+        return CMD_LANE_CHANGE;
+    }
+    return seq_toggle_will_mute(l->muted, __atomic_load_n(&l->pend_mute, __ATOMIC_ACQUIRE))
+           ? CMD_LANE_OFF : CMD_LANE_ON;
+}
+
 /* A LANE THAT WAS NOT COMPILED, AND WHY.
  *
  * This printed "16 lanes is all there is" for every refusal - including a
@@ -1233,9 +1263,15 @@ static cmd_status_t c_dump(cmd_ctx_t *ctx)
     if (want != was && doc_buf_select(want) != ESP_OK) {
         return CMD_ERROR;
     }
+    /* A LINE LONGER THAN THE CONSOLE'S goes on in the next, marked '+' where
+     * a new line is marked '|', so the text comes back exactly. It used to be
+     * cut into two numbered lines and the character at the cut was lost -
+     * found reading the owner's edited pieces back, 2026-09-29, where a long
+     * pattern would have come back one character short. */
     char line[96];
     size_t k = 0;
     int    ln = 1;
+    bool   more = false;
     const size_t n = doc_len();          /* ONCE, before the walk */
     for (size_t i = 0; i <= n; i++) {
         if (doc_len() != n) {
@@ -1243,11 +1279,18 @@ static cmd_status_t c_dump(cmd_ctx_t *ctx)
             break;
         }
         const char ch = (i < n) ? doc_at(i) : '\n';
-        if (ch == '\n' || k == sizeof line - 1) {
+        if (ch != '\n' && k == sizeof line - 1) {
             line[k] = '\0';
-            if (i < n || k > 0) {
-                cmd_out(ctx, "%3d|%s", ln++, line);
+            cmd_out(ctx, "%3d%c%s", ln, more ? '+' : '|', line);
+            more = true;
+            k = 0;
+        }
+        if (ch == '\n') {
+            line[k] = '\0';
+            if (i < n || k > 0 || more) {
+                cmd_out(ctx, "%3d%c%s", ln++, more ? '+' : '|', line);
             }
+            more = false;
             k = 0;
             continue;
         }
@@ -2112,6 +2155,25 @@ static cmd_status_t c_send(cmd_ctx_t *ctx)
     char state[16] = {0};
     if (sscanf(ctx->arg, "%15s %15s", name, state) < 1) {
         return CMD_ERROR;
+    }
+    /* A CONTROLLER, SENT A VALUE NOW: '>send cut 3'. A track sets where its
+     * controllers start before it plays - the owner, 2026-09-29: end a song
+     * on a high drive and the next one starts there - and a lane to do it
+     * would hold a slot a track does not have. Nothing plays; the value goes
+     * out once, on the controller's own channel, 0-9 as on a lane. */
+    {
+        const alias_t *a = alias_find(name);
+        if (a != NULL && a->kind == LD_CC) {
+            if (state[0] < '0' || state[0] > '9' || state[1] != '\0') {
+                cmd_out(ctx, "send %s 0-9", name);
+                return CMD_ERROR;
+            }
+            const int v = state[0] - '0';
+            seq_cc_now(a->chan, a->num, (uint8_t)(v * 127 / 9));
+            snprintf(ctx->msg, sizeof ctx->msg, "%s %d: cc %u = %d on ch %u", name, v,
+                     (unsigned)a->num, v * 127 / 9, (unsigned)a->chan + 1);
+            return CMD_DONE;
+        }
     }
     if (state[0] == '\0') {
         if (strcmp(name, "view") == 0 && seq_dest_is_on(name)) {

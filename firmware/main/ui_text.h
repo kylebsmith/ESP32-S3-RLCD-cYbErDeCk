@@ -115,7 +115,7 @@
  * "guide 3": a password is asked for and never typed on a line (ask.h), so the
  * '>wifi <ssid> <pass>' and '>host deck 12345678' that "guide 2" taught are
  * refused - and cut - now. */
-#define GUIDE_MARK "guide 4"
+#define GUIDE_MARK "guide 5"
 
 /* "guide 4", 2026-09-29: the sections are blocks - a heading run is its
  * section run (editor_block.h) - and the guide says what changed: a line run
@@ -123,6 +123,11 @@
  * that is still "guide 3" exactly as the firmware wrote it, which is how it is
  * known unedited, is replaced outright; an edited one keeps its text below. */
 #define GUIDE3_FNV 0xe79bb7f4u
+
+/* "guide 5", 2026-09-29: a block run again is a switch, a key and a colour
+ * wait for the one as a toggle does, and a controller is set with '>send cut
+ * 3'. "guide 4" exactly as the firmware wrote it is replaced the same way. */
+#define GUIDE4_FNV 0xb6a9751eu
 
 #define GUIDE_TEXT \
     "GUIDE. ctrl+enter runs a line\n" \
@@ -163,8 +168,10 @@
     "  >bass 0__.5_..7__.5...\n" \
     "\n" \
     "-- on the one\n" \
-    "  toggle waits for the bar.\n" \
-    "  run it again: back.\n" \
+    "  toggle, key and colour wait\n" \
+    "  for the bar. a block run\n" \
+    "  again: its lanes out. again:\n" \
+    "  back.\n" \
     "  >toggle hat bass\n" \
     "\n" \
     "-- names\n" \
@@ -174,6 +181,8 @@
     "  >conga ..x..x..x..x.x..\n" \
     "  >bass = ch 5\n" \
     "  >bass = ch 1\n" \
+    "  a controller, set now:\n" \
+    "  >send cut 3\n" \
     "\n" \
     "-- endings\n" \
     "  a lane that ends starts\n" \
@@ -205,7 +214,7 @@
     "  >list\n" \
     "  >help\n" \
     "  midi learn: the midi page.\n" \
-    "guide 4\n" \
+    "guide 5\n" \
     ""
 
 /* THE MIDI PAGE: every controller the deck and its pieces send, one line each.
@@ -213,7 +222,11 @@
  * everything: run a line, and its block plays that cc alone for eight bars
  * (a count, so it stops itself) with every other MIDI lane muted by '>map'.
  * The owner, 2026-09-29: "its own persistent page like guide". */
-#define MIDI_MARK "midi 1"
+#define MIDI_MARK "midi 2"
+
+/* "midi 2" adds the lead's and the arp's filters; "midi 1" exactly as the
+ * firmware wrote it is replaced, an edited one kept below the new. */
+#define MIDI1_FNV 0xb4c63f33u
 
 #define MIDI_TEXT \
     "MIDI LEARN. put the DAW in\n" \
@@ -243,6 +256,12 @@
     ">drive = cc 20 ch 6\n" \
     "  >drive 1357 /2 !16\n" \
     "  >map drive\n" \
+    ">shine = cc 74 ch 2\n" \
+    "  >shine 1357 /2 !16\n" \
+    "  >map shine\n" \
+    ">spark = cc 74 ch 4\n" \
+    "  >spark 1357 /2 !16\n" \
+    "  >map spark\n" \
     "the screen, channel 16:\n" \
     ">ink = cc 1 ch 16\n" \
     "  >ink 1357 /2 !16\n" \
@@ -271,7 +290,7 @@
     "all back on:\n" \
     ">map\n" \
     ">stop\n" \
-    "midi 1\n" \
+    "midi 2\n" \
     ""
 
 #ifndef UI_TEXT_NO_ASSERTS
