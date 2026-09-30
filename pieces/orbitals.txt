@@ -2,7 +2,7 @@ ORBITALS
 for the satellites to come
 
 -- I night
-  >send view poster
+  >send view code
   >bpm 124
   >scale dmin
   >swing 50
@@ -31,6 +31,7 @@ for the satellites to come
   >play
 
 -- II first light
+  >send view poster
   >toggle turn kick disc box
 
 -- III accretion

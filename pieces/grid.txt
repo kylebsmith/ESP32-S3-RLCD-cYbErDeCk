@@ -82,10 +82,12 @@ GRID
   >send view lines 0
 
 -- drop
-  >toggle kick hat clap box
+  >toggle kick hat clap box lead
   >send view inv 0
   >send view lines 3
 
+>bpm 16
+>bass = ch = 1
 -- out
   >clear
   >send view off

@@ -1,7 +1,7 @@
 DRILL
 
 -- set
-  >send view scan
+  >send view plain
   >bpm 165
   >scale ephr
   >swing 50
@@ -11,7 +11,7 @@ DRILL
   >bass = voice 1 ch 6 gate 70
   >bass <00000001 11111112 22222223 11111110 00000001 11111113 33333332 22222220> /2
   >bass:2 <55555556 66666660 00000000 00000077> /2
-  >pad = voice 3 ch 3 gate 990
+  >pad = voice 3 ch 9 gate 990
   >pad <[0,4,7] [1,5,8] [2,6,9] [1,5,8] [0,4,7] [1,5,8] [3,7] [2,6,9]> /16
   >pad:2 <[5,9] [3,6] [0,4,7] [0,4,7]> /16
   >lead = voice 4 ch 2 gate 90
@@ -45,7 +45,7 @@ DRILL
   >tom 9.9.9.99.9.99999 !1
 
 -- drive it
-  >drive <3 5 7 9> /4
+  >drive <3 5 7 9> /8
 
 -- ease off
   >drive 2 /16

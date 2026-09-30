@@ -46,14 +46,14 @@ OFFSET
   >toggle pad pad:2 bass bass:2 lead lead:2
   >route disc:x bass
   >route disc:y lead
-  >lead = ch 2
+  >lead = ch 7
   >send view skew 3
 
 -- open bass2
   >bite <2 3 4 5 6 7 8 9> /16
 
 -- close it
-  >bite 3 /16
+  >bite 1 /16
 
 -- kick broken
   >kick 9..9......9..7..
