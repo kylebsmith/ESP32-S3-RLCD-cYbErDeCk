@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Relay the deck's picture to the HDMI view node, through this computer.
 
+  python3 tools/viewrelay.py                  finds the deck and the node itself
   python3 tools/viewrelay.py --deck /dev/cu.usbmodemDECK --view /dev/cu.usbmodemNODE
 
 docs/VIEW.md. The deck is meant to drive the view node itself, over its own USB.
@@ -32,6 +33,8 @@ import serial
 from serial.tools import list_ports
 
 DECK_USB_SERIAL = 'deck-0001'       # usbdev.c: the deck's serial number in USB MIDI mode
+DECK_MAC = 'A4CB8FD070D4'           # its USB-Serial-JTAG serial, in console mode: the chip's MAC
+NODE_VID = 0x239A                   # Adafruit: the Feather RP2040 DVI
 
 
 def open_deck(port):
@@ -43,12 +46,28 @@ def open_deck(port):
 
 
 def find_deck(given):
-    """The port given, if it is there; else the deck's CDC console in USB MIDI mode."""
+    """The port given, if it is there; else the deck by its own serial number -
+    its CDC console in USB MIDI mode, or its USB-Serial-JTAG console - so a
+    fresh terminal needs no port names, and another ESP32 is never taken."""
     ports = list(list_ports.comports())
-    if any(p.device == given for p in ports):
+    if given and any(p.device == given for p in ports):
         return given
     for p in ports:
         if p.serial_number == DECK_USB_SERIAL:
+            return p.device
+    for p in ports:
+        if (p.serial_number or '').replace(':', '').upper() == DECK_MAC:
+            return p.device
+    return None
+
+
+def find_view(given):
+    """The port given, if it is there; else the Feather RP2040 DVI, by its maker."""
+    ports = list(list_ports.comports())
+    if given and any(p.device == given for p in ports):
+        return given
+    for p in ports:
+        if p.vid == NODE_VID and 'RP2040' in (p.product or ''):
             return p.device
     return None
 
@@ -57,8 +76,8 @@ VIEW = re.compile(rb'\x1b\]view;([A-Za-z0-9+/=]+)\x07')
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--deck', required=True, help="the deck's serial port")
-    ap.add_argument('--view', required=True, help="the view node's serial port")
+    ap.add_argument('--deck', help="the deck's serial port; found by itself if left out")
+    ap.add_argument('--view', help="the view node's serial port; found by itself if left out")
     a = ap.parse_args()
 
     deck = None                        # found and opened in the loop, and again after a move
@@ -67,9 +86,11 @@ def main():
     frames = 0
     while True:
         if node is None:
+            vport = find_view(a.view)
             try:
-                node = serial.Serial(a.view, 115200, timeout=0, write_timeout=0.2)
-                print(f'-- view node on {a.view}', flush=True)
+                if vport is not None:
+                    node = serial.Serial(vport, 115200, timeout=0, write_timeout=0.2)
+                    print(f'-- view node on {vport}', flush=True)
             except serial.SerialException:
                 node = None
         try:
@@ -83,6 +104,8 @@ def main():
             deck, got = None, b''
         if deck is None:
             port = find_deck(a.deck)
+            if port is None:
+                time.sleep(0.5)                # nothing to relay until it is here
             if port is not None:
                 try:
                     deck = open_deck(port)
