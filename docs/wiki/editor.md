@@ -58,7 +58,7 @@ Both keyboards feed one queue (`kbd.h:19-33`, `serialkbd.c:13-15`).
 | `ESC [ A–D` | arrows |
 
 Consequences:
-- **Ctrl-J (0x0A) arrives as Ctrl+Enter and runs the line**, so "previous document" is unreachable over serial.
+- **Ctrl-J (0x0A) arrives as Ctrl+Enter and runs the line.** Previous document is Ctrl-K, which a cable sends as 0x0B, so both directions work over serial.
 - Ctrl-H is Backspace, Ctrl-I is Tab, Ctrl-M is Enter.
 - **Esc needs `ESC ESC`.** A lone ESC swallows the next byte.
 - Other escape sequences leak or vanish: Delete (`ESC [ 3 ~`) types `~`; Home (`ESC [ H`) does nothing. Home and End do not exist over serial.
@@ -142,7 +142,7 @@ Whatever is shown is **clipped to `TEXT_COLS`** (`editor.c:343`). A message long
 | `not a command - start with >` | 3 s | `editor.c:1047-1050` |
 | `guide: Ctrl+Enter runs a line` / `no guide buffer` | 4 s / 3 s | `editor.c:794-800`, `ui_text.h:33-34` |
 | Ctrl-O target name, or `scratch` | 2.5 s | `editor.c:817-819` |
-| Ctrl-L/J target name, or `only one document` | 1.5 s | `editor.c:962-970` |
+| Ctrl-L/K target name, or `only one document` | 1.5 s | `editor.c:962-970` |
 | output move: the command's message (or `output`), then `output - Ctrl-O goes back` | 2.2 s, then until 5.2 s | `editor.c:1022-1024` |
 | password prompt result, or `stopped - nothing sent` | 4 s | `editor.c:1111-1113` |
 
@@ -214,7 +214,7 @@ The editor redraws for the playhead when the **global sixteenth** changes (`main
 
 ### 1.13 Document switching
 
-- **Ctrl-L / Ctrl-J** step to the next or previous buffer, wrapping around, skipping `+` buffers and empty slots (`editor.c:948-971`) [probe]. There are 8 buffers (`docstore.h:22`).
+- **Ctrl-L / Ctrl-K** step to the next or previous buffer, wrapping around, skipping `+` buffers and empty slots (`editor.c:948-971`) [probe]. There are 8 buffers (`docstore.h:22`).
 - They show the target's name (or `scratch`) for 1.5 s, or `only one document`.
 - **They always move the cursor and view to the top of the target (offset 0).** Ctrl-G does too. Only Ctrl-O keeps each buffer's position [read + probe].
 - `>new` also blanks the picture and forgets all lanes (`builtins.c:283-299`).

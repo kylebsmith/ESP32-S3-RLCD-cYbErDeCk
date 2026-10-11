@@ -1,80 +1,131 @@
 DRILL
+>stop
 
 -- set
   >send view code
-  >bpm 165
+  >bpm 170
   >scale ephr
-  >swing 50
+  >swing 56
   >drive = cc 20 ch 6
+  >shine = cc 74 ch 2
+  >spark = cc 74 ch 11
   >send drive 2
+  >send shine 5
+  >send spark 4
+  >perc = note 56
+  >bass = voice 1 ch 6 gate 260
+  >pad = voice 3 ch 9 gate 990
+  >lead = voice 4 ch 2 gate 90
+  >arp = voice 5 ch 11 gate 50
   >kick 9.9.......99....
   >snare ....9..3.9.39...
   >hat 7575757575757575
-  >bass = voice 1 ch 6 gate 70
-  >bass <00000001 11111112 22222223 11111110 00000001 11111113 33333332 22222220> /2
-  >bass:2 <55555556 66666660 00000000 00000077> /2
-  >pad = voice 3 ch 9 gate 990
-  >pad <[0,4,7] [1,5,8] [2,6,9] [1,5,8] [0,4,7] [1,5,8] [3,7] [2,6,9]> /16
-  >pad:2 <[5,9] [3,6] [0,4,7] [0,4,7]> /16
-  >lead = voice 4 ch 2 gate 90
-  >lead <7.7.[78]7.. 7.7.9.[98]7 7.7.[78]7.[87] 9_[98]7.5.4> /2
+  >ohat ..7...7...7...7.
+  >rim [33].3..[33].3..[3333]...3.
+  >perc 9...9...9...9...
+  >bass <0___..0.0___..1. 1___..1.1___..2. 2___..2.2___..1. 1___..1.0___.[01]0.>
+  >pad <[0,4,7] [1,5,8] [2,6,9] [1,5,8]>__. /4
+  >arp 0718 0719 0718 0796
   >echo 6
   >box 7.7.......77....
-  >route box:x bass
   >route noise hat
   >route flip snare
-  >warp r
-  >route warp lead
-  >toggle snare hat bass bass:2 pad:2 lead flip
+  >toggle snare hat ohat rim perc bass pad flip
   >play
 
 -- in
   >toggle snare hat bass
   >send view plain
 
--- riff
-  >toggle lead flip
+-- power
+  >toggle pad
 
--- turn
-  >toggle pad pad:2 bass bass:2 lead
-  >route box:x bass:2
+-- open hats
+  >toggle ohat
 
--- home
-  >toggle pad pad:2 bass bass:2 lead
-  >route box:x bass
+-- glitch rim
+  >toggle rim
 
--- fill, on its one
-  >tom 9.9.9.99.9.99999 !1
+-- cowbell
+  >toggle perc
 
--- drive it
-  >drive <3 5 7 9> /8
+-- riff, four bars
+  >lead <7.7.[78]7.. 7.7.9.[98]7 7.7.[78]7.[87] 9_[98]7.5.4> /2 !4
 
--- ease off
-  >drive 2 /16
+-- run, two bars
+  >lead <0.3.[34]5.7 8.7.5.[54]3> /2 !2
 
--- drums drill
+-- screech
+  >lead [78][78][78][78]............ !2
+
+-- kit drill
   >kick 9.9.......99....
   >box 7.7.......77....
   >snare ....9..3.9.39...
   >hat 7575757575757575
 
--- drums four
-  >kick 9...9...9...9...
-  >box 7...7...7...7...
-  >snare ....9.......9...
-  >hat 7575757575757575
+-- kit jungle
+  >kick 9.9.......9.....
+  >box 7.7.......7.....
+  >snare ....9..[35].9..9..[53]
+  >hat 7.7.7.7.7.7.7[77]7.
 
--- drums shred
+-- kit shred
   >kick 9.[99].....9.9[99]....
   >box 7.[77].....7.7[77]....
   >snare ....9[33]3.9.[9999]9..3.
   >hat 75[75]575[75]575[7777]575[75]5
 
--- drums half
+-- kit half
   >kick 9.......9.9.....
   >box 7.......7.7.....
   >snare ........9.......
   >hat 7.5.7.5.7.5.7.5.
+
+-- bass reese
+  >bass <0___..0.0___..1. 1___..1.1___..2. 2___..2.2___..1. 1___..1.0___.[01]0.>
+
+-- bass stab
+  >bass <00000001 11111112 22222223 11111110> /2
+
+-- bass long
+  >bass <0_______ 1_______ 2_______ 1___0___> /2
+
+-- chords held
+  >pad <[0,4,7] [1,5,8] [2,6,9] [1,5,8]>__. /4
+
+-- chords stab
+  >pad [0,4,7]..[0,4,7]..[0,4,7]...[0,4,7].....
+
+-- arp glitch
+  >arp 0718 0719 0718 0796
+
+-- arp five
+  >arp 07181
+
+-- arp fall
+  >arp <9876 5432 9876 5410 8765 4321 9875 4210>
+
+-- fill
+  >tom 9.9.9.99.9.99999 !1
+
+-- crash, on the one
+  >crash 9............... !1
+
+-- stutter
+  >clap ....[9999]....[9999]...... !2
+
+-- drive it
+  >drive <3 5 7 9> /8 !4
+
+-- ease off
+  >drive <7 4 2> /8 !3
+
+-- shine the riff
+  >shine <5 7 9 6> /8 !4
+
+-- spark the arp
+  >spark <4 6 8 9 7 5> /4 !6
 
 -- cut
   >toggle kick snare hat box
@@ -84,6 +135,12 @@ DRILL
   >send view inv 9
   >send view sort
   >lead = ch 7
+  >lead <7.7.[78]7.. 7.7.9.[98]7 7.7.[78]7.[87] 9_[98]7.5.4> /2 !4
+
+-- back to plain, lead on ch 2
+  >send view inv 0
+  >send view plain
+  >lead = ch 2
 
 -- out
   >clear

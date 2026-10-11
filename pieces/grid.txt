@@ -1,63 +1,141 @@
 GRID
+>stop
 
 -- set
   >send view code
   >send view day 9
   >send view lines 3
-  >bpm 124
+  >bpm 128
   >scale fmin
-  >swing 52
+  >swing 54
   >cut = cc 74 ch 1
   >shine = cc 74 ch 2
   >glow = cc 74 ch 3
-  >spark = cc 74 ch 4
+  >spark = cc 74 ch 11
   >send cut 3
   >send shine 5
   >send glow 4
   >send spark 4
-  >kick 9...9...9...9...
-  >hat ..5...5...5...5.
-  >clap ....8.......8...
-  >bass = voice 1 ch 1 gate 140
-  >bass <0..0.0.7 0..0.07. 5..5.5.7 5..5.54. 3..3.3.7 3..3.35. 4..4.4.8 4..4.43.> /2
-  >bass:2 <3..3.3.7 4..4.4.8 5..5.5.9 6..6.6.8> /2
-  >pad = voice 3 ch 3 gate 2000
-  >pad <[0,2,6,8] [2,4,6,8] [4,5,7,9] [4,5,7,8] [3,5,7,9] [3,5,7,8] [3,4,7,8] [4,6,8]> /16
-  >pad:2 <[3,5,7,9] [3,4,6,8] [4,5,7,9] [1,3,6,7]> /16
+  >perc = note 70
+  >bass = voice 1 ch 1 gate 120
+  >pad = voice 3 ch 3 gate 140
+  >arp = voice 4 ch 11 gate 70
   >lead = voice 4 ch 2 gate 170
-  >lead <4.2.1[21]0. 0___..6. 7.5.4[54]2. 2___..1. 3.5.7_5. 5___..8%60. 8.7.[87]4_. 4___....> /2
-  >arp = voice 4 ch 4 gate 80
-  >arp <4 6 7 9%70 [76]>
+  >kick 9...9...9...9...
+  >perc 3%70.2.3%70.2.3%70.2.3%70.23
+  >hat ..5...5...5...5.
+  >ohat ......6.......6.
+  >clap ....8.......8...
+  >rim ...3......3..3..
+  >bass <0_.0..7_.0..0.3. 5_.5..9_.5..5.6. 3_.3..7_.3..3.2. 4_.4..8_.4..4.[43]2>
+  >pad ..[2,4,6,8]...[2,4,6,8]..[2,4,6,8]......
+  >arp 4.7.9.6.4.2.
   >echo 5
   >box 4...4...4...4...
   >route box:x bass
-  >route box:y lead
   >route edge clap
-  >ramp u
-  >route ramp pad
-  >toggle hat clap bass bass:2 pad:2 lead arp
+  >toggle hat ohat clap rim bass pad arp
   >play
 
 -- in
-  >toggle hat clap bass
+  >toggle hat clap rim bass
   >send view plain
 
--- hook
-  >toggle lead
+-- stabs
+  >toggle pad
 
--- lift, the arp
-  >toggle pad pad:2 bass bass:2 lead arp
-  >route box:x bass:2
-  >route box:y arp
-  >route ramp pad:2
+-- arp
+  >toggle arp
+
+-- open hats
+  >toggle ohat
+
+-- hook, four bars
+  >lead <7.9.[97]6.4 4___..2.> /2 !4
+
+-- answer, two bars
+  >lead <9.7.6.[64]2 0___....> /2 !2
+
+-- kit home
+  >kick 9...9...9...9...
+  >box 4...4...4...4...
+  >hat ..5...5...5...5.
+  >clap ....8.......8...
+  >rim ...3......3..3..
+
+-- kit two-step
+  >kick 9.........9..5..
+  >box 4.........4..2..
+  >hat ..5[33]..5...5[33]..5.
+  >clap ....8.......8.3.
+  >rim ..3..3....3..3..
+
+-- kit glitch
+  >kick 9..[99]..9.9...9...
+  >box 4..[44]..4.4...4...
+  >hat [55]..5[3333]..5..[55].5[33]..
+  >clap ....8...[88]...8%60...
+  >rim .3.3..3.[33]...3.3.
+
+-- kit half
+  >kick 9..........7....
+  >box 4..........2....
+  >hat ..3...5...3...5.
+  >clap ........8.......
+  >rim ......3.......3.
+
+-- bass home
+  >bass <0_.0..7_.0..0.3. 5_.5..9_.5..5.6. 3_.3..7_.3..3.2. 4_.4..8_.4..4.[43]2>
+
+-- bass sub
+  >bass <0___..0_ 5___..5_ 3___..3_ 4___..4_> /2
+
+-- bass bounce
+  >bass <0.0.70.0..0.7.3. 5.5.95.5..5.9.6. 3.3.73.3..3.7.2. 4.4.84.4..4.8.2.>
+
+-- stab home
+  >pad ..[2,4,6,8]...[2,4,6,8]..[2,4,6,8]......
+
+-- stab skip
+  >pad [2,4,6,8].....[2,4,6,8]...[2,4,6,8]..[2,4,6,8]..
+
+-- stab hold
+  >pad [2,4,6,8]_______........
+
+-- stab bright
+  >pad ..[4,6,7,9]...[4,6,7,9]..[4,6,7,9]......
+
+-- arp phase
+  >arp 4.7.9.6.4.2.
+
+-- arp rain
+  >arp 4796%60 4792%50 4796%60 4729%50
+
+-- arp climb
+  >arp <0.2.4.7.9.7.4.2. 5.7.9.7.5.4.2.4. 3.4.6.7.9.7.6.4. 4.6.7.9.[97].6.4.2.>
+
+-- lift, up a tone
+  >scale gmin
   >send view lines 9
 
--- back
-  >toggle pad pad:2 bass bass:2 lead arp
-  >route box:x bass
-  >route box:y lead
-  >route ramp pad
+-- dark, phrygian
+  >scale fphr
+
+-- home key
+  >scale fmin
   >send view lines 3
+
+-- fill
+  >tom ....9..9.9..99.9 !1
+
+-- crash, on the one
+  >crash 7............... !1
+
+-- roll, a bar
+  >snare .....[33]..[33][33]..[3333][5555][7777][9999] !1
+
+-- stutter
+  >snare ....[9999]....[9999]...... !2
 
 -- open the bass
   >cut <2 3 4 5 6 7 8 9> /16 !8
@@ -65,14 +143,17 @@ GRID
 -- close it
   >cut <7 5 4 3> /4 !4
 
--- shine the lead
+-- shine the hook
   >shine <5 6 7 8 9 7> /8 !6
 
--- open the pad
+-- open the stabs
   >glow <4 5 6 7 8 9> /16 !6
 
--- close the pad
+-- close the stabs
   >glow <7 5 4> /8 !3
+
+-- spark the arp
+  >spark <4 6 8 9 7 5> /4 !6
 
 -- lead to ch 7
   >lead = ch 7
@@ -80,45 +161,16 @@ GRID
 -- lead to ch 2
   >lead = ch 2
 
--- drums home
-  >kick 9...9...9...9...
-  >box 4...4...4...4...
-  >hat ..5...5...5...5.
-  >clap ....8.......8...
-
--- drums broken
-  >kick 9..9..9...9..9..
-  >box 4..4..4...4..4..
-  >hat 3.5.3.5[55]3.5.3.5[55]
-  >clap ....8..3....8...
-
--- drums glitch
-  >kick 9...9..[99]..9.9...
-  >box 4...4..[44]..4.4...
-  >hat ..5[33]..5[3333]..5[33]..5[55]
-  >clap ....8...[88]...8%60...
-
--- drums half
-  >kick 9.......9..9....
-  >box 4.......4..4....
-  >hat ..3...5...3...5.
-  >clap ........8.......
-
--- hats rolling
-  >hat 3535753535357535
-
--- hats open
-  >hat ..5...5...5...5.
-
 -- break
-  >toggle kick hat clap box
+  >toggle kick hat clap rim box
   >send view inv 9
   >send view lines 0
 
 -- drop
-  >toggle kick hat clap box lead
+  >toggle kick hat clap rim box
   >send view inv 0
   >send view lines 3
+  >lead <7.9.[97]6.4 4___..2.> /2 !4
 
 -- out
   >clear

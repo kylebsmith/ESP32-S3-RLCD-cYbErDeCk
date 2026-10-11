@@ -569,8 +569,8 @@ static void do_verb(const char *w, const char *arg)
     } else if (strcmp(w, "play") == 0 || strcmp(w, "stop") == 0 ||
                strcmp(w, "panic") == 0 || strcmp(w, "lanes") == 0 ||
                strcmp(w, "split") == 0 || strcmp(w, "jitter") == 0 ||
-               strcmp(w, "sync") == 0) {
-        /* nothing to check */
+               strcmp(w, "sync") == 0 || strcmp(w, "open") == 0) {
+        /* nothing to check: 'open' is the set list moving to a track */
     } else {
         fail("'%s' does not belong in a piece", w, NULL);
         return;

@@ -215,7 +215,7 @@ This is harmless today, because the sequencer only emits `8n 9n Bn F2 F8 F9 FA F
 Consequences, derived from the code:
 
 - **CR vs LF.** A script must send `>cmd\n`. A terminal that sends CRLF inserts a newline and then runs the new empty line, which answers `not a command - start with >` (`ui_text.h:28`).
-- **Ctrl-J cannot be typed over the cable.** Byte 0x0A is Run, but Ctrl-J is "previous document" (`editor.c:834`). `docs/TESTING.md:7-8` names Ctrl-J as a way to walk documents.
+- **Previous document over the cable is Ctrl-K** (0x0B); Ctrl-J is 0x0A, which is Run.
 - Ctrl-H, Ctrl-I and Ctrl-M are also taken, but nothing is bound to them (`editor.c:779-864`).
 - Esc needs `ESC ESC`. At the password prompt, Ctrl-C and Ctrl-G also cancel (`ask.h:59-78`).
 - Home and End exist only on BLE (`ble_kbd.c:175-176`).

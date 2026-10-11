@@ -66,7 +66,7 @@ Consequences that follow from the code (**UNVERIFIED** on hardware):
   - All command output goes there, each command's lines preceded by a rule of 30 dashes (`cmd.c:68-98`), and so do SSH replies.
   - When it reaches 128 KB, further appends are cut off silently; nothing trims it (`buffer.c:253-277`).
 - **Behaviour in the editor.**
-  - Ctrl-L and Ctrl-J skip `+` buffers (`editor.c:948-970`); Ctrl-O toggles into and out of `+out` (`editor.c:803-822`).
+  - Ctrl-L and Ctrl-K skip `+` buffers (`editor.c:948-970`); Ctrl-O toggles into and out of `+out` (`editor.c:803-822`).
   - The status bar is drawn un-inverted in a `+` buffer (`editor.c:357-362`).
   - `>save` in one says `<name> is output, not a document` (`builtins.c:350-358`).
   - `doc_save_all_dirty()` skips `+` buffers (`buffer.c:411`).
@@ -85,7 +85,7 @@ Consequences that follow from the code (**UNVERIFIED** on hardware):
 - A dirty transient buffer is only marked clean (`main.c:976-978`).
 - **Why not while playing** (`main.c:984-998`): a journal write was **measured at 13 000–18 600 µs**, with both cores' caches off and the clock callback in flash. That is the only term above the ~6 ms at which a percussive onset is heard as displaced.
   - Edits made while playing stay in RAM until `>stop`. The stop edge is detected in the main loop; the comment's "`seq_stop()` forces the save" (`main.c:996-997`) is not literally true.
-- **Only the current buffer is autosaved.** Switching documents (Ctrl-L, Ctrl-J, `>open`) saves nothing (`editor.c:948-970`; `builtins.c:319-346`). A buffer left dirty stays in RAM until it is current again, or until `>usb`, `>flash now` or an esptool reset runs `doc_save_all_dirty`. `saved_len` is one variable shared by all buffers (`main.c:723,978,1008`).
+- **Only the current buffer is autosaved.** Switching documents (Ctrl-L, Ctrl-K, `>open`) saves nothing (`editor.c:948-970`; `builtins.c:319-346`). A buffer left dirty stays in RAM until it is current again, or until `>usb`, `>flash now` or an esptool reset runs `doc_save_all_dirty`. `saved_len` is one variable shared by all buffers (`main.c:723,978,1008`).
 
 ### 1.6 SD mirror (`sdmirror.c`; `mirror_path.h`)
 

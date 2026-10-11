@@ -5,7 +5,7 @@ what you should see — if you don't see it, that's the bug, and the step number
 is enough to report it.
 
 Ctrl+Enter runs the line the cursor is on. Ctrl-O comes back from any output
-page. Ctrl-L and Ctrl-J walk between documents.
+page. Ctrl-L and Ctrl-K walk between documents.
 
 ### Driving it from a terminal, and the one trap in it
 

@@ -176,7 +176,7 @@ routes draws in table order, whatever order the lines were typed.
 | `save` | write now |
 | `help` | all of this, on the deck |
 
-`Ctrl-L` / `Ctrl-J` walk documents. `Ctrl-O` returns from output. `Ctrl-G` the guide.
+`Ctrl-L` / `Ctrl-K` walk documents. `Ctrl-O` returns from output. `Ctrl-G` the guide.
 
 ## Playing live — 3
 

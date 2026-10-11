@@ -114,7 +114,7 @@
  * "guide 3": a password is asked for and never typed on a line (ask.h), so the
  * '>wifi <ssid> <pass>' and '>host deck 12345678' that "guide 2" taught are
  * refused - and cut - now. */
-#define GUIDE_MARK "guide 5"
+#define GUIDE_MARK "guide 6"
 
 /* "guide 4", 2026-09-29: the sections are blocks - a heading run is its
  * section run (editor_block.h) - and the guide says what changed: a line run
@@ -128,12 +128,16 @@
  * 3'. "guide 4" exactly as the firmware wrote it is replaced the same way. */
 #define GUIDE4_FNV 0xb6a9751eu
 
+/* "guide 6", 2026-10-11: Ctrl-K is the previous document now - it was Ctrl-J,
+ * which a cable sends as Run - and the line kill it used to be is gone. */
+#define GUIDE5_FNV 0xb368feecu
+
 #define GUIDE_TEXT \
     "GUIDE. ctrl+enter runs a line\n" \
     "and the lines tabbed under it,\n" \
     "so a heading runs its section.\n" \
     "enter makes a line, tab\n" \
-    "indents it. ctrl-l / ctrl-j:\n" \
+    "indents it. ctrl-l / ctrl-k:\n" \
     "next document. ctrl-o: output\n" \
     "and back. ctrl-g: here.\n" \
     "\n" \
@@ -213,7 +217,7 @@
     "  >list\n" \
     "  >help\n" \
     "  midi learn: the midi page.\n" \
-    "guide 5\n" \
+    "guide 6\n" \
     ""
 
 /* THE MIDI PAGE: every controller the deck and its pieces send, one line each.

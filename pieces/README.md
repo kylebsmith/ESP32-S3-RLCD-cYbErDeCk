@@ -1,102 +1,57 @@
-# Pieces
+# The set
 
-An EP of four tracks, each a document on the deck. Open one and run its
-headings top to bottom. Every track ends in silence, so any can follow any.
+Four tracks and a set list, each a document on the deck, about forty minutes. Open
+`set` and run a heading to go to a track.
 
-| document | tempo, key | what it is | the screen |
-|---|---|---|---|
-| `grid` | 124, F minor | Swiss techno. A: Fm9 – A♭maj7/F – D♭maj7 – D♭maj7♯11 – B♭m7 – B♭m6 – C7sus4 – Cm, a bar each; the lift climbs B♭m7 – Cm7 – D♭maj7 – E♭ under **the arp**: F minor pentatonic in fives against the bar, so it lands anew each bar and only repeats after twenty | `plain`, black on paper: a square on the beat stands where the bass is (across) and as high as the lead - the arp, in the lift; the clap outlines it; each chord lights the floor; the lift brings the grid forward, the break turns the page negative |
-| `offset` | 132, A dorian | broken two-step: Am9 – Am7 – D7 – D9 – Em7 – Em7 – Cmaj7 – D6; the turn walks down C – B – A – G, the lead on Lead2 | `riso`: a dot on the kick, at the bass and the lead, its trail slipped right by the snare; the turn pulls the plates apart |
-| `drill` | 165, E phrygian | punk drill'n'bass: power chords E – F – G – F – E – F – A – G on their own synth (channel 9), a pumping bass on Bass3, a riff | `plain`: hats are grain, the kick a block at the bass, the riff bends the rows, the snare flips it; the drop inverts, lead on Lead2 |
-| `orbitals` | 124, D minor | a radar, a planet, a sun over a D pedal. Seven sections, numbered, so the poster prints them; the one key change on the EP is the eclipse | `code` for the night, then `poster` from first light: the planet goes where the arp and the lead go; the eclipse turns the accent blue |
+| | document | tempo, key | what it is | the screen |
+|---|---|---|---|---|
+| 1 | `grid` | 128, F minor | Swiss techno into 2-step: one organ stab over a moving bass, so four chords from one shape — Fm9, D♭maj9♯11, B♭9sus, Cm(♭13) | code, then `plain`: a square on the kick, where the bass is, framed on the clap |
+| 2 | `offset` | 132, A dorian | UK garage: a 2-step, swung hats, an organ stab giving Am9, D9sus, Cmaj7, G6, chopped blips on Lead2 | poster, then `riso`: a dot on the kick at the bass, slipped by the snare |
+| 3 | `drill` | 170, E phrygian | breaks: drill, jungle, shredded and half-time kits, a reese, power chords, a glitch arp | code, then `plain`; the drop goes negative and `sort` |
+| 4 | `orbitals` | 124, D minor | the closer: Dm9 – B♭maj7 – Fmaj7 – C6 under orbiting arps, a melody, an eclipse, a lift | code for the night, `poster` from first light, `latent` in the eclipse |
 
-## How a track plays
+## Playing it
 
-**A heading runs its section.** Put the cursor on `-- lift` and press ctrl+enter:
-every `>` line indented under it runs, top to bottom. The `-- set` block sets the
-whole track up and starts it; after that each heading is a scene.
-
-**A scene lands on the one.** `>toggle`, `>scale` and `>send view <colour>` wait for
-the next bar's first beat while playing, so run a scene any time in the bar
-before and its sound, its key and its picture change together.
-
-**Run a block again and it is a switch.** A kit — `-- drums glitch` — run a second
-time, unchanged, takes its lanes out on the one; once more brings them back. So
-every kit is also a break, and every layer a key.
-
-**Controllers start at home.** Each `-- set` names its controllers and sends them
-their starting value — `>send cut 3` — so a track that ended with the filter wide
-open or the drive high cannot leave the next one there. A sweep is counted
-(`>cut <2 3 4 5 6 7 8 9> /16 !8`): eight bars up, then it ends and its lane is free.
-
-- **One key a track**, harmony moving by progression; ORBITALS' eclipse is the
-  only key change.
-- **Two versions of the harmony.** `-- lift` / `-- back` (and `-- turn` / `-- back`,
-  `-- turn` / `-- home`) swap `pad`, `bass`, `lead` for `pad:2` and so on, and move
-  the picture's routes with them.
-- **Kits are headings**: `-- drums home`, `broken`, `glitch`, `half` in GRID, `skip`,
-  `drift`, `half` in OFFSET, `drill`, `four`, `shred`, `half` in DRILL, `orbit`,
-  `dust`, `pulse` in ORBITALS - each changes every drum, and the kick's picture
-  with it, from the step they are on. `drift` has hats three bars long against an
-  eight-bar harmony: it comes round every twenty-four.
-- **Fills count**: `>tom … !1` waits for the bar, plays once and ends.
-- **Voices move**: `>lead = ch 7` plays the lead on another synth, `= ch 2` back.
-  ORBITALS moves the arp to 8 for the day.
-- **Controllers** are the MIDI page's names - `cut` (Bass1), `shine` (Lead1),
-  `glow` (pad), `spark` (Arp1), `bite` (Bass2), `drive` (Bass3) - learnt once,
-  then every track uses them.
-- **Blocks nest**: a heading indented under another runs with it, and alone.
-- **Tab indents**, two spaces; a line run inside a block is never the second run
-  that removes a lane, so a scene can be run again safely.
+- **`-- set` starts a track** from silence: it names its sounds and controllers,
+  sends each controller its home value, and plays the intro.
+- **A heading is a scene and lands on the one.** Run it any time in the bar before.
+- **Run a scene again and its lanes go out** on the one; again, back. Every kit is
+  also a break.
+- **Versions, by heading.** Each track has kits (`kit home`, `two-step`, `glitch`,
+  `half`; `jungle`, `shred`; `drums dust`, `pulse`…), basses, stabs and arps to
+  switch between while it plays.
+- **Moments end by themselves.** Hooks, chops, riffs and the melody are counted
+  (`!4`): they play their bars and stop, so the lead never loops the whole track.
+  Fills, crashes, rolls and stutters are the same.
+- **Key moves land on the one.** `lift, up a tone`, `dark, phrygian`, `shade`,
+  the eclipse, and ORBITALS' lift, which moves to F major and turns the same notes
+  into Fmaj9 – Dm7 – Am7 – C7/E.
+- **Arps against the bar.** `arp phase` is 12 steps over 16 and comes round every
+  three bars; `arp five` in DRILL every five; `kit drift` has three-bar hats over
+  four-bar chords.
+- **Sweeps are counted too** (`>cut <2 3 4 5 6 7 8 9> /16 !8`), so they end and free
+  their lane. One at a time: each track runs 13 lanes and keeps 3 for moments.
+- **`>stop` is the second line** of every document.
 
 ## What to plug in
 
 | channel | what |
 |---|---|
-| 1 | Bass1: `bass` in `grid` and `orbitals`, and ORBITALS' `roll` |
+| 1 | Bass1: GRID, ORBITALS |
 | 2 | Lead1 |
-| 3 | pad |
-| 4 | Arp1: ORBITALS, and GRID's lift |
-| 5 | Bass2: `bass` in `offset` |
-| 6 | Bass3: `bass` in `drill` |
-| 7 | Lead2: the lead after `>lead = ch 7` |
-| 8 | Arp2: ORBITALS' arp in the day |
+| 3 | stabs and pads |
+| 5 | Bass2: OFFSET |
+| 6 | Bass3: DRILL's reese |
+| 7 | Lead2: OFFSET's chops, DRILL's drop |
 | 9 | DRILL's power chords |
-| 10 | a General MIDI drum kit |
-| 16 | the HDMI screen's colour, and the `midi` page's learn lines |
+| 10 | General MIDI drums: kick, snare, clap, hats, rim, tom, crash, and `perc` — maracas in GRID, conga in OFFSET, cowbell in DRILL, claves in ORBITALS |
+| 11 | the arp |
+| 16 | the HDMI screen's colour |
 
-The deck holds 16 lanes; each track uses at most 16, pictures included.
+Controllers, from the `midi` page: `cut` (Bass1), `shine` (Lead1), `glow` (stabs),
+`bite` (Bass2), `drive` (Bass3). `spark` is the arp's filter on channel 11 here —
+learn it by running any `spark` scene with the DAW in map mode.
 
-**Timing.** Three things were wrong, and all three are fixed, each with a check
-that fails on the old code:
-
-- **Note length.** A note-off ended whatever note of its pitch was sounding, so a
-  held note cut the next one short - ORBITALS lost 573. A note-off now ends only
-  its own note (`seq_offs.h`, `tools/test_offs.c`).
-- **Tempo.** The tick was 5,040 µs where 124 bpm needs 5,040.32, so the deck
-  played 124.008 - 3.5 ms a minute ahead of a DAW at 124, measured, and 14 ms a
-  minute at 165. Every tick is now worked out exactly from its number
-  (`seq_clock.h`, `tools/test_clock.c`, `tools/clock_audit.py`).
-- **Thick steps.** Each message went to USB on its own, and past sixteen in one
-  step the rest were dropped. A step now leaves in one transfer. (The host still
-  stamps a step's notes about 0.09 ms apart; the deck's own count puts every
-  event on its way within 0.5 ms of its tick.)
-
-Sync your DAW to the deck (`>sync on`, and Sync on in the DAW), or the two
-crystals still part by a few parts per million.
-
-## Whose is it
-
-Every line is ours, written for this deck; nothing is copied from a recording. The
-vocabulary is shared — a four-on-the-floor kick, a backbeat, a two-step, the
-i – VI – III – VII of a thousand records, power chords — and the forms are ours.
-`.000.000.000.<000 777>` was my line. Until 2026-09-29 the pieces were
-sketches after named live coders, genre studies, then one long set with a key
-change a section; I found the keys, the dropouts and the screen changes
-arbitrary, and this EP replaced them.
-
-**Checked, every line:** `tools/test_pieces.c` runs each track through the deck's
-own compiler, names, key and pictures, alone, twice over, and as the EP in order.
-`-s` prints the notes each section plays: every chord, bass note and lead note
-was read against the others that way. Nothing here has been heard by the author;
-it has been read.
+**Checked, every line:** `tools/test_pieces.c` runs each document through the deck's
+own compiler, alone, twice over and in set order; `-s` prints every note a scene
+plays, and each chord, bass and lead was read against the others that way.

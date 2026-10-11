@@ -832,7 +832,11 @@ static void handle_ctrl(char c)
      * '+' buffers are skipped. Machine output is not somewhere you navigate
      * TO; it is somewhere a command puts you, and Ctrl-O brings you back. */
     case 'l': cycle_buffer(+1); break;
-    case 'j': cycle_buffer(-1); break;
+    /* Ctrl-K, not Ctrl-J, since 2026-10-11: a cable sends Ctrl-J as LF, which
+     * is Run (serialkbd_map.h), so the previous document could not be reached
+     * down one. Ctrl-K was the line kill, which I never used and could lose a
+     * line to. Ctrl-J is left unbound. */
+    case 'k': cycle_buffer(-1); break;
 
     case 'z': doc_undo(); break;
     case 'y': doc_redo(); break;
@@ -842,16 +846,6 @@ static void handle_ctrl(char c)
     case 'f': doc_right(); break;
     case 'p': move_vertical(-1); break;
     case 'n': move_vertical(+1); break;
-    case 'k': {                      /* kill to end of line */
-        int s, e;
-        line_bounds(&s, &e);
-        const size_t cur = doc_cursor();
-        doc_move_to((size_t)e);
-        while (doc_cursor() > cur) {
-            doc_backspace();
-        }
-        break;
-    }
     case 'w': {                      /* delete the word before the cursor */
         while (doc_cursor() > 0 && !is_word_char(doc_at(doc_cursor() - 1))) {
             doc_backspace();

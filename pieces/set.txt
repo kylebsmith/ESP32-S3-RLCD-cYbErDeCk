@@ -1,0 +1,23 @@
+SET
+>stop
+>panic
+
+four tracks, about forty
+minutes. run a heading to go
+to its track.
+
+-- 1 grid
+  >open grid
+-- 2 offset
+  >open offset
+-- 3 drill
+  >open drill
+-- 4 orbitals
+  >open orbitals
+
+in each, -- set starts it.
+headings are scenes and land
+on the one. a scene run again
+takes its lanes out; again,
+back. moments (!n) play and
+end. -- out ends on a card.
