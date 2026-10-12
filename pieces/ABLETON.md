@@ -10,7 +10,7 @@ one channel into several voices.
 - **Settings → Link, Tempo & MIDI**, the `cyberdeck` input: **Track** on, **Remote**
   on (for mapping its controllers), **Sync** on.
 - On the deck, `>sync on`. Ableton's tempo then follows the deck through the set —
-  128, 132, 150, 145, 140, 124 — with every delay and LFO in time. Press **EXT**.
+  128, 132, 150, 160, 140, 124 — with every delay and LFO in time. Press **EXT**.
 - Nothing has to go back to the deck.
 
 ## 2. One track an instrument type, one chain a track
@@ -30,16 +30,15 @@ and the 808 into HEAT's 808; starting ORBITALS turns the keys into its glass pad
 | ch | track | 1 GRID | 2 OFFSET | 3 WEIGHT | 4 HEAT | 5 PRESSURE | 6 ORBITALS |
 |---|---|---|---|---|---|---|---|
 | 1 | Bass1 | short techno bass | | | | | warm sub, long |
-| 2 | Lead1 | organ lead | pluck | sung vowel, glide | | | soft sine |
-| 3 | Keys | short organ stab | garage organ | e-piano + supersaw | | | slow glass pad |
+| 2 | Lead1 | organ lead | pluck | sung vowel, glide | bright saw, long glide | | soft sine |
+| 3 | Keys | short organ stab | garage organ | e-piano + supersaw | crushed supersaw | | slow glass pad |
 | 4 | Stab | | | | | dark saw stab | |
 | 5 | Bass2 | | reese, sub | | | | |
-| 6 | 808 | | | clean, sliding | blown out | | |
-| 8 | Brass | | | | orchestra hit | | |
+| 6 | 808 | | | clean, sliding | rubber, long glide, crushed | | |
 | 9 | Rumble | | | | | rumble | |
-| 10 | Drums | tight techno kit | garage kit | plugg kit | Florida 808 kit | industrial kit | soft kit |
+| 10 | Drums | tight techno kit | garage kit | plugg kit | crushed hyperpop kit | industrial kit | soft kit |
 | 11 | Bell | | | FM bell | | | glass FM arp |
-| 12 | Samples | C1 | C♯1, D1 | D♯1 | E1, F1, F♯1 | G1, G♯1 | A1, A♯1 |
+| 12 | Samples | C1 | C♯1, D1 | D♯1 | E1, F1 | G1, G♯1 | A1, A♯1 |
 | 13 | Acid | | | | | 303 | |
 
 **Setting up a switch.** In the rack, show the **Chain** select editor and give
@@ -119,9 +118,8 @@ it again cuts it and starts it over: `9.9.9...` stutters the start of a phrase.
 | C♯1 (37) | OFFSET (A dorian) | "pull up" | as it strips down |
 | D1 (38) | OFFSET | "very demure, very mindful" | on the drop |
 | D♯1 (39) | WEIGHT (F♯ minor) | the Roblox "oof" | the one of each drop |
-| E1 (40) | HEAT (G locrian) | "shadow wizard money gang" | the call, every other bar; stuttered, and drifting out of step |
-| F1 (41) | HEAT | "we love casting spells" | the answer, the other bar; alone in the dead stop |
-| F♯1 (42) | HEAT | an MLG air horn | the Miami switch, the last drop |
+| E1 (40) | HEAT (E major) | "shadow wizard money gang" | once, in the chaos |
+| F1 (41) | HEAT | "we love casting spells" | the moment the first one ends |
 | G1 (43) | PRESSURE (E phrygian) | "we live in a society", pitched down | alone in the bar of nothing |
 | G♯1 (44) | PRESSURE | "bass boosted", yelled | on the one of the last drop |
 | A1 (45) | ORBITALS (D minor) | Carl Sagan: "that's here. that's home. that's us." | through the eclipse |
@@ -134,16 +132,15 @@ These are other people's recordings: fine on a stage, cleared before a release.
 
 - **808 (ch 6).** Mono, legato, glide about 60 ms. WEIGHT and HEAT write their
   slides: a tie that runs into the next note overlaps it and glides, a rest before
-  a note does not (the gate, 250 ms, is longer than an eighth). `drive` on the
-  distortion; HEAT runs it at 6 and 9.
+  a note does not (the gate, 250 ms, is longer than an eighth). HEAT's never
+  stops: give its chain a long glide, 100 ms or more. `drive` on the distortion;
+  HEAT runs it from 5 to 9.
 - **Keys (ch 3).** Four chains on the patch: GRID's short organ stab, OFFSET's
   garage organ, WEIGHT's electric piano with a supersaw under it, ORBITALS' slow
   glass pad. `glow` is each one's filter. The pump compressor after the rack.
 - **Lead1 (ch 2).** A sung vowel in Simpler, Classic mode, mono with glide, so a
   hook sounds like a voice; a quiet sine an octave up as a second chain, in key
   zones as above, for WEIGHT's octave.
-- **Brass (ch 8).** HEAT's hit is G, D♭, G — a power chord with a tritone where the
-  fifth should be. An orchestra hit or a brass stab, loud, short.
 - **Stab (ch 4).** PRESSURE's stab: E minor with a flat ninth on top, played every
   three sixteenths against the four, so it comes round every three bars. A short
   saw chord into a long dark reverb.

@@ -166,9 +166,9 @@ def walk(p, d):
 
 # ------------------------------------------------------------------ 3
 
-BAY = (('1', 'bass1', (1, 6)), ('2', 'lead1', (1, 3, 6)), ('3', 'keys', (1, 2, 3, 6)),
+BAY = (('1', 'bass1', (1, 6)), ('2', 'lead1', (1, 2, 3, 4, 6)), ('3', 'keys', (1, 2, 3, 4, 6)),
        ('4', 'stab', (5,)), ('5', 'bass2', (2,)), ('6', '808', (3, 4)),
-       ('8', 'brass', (4,)), ('9', 'rumble', (5,)),
+       ('9', 'rumble', (5,)),
        ('10', 'drums', (1, 2, 3, 4, 5, 6)), ('11', 'bell', (3, 6)),
        ('12', 'samples', (1, 2, 3, 4, 5, 6)), ('13', 'acid', (5,)))
 
@@ -193,7 +193,7 @@ def sounds(p, d):
     y += 30
     pads = (('c1', 'one two three four'), ('c#1', 'pull up'), ('d1', 'very demure, very mindful'),
             ('d#1', 'oof'), ('e1', 'shadow wizard money gang'), ('f1', 'we love casting spells'),
-            ('f#1', 'an air horn'), ('g1', 'we live in a society'), ('g#1', 'bass boosted'),
+            ('g1', 'we live in a society'), ('g#1', 'bass boosted'),
             ('a1', "that's here. that's home."), ('a#1', 'the xp shutdown'))
     for i, (pad, w_) in enumerate(pads):
         p.text(M, y + i * (S2 + 8), pad, SMALL, 2, RED)
@@ -282,19 +282,37 @@ def weight_score(p, d):
 
 def heat_read(p, d):
     y = opener(p, 'heat')
-    # the call, a bar, and its answer, the next: the internet's own voice over
-    # one 808. The call's start stutters, 9.9.9 - sha, sha, shadow.
-    p.text(M, y, 'sha sha', SMALL, 3, RED)
-    y += 50
-    p.text(M, y, 'shadow wizard', BIG, 5)
-    p.text(M, y + 130, 'money gang', BIG, 5)
-    p.box(M + 10 * 60 + 40, y + 130 + 20, 240, 80, RED)
-    p.text(M + 300, y + 330, 'we love', BIG, 5, RED)
-    p.text(M + 300, y + 460, 'casting spells', BIG, 5, RED)
-    y += 460 + 120 + 40
-    p.text(M, y, '>gang <9.9.9........... ................>', SMALL, 2)
-    p.text(M, y + S2 + 8, '>spells <................ 9...............>', SMALL, 2, RED)
-    low(p, ('145 bpm, g locrian.', 'one 808 on g that slides up', 'the tritone, a brass hit on', 'the tresillo. then miami', 'bass and an air horn.'), keys_of('heat'))
+    # the royal road, and the one note all four chords keep
+    for k, ch in enumerate(('amaj7#11', 'b9', 'g#m7', 'c#m9')):
+        p.text(M + k * 320, y, ch, BIG, 2)
+        p.glyph(M + k * 320, y + 60, 136, BIG, 2, RED)
+    p.text(M, y + 60 + 60, 'd#, held through all four', SMALL, 2, RED)
+    y += 60 + 60 + S2 + 110
+    # the 808 in the drop: >bass <3__7_3_7 ...> - every note tied into the
+    # next, so it never lands: a fifth up and back, four roots, all glide
+    bars = ((33, 40), (35, 42), (32, 39), (37, 44))
+    pts = []
+    for b, (lo, hi) in enumerate(bars):
+        for e, n in ((0, lo), (3, hi), (5, lo), (7, hi)):
+            pts.append((M + (b * 8 + e) * 40, n))
+    pts.append((M + 32 * 40, 33))
+    base = y + 15 * 22
+    for (x0, n0), (x1, n1) in zip(pts, pts[1:]):
+        steps = max(1, (x1 - x0) // 8, abs(n1 - n0) * 2)
+        for i in range(steps):
+            fx = x0 + (x1 - x0) * i // steps
+            fy = base - (n0 + (n1 - n0) * i / steps - 30) * 22
+            p.box(fx, int(fy), 14, 14, RED)
+    for b, name in enumerate(('a', 'b', 'g#', 'c#')):
+        p.text(M + b * 320, base + 40, name, BIG, 3)
+    y = base + 40 + 72 + 40
+    p.text(M, y, '>bass <3__7_3_7 4__8_4_8 2__6_2_6 5__9_5_9> /2', SMALL, 2)
+    y += S2 + 80
+    p.text(M, y, 'shadow wizard money gang', BIG, 2)
+    p.text(M, y + 52, 'we love casting spells', BIG, 2, RED)
+    p.text(M, y + 52 + 56, 'once, in the chaos. the second starts as the first ends:', SMALL, 2)
+    p.text(M, y + 52 + 56 + S2 + 6, '>route spells gang:end', SMALL, 2, RED)
+    low(p, ('160 bpm, e major.', 'an 808 that never lands,', 'a bright hook that glides,', 'four on the floor, crushed.'), keys_of('heat'))
 
 
 def heat_score(p, d):
@@ -353,7 +371,7 @@ def orbitals_score(p, d):
 def back(p, d):
     y = title(p, 'help', '39 commands - the one line here it knows')
     for n, (name, bpm, key) in enumerate((('grid', 128, 'f minor'), ('offset', 132, 'a dorian'),
-                                          ('weight', 150, 'f# minor'), ('heat', 145, 'g locrian'),
+                                          ('weight', 150, 'f# minor'), ('heat', 160, 'e major'),
                                           ('pressure', 140, 'e phrygian'), ('orbitals', 124, 'd minor')), 1):
         x = p.text(M, y, str(n), BIG, 2, RED)
         p.text(x + 24, y, '%-9s %d  %s' % (name, bpm, key), BIG, 2)

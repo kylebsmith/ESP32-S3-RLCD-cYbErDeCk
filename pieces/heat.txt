@@ -1,83 +1,93 @@
 HEAT
 >stop
 
-south florida trap, g locrian,
-145. ignorant on purpose: one
-808, a brass hit on the
-tritone, a call and its
-answer, and a switch to
-miami bass nobody asked for.
+hyperpop, e major, 160. the
+royal road - amaj7#11, b9,
+g#m7, c#m9 - with one d# held
+through all four, an 808 that
+never stops gliding, a hook
+that glides too. crushed.
+one meme, once, in the chaos.
 
 -- set
-  >keys kick clap hat perc bass hit gang spells
+  >keys kick clap hat ohat perc bass pad lead
   >patch 4
   >send view code
-  >bpm 145
-  >scale gloc
+  >bpm 160
+  >scale emaj
   >swing 50
-  >perc = note 56
+  >perc = note 37
   >bass = voice 1 ch 6 gate 250
-  >hit = voice 3 ch 8 gate 120
+  >pad = voice 3 ch 3 gate 1500
+  >lead = voice 5 ch 2 gate 120
   >gang = note 40 ch 12 gate 2000
   >spells = note 41 ch 12 gate 2000
-  >horn = note 42 ch 12 gate 1000
   >drive = cc 20 ch 6
-  >send drive 6
-  >gang <9............... ................>
+  >pump = cc 21 ch 3
+  >glow = cc 74 ch 3
+  >shine = cc 74 ch 2
+  >send drive 5
+  >send pump 0
+  >send glow 5
+  >send shine 6
+  >pad <[2,5,6,7] [3,4,6,8] [2,4,6,8] [4,6,7,9]> /16
   >play
 
--- 1 the 808
-  >bass <0_____0_ 0_____0_ 0_____0_ 0__4____> /2
-  >kick 9...........9...
-  >spells <................ 9...............>
-  >box 4...........4...
-  >route box:x bass
+-- 1 glide
+  >bass <3_______ 4_______ 2_______ 5_____7_> /2
   >send view plain
 
--- 2 trap
-  >clap ........9.......
-  >hat 9.9.9.9.9.9.9.9.
-  >hit <[0,4,7]..[0,4,7]..[0,4,7]......... ................>
+-- 2 the hook
+  >lead <457_459_ 458_456_ 246_248_ 457.9754> /2
+
+-- 3 bounce
+  >kick 9......9.9......
+  >clap ........9......5
+  >hat 7.5.7.557.5.7.55
+  >perc ...5......5..5..
+  >box 4......4.4......
+  >route box:x bass
   >route flip clap
 
--- 3 casting
-  >gang <9.9.9........... ................>
+-- 4 air
+  >mute kick clap hat perc bass
 
--- 4 out of step
-  >mute spells
-  >gang 9...........
-
--- 5 nothing
-  >mute kick clap hat bass hit gang
-  >spells 9...............
-
--- 6 miami
+-- 5 hype
   >kick 9...9...9...9...
   >clap ....9.......9...
   >hat 7575757575757575
-  >perc ..9...9...9...9.
-  >bass <0..0..0. 0..0..0. 0..0..0. 0..0..4.> /2
-  >hit <[0,4,7]..[0,4,7]..[0,4,7]......... ................>
-  >gang <9............... ................>
-  >spells <................ 9...............>
-  >horn <9............... ................ ................ ................>
-  >send view riso
-
--- 7 heat
-  >mute perc
-  >kick 9...........9...
-  >clap ........9.......
-  >hat 9.9.9.9.9.9.9.9.
-  >bass <0_____0_ 0_____0_ 0_____0_ 0__4____> /2
-  >gang <9.9.9........... ................>
-  >horn <9............... ................>
-  >send drive 9
+  >ohat ..7...7...7...7.
+  >perc .9.....9.9.....9
+  >bass <3__7_3_7 4__8_4_8 2__6_2_6 5__9_5_9> /2
+  >pump 9 /16
+  >crash 9............... !1
+  >send drive 8
   >send view sort
 
+-- 6 chaos
+  >kick 9.9.9.9.9.9.9.9.
+  >hat 9999999999999999
+  >bass <3_7_3_7_3_7_3_7_ 4_8_4_8_4_8_4_8_ 2_6_2_6_2_6_2_6_ 5_9_5_9_5_9_5_9_>
+  >lead <457_459_ 458_456_ 246_248_ 457.9754>
+  >gang 9............... !1
+  >spells 9............... !1
+  >route spells gang:end
+  >send drive 9
+  >send view inv 9
+
+-- 7 hype again
+  >kick 9...9...9...9...
+  >hat 7575757575757575
+  >bass <3__7_3_7 4__8_4_8 2__6_2_6 5__9_5_9> /2
+  >lead <457_459_ 458_456_ 246_248_ 457.9754> /2
+  >crash 9............... !1
+  >send drive 8
+  >send view inv 0
+
 -- 8 last
-  >mute kick clap hat hit spells horn
-  >gang <9............... ................>
-  >send drive 6
+  >mute kick clap hat ohat perc bass
+  >pump 0 /16
+  >send drive 5
   >send view plain
 
 -- out
