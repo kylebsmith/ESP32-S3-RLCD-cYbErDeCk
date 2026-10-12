@@ -2,13 +2,13 @@ PRESSURE
 >stop
 
 dark techno, e phrygian, 140.
-a kick and its rumble, one
-word, a stab in threes over
-the four, acid, then the kick
-itself thrown off the grid.
+a kick and its rumble, a stab
+in threes over the four,
+acid, the kick thrown off the
+grid, and a society.
 
 -- set
-  >keys kick clap hat ohat rumble hit acid vox
+  >keys kick clap hat ohat rumble hit acid
   >patch 5
   >send view code
   >bpm 140
@@ -17,7 +17,8 @@ itself thrown off the grid.
   >rumble = voice 1 ch 9 gate 70
   >hit = voice 3 ch 4 gate 90
   >acid = voice 2 ch 13 gate 120
-  >vox = note 40 ch 12 gate 500
+  >society = note 43 ch 12 gate 2500
+  >boosted = note 44 ch 12 gate 1200
   >cut = cc 74 ch 9
   >bite = cc 74 ch 13
   >send cut 4
@@ -31,7 +32,6 @@ itself thrown off the grid.
   >send view scan
 
 -- 2 pressure
-  >vox <..............1. ................>
   >hat 7373737373737373
   >clap ....9.......9...
 
@@ -47,23 +47,22 @@ itself thrown off the grid.
 -- 5 off the grid
   >mute rumble clap ohat
   >kick 9..9..9..9..9...
-  >vox <4............... ................>
 
 -- 6 nothing
   >mute kick hat hit acid
-  >vox 1...............
+  >society 9............... !1
   >send view inv 9
 
--- 7 harder
+-- 7 boosted
   >mute
   >kick 9...9...9...9...
-  >vox 3...3...3...3...
+  >boosted 9............... !1
   >send cut 7
   >send view inv 0
   >send view sort
 
 -- 8 last
-  >mute kick clap hat ohat rumble vox
+  >mute kick clap hat ohat rumble
   >send cut 4
   >send bite 2
 

@@ -466,10 +466,13 @@ typedef struct {
     uint16_t gate;          /* ms                                           */
 } alias_t;
 
-/* THIRTY-TWO NAMES. Sixteen come in the boot document, which leaves room for a
- * player's own twice over; a definition past that is refused with the number,
+/* SIXTY-FOUR NAMES. Sixteen come in the boot document. It was thirty-two, and
+ * a set is played in one sitting and names are never forgotten between its
+ * tracks: six tracks, each naming its own samples, came to thirty-eight, and
+ * PRESSURE's names were refused halfway through the set (2026-10-11). A name
+ * is fourteen bytes. A definition past the last is refused with the number,
  * not dropped. */
-#define ALIAS_MAX 32
+#define ALIAS_MAX 64
 static alias_t s_alias[ALIAS_MAX];
 
 _Static_assert(LANE_NAME_MAX <= SEQ_NAME_MAX, "a lane's address fits its name");

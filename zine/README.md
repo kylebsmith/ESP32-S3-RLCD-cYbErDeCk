@@ -13,12 +13,12 @@ the deck holds it — `pieces/<track>.txt`, read when the zine is built — in t
 deck's 60-column face, headings red because a heading is what you press. **The
 left page reads it out**: the tempo, the key, the chords, what the voice says,
 and the one figure that makes the track, each drawn from the lines beside it —
-GRID's voice counting its four beats, OFFSET's swing and its rewind set
-backwards, WEIGHT's chords stacked as plates over its 808, HEAT's one word three
-times on the tresillo over the brass hit, PRESSURE's "harder" on a dark page with
-its threes against the fours, ORBITALS' orbit as the deck's engine draws it.
-Before the spreads, how to walk a score and the sounds: the patch, one chain a
-track, and the voice as a bank. Same method as zine #0 below: the deck's faces,
+GRID's computer voice counting its four beats, OFFSET's swing and its "pull up"
+set backwards, WEIGHT's chords stacked as plates over its 808, HEAT's "shadow
+wizard money gang" and its answer, PRESSURE's "we live in a society" on a dark
+page with its threes against the fours, ORBITALS' orbit as the deck's engine
+draws it under Carl Sagan. Before the spreads, how to walk a score and the
+sounds: the patch, one chain a track, and the samples, one a pad. Same method as zine #0 below: the deck's faces,
 its tiles, its picture engine, two inks of one bit each, page numbers as steps.
 
 Print and fold as zine #0. Build: as below, then

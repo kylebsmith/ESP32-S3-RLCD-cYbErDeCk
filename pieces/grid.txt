@@ -25,13 +25,13 @@ from one hand. walk down.
   >bass = voice 1 ch 1 gate 120
   >pad = voice 3 ch 3 gate 140
   >lead = voice 4 ch 2 gate 170
-  >vox = note 36 ch 12 gate 300
+  >count = note 36 ch 12 gate 1900
   >kick 9...9...9...9...
   >perc 3%70.2.3%70.2.3%70.2.3%70.23
   >play
 
 -- 1 the grid
-  >vox 1...2...3...4... !1
+  >count 9............... !1
   >hat ..5...5...5...5.
   >clap ....8.......8...
   >box 4...4...4...4...
@@ -62,13 +62,12 @@ from one hand. walk down.
 -- 7 hold
   >mute kick hat ohat clap rim perc
   >pad [2,4,6,8]_______........
-  >vox 5............... !1
   >bass <0___..0_ 5___..5_ 3___..3_ 4___..4_> /2
   >send view inv 9
   >send view lines 0
 
 -- 8 hard
-  >vox 1...2...3...4... !1
+  >count 9............... !1
   >kick 9..7..9...9..7..
   >hat 7575757575757575
   >clap ....9.......9..5

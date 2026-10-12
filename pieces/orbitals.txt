@@ -26,7 +26,8 @@ an eclipse, a lift.
   >pad = voice 3 ch 3 gate 1900
   >arp = voice 5 ch 11 gate 90
   >lead = voice 4 ch 2 gate 400
-  >vox = note 41 ch 12 gate 1800
+  >sagan = note 45 ch 12 gate 4000
+  >bye = note 46 ch 12 gate 3000
   >pad <[0,2,6,8] [4,5,7,9] [2,4,6,8] [3,4,6,8]> /16
   >arp 9.7.4.6.7.3.
   >echo 8
@@ -58,7 +59,7 @@ an eclipse, a lift.
   >kick 9.......9.......
   >clap ........7.......
   >lead 7__98__67__4____ /4
-  >vox 1............... !4
+  >sagan 9............... !1
   >send view glint 6
   >send view latent
 
@@ -87,6 +88,10 @@ an eclipse, a lift.
   >mute kick clap hat ohat rim perc bass lead
   >arp 9.7.4.6.7.3.
   >glow <6 5 4 3 2> /8 !5
+
+-- XI shut down
+  >mute arp
+  >bye 9............... !1
 
 -- out
   >clear

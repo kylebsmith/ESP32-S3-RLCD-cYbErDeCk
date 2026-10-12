@@ -3,13 +3,13 @@ HEAT
 
 south florida trap, g locrian,
 145. ignorant on purpose: one
-808, one word, a brass hit on
-the tritone, and a switch to
+808, a brass hit on the
+tritone, a call and its
+answer, and a switch to
 miami bass nobody asked for.
-the vox digit picks the word.
 
 -- set
-  >keys kick clap hat perc bass hit vox
+  >keys kick clap hat perc bass hit gang spells
   >patch 4
   >send view code
   >bpm 145
@@ -18,15 +18,18 @@ the vox digit picks the word.
   >perc = note 56
   >bass = voice 1 ch 6 gate 250
   >hit = voice 3 ch 8 gate 120
-  >vox = note 39 ch 12 gate 400
+  >gang = note 40 ch 12 gate 2000
+  >spells = note 41 ch 12 gate 2000
+  >horn = note 42 ch 12 gate 1000
   >drive = cc 20 ch 6
   >send drive 6
-  >vox 1..1..1.........
+  >gang <9............... ................>
   >play
 
 -- 1 the 808
   >bass <0_____0_ 0_____0_ 0_____0_ 0__4____> /2
   >kick 9...........9...
+  >spells <................ 9...............>
   >box 4...........4...
   >route box:x bass
   >send view plain
@@ -37,15 +40,16 @@ the vox digit picks the word.
   >hit <[0,4,7]..[0,4,7]..[0,4,7]......... ................>
   >route flip clap
 
--- 3 ad-libs
-  >vox 1..1..1.2...4...
+-- 3 casting
+  >gang <9.9.9........... ................>
 
 -- 4 out of step
-  >vox 1..1..1.2...
+  >mute spells
+  >gang 9...........
 
 -- 5 nothing
-  >mute kick clap hat bass hit
-  >vox 0...............
+  >mute kick clap hat bass hit gang
+  >spells 9...............
 
 -- 6 miami
   >kick 9...9...9...9...
@@ -54,7 +58,9 @@ the vox digit picks the word.
   >perc ..9...9...9...9.
   >bass <0..0..0. 0..0..0. 0..0..0. 0..0..4.> /2
   >hit <[0,4,7]..[0,4,7]..[0,4,7]......... ................>
-  >vox <9...5...5...5... 5...5...5.5.5.5. 5...5...5...5... 6...6...6.6.6.6.>
+  >gang <9............... ................>
+  >spells <................ 9...............>
+  >horn <9............... ................ ................ ................>
   >send view riso
 
 -- 7 heat
@@ -63,13 +69,14 @@ the vox digit picks the word.
   >clap ........9.......
   >hat 9.9.9.9.9.9.9.9.
   >bass <0_____0_ 0_____0_ 0_____0_ 0__4____> /2
-  >vox <9..1..1.2...4... 1..1..1.2...4...>
+  >gang <9.9.9........... ................>
+  >horn <9............... ................>
   >send drive 9
   >send view sort
 
 -- 8 last
-  >mute kick clap hat hit
-  >vox 1..1..1.........
+  >mute kick clap hat hit spells horn
+  >gang <9............... ................>
   >send drive 6
   >send view plain
 

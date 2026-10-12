@@ -219,9 +219,9 @@ and a flick sends up to 8, and the full range is under one turn when you want it
 127 careful detents when you do not.
 
 **The document still defines the names** — a packet creates nothing, as with OSC
-. `[OPEN]` **Two nodes are twelve names, and that is most of
-the room:** the deck holds 32 names and the boot document uses 16; it holds 16 inputs.
-A third node will move one of those limits.
+. `[OPEN]` **Two nodes are twelve names and twelve inputs:** the deck
+holds 64 names, of which the boot document uses 16, and 16 inputs. A third node
+will move the inputs limit.
 
 ## The first two nodes
 

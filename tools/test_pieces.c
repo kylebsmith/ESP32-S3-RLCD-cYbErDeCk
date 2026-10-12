@@ -38,7 +38,7 @@ const seq_lane_t *seq_lanes(int *count)
 }
 
 #define MAX_VERBS  64
-#define ALIASES    32        /* builtins.c ALIAS_MAX */
+#define ALIASES    64        /* builtins.c ALIAS_MAX */
 #define LINE_MAX_RUN 127     /* c_run's line buffer, less its terminator */
 #define WIDE       30        /* the chunky face's columns */
 
@@ -391,7 +391,7 @@ static void do_define(const char *word, size_t n, const char *arg)
         if (s_alias[i].name[0] == '\0') { a = &s_alias[i]; }
     }
     if (a == NULL) {
-        fail("%s: 32 names is all there is", ln.base, NULL);
+        fail("%s: 64 names is all there is", ln.base, NULL);
         return;
     }
     snprintf(a->name, sizeof a->name, "%s", ln.base);

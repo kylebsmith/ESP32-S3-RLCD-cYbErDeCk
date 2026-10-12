@@ -4,8 +4,8 @@ OFFSET
 uk garage, a dorian, 132.
 an organ stab moves in the
 bar over the bass: Am9,
-D9sus, Cmaj7, G6. the chops
-are a voice, cut up.
+D9sus, Cmaj7, G6, and a
+plucked hook over it.
 
 -- set
   >keys kick snare hat ohat perc bass pad lead
@@ -17,15 +17,16 @@ are a voice, cut up.
   >swing 62
   >glow = cc 74 ch 3
   >bite = cc 74 ch 5
-  >shine = cc 74 ch 7
+  >shine = cc 74 ch 2
   >send glow 4
   >send bite 1
   >send shine 5
   >perc = note 64
   >bass = voice 1 ch 5 gate 200
   >pad = voice 3 ch 3 gate 150
-  >lead = voice 4 ch 7 gate 60
-  >vox = note 37 ch 12 gate 600
+  >lead = voice 4 ch 2 gate 60
+  >pullup = note 37 ch 12 gate 1500
+  >demure = note 38 ch 12 gate 2500
   >pad ..[2,4,7,8]...[2,4,6,9].[2,4,6,8].....[2,4,6,8].
   >play
 
@@ -39,14 +40,12 @@ are a voice, cut up.
   >snare ....9.......9..3
   >rim ...4..4....4.4%60..
   >disc 5......4..5.....
-  >move r
-  >route move snare
 
 -- 3 the bass
   >bass <0_..0.0...7_0... 3_..3.3...7_3... 2_..2.2...6_2... 6_..6.6...[65]4....>
   >route disc:x bass
 
--- 4 chops
+-- 4 the hook
   >lead <..7.7.9.[97]6....4. ..7.7.9.[97]4..2...>
 
 -- 5 the answer
@@ -57,14 +56,14 @@ are a voice, cut up.
 -- 6 strip
   >mute kick snare rim perc bass ohat
   >pad [2,4,6,9]..[2,4,6,7]..[2,4,6,8]......[2,4,6,8]..
-  >vox 9............... !1
+  >pullup 9............... !1
   >send view inv 9
 
 -- 7 drop
   >mute
   >lead <..7.7.9.[97]6....4. ..7.7.9.[97]4..2...>
   >crash 9............... !1
-  >vox 5............... !1
+  >demure 9............... !1
   >send bite 1
   >send view inv 0
 

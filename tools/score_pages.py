@@ -168,9 +168,9 @@ def walk(p, d):
 
 BAY = (('1', 'bass1', (1, 6)), ('2', 'lead1', (1, 3, 6)), ('3', 'keys', (1, 2, 3, 6)),
        ('4', 'stab', (5,)), ('5', 'bass2', (2,)), ('6', '808', (3, 4)),
-       ('7', 'chops', (2,)), ('8', 'brass', (4,)), ('9', 'rumble', (5,)),
+       ('8', 'brass', (4,)), ('9', 'rumble', (5,)),
        ('10', 'drums', (1, 2, 3, 4, 5, 6)), ('11', 'bell', (3, 6)),
-       ('12', 'vox', (1, 2, 3, 4, 5, 6)), ('13', 'acid', (5,)))
+       ('12', 'samples', (1, 2, 3, 4, 5, 6)), ('13', 'acid', (5,)))
 
 
 def sounds(p, d):
@@ -185,19 +185,19 @@ def sounds(p, d):
         p.text(M, y, '%2s %s' % (ch, name), SMALL, 2)
         for c in range(6):
             on = (c + 1) in used
-            p.glyph(x0 + c * 72, y - 12, 136 if on else 137, BIG, 2, RED if (on and name == 'vox') else INK)
+            p.glyph(x0 + c * 72, y - 12, 136 if on else 137, BIG, 2, RED if (on and name == 'samples') else INK)
         y += 52
     p.text(M, y + 4, '1 grid  2 offset  3 weight  4 heat  5 pressure  6 orbitals', SMALL, 2, RED)
     y += 80
-    y = para(p, y, 'a voice is a bank: the note\npicks the track, the digit\npicks the word.')
+    y = para(p, y, 'a sample is a note: drop it\non its pad, channel 12.')
     y += 30
-    words = ('huh', 'HEAT', 'uh', 'yeah', 'what', 'go', "let's go", 'ayy', 'skrrt', 'air horn')
-    for i, w_ in enumerate(words):
-        col, row = divmod(i, 5)
-        x = M + col * 360
-        p.text(x, y + row * (S2 + 10), str(i), SMALL, 2, RED)
-        p.text(x + 36, y + row * (S2 + 10), w_, SMALL, 2)
-    p.text(M, y + 5 * (S2 + 10) + 10, ">vox 1..1..1.2...4...   heat's bank, d#1", SMALL, 2)
+    pads = (('c1', 'one two three four'), ('c#1', 'pull up'), ('d1', 'very demure, very mindful'),
+            ('d#1', 'oof'), ('e1', 'shadow wizard money gang'), ('f1', 'we love casting spells'),
+            ('f#1', 'an air horn'), ('g1', 'we live in a society'), ('g#1', 'bass boosted'),
+            ('a1', "that's here. that's home."), ('a#1', 'the xp shutdown'))
+    for i, (pad, w_) in enumerate(pads):
+        p.text(M, y + i * (S2 + 8), pad, SMALL, 2, RED)
+        p.text(M + 60, y + i * (S2 + 8), w_, SMALL, 2)
 
 
 # ------------------------------------------------------------------ 4, 5: GRID
@@ -210,7 +210,7 @@ def grid_read(p, d):
         p.glyph(M + s * 72, y, 136 if on else 137, BIG, 6, INK)
     for k, w_ in enumerate(('one', 'two', 'three', 'four')):
         p.text(M + k * 4 * 72, y + 144 + 20, w_, BIG, 3, RED)
-    p.text(M, y + 144 + 20 + 72 + 16, '>vox 1...2...3...4... !1', SMALL, 2)
+    p.text(M, y + 144 + 20 + 72 + 16, '>count 9............... !1   a computer voice, once', SMALL, 2)
     y += 144 + 20 + 72 + 16 + S2 + 110
     # one hand, four chords: the stab's notes, the same four over four basses
     stab = ('ab', 'eb', 'c', 'ab')          # [2,4,6,9] in f minor, top down
@@ -241,9 +241,10 @@ def offset_read(p, d):
         y += 110
     y += 120
     # the MC's word, set backwards: a rewind
-    mirrored(p, M - 20, y, 'rewind', 12)
-    p.text(M, y + 288 + 30, '>vox 9............... !1', SMALL, 2, RED)
-    low(p, ('132 bpm, a dorian.', 'am9 d9sus cmaj7 g6: an organ', 'stab that moves in the bar,', 'a voice cut into chops.'), keys_of('offset'))
+    mirrored(p, M - 20, y, 'pull up', 12)
+    p.text(M, y + 288 + 30, '>pullup 9............... !1', SMALL, 2, RED)
+    p.text(M, y + 288 + 30 + S2 + 8, '>demure 9............... !1   on the drop', SMALL, 2)
+    low(p, ('132 bpm, a dorian.', 'am9 d9sus cmaj7 g6: an organ', 'stab that moves in the bar,', 'and a plucked hook over it.'), keys_of('offset'))
 
 
 def offset_score(p, d):
@@ -270,7 +271,7 @@ def weight_read(p, d):
         for i in range(7):
             p.box(M + k * 320 + 200 + i * 16, yb + i * 12, 14, 14, INK)
     p.text(M, top + 12 * 36 + 40 + 192 + 14 + S2 + 30, 'the 808: a tie into the next note slides.', SMALL, 2)
-    low(p, ('150 bpm, f# minor.', 'the bridge: amaj9 e6/9', 'dmaj9 c#7sus. in the drops,', '>vox 7.........1.1...'), keys_of('weight'))
+    low(p, ('150 bpm, f# minor.', 'the bridge: amaj9 e6/9', 'dmaj9 c#7sus. each drop', 'lands on an oof.'), keys_of('weight'))
 
 
 def weight_score(p, d):
@@ -281,18 +282,19 @@ def weight_score(p, d):
 
 def heat_read(p, d):
     y = opener(p, 'heat')
-    # the hook is one word on the tresillo, 1..1..1., with the brass hit under
-    # it: three HEATs at steps 0, 3 and 6 of the bar, each a step lower
-    step = 78
-    for k, s in enumerate((0, 3, 6)):
-        x, yy = M + s * step, y + k * 210
-        p.box(x, yy + 40, 3 * step - 20, 150, RED)
-        p.text(x, yy, 'HEAT', BIG, 8, INK)
-    y += 2 * 210 + 192 + 70
-    p.text(M, y, '>vox 1..1..1.2...4...', BIG, 2, RED)
-    y += 48 + 8
-    p.text(M + 5 * 24, y, 'heat  heat  heat  uh      what', SMALL, 2)
-    low(p, ('145 bpm, g locrian.', 'one 808 on g that slides up', 'the tritone. a brass hit, g', 'db g, on the same three. then', 'miami bass nobody asked for.'), keys_of('heat'))
+    # the call, a bar, and its answer, the next: the internet's own voice over
+    # one 808. The call's start stutters, 9.9.9 - sha, sha, shadow.
+    p.text(M, y, 'sha sha', SMALL, 3, RED)
+    y += 50
+    p.text(M, y, 'shadow wizard', BIG, 5)
+    p.text(M, y + 130, 'money gang', BIG, 5)
+    p.box(M + 10 * 60 + 40, y + 130 + 20, 240, 80, RED)
+    p.text(M + 300, y + 330, 'we love', BIG, 5, RED)
+    p.text(M + 300, y + 460, 'casting spells', BIG, 5, RED)
+    y += 460 + 120 + 40
+    p.text(M, y, '>gang <9.9.9........... ................>', SMALL, 2)
+    p.text(M, y + S2 + 8, '>spells <................ 9...............>', SMALL, 2, RED)
+    low(p, ('145 bpm, g locrian.', 'one 808 on g that slides up', 'the tritone, a brass hit on', 'the tresillo. then miami', 'bass and an air horn.'), keys_of('heat'))
 
 
 def heat_score(p, d):
@@ -306,11 +308,12 @@ def pressure_read(p, d):
     p.box(0, 0, W, H)
     p.dark = True
     y = title(p, 'open pressure', 'pressure', ink=PAPER)
-    for k in range(4):
-        p.text(M + k * 60, y + k * 150, 'harder', BIG, 6, PAPER)
-    y += 4 * 150 + 60
-    p.text(M, y, '>vox 3...3...3...3...', SMALL, 2, RED)
-    y += S2 + 80
+    p.text(M, y, 'we live in', BIG, 6, PAPER)
+    p.text(M, y + 160, 'a society', BIG, 6, PAPER)
+    y += 160 + 144 + 50
+    p.text(M, y, '>society 9............... !1   alone, in a bar of nothing', SMALL, 2, RED)
+    p.text(M, y + S2 + 8, '>boosted 9............... !1   on the drop', SMALL, 2, RED)
+    y += 2 * S2 + 90
     # the stab in threes over the kick in fours, home every three bars
     for row, (label, n, ink) in enumerate((('kick', 4, PAPER), ('stab', 3, RED))):
         p.text(M, y, label, SMALL, 2, ink)
@@ -318,7 +321,7 @@ def pressure_read(p, d):
             p.glyph(M + 90 + s * 24, y, 147 if s % n == 0 else 137, SMALL, 2, ink)
         y += 60
     p.text(M + 90 + 47 * 24 - 24, y, 'home', SMALL, 2, RED)
-    low(p, ('140 bpm, e phrygian.', 'em(b9) every three', 'sixteenths. a kick and its', 'rumble, acid, one word.', 'then the kick off the grid.'), keys_of('pressure'), ink=PAPER)
+    low(p, ('140 bpm, e phrygian.', 'em(b9) every three', 'sixteenths. a kick and its', 'rumble, acid, then the kick', 'thrown off the grid.'), keys_of('pressure'), ink=PAPER)
 
 
 def pressure_score(p, d):
@@ -332,10 +335,12 @@ def orbitals_read(p, d):
     p.cells(W - 1100, 520, art(d, 'orbit-5'), 2, crop=(0, 1, 60, 22), ink=RED)
     y = opener(p, 'orbitals')
     y += 520
-    # one sung vowel through the eclipse: a bar long
-    p.text(M, y, 'ah', BIG, 10)
-    p.box(M + 2 * 120 + 30, y + 150, 900, 40, RED)
-    p.text(M, y + 240 + 20, '>vox 1............... !4    sung on d', SMALL, 2)
+    # one voice through the eclipse, and the set shutting down after it
+    for k, ln in enumerate(("that's here.", "that's home.", "that's us.")):
+        p.text(M, y + k * 130, ln, BIG, 5)
+    y += 3 * 130 + 40
+    p.text(M, y, '>sagan 9............... !1   carl sagan, in the eclipse', SMALL, 2)
+    p.text(M, y + S2 + 8, '>bye 9............... !1   the xp shutdown, the last sound', SMALL, 2, RED)
     low(p, ('124 bpm, d minor.', 'dm9 bbmaj7 fmaj7 c6 under', 'glass, a slow tune, an', 'eclipse in half time, a lift.'), keys_of('orbitals'))
 
 
@@ -361,8 +366,8 @@ def back(p, d):
     note(p, 2010,
          "the right pages are the documents the deck runs, pieces/,\n"
          "set in its own 6x12 face; the left pages read them out in\n"
-         "its 12x24. two inks, one bit each. the voices are yours to\n"
-         "record: pieces/ABLETON.md. copy it, fold it, pass it on.")
+         "its 12x24. two inks, one bit each. the samples go on their\n"
+         "pads: pieces/ABLETON.md. copy it, fold it, pass it on.")
 
 
 PAGES = [cover, walk, sounds, grid_read, grid_score, offset_read, offset_score,
