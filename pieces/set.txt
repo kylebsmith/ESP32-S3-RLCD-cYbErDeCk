@@ -2,7 +2,7 @@ SET
 >stop
 >panic
 
-four tracks, about forty
+four scores, about forty
 minutes. run a heading to go
 to its track.
 
@@ -15,11 +15,9 @@ to its track.
 -- 4 orbitals
   >open orbitals
 
-in each, the first heading
-starts it. f1-f8 play the
-parts, f9/f10 walk headings.
-headings are scenes and land
-on the one. a scene run again
-takes its lanes out; again,
-back. moments (!n) play and
-end. -- out ends on a card.
+each track is a score: walk
+down it. f10 goes to the next
+heading, ctrl+enter runs it,
+and it lands on the next one.
+f1-f8 take parts out and back
+in. -- out ends on a card.
