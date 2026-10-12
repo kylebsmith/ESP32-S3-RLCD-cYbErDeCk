@@ -163,6 +163,10 @@ static void dispatch_usage(uint8_t usage, uint8_t mods, bool repeat)
 {
     const bool shift = (mods & 0x22) != 0;    /* either shift */
 
+    if (usage >= 0x3A && usage <= 0x45) {      /* F1-F12 */
+        emit_m(KBD_EV_FKEY, (char)(usage - 0x39), mods, repeat);
+        return;
+    }
     switch (usage) {
     case 0x28: emit_m(KBD_EV_ENTER,     0, mods, repeat); return;
     case 0x29: emit_m(KBD_EV_ESC,       0, mods, repeat); return;

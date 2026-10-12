@@ -12,6 +12,7 @@ int main(void){
     SAME(SKB_ESC, KBD_EV_ESC);        SAME(SKB_LEFT, KBD_EV_LEFT);
     SAME(SKB_RIGHT, KBD_EV_RIGHT);    SAME(SKB_UP, KBD_EV_UP);
     SAME(SKB_DOWN, KBD_EV_DOWN);      SAME(SKB_MOD_LCTRL, KBD_MOD_LCTRL);
+    SAME(SKB_FKEY, KBD_EV_FKEY);
     printf(f?"[FAIL] %d constant(s) diverged\n":"[PASS] keymap constants agree with kbd.h\n",f);
     return f!=0;
 }

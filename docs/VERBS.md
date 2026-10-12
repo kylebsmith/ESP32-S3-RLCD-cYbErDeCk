@@ -176,7 +176,7 @@ routes draws in table order, whatever order the lines were typed.
 | `save` | write now |
 | `help` | all of this, on the deck |
 
-`Ctrl-L` / `Ctrl-K` walk documents. `Ctrl-O` returns from output. `Ctrl-G` the guide.
+`Ctrl-L` / `Ctrl-K` walk documents. **F1–F8** toggle the parts `>keys kick hat bass…` names (the first eight sound lanes until a document names them), on the next bar's one; **F9 / F10** jump to the heading above or below. `Ctrl-O` returns from output. `Ctrl-G` the guide.
 
 ## Playing live — 3
 

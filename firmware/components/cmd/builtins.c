@@ -671,6 +671,60 @@ int cmd_line_lane(const char *line, char *name, size_t n)
            ? CMD_LANE_OFF : CMD_LANE_ON;
 }
 
+/* F1-F8, THE PARTS A TRACK PLAYS BY HAND (2026-10-11: "add the actual
+ * function keys F1-F8 to toggle on and off different tracks"). '>keys kick
+ * hat bass' names them in order; until a document does, they are the first
+ * eight sound lanes as they were made - no pictures, no controllers. A key
+ * toggles its lane on the next bar's one, as '>toggle' does (seq_toggle.h). */
+static char s_keys[8][SEQ_NAME_MAX];
+static bool s_keys_named;
+
+const char *cmd_key_lane(int f)
+{
+    if (f < 1 || f > 8) {
+        return NULL;
+    }
+    if (s_keys_named) {
+        return s_keys[f - 1][0] ? s_keys[f - 1] : NULL;
+    }
+    int n = 0;
+    const seq_lane_t *l = seq_lanes(&n);
+    for (int i = 0, k = 0; l != NULL && i < SEQ_MAX_LANES; i++) {
+        if (l[i].used && l[i].bind == SEQ_BIND_NOTE && ++k == f) {
+            return l[i].name;
+        }
+    }
+    return NULL;
+}
+
+static cmd_status_t c_keys(cmd_ctx_t *ctx)
+{
+    if (ctx->arg[0] != '\0') {
+        memset(s_keys, 0, sizeof s_keys);
+        const char *p = ctx->arg;
+        for (int k = 0; k < 8 && *p != '\0'; k++) {
+            size_t w = 0;
+            while (p[w] != '\0' && p[w] != ' ' && p[w] != '\t') { w++; }
+            lane_name_t ln;
+            if (lane_name_parse(p, w, &ln) != LN_OK) {
+                ctx->err_at = (int)(p - ctx->arg);
+                cmd_out(ctx, "keys: %.*s is not a name", (int)w, p);
+                return CMD_ERROR;
+            }
+            snprintf(s_keys[k], sizeof s_keys[k], "%s", ln.canon);
+            p += w;
+            while (*p == ' ' || *p == '\t') { p++; }
+        }
+        s_keys_named = true;
+    }
+    for (int f = 1; f <= 8; f++) {
+        const char *nm = cmd_key_lane(f);
+        cmd_out(ctx, "F%d %s", f, nm ? nm : "-");
+    }
+    snprintf(ctx->msg, sizeof ctx->msg, "F1-F8 toggle these, on the one");
+    return CMD_DONE;
+}
+
 /* A LANE THAT WAS NOT COMPILED, AND WHY.
  *
  * This printed "16 lanes is all there is" for every refusal - including a
@@ -765,9 +819,10 @@ cmd_status_t cmd_lane(cmd_ctx_t *ctx, const char *word, size_t n)
         return lane_refused(ctx, le);
     }
     seq_mute(name, false);
-    if (b.bind == SEQ_BIND_VIZ) {
-        viz_split(true);
-    }
+    /* A picture no longer opens the deck's own preview pane: on stage the
+     * HDMI node shows the picture and this screen stays the code (I said,
+     * 2026-10-11: the preview was "taking over the viewer"). '>split' still
+     * shows it here. */
     if (b.melodic) {
         snprintf(ctx->msg, sizeof ctx->msg, "%s %s in %s", name, pat,
                  seq_scale_name());
@@ -2249,10 +2304,8 @@ static cmd_status_t c_send(cmd_ctx_t *ctx)
             viz_out_size(0, 0);
         } else if (vw > 0) {
             viz_out_size(vw, vh);
-            viz_split(true);
         } else if (!seq_dest_is_on("view")) {
             viz_out_size(VIZ_VIEW_W, VIZ_VIEW_H);
-            viz_split(true);
         }
         if (mode >= 0 && seq_running() && seq_dest_is_on("view")) {
             viz_out_mode_at(mode, (seq_position() / 16 + 1) * 16);   /* on the one */
@@ -2552,6 +2605,7 @@ static const cmd_t s_builtins[] = {
     { "frame", c_frame, CMD_CAP_NET,   "send the frame over osc" },
     { "split", c_split, CMD_CAP_EDIT,  "split on | off | <rows>" },
     { "route", c_route, CMD_CAP_EDIT,  "route disc kick" },
+    { "keys",  c_keys,  CMD_CAP_EDIT,  "keys kick hat bass: F1-F8" },
     { "usb",   c_usb,   CMD_CAP_SYSTEM,"usb on | off - MIDI over the cable" },
     { "din",   c_din,   CMD_CAP_SYSTEM,"din <gpio> - MIDI with no host" },
     { "flash", c_flash, CMD_CAP_SYSTEM,"flash now - reboot to ROM loader" },

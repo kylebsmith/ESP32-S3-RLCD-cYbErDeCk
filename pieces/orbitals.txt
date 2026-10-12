@@ -2,6 +2,7 @@ ORBITALS
 >stop
 
 -- I night
+  >keys kick clap hat ohat perc bass pad arp
   >send view code
   >bpm 124
   >scale dmin
@@ -35,6 +36,7 @@ ORBITALS
   >toggle bass kick clap hat ohat rim perc disc
   >play
 
+the structure
 -- II first light
   >send view poster
   >toggle bass rim perc disc
@@ -49,26 +51,29 @@ ORBITALS
   >lead 4__67__98__67___ /4 !2
 
 -- VI eclipse
-  >scale dphr
   >send view glint 6
   >send view latent
   >kick 9.......9.......
   >clap ........7.......
 
 -- VII return
-  >scale dmin
   >send view glint 0
   >send view poster
   >kick 9.........9.....
   >clap ....7.......7...
 
 -- VIII lift
-  >scale fmaj
+  >pad <[3,5,7,9] [3,4,6,8] [4,5,7,9] [3,6,7,8]> /16
+  >bass <3 4 5 6> /16
+  >arp 7 9%60 4 6%70 7 3%50 9 2%60 7 9%60 4 6%70 7 3%50 9 4%60
   >toggle ohat
   >kick 9...9...9...9...
+  >crash 9............... !1
 
 -- IX home
-  >scale dmin
+  >pad <[0,2,6,8] [4,5,7,9] [2,4,6,8] [3,4,6,8]> /16
+  >bass <7 5 9 6> /16
+  >arp <4794794794794794 2472472472472472 4684684684684684 3683683683683683>
   >toggle ohat
   >kick 9.........9.....
 
@@ -77,9 +82,20 @@ ORBITALS
   >arp 9.7.4.6.7.3.
   >glow <6 5 4 3 2> /8 !5
 
+moments
 -- answer
   >lead 7__98__67__4____ /4 !1
 
+-- fill
+  >tom ....9..9.9..99.9 !1
+
+-- crash
+  >crash 7............... !1
+
+-- glitch
+  >snare ....[3333]....[3333]...... !2
+
+drums
 -- drums orbit
   >kick 9.........9.....
   >clap ....7.......7...
@@ -104,6 +120,7 @@ ORBITALS
   >hat .3.3.3.3.3.3.3.3
   >rim ......3.......3.
 
+arps
 -- glass
   >arp 9.7.4.6.7.3.
 
@@ -113,6 +130,7 @@ ORBITALS
 -- raining
   >arp 7 9%60 4 6%70 7 3%50 9 2%60 7 9%60 4 6%70 7 3%50 9 4%60
 
+bass
 -- sub
   >bass = voice 1 ch 1 gate 1800
   >bass <7 5 9 6> /16
@@ -121,6 +139,7 @@ ORBITALS
   >bass = voice 1 ch 1 gate 200
   >bass <7.7.7.7.7.7.7.7. 5.5.5.5.5.5.5.5. 9.9.9.9.9.9.9.9. 6.6.6.6.6.6.6.[65].>
 
+sweeps
 -- sparks
   >spark <4 6 8 9 7 5> /4 !6
 
@@ -129,15 +148,6 @@ ORBITALS
 
 -- dimming
   >glow <6 4 3> /8 !3
-
--- fill
-  >tom ....9..9.9..99.9 !1
-
--- crash
-  >crash 7............... !1
-
--- glitch
-  >snare ....[3333]....[3333]...... !2
 
 -- out
   >clear

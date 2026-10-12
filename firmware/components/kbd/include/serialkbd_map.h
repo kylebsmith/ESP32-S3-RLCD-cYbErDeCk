@@ -29,7 +29,7 @@ typedef struct {
 } skb_ev_t;
 
 /* Escape-sequence state, owned by the caller so the mapper stays pure. */
-typedef struct { int esc; } skb_state_t;
+typedef struct { int esc; int num; } skb_state_t;
 
 /* Values mirror kbd.h. The host check asserts they agree, so a renumbering
  * there cannot silently change what this produces. */
@@ -42,17 +42,51 @@ typedef struct { int esc; } skb_state_t;
 #define SKB_RIGHT      6
 #define SKB_UP         7
 #define SKB_DOWN       8
+#define SKB_FKEY       13   /* ch is the function key's number, 1-12 */
 #define SKB_MOD_LCTRL  0x01
+
+/* The number in ESC [ n ~ for each function key, as xterm sends them; F1-F4
+ * also come as ESC O P..S. */
+static inline int skb_fkey_of(int n)
+{
+    static const int8_t f[25] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                                  1, 2, 3, 4, 5, 0, 6, 7, 8, 9, 10, 0, 11, 12 };
+    return (n >= 0 && n < 25) ? f[n] : 0;
+}
 
 static inline skb_ev_t skb_feed(skb_state_t *st, uint8_t b)
 {
     skb_ev_t e = { 0, 0, 0, false };
 
-    /* Arrow keys arrive as ESC [ A..D from any terminal. */
+    /* Arrow keys arrive as ESC [ A..D from any terminal, function keys as
+     * ESC O P..S (F1-F4) or ESC [ n ~ (all twelve). */
     if (st->esc == 1) {
-        st->esc = (b == '[') ? 2 : 0;
+        st->esc = (b == '[') ? 2 : (b == 'O') ? 3 : 0;
         if (st->esc == 0 && b == 0x1B) {
             e.type = SKB_ESC; e.emit = true;
+        }
+        return e;
+    }
+    if (st->esc == 3) {
+        st->esc = 0;
+        if (b >= 'P' && b <= 'S') {
+            e.type = SKB_FKEY; e.ch = (char)(b - 'P' + 1); e.emit = true;
+        }
+        return e;
+    }
+    if (st->esc == 2 && b >= '0' && b <= '9') {
+        st->esc = 4;
+        st->num = b - '0';
+        return e;
+    }
+    if (st->esc == 4) {
+        if (b >= '0' && b <= '9' && st->num < 100) {
+            st->num = st->num * 10 + (b - '0');
+            return e;
+        }
+        st->esc = 0;
+        if (b == '~' && skb_fkey_of(st->num) != 0) {
+            e.type = SKB_FKEY; e.ch = (char)skb_fkey_of(st->num); e.emit = true;
         }
         return e;
     }

@@ -162,3 +162,7 @@ void cmd_announce(const char *line);
  * `name` gets the lane's address. The values are editor_block.h's. */
 enum { CMD_LANE_OTHER = 0, CMD_LANE_CHANGE = 1, CMD_LANE_ON = 2, CMD_LANE_OFF = 3 };
 int cmd_line_lane(const char *line, char *name, size_t n);
+
+/* The lane F1-F8 toggles: '>keys', or the first eight sound lanes. NULL when
+ * the key has none. */
+const char *cmd_key_lane(int f);

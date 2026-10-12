@@ -73,6 +73,37 @@ int main(void)
     expect("unknown CSI swallowed", skb_feed(&st, 'H'), false, 0, 0, 0);
     expect("and it recovered",      skb_feed(&st, 'z'), true, SKB_CHAR, 'z', 0);
 
+    /* Function keys: F1-F4 as ESC O P..S, all twelve as ESC [ n ~. F1-F8
+     * toggle parts and F9/F10 walk headings, so the cable reaches them too. */
+    skb_feed(&st, 0x1B);
+    expect("ESC O consumed", skb_feed(&st, 'O'), false, 0, 0, 0);
+    expect("F1 as ESC O P",  skb_feed(&st, 'P'), true, SKB_FKEY, 1, 0);
+    skb_feed(&st, 0x1B); skb_feed(&st, 'O');
+    expect("F4 as ESC O S",  skb_feed(&st, 'S'), true, SKB_FKEY, 4, 0);
+    {
+        static const struct { const char *seq; int f; } fk[] = {
+            { "\x1b[15~", 5 }, { "\x1b[17~", 6 }, { "\x1b[18~", 7 },
+            { "\x1b[19~", 8 }, { "\x1b[20~", 9 }, { "\x1b[21~", 10 },
+            { "\x1b[11~", 1 }, { "\x1b[24~", 12 },
+        };
+        for (size_t i = 0; i < sizeof fk / sizeof fk[0]; i++) {
+            skb_ev_t last = { 0, 0, 0, false };
+            int emitted = 0;
+            for (const char *q = fk[i].seq; *q; q++) {
+                const skb_ev_t e = skb_feed(&st, (uint8_t)*q);
+                if (e.emit) { last = e; emitted++; }
+            }
+            char what[24];
+            snprintf(what, sizeof what, "F%d as ESC [ n ~", fk[i].f);
+            expect(what, last, emitted == 1, SKB_FKEY, (char)fk[i].f, 0);
+        }
+    }
+    expect("an arrow still after", (skb_feed(&st, 0x1B), skb_feed(&st, '['), skb_feed(&st, 'A')),
+           true, SKB_UP, 0, 0);
+    skb_feed(&st, 0x1B); skb_feed(&st, '['); skb_feed(&st, '1'); skb_feed(&st, '6');
+    expect("a number that is no key", skb_feed(&st, '~'), false, 0, 0, 0);
+    expect("and it recovered",        skb_feed(&st, 'k'), true, SKB_CHAR, 'k', 0);
+
     /* Bytes with the high bit set are not characters on this device. */
     expect("high byte ignored", skb_feed(&st, 0xC3), false, 0, 0, 0);
 

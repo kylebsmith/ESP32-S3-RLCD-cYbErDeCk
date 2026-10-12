@@ -1030,6 +1030,75 @@ void editor_show_output(size_t from, const char *msg)
     }
 }
 
+/* F1-F8: THE PARTS, ON THE ONE. Each toggles the lane '>keys' gave it (or
+ * the first eight sound lanes), the way '>toggle' does: it lands on the next
+ * bar's first beat, so a hand can play the structure without leaving the
+ * line it is editing (2026-10-11). */
+static void key_toggle(int f)
+{
+    const char *nm = cmd_key_lane(f);
+    bool mute = false;
+    if (nm == NULL) {
+        snprintf(s_msg, sizeof s_msg, "F%d: nothing - >keys names them", f);
+    } else if (seq_toggle(nm, &mute) != ESP_OK) {
+        snprintf(s_msg, sizeof s_msg, "F%d: no %.16s yet", f, nm);
+    } else {
+        seq_hold(nm, false);
+        snprintf(s_msg, sizeof s_msg, "F%d %.12s %s%s", f, nm, mute ? "off" : "on",
+                 seq_running() ? " - on the one" : "");
+    }
+    s_msg_until = editor_now_ms() + 3000;
+    editor_invalidate();
+}
+
+/* F9 / F10: THE PREVIOUS OR NEXT HEADING - a line whose first marks are '--'
+ * - so a scene is one key away, not a run of arrows. It wraps. */
+static void jump_heading(int dir)
+{
+    const size_t len = doc_len();
+    if (len == 0) {
+        return;
+    }
+    size_t s = doc_cursor() < len ? doc_cursor() : len;
+    while (s > 0 && doc_at(s - 1) != '\n') {
+        s--;
+    }
+    size_t p = s;
+    for (size_t guard = 0; guard <= len + 1; guard++) {
+        if (dir > 0) {
+            while (p < len && doc_at(p) != '\n') {
+                p++;
+            }
+            p = (p < len) ? p + 1 : 0;
+        } else {
+            p = (p == 0) ? len : p - 1;
+            while (p > 0 && doc_at(p - 1) != '\n') {
+                p--;
+            }
+        }
+        if (p == s) {
+            break;
+        }
+        size_t q = p;
+        while (q < len && (doc_at(q) == ' ' || doc_at(q) == '\t')) {
+            q++;
+        }
+        if (q + 1 < len && doc_at(q) == '-' && doc_at(q + 1) == '-') {
+            doc_move_to(p);
+            char h[29];
+            size_t k = 0;
+            for (size_t i = q; i < len && doc_at(i) != '\n' && k < sizeof h - 1; i++) {
+                h[k++] = doc_at(i);
+            }
+            h[k] = '\0';
+            snprintf(s_msg, sizeof s_msg, "%s", h);
+            s_msg_until = editor_now_ms() + 1500;
+            editor_invalidate();
+            return;
+        }
+    }
+}
+
 /* The block, copied before any of it runs: a line in it may switch the page. */
 static char s_block[BLOCK_MAX_LINES][BLOCK_LINE_MAX];
 _Static_assert((int)CMD_LANE_OTHER == (int)BLOCK_LANE_OTHER &&
@@ -1217,6 +1286,17 @@ void editor_handle(const kbd_event_t *ev)
             s_err_off = -1;
             editor_invalidate();
         }
+    }
+
+    if (ev->type == KBD_EV_FKEY) {
+        const int f = (unsigned char)ev->ch;
+        if (f >= 1 && f <= 8) {
+            key_toggle(f);
+        } else if (f == 9 || f == 10) {
+            s_goal_col = -1;
+            jump_heading(f == 9 ? -1 : +1);
+        }
+        return;
     }
 
     if (ev->type == KBD_EV_ENTER && (ev->mods & KBD_COMMAND_MODS)) {

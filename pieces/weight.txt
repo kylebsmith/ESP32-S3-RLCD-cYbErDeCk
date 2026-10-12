@@ -1,0 +1,159 @@
+WEIGHT
+>stop
+
+-- set
+  >keys kick snare hat ohat perc bass pad arp
+  >send view code
+  >send view day 9
+  >bpm 140
+  >scale c#phr
+  >swing 50
+  >drive = cc 20 ch 6
+  >glow = cc 74 ch 3
+  >shine = cc 74 ch 2
+  >spark = cc 74 ch 11
+  >send drive 3
+  >send glow 3
+  >send shine 5
+  >send spark 4
+  >perc = note 56
+  >bass = voice 1 ch 6 gate 700
+  >pad = voice 3 ch 3 gate 1600
+  >arp = voice 5 ch 11 gate 150
+  >lead = voice 4 ch 2 gate 300
+  >kick 9......9..9.....
+  >snare ........9.......
+  >hat 5.5.5.5.5.5.5.5.
+  >ohat ......7.......7.
+  >rim ...3......3...3.
+  >perc ..4...4...4...4.
+  >bass <0______0__7_____ 5______5__9_____ 3______3__7__5__ 1______1__8__[88]__>
+  >pad <[0,2,4] [0,2,5] [0,3,5] [1,3,5]> /16
+  >arp <7.8.7.4.5.4.3.4. 7.8.9.8.7.4.1.0.>
+  >echo 4
+  >box 4......4..4.....
+  >route box:x bass
+  >route flip snare
+  >toggle kick snare hat ohat rim perc bass
+  >play
+
+the structure
+-- in, the 808
+  >toggle kick snare hat bass
+  >send view plain
+
+-- layers
+  >toggle ohat rim perc
+
+-- cut, silence
+  >toggle kick snare hat ohat rim perc bass pad
+  >send view inv 9
+
+-- drop
+  >toggle kick snare hat ohat rim perc bass pad
+  >send view inv 0
+  >send view sort
+  >crash 9............... !1
+
+-- plain again
+  >send view plain
+
+moments
+-- flute, four bars
+  >lead <7___8_7_4___.... 5___4_3_1_______> /2 !2
+
+-- flute high
+  >lead <9_8_7___8_7_4___ 7_5_4_3_1___0___> /2 !2
+
+-- build, half a bar
+  >clap ........[33][33][55][55][77][77][99][99] !1
+
+-- stutter
+  >clap ....[9999]....[9999]...... !2
+
+-- glitch the hats
+  >tom [55][55]..[55][55]..[5555][5555][7777][9999].... !1
+
+-- crash
+  >crash 9............... !1
+
+kits
+-- kit atl
+  >kick 9......9..9.....
+  >box 4......4..4.....
+  >snare ........9.......
+  >hat 5.5.5.5.5.5.5.5.
+  >rim ...3......3...3.
+
+-- kit rolls
+  >kick 9......9..9.....
+  >box 4......4..4.....
+  >snare ........9......5
+  >hat 5.5.5[55]5.5.5[55][5555]5[55][7777]
+  >rim ...3......3.[33].
+
+-- kit triplets
+  >kick 9.....9...9..9..
+  >box 4.....4...4..4..
+  >snare ........9.......
+  >hat 5.5[555]5.5.5[555]5.[555]5[777][777]
+  >rim .....3......3...
+
+-- kit bounce
+  >kick 9..9......9..9..
+  >box 4..4......4..4..
+  >snare ........9...5...
+  >hat 5[55]5.5[55]5.5[55]5.5[55]5.
+  >rim ..3.......3.....
+
+-- kit half
+  >kick 9...........9...
+  >box 4...........4...
+  >snare ........9.......
+  >hat 5...5...5...5...
+  >rim ................
+
+808
+-- 808 home
+  >bass <0______0__7_____ 5______5__9_____ 3______3__7__5__ 1______1__8__[88]__>
+
+-- 808 slide
+  >bass <0___7___0___7_5_ 5___9___5___9_7_ 3___7___3___7_5_ 1___8___1_8__[88]__>
+
+-- 808 short
+  >bass <0......0..0..... 5......5..5..... 3......3..3..5.. 1......1..8..[88]..>
+
+layers
+-- choir
+  >pad <[0,2,4] [0,2,5] [0,3,5] [1,3,5]> /16
+
+-- bells
+  >arp <7.8.7.4.5.4.3.4. 7.8.9.8.7.4.1.0.>
+
+-- bells sparse
+  >arp <7.8%60.7.4%50.5.4.3%60.4. 7.8.9%60.8.7.4%50.1.0.>
+
+-- bells rolling
+  >arp <78747848 98747810> *2
+
+sweeps
+-- drive it
+  >drive <4 6 8 9> /8 !4
+
+-- ease off
+  >drive <7 5 3> /8 !3
+
+-- open the choir
+  >glow <3 4 5 6 7 8> /16 !6
+
+-- shine the flute
+  >shine <5 7 9 6> /8 !4
+
+-- spark the bells
+  >spark <4 6 8 9 7 5> /4 !6
+
+-- out
+  >clear
+  >send view off
+  >send view poster
+  >stop

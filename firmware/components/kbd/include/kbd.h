@@ -30,6 +30,7 @@ typedef enum {
     KBD_EV_END,
     KBD_EV_CONNECTED,
     KBD_EV_DISCONNECTED,
+    KBD_EV_FKEY,         /* ch holds the function key's number, 1-12 */
 } kbd_ev_type_t;
 
 /* HID modifier bits, as they arrive in byte 0 of a report. */

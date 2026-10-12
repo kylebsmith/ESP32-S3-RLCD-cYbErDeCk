@@ -114,7 +114,7 @@
  * "guide 3": a password is asked for and never typed on a line (ask.h), so the
  * '>wifi <ssid> <pass>' and '>host deck 12345678' that "guide 2" taught are
  * refused - and cut - now. */
-#define GUIDE_MARK "guide 6"
+#define GUIDE_MARK "guide 7"
 
 /* "guide 4", 2026-09-29: the sections are blocks - a heading run is its
  * section run (editor_block.h) - and the guide says what changed: a line run
@@ -132,6 +132,10 @@
  * which a cable sends as Run - and the line kill it used to be is gone. */
 #define GUIDE5_FNV 0xb368feecu
 
+/* "guide 7", 2026-10-11: F1-F8 play the parts '>keys' names, on the one, and
+ * F9/F10 walk the headings. */
+#define GUIDE6_FNV 0x900f034au
+
 #define GUIDE_TEXT \
     "GUIDE. ctrl+enter runs a line\n" \
     "and the lines tabbed under it,\n" \
@@ -140,6 +144,10 @@
     "indents it. ctrl-l / ctrl-k:\n" \
     "next document. ctrl-o: output\n" \
     "and back. ctrl-g: here.\n" \
+    "f1-f8: a part on or off, on\n" \
+    "the one (>keys names them).\n" \
+    "f9 / f10: the heading above,\n" \
+    "the heading below.\n" \
     "\n" \
     "-- a beat\n" \
     "  >bpm 124\n" \
@@ -217,7 +225,7 @@
     "  >list\n" \
     "  >help\n" \
     "  midi learn: the midi page.\n" \
-    "guide 6\n" \
+    "guide 7\n" \
     ""
 
 /* THE MIDI PAGE: every controller the deck and its pieces send, one line each.
