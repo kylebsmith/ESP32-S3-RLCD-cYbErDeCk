@@ -349,6 +349,17 @@ void seq_reap(void);
 /* A controller value, out now through the clock's own queue: '>send cut 3'. */
 void seq_cc_now(uint8_t chan, uint8_t cc, uint8_t value);
 
+/* '>patch 4' - WHICH SOUNDS A TRACK PLAYS. Six tracks share a handful of
+ * channels - every pad on 3, every kit on 10 - so one instrument a channel
+ * gave every track the same pad (I asked, 2026-10-11, "why do all of our
+ * tracks use the same pad"). This sends controller SEQ_PATCH_CC at n's level
+ * (n x 127 / 9, as a lane's digit) on every instrument channel, 1-15, and a
+ * DAW's rack on each channel picks that track's chain by it
+ * (pieces/ABLETON.md). On the next bar's one while the clock runs; at once
+ * when stopped. ESP_ERR_INVALID_ARG outside 0-9. */
+#define SEQ_PATCH_CC 3
+esp_err_t seq_patch(int n);
+
 /* FORGET A LANE, WHICH IS NOT THE SAME AS MUTING ONE.
  *
  * Eight lanes is the budget, and until this existed there was no way to give a

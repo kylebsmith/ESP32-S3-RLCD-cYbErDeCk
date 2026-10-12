@@ -8,6 +8,7 @@ an eclipse, a lift.
 
 -- I night
   >keys kick clap hat ohat perc bass pad arp
+  >patch 6
   >send view code
   >bpm 124
   >scale dmin

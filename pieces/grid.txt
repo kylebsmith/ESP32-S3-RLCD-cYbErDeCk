@@ -8,6 +8,7 @@ from one hand. walk down.
 
 -- set
   >keys kick clap hat ohat perc bass pad lead
+  >patch 1
   >send view code
   >send view day 9
   >send view lines 3

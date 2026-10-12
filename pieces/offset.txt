@@ -9,6 +9,7 @@ are a voice, cut up.
 
 -- set
   >keys kick snare hat ohat perc bass pad lead
+  >patch 2
   >send view poster
   >send view skew 3
   >bpm 132

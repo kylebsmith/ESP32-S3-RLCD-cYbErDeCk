@@ -10,6 +10,7 @@ the vox digit picks the word.
 
 -- set
   >keys kick clap hat perc bass hit vox
+  >patch 4
   >send view code
   >bpm 145
   >scale gloc

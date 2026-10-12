@@ -9,6 +9,7 @@ rest before it does not.
 
 -- set
   >keys kick clap hat perc bass pad lead bell
+  >patch 3
   >send view code
   >bpm 150
   >scale f#min

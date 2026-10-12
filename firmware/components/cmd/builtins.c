@@ -2516,6 +2516,24 @@ static cmd_status_t c_mute(cmd_ctx_t *ctx)
     return CMD_DONE;
 }
 
+/* '>patch 4' - THE TRACK'S SOUNDS, on every instrument channel (seq.h). A
+ * track's first section names its patch, so starting it switches every rack
+ * in the DAW to that track's chain: GRID's organ on the keys channel in GRID,
+ * WEIGHT's keys there in WEIGHT, a kit a track on 10. */
+static cmd_status_t c_patch(cmd_ctx_t *ctx)
+{
+    const char *a = ctx->arg;
+    if (a[0] < '0' || a[0] > '9' || a[1] != '\0') {
+        cmd_out(ctx, "patch 0-9: the track's sounds");
+        return CMD_ERROR;
+    }
+    seq_patch(a[0] - '0');
+    snprintf(ctx->msg, sizeof ctx->msg,
+             seq_running() ? "patch %c: cc %d, ch 1-15 - on the one" : "patch %c: cc %d, ch 1-15",
+             a[0], SEQ_PATCH_CC);
+    return CMD_DONE;
+}
+
 /* '>clear' - EVERY LANE GONE, THE PAGE STAYS. '>new' was the only clean
  * slate, and it took the page with it; a performer building a set wants the
  * sound gone and the text still there to run again (2026-09-29). The clock
@@ -2622,6 +2640,7 @@ static const cmd_t s_builtins[] = {
     { "split", c_split, CMD_CAP_EDIT,  "split on | off | <rows>" },
     { "route", c_route, CMD_CAP_EDIT,  "route disc kick" },
     { "keys",  c_keys,  CMD_CAP_EDIT,  "keys kick hat bass: F1-F8" },
+    { "patch", c_patch, CMD_CAP_EDIT,  "patch 4: the track's sounds" },
     { "usb",   c_usb,   CMD_CAP_SYSTEM,"usb on | off - MIDI over the cable" },
     { "din",   c_din,   CMD_CAP_SYSTEM,"din <gpio> - MIDI with no host" },
     { "flash", c_flash, CMD_CAP_SYSTEM,"flash now - reboot to ROM loader" },

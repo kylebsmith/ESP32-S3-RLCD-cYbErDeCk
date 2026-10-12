@@ -159,6 +159,30 @@ def main():
                     fails.append(f"README advertises a {m.group(1)}-check audit; "
                                  f"validation.json reports {total}")
 
+    # 6. The verb count the docs state is the command table's. It said
+    #    thirty-seven for two verbs after `keys` and `patch` were added.
+    bsrc = os.path.join(ROOT, "firmware", "components", "cmd", "builtins.c")
+    if os.path.exists(bsrc):
+        b = open(bsrc).read()
+        i = b.index("static const cmd_t")
+        n_v = len(set(re.findall(r'\{\s*"([a-z0-9]+)"\s*,\s*c_', b[i:b.index("};", i)])))
+        want_v = WORDS.get(n_v)
+        # the sentences that state today's count; the history around them
+        # ("sixty-nine became thirty-six") is allowed its old numbers
+        claims = (("docs/VERBS.md", r"([A-Za-z-]+) verbs, counted from the command table"),
+                  ("docs/MAP.md", r"\*\*([A-Za-z-]+) verbs `\[FACT\]`\*\*, counted"),
+                  ("docs/MAP.md", r"([A-Za-z-]+) verbs, grouped by what they actually touch"),
+                  ("docs/MANIFESTO.md", r"([A-Za-z-]+) verbs, all of them on"))
+        for doc, pat in claims:
+            if not os.path.exists(os.path.join(ROOT, doc)):
+                continue            # MAP.md and MANIFESTO.md live off the repo
+            m = re.search(pat, open(os.path.join(ROOT, doc)).read())
+            if m is None:
+                fails.append(f"{doc} no longer states its verb count")
+            elif m.group(1).lower() != want_v:
+                fails.append(f"{doc} says '{m.group(1)} verbs'; the command table "
+                             f"in builtins.c has {n_v} ({want_v})")
+
     print(f"-- DOCS --  {n_c} corrections, {n_o} open items, "
           f"{len(cited)} distinct records cited across the repo")
     for f in fails:

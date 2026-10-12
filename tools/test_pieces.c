@@ -566,6 +566,10 @@ static void do_verb(const char *w, const char *arg)
                    strcmp(mode, "off") != 0) {
             fail("send view %s: no such mode", mode, NULL);
         }
+    } else if (strcmp(w, "patch") == 0) {
+        if (arg[0] < '0' || arg[0] > '9' || arg[1] != '\0') {
+            fail("patch %s: 0-9", arg, NULL);
+        }
     } else if (strcmp(w, "play") == 0 || strcmp(w, "stop") == 0 ||
                strcmp(w, "panic") == 0 || strcmp(w, "lanes") == 0 ||
                strcmp(w, "split") == 0 || strcmp(w, "jitter") == 0 ||

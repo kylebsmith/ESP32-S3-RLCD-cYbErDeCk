@@ -290,6 +290,10 @@ esp_err_t seq_scale_on_one(const char *spec)
     return ESP_OK;
 }
 
+/* THE TRACK'S SOUNDS, held for the bar like a key (seq.h, seq_patch). */
+static volatile int s_patch_pend = -1;
+static void patch_send(int n);
+
 /* The clock, on a bar's first tick, before any lane fires. */
 static void key_land(void)
 {
@@ -1019,6 +1023,10 @@ static void tick(void *arg)
      * core; a press between the read and the clear is never lost. */
     if (seq_toggle_at_bar(s_tick)) {
         key_land();
+        const int patch = __atomic_exchange_n(&s_patch_pend, -1, __ATOMIC_ACQ_REL);
+        if (patch >= 0) {
+            patch_send(patch);
+        }
         next_land();
         for (int i = 0; i < SEQ_MAX_LANES; i++) {
             seq_lane_t *l = &s_lanes[i];
@@ -1724,6 +1732,29 @@ void seq_reap(void)
 void seq_cc_now(uint8_t chan, uint8_t cc, uint8_t value)
 {
     emit((uint8_t)(0xB0 | (chan & 0x0F)), (uint8_t)(cc & 0x7F), (uint8_t)(value & 0x7F));
+}
+
+/* Every instrument channel, 1-15: 16 is the screen's. Before the notes of the
+ * tick it lands on, so the bar's first notes already reach the new sound. */
+static void patch_send(int n)
+{
+    const uint8_t v = (uint8_t)(n * 127 / 9);
+    for (uint8_t ch = 0; ch < 15; ch++) {
+        emit((uint8_t)(0xB0 | ch), SEQ_PATCH_CC, v);
+    }
+}
+
+esp_err_t seq_patch(int n)
+{
+    if (n < 0 || n > 9) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (!s_running) {
+        patch_send(n);
+    } else {
+        __atomic_store_n(&s_patch_pend, n, __ATOMIC_RELEASE);
+    }
+    return ESP_OK;
 }
 
 esp_err_t seq_hold(const char *name, bool held)

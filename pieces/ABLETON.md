@@ -13,33 +13,53 @@ one channel into several voices.
   128, 132, 150, 145, 140, 124 — with every delay and LFO in time. Press **EXT**.
 - Nothing has to go back to the deck.
 
-## 2. One track a channel
+## 2. One track an instrument type, one chain a track
 
 Make a MIDI track for each channel, input `cyberdeck`, the channel below, and
-**Monitor: In**, so it plays without being armed.
+**Monitor: In**, so it plays without being armed. Never **All Channels**: a track
+on all channels plays every part through one instrument, and every track becomes
+the same pad.
 
-| ch | track | what plays on it |
-|---|---|---|
-| 1 | Bass1 | GRID's and ORBITALS' bass |
-| 2 | Lead1 | the hooks in GRID, WEIGHT, ORBITALS |
-| 3 | Keys | every stab and pad in GRID, OFFSET, WEIGHT, ORBITALS |
-| 4 | Stab | PRESSURE's stab in threes |
-| 5 | Bass2 | OFFSET's bass |
-| 6 | 808 | WEIGHT's and HEAT's 808 |
-| 7 | Chops | OFFSET's chops: one voice, pitched |
-| 8 | Brass | HEAT's hit on the tritone |
-| 9 | Rumble | PRESSURE's rumble |
-| 10 | Drums | a Drum Rack on the General MIDI notes |
-| 11 | Bell | WEIGHT's bell, ORBITALS' glass arp |
-| 12 | VOX | the sample banks: a pad a track, a word a digit (§5) |
-| 13 | Acid | PRESSURE's acid |
+Six tracks share these channels — every chord on 3, every kit on 10 — so each
+Ableton track is an **instrument type** and holds a rack with **one chain per
+track that uses it**. Each score's first section runs `>patch N`: the deck sends
+controller 3 at N's level on channels 1–15, and every rack switches to that
+track's chain before a note plays. Starting HEAT turns the drums into HEAT's kit
+and the 808 into HEAT's 808; starting ORBITALS turns the keys into its glass pad.
+
+| ch | track | 1 GRID | 2 OFFSET | 3 WEIGHT | 4 HEAT | 5 PRESSURE | 6 ORBITALS |
+|---|---|---|---|---|---|---|---|
+| 1 | Bass1 | short techno bass | | | | | warm sub, long |
+| 2 | Lead1 | organ lead | | sung vowel, glide | | | soft sine |
+| 3 | Keys | short organ stab | garage organ | e-piano + supersaw | | | slow glass pad |
+| 4 | Stab | | | | | dark saw stab | |
+| 5 | Bass2 | | reese, sub | | | | |
+| 6 | 808 | | | clean, sliding | blown out | | |
+| 7 | Chops | | one vowel, pitched | | | | |
+| 8 | Brass | | | | orchestra hit | | |
+| 9 | Rumble | | | | | rumble | |
+| 10 | Drums | tight techno kit | garage kit | plugg kit | Florida 808 kit | industrial kit | soft kit |
+| 11 | Bell | | | FM bell | | | glass FM arp |
+| 12 | VOX | bank C1 | C♯1 | D1 | D♯1 | E1 | F1 |
+| 13 | Acid | | | | | 303 | |
+
+**Setting up a switch.** In the rack, show the **Chain** select editor and give
+each chain the zone of its patch: patch N arrives as N × 127 / 9, so 1 is 14, 2 is
+28, 3 is 42, 4 is 56, 5 is 70, 6 is 84 — zone N runs from 14N − 6 to 14N + 7 (the
+table in §5). Map the Chain Selector to a macro, press **⌘M**, click the macro,
+and run `>patch 1` on the deck: Ableton learns controller 3. Do the same on every
+rack with the same `>patch` line; one controller mapped many times moves them all.
+A channel only one track uses needs no switch. On the drums, the chains are whole
+Drum Racks inside an Instrument Rack. The VOX bank already switches by note.
+
+While a track plays, `>patch` lands on the next one like everything else, so a
+section can change every sound at once — none of the scores do yet.
 
 Take parts out on the deck, not in Ableton: the deck's mutes land on the one.
 
 ## 3. Several voices on one track
 
-Put an **Instrument Rack** on each track and give it more than one chain. A chain
-is a voice; the rack decides which voices a note reaches, four ways:
+Inside a track's chain, more voices. A rack decides which voices a note reaches:
 
 - **Layer.** Every chain plays every note. The 808 as a sine sub plus a distorted
   layer high-passed at about 120 Hz, so the low end stays clean while the top
@@ -52,9 +72,6 @@ is a voice; the rack decides which voices a note reaches, four ways:
   between them with its octave: WEIGHT's drop runs `>lead:oct 5 /16`, so give the
   octave above the hook its own chain — a pitched vowel, a supersaw — and the
   drop changes the sound as well as the register.
-- **Chain select.** Map a macro to the Chain Selector and set the chains' zones to
-  overlap with fades: one deck controller then crossfades voices. `>send glow 8`
-  can take the keys from an electric piano into a wide supersaw.
 
 Put the rack's **MIDI effects** in front of it for variety the deck does not write:
 a **Velocity** device with a little Random on hats and voices (the deck's voices
@@ -166,9 +183,9 @@ let `harder` distort.
   slides: a tie that runs into the next note overlaps it and glides, a rest before
   a note does not (the gate, 250 ms, is longer than an eighth). `drive` on the
   distortion; HEAT runs it at 6 and 9.
-- **Keys (ch 3).** One rack for the set: an electric piano chain for GRID and
-  OFFSET's organ stabs (short release), a supersaw chain with a slow attack for
-  WEIGHT and ORBITALS, `glow` between them. The pump compressor after the rack.
+- **Keys (ch 3).** Four chains on the patch: GRID's short organ stab, OFFSET's
+  garage organ, WEIGHT's electric piano with a supersaw under it, ORBITALS' slow
+  glass pad. `glow` is each one's filter. The pump compressor after the rack.
 - **Lead1 (ch 2).** A sung vowel in Simpler, Classic mode, mono with glide, so a
   hook sounds like a voice; a quiet sine an octave up as a second chain, in key
   zones as above, for WEIGHT's octave.

@@ -9,6 +9,7 @@ itself thrown off the grid.
 
 -- set
   >keys kick clap hat ohat rumble hit acid vox
+  >patch 5
   >send view code
   >bpm 140
   >scale ephr

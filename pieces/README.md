@@ -41,6 +41,15 @@ velocity, and the sampler picks the sample by velocity. `>vox 1..1..1.` in HEAT 
 bar in. Every chop shares its bank's note, so each word cuts the last. Banks,
 words, and how to build them in Ableton: [ABLETON.md](ABLETON.md), §5.
 
+## Its own sounds
+
+Six tracks share the instrument channels — every chord on 3, every kit on 10 —
+so each track's first section runs `>patch N`, GRID 1 to ORBITALS 6: controller 3
+at N's level on channels 1–15. In the DAW each channel is an instrument type with
+a chain per track, and the patch picks the chain, so HEAT's kit and 808 are not
+WEIGHT's and ORBITALS' pad is not GRID's organ. Which chains each channel needs:
+[ABLETON.md](ABLETON.md), §2.
+
 ## What to plug in
 
 | channel | what |
@@ -57,6 +66,7 @@ words, and how to build them in Ableton: [ABLETON.md](ABLETON.md), §5.
 | 10 | General MIDI drums: kick, snare, clap, hats, rim, crash, and `perc` — maracas in GRID, low conga in OFFSET, rim in WEIGHT, cowbell in HEAT, claves in ORBITALS |
 | 11 | WEIGHT's bell, ORBITALS' glass arp |
 | 12 | VOX: note 36–41 is the track's bank, the velocity is the word |
+| 1–15 | controller 3: the patch, which track's sounds |
 | 13 | Acid: PRESSURE |
 | 16 | the HDMI screen's colour |
 

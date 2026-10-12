@@ -1,6 +1,6 @@
 # Every verb, on one page
 
-*The whole language. Thirty-seven verbs, counted from the command table itself —
+*The whole language. Thirty-nine verbs, counted from the command table itself —
 if this page and the firmware disagree, the firmware is right and this page is
 stale. The lane names are not
 verbs: they are yours, defined in the boot document.*
@@ -186,10 +186,12 @@ routes draws in table order, whatever order the lines were typed.
 
 `Ctrl-L` / `Ctrl-K` walk documents. **F1–F8** toggle the parts `>keys kick hat bass…` names (the first eight sound lanes until a document names them), on the next bar's one; **F9 / F10** jump to the heading above or below. `Ctrl-O` returns from output. `Ctrl-G` the guide.
 
-## Playing live — 3
+## Playing live — 5
 
 | | |
 |---|---|
+| `keys kick hat bass` | what F1–F8 play: a key takes its part out or brings it back **on the next bar's one** |
+| `patch 4` | **the track's sounds**: controller 3 at 4's level on channels 1–15, on the one while it plays. A rack on each channel in the DAW picks the track's chain by it — [pieces/ABLETON.md](../pieces/ABLETON.md) |
 | `toggle kick hat` | a block off **on the next bar's one**; the same line brings it back. `toggle pad pad:2` swaps two versions |
 | `cut <2 3 4 5 6 7 8 9> /16 !8` | a sweep that **ends by itself** — eight bars up, then its lane is free again |
 | `clear` | every lane gone; the page stays |
