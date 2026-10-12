@@ -114,7 +114,7 @@
  * "guide 3": a password is asked for and never typed on a line (ask.h), so the
  * '>wifi <ssid> <pass>' and '>host deck 12345678' that "guide 2" taught are
  * refused - and cut - now. */
-#define GUIDE_MARK "guide 7"
+#define GUIDE_MARK "guide 8"
 
 /* "guide 4", 2026-09-29: the sections are blocks - a heading run is its
  * section run (editor_block.h) - and the guide says what changed: a line run
@@ -135,6 +135,10 @@
 /* "guide 7", 2026-10-11: F1-F8 play the parts '>keys' names, on the one, and
  * F9/F10 walk the headings. */
 #define GUIDE6_FNV 0x900f034au
+
+/* "guide 8", 2026-10-11: while it plays, a line, mute and solo wait for the
+ * bar too (seq_toggle.h), so a score is walked a section at a time. */
+#define GUIDE7_FNV 0x330e11b8u
 
 #define GUIDE_TEXT \
     "GUIDE. ctrl+enter runs a line\n" \
@@ -179,10 +183,11 @@
     "  >bass 0__.5_..7__.5...\n" \
     "\n" \
     "-- on the one\n" \
-    "  toggle, key and colour wait\n" \
-    "  for the bar. a block run\n" \
-    "  again: its lanes out. again:\n" \
-    "  back.\n" \
+    "  playing, it all waits for\n" \
+    "  the bar: a line, a toggle,\n" \
+    "  mute, key, colour. a block\n" \
+    "  run again: its lanes out.\n" \
+    "  again: back.\n" \
     "  >toggle hat bass\n" \
     "\n" \
     "-- names\n" \
@@ -225,7 +230,7 @@
     "  >list\n" \
     "  >help\n" \
     "  midi learn: the midi page.\n" \
-    "guide 7\n" \
+    "guide 8\n" \
     ""
 
 /* THE MIDI PAGE: every controller the deck and its pieces send, one line each.

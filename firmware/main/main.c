@@ -373,7 +373,8 @@ static void ensure_guide_buffer(void)
                 for (size_t k = 0; keep != NULL && k < had; k++) {
                     h = (h ^ (uint8_t)keep[k]) * 16777619u;
                 }
-                if (keep != NULL && (h == GUIDE3_FNV || h == GUIDE4_FNV || h == GUIDE5_FNV || h == GUIDE6_FNV)) {
+                if (keep != NULL && (h == GUIDE3_FNV || h == GUIDE4_FNV || h == GUIDE5_FNV || h == GUIDE6_FNV ||
+                                 h == GUIDE7_FNV)) {
                     keep[0] = '\0';
                 }
                 doc_set_text(GUIDE_TEXT);
