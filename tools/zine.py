@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""zine.py ART_DIR OUT_DIR - set the hello zine in the deck's own faces.
+"""zine.py ART_DIR OUT_DIR [BOOK] - set a zine in the deck's own faces.
+
+BOOK is hello (zine #0, tools/zine_pages.py, the default) or score (zine #1,
+the score book, tools/score_pages.py); the files are named for it.
 
 Sixteen pages, half letter (5.5 x 8.5 in) at 300 dpi, in two inks: black, and a
 red for what the deck lights - the step you are on, its replies, the numbers.
@@ -236,22 +239,25 @@ def write_pdf(path, images, w, h, inks=(RGB_RED, (0, 0, 0))):
     open(path, 'wb').write(bytes(out))
 
 
-def build(art, out):
-    from zine_pages import PAGES
+def build(art, out, book='hello'):
+    PAGES = __import__({'hello': 'zine_pages', 'score': 'score_pages'}[book]).PAGES
     pages = []
     for i, fn in enumerate(PAGES, 1):
         p = Page()
         fn(p, art)
-        if i not in (1, len(PAGES)):
-            p.numeral(i, right=(i % 2 == 1), ink_under=(fn.__name__ != 'room'))
-        p.marker(i, len(PAGES), ink=PAPER if fn.__name__ == 'room' else INK)
+        # A page the room made dark ('room' in hello, any page that says so)
+        # takes its folio in paper; a page of dense text takes no numeral.
+        dark = fn.__name__ == 'room' or getattr(p, 'dark', False)
+        if i not in (1, len(PAGES)) and not getattr(p, 'no_numeral', False):
+            p.numeral(i, right=(i % 2 == 1), ink_under=not dark)
+        p.marker(i, len(PAGES), ink=PAPER if dark else INK)
         pages.append(p.im)
-        p.im.save(os.path.join(out, f'hello-{i:02d}.png'), dpi=(300, 300))
-    write_pdf(os.path.join(out, 'hello-pages.pdf'), [plates(im) for im in pages], W, H)
-    return impose(pages, out)
+        p.im.save(os.path.join(out, f'{book}-{i:02d}.png'), dpi=(300, 300))
+    write_pdf(os.path.join(out, f'{book}-pages.pdf'), [plates(im) for im in pages], W, H)
+    return impose(pages, out, book)
 
 
-def impose(pages, out):
+def impose(pages, out, book='hello'):
     """A saddle-stitched booklet: US Letter landscape, two pages a side. For
     sixteen pages the sides are 16|1, 2|15, 14|3, 4|13, 12|5, 6|11, 10|7,
     8|9 - print both sides flipping on the short edge, stack in order, fold
@@ -271,13 +277,13 @@ def impose(pages, out):
         sheet.paste(pages[right - 1], (W, 0))
         sheets.append(sheet)
     both = [plates(sh) for sh in sheets]
-    write_pdf(os.path.join(out, 'hello-booklet.pdf'), both, 2 * W, H)
+    write_pdf(os.path.join(out, f'{book}-booklet.pdf'), both, 2 * W, H)
     # the plates apart, each printed black, for a riso drum apiece
-    write_pdf(os.path.join(out, 'hello-plate-red.pdf'), [(r,) for r, _ in both], 2 * W, H, inks=((0, 0, 0),))
-    write_pdf(os.path.join(out, 'hello-plate-black.pdf'), [(b,) for _, b in both], 2 * W, H, inks=((0, 0, 0),))
+    write_pdf(os.path.join(out, f'{book}-plate-red.pdf'), [(r,) for r, _ in both], 2 * W, H, inks=((0, 0, 0),))
+    write_pdf(os.path.join(out, f'{book}-plate-black.pdf'), [(b,) for _, b in both], 2 * W, H, inks=((0, 0, 0),))
     return sheets
 
 
 if __name__ == '__main__':
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    build(sys.argv[1], sys.argv[2])
+    build(sys.argv[1], sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else 'hello')

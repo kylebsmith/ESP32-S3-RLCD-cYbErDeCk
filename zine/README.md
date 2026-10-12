@@ -1,3 +1,30 @@
+# score — zine #1
+
+*The set's six tracks as their scores: a spread a track, in set order.*
+
+| file | what it is |
+|---|---|
+| `score-booklet.pdf` | to print: US Letter, landscape, two pages a side — both sides, fold, staple |
+| `score-pages.pdf` | the sixteen pages in reading order, half letter, for a screen |
+| `score-plate-black.pdf`, `score-plate-red.pdf` | the two plates apart, for riso |
+
+Each spread is one track. **The right page is the score**: the whole document as
+the deck holds it — `pieces/<track>.txt`, read when the zine is built — in the
+deck's 60-column face, headings red because a heading is what you press. **The
+left page reads it out**: the tempo, the key, the chords, what the voice says,
+and the one figure that makes the track, each drawn from the lines beside it —
+GRID's voice counting its four beats, OFFSET's swing and its rewind set
+backwards, WEIGHT's chords stacked as plates over its 808, HEAT's one word three
+times on the tresillo over the brass hit, PRESSURE's "harder" on a dark page with
+its threes against the fours, ORBITALS' orbit as the deck's engine draws it.
+Before the spreads, how to walk a score and the sounds: the patch, one chain a
+track, and the voice as a bank. Same method as zine #0 below: the deck's faces,
+its tiles, its picture engine, two inks of one bit each, page numbers as steps.
+
+Print and fold as zine #0. Build: as below, then
+`python3 tools/zine.py /tmp/zine_art_cells zine score` — the layout is
+`tools/score_pages.py`.
+
 # hello — zine #0
 
 *A getting-started zine for the deck, and the same zine as a document on it.*
