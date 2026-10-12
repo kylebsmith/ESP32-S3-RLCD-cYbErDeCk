@@ -1672,6 +1672,23 @@ esp_err_t seq_toggle(const char *name, bool *will_mute)
     return ESP_OK;
 }
 
+esp_err_t seq_mute_at_one(const char *name, bool mute)
+{
+    seq_lane_t *l = find(name, false);
+    if (l == NULL) {
+        return ESP_ERR_NOT_FOUND;
+    }
+    if (!s_running) {
+        return seq_mute(name, mute);
+    }
+    l->gone = false;
+    __atomic_store_n(&l->pend_mute,
+                     (int8_t)(mute == l->muted ? SEQ_PEND_NONE
+                                               : mute ? SEQ_PEND_MUTE : SEQ_PEND_UNMUTE),
+                     __ATOMIC_RELEASE);
+    return ESP_OK;
+}
+
 esp_err_t seq_leave(const char *name)
 {
     seq_lane_t *l = find(name, false);

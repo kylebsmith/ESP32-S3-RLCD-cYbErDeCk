@@ -200,8 +200,8 @@ Controllers 1-8 on channel 16 colour the HDMI view: `>day = cc 4 ch 16`, then
 | | |
 |---|---|
 | `panic` | silence everything, now |
-| `mute hat bass` | `mute` alone puts all back |
-| `solo kick` | |
+| `mute hat bass` | out **on the next bar's one** while it plays, whatever the F-keys did; `mute` alone puts all back |
+| `solo kick` | the rest out on the one |
 | `kbd` | what is typing; `kbd forget` to pair a different keyboard |
 | `battery` | find the sense pin |
 | `ssh me@host ls` | a command, run elsewhere - it asks for the password |

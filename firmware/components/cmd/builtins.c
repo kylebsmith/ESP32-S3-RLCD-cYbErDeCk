@@ -2494,14 +2494,19 @@ static cmd_status_t c_mute(cmd_ctx_t *ctx)
         }
         const bool named = !clear && lane_named(ctx->arg, l[i].name);
         /* solo: everything not named goes quiet. mute: everything named does.
-         * With no argument both mean "everything back on". */
+         * With no argument both mean "everything back on". While it plays it
+         * lands on the one, like a toggle, but it says which way - so a score
+         * can take the drums out whatever the F-keys did before. */
         const bool want_mute = clear ? false : (solo ? !named : named);
-        if (want_mute != l[i].muted) {
-            seq_mute(l[i].name, want_mute);
+        const bool going = seq_toggle_will_mute(
+            l[i].muted, __atomic_load_n(&l[i].pend_mute, __ATOMIC_ACQUIRE));
+        if (want_mute != going) {
+            seq_mute_at_one(l[i].name, want_mute);
             touched++;
         }
     }
-    snprintf(ctx->msg, sizeof ctx->msg, "%s: %d lane%s changed",
+    snprintf(ctx->msg, sizeof ctx->msg, seq_running() ? "%s: %d lane%s - on the one"
+                                                      : "%s: %d lane%s changed",
              clear ? "all on" : ctx->name, touched, touched == 1 ? "" : "s");
     return CMD_DONE;
 }

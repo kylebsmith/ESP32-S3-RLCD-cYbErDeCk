@@ -332,6 +332,11 @@ esp_err_t seq_toggle(const char *name, bool *will_mute);
  * exactly the lanes it took out (editor_block.h). */
 esp_err_t seq_hold(const char *name, bool held);
 
+/* '>mute kick' and '>solo bass' while it plays: where the lane goes, on the
+ * next bar's one (seq_toggle.h), whatever a toggle had pending - unlike a
+ * toggle it says which way. At once when stopped. */
+esp_err_t seq_mute_at_one(const char *name, bool mute);
+
 /* A line run again unchanged takes its lane out: on the next one while the
  * clock runs (seq_toggle.h), its slot freed by seq_reap once it has gone;
  * forgotten at once when stopped. */
