@@ -18,6 +18,7 @@ rest before it does not.
   >pad = voice 3 ch 3 gate 1600
   >lead = voice 4 ch 2 gate 220
   >bell = voice 5 ch 11 gate 120
+  >vox = note 38 ch 12 gate 450
   >drive = cc 20 ch 6
   >pump = cc 21 ch 3
   >glow = cc 74 ch 3
@@ -63,12 +64,13 @@ one bar of air, then drop
   >lead <6_4__7__6_4__3__ 5_4__2__1_2__4__> /2
   >lead:oct 5 /16
   >pump 9 /16
+  >vox 7.........1.1...
   >crash 9............... !1
   >send drive 7
   >send view sort
 
 -- 7 weightless
-  >mute kick clap hat lead
+  >mute kick clap hat lead vox
   >bass <2_______ 6_______ 5_______ 4_______> /2
   >pad <[1,3,4,6] [0,1,3,4] [0,2,4,6] [0,1,3,4]> /16
   >pump 0 /16
@@ -84,7 +86,7 @@ one bar of air, then drop
   >send view sort
 
 -- 9 last
-  >mute kick clap hat perc bass
+  >mute kick clap hat perc bass vox
   >lead <6_4__7__6_4__3__ 5_4__2__1_2__4__> /2
   >lead:oct 4 /16
   >pump 0 /16

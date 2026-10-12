@@ -76,6 +76,10 @@ sixteen sounds; the sixteen pictures answer to their own names.
 kick that is already playing; `>conga =` forgets the name and its lanes. A name is
 up to eight letters and cannot be a verb or a picture.
 
+**A sample bank is one note.** `>vox = note 39 ch 12`: on a drum the digit is the
+velocity, so a sampler that picks its sample by velocity plays ten words from one
+lane — `>vox 1..1..1.` is word 1 three times. The set's banks: `pieces/ABLETON.md`.
+
 **Inputs are names too.** `>knob1 = knob` holds a value, `>pad1 = pad` fires on a
 press, and `>route cut knob1` makes the filter follow it. With `>osc in 9000`, OSC to
 `/deck/knob1` sets it — a phone, a laptop, another deck. A pad lands on the next

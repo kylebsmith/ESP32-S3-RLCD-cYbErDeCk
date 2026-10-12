@@ -24,7 +24,7 @@ are a voice, cut up.
   >bass = voice 1 ch 5 gate 200
   >pad = voice 3 ch 3 gate 150
   >lead = voice 4 ch 7 gate 60
-  >echo 7
+  >vox = note 37 ch 12 gate 600
   >pad ..[2,4,7,8]...[2,4,6,9].[2,4,6,8].....[2,4,6,8].
   >play
 
@@ -56,12 +56,14 @@ are a voice, cut up.
 -- 6 strip
   >mute kick snare rim perc bass ohat
   >pad [2,4,6,9]..[2,4,6,7]..[2,4,6,8]......[2,4,6,8]..
+  >vox 9............... !1
   >send view inv 9
 
 -- 7 drop
   >mute
   >lead <..7.7.9.[97]6....4. ..7.7.9.[97]4..2...>
   >crash 9............... !1
+  >vox 5............... !1
   >send bite 1
   >send view inv 0
 

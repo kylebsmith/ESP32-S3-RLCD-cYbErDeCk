@@ -1,0 +1,79 @@
+HEAT
+>stop
+
+south florida trap, g locrian,
+145. ignorant on purpose: one
+808, one word, a brass hit on
+the tritone, and a switch to
+miami bass nobody asked for.
+the vox digit picks the word.
+
+-- set
+  >keys kick clap hat perc bass hit vox
+  >send view code
+  >bpm 145
+  >scale gloc
+  >swing 50
+  >perc = note 56
+  >bass = voice 1 ch 6 gate 250
+  >hit = voice 3 ch 8 gate 120
+  >vox = note 39 ch 12 gate 400
+  >drive = cc 20 ch 6
+  >send drive 6
+  >vox 1..1..1.........
+  >play
+
+-- 1 the 808
+  >bass <0_____0_ 0_____0_ 0_____0_ 0__4____> /2
+  >kick 9...........9...
+  >box 4...........4...
+  >route box:x bass
+  >send view plain
+
+-- 2 trap
+  >clap ........9.......
+  >hat 9.9.9.9.9.9.9.9.
+  >hit <[0,4,7]..[0,4,7]..[0,4,7]......... ................>
+  >route flip clap
+
+-- 3 ad-libs
+  >vox 1..1..1.2...4...
+
+-- 4 out of step
+  >vox 1..1..1.2...
+
+-- 5 nothing
+  >mute kick clap hat bass hit
+  >vox 0...............
+
+-- 6 miami
+  >kick 9...9...9...9...
+  >clap ....9.......9...
+  >hat 7575757575757575
+  >perc ..9...9...9...9.
+  >bass <0..0..0. 0..0..0. 0..0..0. 0..0..4.> /2
+  >hit <[0,4,7]..[0,4,7]..[0,4,7]......... ................>
+  >vox <9...5...5...5... 5...5...5.5.5.5. 5...5...5...5... 6...6...6.6.6.6.>
+  >send view riso
+
+-- 7 heat
+  >mute perc
+  >kick 9...........9...
+  >clap ........9.......
+  >hat 9.9.9.9.9.9.9.9.
+  >bass <0_____0_ 0_____0_ 0_____0_ 0__4____> /2
+  >vox <9..1..1.2...4... 1..1..1.2...4...>
+  >send drive 9
+  >send view sort
+
+-- 8 last
+  >mute kick clap hat hit
+  >vox 1..1..1.........
+  >send drive 6
+  >send view plain
+
+-- out
+  >clear
+  >send view off
+  >send view poster
+  >stop

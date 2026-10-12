@@ -2,9 +2,9 @@ SET
 >stop
 >panic
 
-four scores, about forty
-minutes. run a heading to go
-to its track.
+six scores, about an hour.
+run a heading to go to its
+track.
 
 -- 1 grid
   >open grid
@@ -12,7 +12,11 @@ to its track.
   >open offset
 -- 3 weight
   >open weight
--- 4 orbitals
+-- 4 heat
+  >open heat
+-- 5 pressure
+  >open pressure
+-- 6 orbitals
   >open orbitals
 
 each track is a score: walk
