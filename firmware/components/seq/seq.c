@@ -1571,7 +1571,14 @@ esp_err_t seq_lane_bind(const char *name, const seq_binding_t *b)
     l->melodic = (b->bind == SEQ_BIND_NOTE) && b->melodic;
     l->ctrl    = (b->bind == SEQ_BIND_CC);
     l->note    = b->note & 0x7F;
-    l->octave  = b->octave;
+    /* THE OCTAVE A PART MOVED STAYS MOVED. Running a voice's line binds it
+     * again, and this reset the octave to the name's own on the spot: WEIGHT's
+     * last section ran '>lead' with '>lead:oct 5 /16' still in play, and the
+     * old hook dropped an octave for the rest of the bar (heard on the deck,
+     * 2026-10-11). Only a new octave in the definition moves it now. */
+    if (l->slots == 0 || l->oct0 != b->octave) {
+        l->octave = b->octave;
+    }
     l->chan    = b->chan & 0x0F;
     l->gate_ms = b->gate_ms ? b->gate_ms : 40;
     l->cc      = b->cc & 0x7F;
