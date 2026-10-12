@@ -85,6 +85,48 @@ int main(void)
     /* 5. A lane made after the press never inherits it: a new slot is zeroed. */
     CHECK(SEQ_PEND_NONE == 0, "no change pending is zero, what a new lane starts with");
 
-    printf(fails ? "[FAIL] %d check(s) failed\n" : "[PASS] toggle lands on the one\n", fails);
+    /* 6-9. A LINE RUN WHILE IT PLAYS lands on the one too: seq_lane's three
+     *    ways, with the lane's pattern as a number and a pattern waiting for
+     *    the bar beside it, as the clock holds them. */
+    for (int k = 0; k < 4; k++) {
+        /* 6 a silent part, 7 a sounding part changed, 8 the same line again,
+         * 9 a silent part with the clock stopped */
+        lane_t l = { k == 0 || k == 3, SEQ_PEND_NONE };
+        int pat = (k == 0 || k == 3) ? 0 : 1, next = -1;
+        int heard_new = -1, went = -1;
+        const int running = (k != 3);
+        for (unsigned t = 0; t < 1000; t++) {
+            if (t == 100) {
+                const int sounding = !l.muted;
+                if (k == 2) {
+                    l.pend = running ? SEQ_PEND_MUTE : SEQ_PEND_NONE;      /* seq_leave */
+                    if (!running) l.muted = 1;
+                } else {
+                    const int plan = seq_run_plan(running, sounding);
+                    if (plan == SEQ_RUN_NEXT) { next = 2; l.pend = SEQ_PEND_NONE; }
+                    else {
+                        pat = 2;
+                        if (plan == SEQ_RUN_ENTERS) { l.muted = 1; l.pend = SEQ_PEND_UNMUTE; }
+                        else { l.muted = 0; l.pend = SEQ_PEND_NONE; }
+                    }
+                }
+            }
+            if (seq_toggle_at_bar(t) && next >= 0) { pat = next; next = -1; }
+            const int was_muted = l.muted;
+            tick(&l, 1, t);
+            if (heard_new < 0 && !l.muted && pat == 2) heard_new = (int)t;
+            if (went < 0 && l.muted && !was_muted) went = (int)t;
+        }
+        if (k == 0) CHECK(heard_new == 384, "a part run at tick 100 comes in at 384 (%d)", heard_new);
+        if (k == 1) CHECK(heard_new == 384, "a part changed at tick 100 plays the old until 384 (%d)", heard_new);
+        if (k == 2) CHECK(went == 384, "the same line again at tick 100 goes out at 384 (%d)", went);
+        if (k == 3) CHECK(heard_new == 100, "stopped, a line run at tick 100 is in place at 100 (%d)", heard_new);
+    }
+    CHECK(seq_run_plan(0, 1) == SEQ_RUN_NOW && seq_run_plan(0, 0) == SEQ_RUN_NOW,
+          "stopped, every line acts at once");
+    CHECK(seq_run_plan(1, 1) == SEQ_RUN_NEXT && seq_run_plan(1, 0) == SEQ_RUN_ENTERS,
+          "playing: a sounding part waits, a silent one enters");
+
+    printf(fails ? "[FAIL] %d check(s) failed\n" : "[PASS] toggles and lines land on the one\n", fails);
     return fails != 0;
 }

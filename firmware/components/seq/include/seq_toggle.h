@@ -44,3 +44,23 @@ static inline bool seq_toggle_land(bool muted, int pend)
 {
     return pend == SEQ_PEND_NONE ? muted : pend == SEQ_PEND_MUTE;
 }
+
+/* A LINE RUN WHILE IT PLAYS LANDS ON THE ONE TOO. The pieces are scores now,
+ * walked top to bottom, a section run in the bar before it - and a part came
+ * in the moment its line ran, wherever the bar was: a hat run on the and of
+ * three came in on the and of three. I asked for transitions that do not come
+ * in "at not correct timing" (2026-09-29), and got them for toggles only. So
+ * while the clock runs, a lane's line is a switch too:
+ *
+ *   a part that is silent is made now and comes in on the next one
+ *   a part that sounds plays what it played until the one, then the new
+ *   the same line run again goes out on the one (seq_leave)
+ *
+ * Stopped, a line acts at once, so a piece still sets itself up before
+ * '>play'. "Sounds" means in play, not muted, not finished. */
+enum { SEQ_RUN_NOW = 0, SEQ_RUN_ENTERS = 1, SEQ_RUN_NEXT = 2 };
+
+static inline int seq_run_plan(bool running, bool sounding)
+{
+    return !running ? SEQ_RUN_NOW : sounding ? SEQ_RUN_NEXT : SEQ_RUN_ENTERS;
+}

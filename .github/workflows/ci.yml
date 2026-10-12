@@ -187,7 +187,7 @@ jobs:
 
       # '>toggle' lands on the next bar's first tick, not when it is pressed:
       # the rule in seq_toggle.h that the clock runs, played out over ticks.
-      - name: Check that a toggle lands on the one
+      - name: Check that a toggle and a line land on the one
         run: |
           cc -std=c11 -Wall -Wextra -Werror -I firmware/components/seq/include \
              -o /tmp/test_toggle tools/test_toggle.c

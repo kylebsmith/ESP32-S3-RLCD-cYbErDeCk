@@ -42,6 +42,10 @@ rather than played as a hit.
 take that lane out; run it again to bring it back. Type a lane's name alone to delete
 it. Inside `< >`, words of one length take turns whole: `<000 777>`.
 
+**While it plays, a line lands on the next bar's one.** A new part comes in there,
+a changed part plays what it played until there, and a line run again goes out
+there, so a line can be run any time in the bar before. Stopped, a line acts at once.
+
 **A line runs the lines tabbed under it**, so a heading runs its section — a scene,
 one key. **Run a block again, unchanged, and its lanes go out on the next bar's
 one; once more and the ones it took come back** — a drum kit, a layer, a whole

@@ -6,8 +6,10 @@
 #include "seq_scale.h"
 
 #include <ctype.h>
+#include <stdlib.h>
 #include <string.h>
 
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -737,12 +739,31 @@ static void fire_lanes(uint32_t tick)
  * cannot be torn safely, so the command layer compiles into this stage and the
  * clock copies it in at the top of a tick - the clock is then the only writer of
  * everything it reads. One stage, because one command runs at a time. */
-static struct {
+typedef struct {
     seq_ev_t ev[SEQ_MAX_EVENTS];
     uint8_t  first[SEQ_MAX_STEPS + 1];
     uint8_t  nev, slots, div, steps, rnum, rden, count;
-} s_stage;
+} stage_t;
+static stage_t s_stage;
 static volatile int s_stage_for = -1;    /* the lane waiting for it, or -1 */
+
+/* A compiled pattern into its lane - by the clock, the lane's only writer. */
+static void apply(seq_lane_t *l, const stage_t *s)
+{
+    memcpy(l->ev, s->ev, sizeof l->ev);
+    memcpy(l->first, s->first, sizeof l->first);
+    l->nev   = s->nev;
+    l->div   = s->div;
+    l->steps = s->steps;
+    l->rnum  = s->rnum;
+    l->rden  = s->rden;
+    /* A lane written again starts its count again: it waits for its downbeat,
+     * or for its source, and is no longer finished. */
+    l->count = s->count;
+    l->idle  = true;
+    l->done  = false;
+    l->slots = s->slots;
+}
 
 static void stage_apply(void)
 {
@@ -751,22 +772,31 @@ static void stage_apply(void)
         return;
     }
     __sync_synchronize();
-    seq_lane_t *l = &s_lanes[i];
-    memcpy(l->ev, s_stage.ev, sizeof l->ev);
-    memcpy(l->first, s_stage.first, sizeof l->first);
-    l->nev   = s_stage.nev;
-    l->div   = s_stage.div;
-    l->steps = s_stage.steps;
-    l->rnum  = s_stage.rnum;
-    l->rden  = s_stage.rden;
-    /* A lane written again starts its count again: it waits for its downbeat,
-     * or for its source, and is no longer finished. */
-    l->count = s_stage.count;
-    l->idle  = true;
-    l->done  = false;
-    l->slots = s_stage.slots;
+    apply(&s_lanes[i], &s_stage);
     __sync_synchronize();
     s_stage_for = -1;
+}
+
+/* A CHANGE TO A PART THAT IS PLAYING WAITS FOR THE ONE (seq_toggle.h). One
+ * compiled pattern a lane, handed over as the stage is: the command layer
+ * writes it and marks it ready, the clock copies it in on the bar's first tick
+ * before any lane fires. A newer line takes the waiting one back first. 13 KB
+ * for all sixteen, so in PSRAM; the clock reads it once a bar at most. */
+enum { NEXT_EMPTY = 0, NEXT_READY = 1, NEXT_LANDING = 2 };
+static stage_t *s_next;
+static uint8_t  s_next_st[SEQ_MAX_LANES];
+static void next_take(int i);
+
+static void next_land(void)
+{
+    for (int i = 0; i < SEQ_MAX_LANES; i++) {
+        uint8_t want = NEXT_READY;
+        if (__atomic_compare_exchange_n(&s_next_st[i], &want, (uint8_t)NEXT_LANDING,
+                                        false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
+            apply(&s_lanes[i], &s_next[i]);
+            __atomic_store_n(&s_next_st[i], (uint8_t)NEXT_EMPTY, __ATOMIC_RELEASE);
+        }
+    }
 }
 
 /* The clock. A hardware timer, never a task delay - docs/OS.md: "Never
@@ -989,6 +1019,7 @@ static void tick(void *arg)
      * core; a press between the read and the clear is never lost. */
     if (seq_toggle_at_bar(s_tick)) {
         key_land();
+        next_land();
         for (int i = 0; i < SEQ_MAX_LANES; i++) {
             seq_lane_t *l = &s_lanes[i];
             const int p = __atomic_exchange_n(&l->pend_mute, (int8_t)SEQ_PEND_NONE,
@@ -1122,6 +1153,14 @@ esp_err_t seq_init(void)
     s_midiq = xQueueCreate(64, sizeof(midi_ev_t));
     if (s_midiq == NULL) {
         return ESP_ERR_NO_MEM;
+    }
+    s_next = heap_caps_calloc(SEQ_MAX_LANES, sizeof(stage_t),
+                              MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (s_next == NULL) {
+        s_next = calloc(SEQ_MAX_LANES, sizeof(stage_t));
+    }
+    if (s_next == NULL) {
+        ESP_LOGW(TAG, "no room to hold changes for the one: lines act at once");
     }
     /* Priority above the editor, below the BLE host. 4 KB because NimBLE's
      * notify path is the deepest thing this task calls. */
@@ -1270,6 +1309,8 @@ esp_err_t seq_forget(const char *name)
     l->slots = 0;
     l->route[0] = '\0';
     l->trig = false;
+    l->gone = false;
+    next_take((int)(l - s_lanes));
     /* A PART THAT GOES TAKES ITS SETTING WITH IT. Dropping '>bass:oct' and
      * leaving the bass two octaves up would be a change nobody can see the
      * cause of any more; the name's own octave and the default level return. */
@@ -1291,7 +1332,9 @@ void seq_forget_all(void)
         s_lanes[i].slots = 0;
         s_lanes[i].route[0] = '\0';
         s_lanes[i].trig = false;
+        s_lanes[i].gone = false;
         s_lanes[i].used = false;
+        next_take(i);
     }
     rerank();
 }
@@ -1311,20 +1354,19 @@ static void stage_wait(void)
     }
 }
 
-static void stage(int lane, const seq_comp_t *c)
+static void fill(stage_t *st, const seq_comp_t *c)
 {
-    stage_wait();
     /* Rests and ties are the playhead's business; the clock gets the hits,
      * sorted by slot, and where each slot's run of them begins. */
     int n = 0;
     for (int s = 0; s < c->slots; s++) {
-        s_stage.first[s] = (uint8_t)n;
+        st->first[s] = (uint8_t)n;
         for (int i = 0; i < c->n; i++) {
             const seq_leaf_t *L = &c->leaf[i];
             if (L->kind != SEQ_LEAF_HIT || L->slot != s) {
                 continue;
             }
-            seq_ev_t *e = &s_stage.ev[n++];
+            seq_ev_t *e = &st->ev[n++];
             e->slot  = L->slot;
             e->val   = L->val;
             e->hold  = (uint8_t)(L->len - L->width);
@@ -1336,18 +1378,47 @@ static void stage(int lane, const seq_comp_t *c)
         }
     }
     for (int s = c->slots; s <= SEQ_MAX_STEPS; s++) {
-        s_stage.first[s] = (uint8_t)n;
+        st->first[s] = (uint8_t)n;
     }
-    s_stage.nev   = (uint8_t)n;
-    s_stage.slots = (uint8_t)c->slots;
-    s_stage.div   = (uint8_t)c->div;
-    s_stage.steps = (uint8_t)c->steps;
-    s_stage.rnum  = (uint8_t)c->rnum;
-    s_stage.rden  = (uint8_t)c->rden;
-    s_stage.count = (uint8_t)c->count;
+    st->nev   = (uint8_t)n;
+    st->slots = (uint8_t)c->slots;
+    st->div   = (uint8_t)c->div;
+    st->steps = (uint8_t)c->steps;
+    st->rnum  = (uint8_t)c->rnum;
+    st->rden  = (uint8_t)c->rden;
+    st->count = (uint8_t)c->count;
+}
+
+static void stage(int lane, const seq_comp_t *c)
+{
+    stage_wait();
+    fill(&s_stage, c);
     __sync_synchronize();
     s_stage_for = lane;
     stage_wait();
+}
+
+/* Take back a pattern still waiting for the one: a newer line replaces it, a
+ * line run while stopped acts at once, and a lane let go takes nothing with it.
+ * The clock holds it for one copy at most; the wait is bounded all the same. */
+static void next_take(int i)
+{
+    for (int k = 0; k < 50; k++) {
+        uint8_t want = NEXT_READY;
+        if (__atomic_compare_exchange_n(&s_next_st[i], &want, (uint8_t)NEXT_EMPTY,
+                                        false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE) ||
+            want == NEXT_EMPTY) {
+            return;
+        }
+        vTaskDelay(1);
+    }
+}
+
+static void next_put(int i, const seq_comp_t *c)
+{
+    next_take(i);
+    fill(&s_next[i], c);
+    __atomic_store_n(&s_next_st[i], (uint8_t)NEXT_READY, __ATOMIC_RELEASE);
 }
 
 /* One compile at a time - the command layer is the only caller - so the
@@ -1406,7 +1477,32 @@ esp_err_t seq_lane(const char *name, const char *steps)
     s_err[0] = '\0';
     s_err_at = -1;
 
-    stage((int)(l - s_lanes), &s_comp);
+    /* WHEN IT TAKES EFFECT (seq_toggle.h): stopped, now; playing, on the next
+     * one - a part that was silent comes in there, a part that sounds plays
+     * what it played until there. Running a line means play this, so it also
+     * takes back a toggle or a leave still waiting for the bar. */
+    const int i = (int)(l - s_lanes);
+    const bool sounding = l->slots != 0 && !l->muted && !l->done;
+    int plan = seq_run_plan(s_running, sounding);
+    if (plan == SEQ_RUN_NEXT && s_next == NULL) {
+        plan = SEQ_RUN_NOW;                  /* no room to hold it: as before */
+    }
+    if (plan == SEQ_RUN_NEXT) {
+        next_put(i, &s_comp);
+    } else {
+        next_take(i);
+        if (plan == SEQ_RUN_ENTERS) {
+            l->muted = true;                 /* silent until the one */
+        }
+        stage(i, &s_comp);
+    }
+    l->gone = false;
+    __atomic_store_n(&l->pend_mute,
+                     (int8_t)(plan == SEQ_RUN_ENTERS ? SEQ_PEND_UNMUTE : SEQ_PEND_NONE),
+                     __ATOMIC_RELEASE);
+    if (plan == SEQ_RUN_NOW) {
+        l->muted = false;
+    }
     /* A DIRECTION IN FRONT OF THE PATTERN - '>ramp u 4' - is the lane's way;
      * a step can still say its own with u d l r. */
     l->dir = s_comp.dir ? s_comp.dir : 'd';
@@ -1551,6 +1647,7 @@ esp_err_t seq_mute(const char *name, bool mute)
     }
     __atomic_store_n(&l->pend_mute, (int8_t)SEQ_PEND_NONE, __ATOMIC_RELEASE);
     l->muted = mute;
+    l->gone = false;
     return ESP_OK;
 }
 
@@ -1565,6 +1662,7 @@ esp_err_t seq_toggle(const char *name, bool *will_mute)
     if (will_mute != NULL) {
         *will_mute = (next == SEQ_PEND_MUTE);
     }
+    l->gone = false;
     if (!s_running) {
         __atomic_store_n(&l->pend_mute, (int8_t)SEQ_PEND_NONE, __ATOMIC_RELEASE);
         l->muted = (next == SEQ_PEND_MUTE);
@@ -1572,6 +1670,31 @@ esp_err_t seq_toggle(const char *name, bool *will_mute)
         __atomic_store_n(&l->pend_mute, (int8_t)next, __ATOMIC_RELEASE);
     }
     return ESP_OK;
+}
+
+esp_err_t seq_leave(const char *name)
+{
+    seq_lane_t *l = find(name, false);
+    if (l == NULL) {
+        return ESP_ERR_NOT_FOUND;
+    }
+    if (!s_running) {
+        return seq_forget(name);
+    }
+    l->gone = true;
+    __atomic_store_n(&l->pend_mute, (int8_t)SEQ_PEND_MUTE, __ATOMIC_RELEASE);
+    return ESP_OK;
+}
+
+void seq_reap(void)
+{
+    for (int i = 0; i < SEQ_MAX_LANES; i++) {
+        seq_lane_t *l = &s_lanes[i];
+        if (l->used && l->gone && l->muted &&
+            __atomic_load_n(&l->pend_mute, __ATOMIC_ACQUIRE) == SEQ_PEND_NONE) {
+            seq_forget(l->name);
+        }
+    }
 }
 
 void seq_cc_now(uint8_t chan, uint8_t cc, uint8_t value)

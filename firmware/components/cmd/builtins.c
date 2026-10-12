@@ -630,8 +630,12 @@ static bool rerun_silences_named(const char *name, const char *pat)
     if (!seq_running()) {
         return false;
     }
+    /* Where it is GOING, as a toggle reads it: a part coming in on the next
+     * one is taken back by the same line again, before the bar or after. */
     const seq_lane_t *l = seq_lane_find(name, -1);
-    return l != NULL && !l->muted && l->src == seq_pattern_hash(pat);
+    return l != NULL && !l->done &&
+           !seq_toggle_will_mute(l->muted, __atomic_load_n(&l->pend_mute, __ATOMIC_ACQUIRE)) &&
+           l->src == seq_pattern_hash(pat);
 }
 
 static bool rerun_silences(const cmd_ctx_t *ctx)
@@ -782,8 +786,8 @@ cmd_status_t cmd_lane(cmd_ctx_t *ctx, const char *word, size_t n)
         return CMD_DONE;
     }
     if (rerun_silences(ctx)) {
-        seq_forget(name);
-        snprintf(ctx->msg, sizeof ctx->msg, "%s off - again for on", name);
+        seq_leave(name);
+        snprintf(ctx->msg, sizeof ctx->msg, "%s off on the one - again for on", name);
         return CMD_DONE;
     }
     /* A WAY WHERE NOTHING TURNS IS REFUSED (docs/MANIFESTO.md §3.10). 'u d l r'
@@ -814,16 +818,18 @@ cmd_status_t cmd_lane(cmd_ctx_t *ctx, const char *word, size_t n)
     if (seq_lane_bind(name, &b) != ESP_OK) {
         return lane_refused(ctx, ESP_ERR_NO_MEM);
     }
+    /* Playing, it lands on the next one; stopped, at once (seq_toggle.h). */
     const esp_err_t le = seq_lane(name, pat);
     if (le != ESP_OK) {
         return lane_refused(ctx, le);
     }
-    seq_mute(name, false);
     /* A picture no longer opens the deck's own preview pane: on stage the
      * HDMI node shows the picture and this screen stays the code (I said,
      * 2026-10-11: the preview was "taking over the viewer"). '>split' still
      * shows it here. */
-    if (b.melodic) {
+    if (seq_running()) {
+        snprintf(ctx->msg, sizeof ctx->msg, "%s on the one", name);
+    } else if (b.melodic) {
         snprintf(ctx->msg, sizeof ctx->msg, "%s %s in %s", name, pat,
                  seq_scale_name());
     } else {

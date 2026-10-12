@@ -156,6 +156,7 @@ typedef struct {
     bool     muted;
     int8_t   pend_mute;     /* a '>toggle' waiting for the bar: seq_toggle.h */
     bool     held;          /* silenced by its block's second run, to come back */
+    bool     gone;          /* its line run again: out on the one, then freed  */
     bool     melodic;
     bool     ctrl;          /* a controller lane: digits are VALUES, not notes */
     uint8_t  cc;
@@ -218,7 +219,11 @@ esp_err_t seq_init(void);
  * the character from seq_lane_error(). Nothing is changed when it is refused,
  * so a typo mid-performance leaves the lane playing what it played before.
  *
- * `steps` is kept verbatim for '>lanes'. ESP_ERR_NO_MEM means no lane is free. */
+ * `steps` is kept verbatim for '>lanes'. ESP_ERR_NO_MEM means no lane is free.
+ *
+ * While the clock runs it lands on the next bar's one (seq_toggle.h): a lane
+ * that was silent comes in there, a lane that sounds plays its old pattern
+ * until there. Stopped, it is in place at once and unmuted. */
 esp_err_t seq_lane(const char *name, const char *steps);
 
 /* Why the last seq_lane() refused its pattern, in at most thirty columns, and
@@ -326,6 +331,15 @@ esp_err_t seq_toggle(const char *name, bool *will_mute);
 /* Mark a lane as one a block silenced, so the block's next run brings back
  * exactly the lanes it took out (editor_block.h). */
 esp_err_t seq_hold(const char *name, bool held);
+
+/* A line run again unchanged takes its lane out: on the next one while the
+ * clock runs (seq_toggle.h), its slot freed by seq_reap once it has gone;
+ * forgotten at once when stopped. */
+esp_err_t seq_leave(const char *name);
+
+/* Free the lanes seq_leave sent out, once they are out. From the editor's
+ * loop, so the slot is given back by the same task that hands slots out. */
+void seq_reap(void);
 
 /* A controller value, out now through the clock's own queue: '>send cut 3'. */
 void seq_cc_now(uint8_t chan, uint8_t cc, uint8_t value);

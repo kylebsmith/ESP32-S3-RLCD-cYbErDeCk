@@ -880,6 +880,9 @@ void app_main(void)
          * is why the deck can no longer wedge itself into unreachability. */
         usbdev_poll();
         st7305_service();
+        /* A line run again went out on the one; its slot comes back here,
+         * in the task that hands slots out (seq.h, seq_reap). */
+        seq_reap();
 
         /* Keep the radio in step with the destination. '>send ble on' must
          * actually bring the peripheral up, and '>send ble off' must stop it
