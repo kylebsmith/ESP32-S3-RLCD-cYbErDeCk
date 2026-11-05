@@ -1,0 +1,70 @@
+"""Shared geometry for the layout studies.
+
+A spec states intent -- which bays, in which rows -- and this computes the deck
+from the keyboard by the repo's own identity, then places the display in the
+board band. No layout types a body size in.
+"""
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(__file__))
+import parts as P  # noqa: E402
+
+SPINE = 3.20
+BOARD_POCKET_H = 70.30
+PLATE_W = 266.700           # 14 key units, 420 x 0.635. Leaves 10.825 mm of
+                            # shell each side of a 288.35 interior -- enough for
+                            # the seat and the drawn reveal, which a plate sized
+                            # to the bay row (285.75) does not leave.
+
+
+def frame(L, ctrl_band_h, title):
+    """A Panel sized from the K9 Pro, datumed on the control band's bottom edge."""
+    bw, bh, d = L.deck(P.KBD_W, P.KBD_D, ctrl_band_h)
+    panel = L.Panel(bw, bh, title=title, y_datum=d["band_lo"])
+    disp_y = d["band_hi"] + SPINE + BOARD_POCKET_H / 2
+    panel.add(L.display(0.0, disp_y))
+    panel.datums, panel.disp_y, panel.band = d, disp_y, ctrl_band_h
+    return panel
+
+
+def kbd(L, d):
+    """The keyboard bay, centred, sitting on the bottom wall."""
+    kw, kh = d["kbd_pocket"]
+    return L.keyboard(0.0, d["kbd_top"] - kh / 2, kw, kh,
+                      "K9 PRO BAY", field=(285.75, 95.25))
+
+
+def rows(d, ctrl_band_h, stack):
+    """Centre y for each row, returned top-first. stack is [(half, gap_below)].
+
+    Rows hang from the band's BOTTOM edge, not centred in it. Centring looked
+    tidier and was wrong: it distributes the spare band height as half of it per
+    side, and half of an odd number of grid units is a half unit, which throws
+    every row off the grid. Hanging from the datum keeps every row an exact
+    multiple of the module from it, and any spare collects at the top where
+    nothing is datumed to it.
+    """
+    n = len(stack)
+    half = [h for h, _ in stack]
+    gap = [g for _, g in stack]
+    span = sum(2 * h for h in half) + sum(gap[:-1])
+    y = [0.0] * n
+    y[n - 1] = d["band_lo"] + half[n - 1]
+    for i in range(n - 2, -1, -1):
+        y[i] = y[i + 1] + half[i + 1] + gap[i] + half[i]
+    return y, span
+
+
+def plate_rect(d, ctrl_band_h):
+    """The plate fills the band: centred on it, the full band height."""
+    return 0.0, d["band_lo"] + ctrl_band_h / 2, PLATE_W, ctrl_band_h
+
+
+def thumb(d, ys, labels, limit):
+    out = []
+    for lab, y in zip(labels, ys):
+        mm = round(y - d["kbd_top"], 2)
+        out.append(f"{lab} centreline {mm} mm from the keyboard edge"
+                   f" ({'within' if mm <= limit else 'BEYOND'} the {limit:.0f} limit)")
+    return out

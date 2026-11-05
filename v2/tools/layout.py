@@ -100,10 +100,11 @@ TURNABLE = ("knob", "encoder")
 # Which things may overlap which: a control sits ON a bay and a bay sits ON
 # the plate, so overlap is only ever checked within one layer. Containment is
 # what gets checked between them.
-LAYER = {"plate": 0, "bay": 1}
+LAYER = {"plate": 0, "bay": 1, "keyboard": 0}
 
 
-def _ctl(kind, x, y, w, h, label, r=0.0, kw=None, kh=None, free=False):
+def _ctl(kind, x, y, w, h, label, r=0.0, kw=None, kh=None, free=False,
+         on_plate=None, y_from=None):
     """One control, centred at (x, y) in millimetres from the deck centre.
 
     kind    knob | encoder | key | slider | slot | sensor | display
@@ -112,11 +113,23 @@ def _ctl(kind, x, y, w, h, label, r=0.0, kw=None, kh=None, free=False):
             checked on this, because a panel-mount nut needs a wrench and a
             breakout PCB is wider than the actuator standing on it.
     free    exempt from the mirror-symmetry check, deliberately
+    on_plate  whether this control belongs to the acrylic plate. Default True
+            for a control, False for the plate and the display. Set it False
+            for something panel-mounted straight into the printed shell -- a
+            pot with a short bushing fits a 2.40 mm wall and needs no plate.
+    y_from  the y datum this control is dimensioned FROM, when it is not the
+            panel's. A control placed beside the display is dimensioned off the
+            display's centre, and the display lands on no inch grid at all, so
+            its absolute y cannot be on the grid and checking it there is
+            meaningless. Declaring the datum keeps the check real: the OFFSET
+            from that datum still has to be on the grid. An exemption that has
+            to be declared is a constraint; one the checker guesses is a hole.
     """
     return dict(kind=kind, x=x, y=y, w=w, h=h, label=label, r=r, free=free,
                 kw=w if kw is None else kw, kh=h if kh is None else kh,
-                layer=LAYER.get(kind, 2),
-                on_plate=kind not in ("plate", "display"))
+                layer=LAYER.get(kind, 2), y_from=y_from,
+                on_plate=(kind not in ("plate", "display")
+                          if on_plate is None else on_plate))
 
 
 def display(x, y, label="DISPLAY"):
@@ -127,6 +140,13 @@ def display(x, y, label="DISPLAY"):
 def plate(x, y, w, h, label="PLATE"):
     """The flush laser-cut acrylic plate. Everything on_plate must fit inside."""
     return _ctl("plate", x, y, w, h, label)
+
+
+def keyboard(x, y, w, h, label="KEYBOARD", field=None):
+    """The keyboard bay. field is the switch field (w, h) drawn inside it."""
+    it = _ctl("keyboard", x, y, w, h, label, on_plate=False)
+    it["field"] = field
+    return it
 
 
 def bay(x, y, label, pattern="B"):
@@ -150,9 +170,20 @@ class Panel:
     else.
     """
 
-    def __init__(self, body_w, body_h, module=MODULE, title="", finger=FINGER):
+    def __init__(self, body_w, body_h, module=MODULE, title="", finger=FINGER,
+                 y_datum=0.0):
+        """y_datum is the horizontal line the vertical grid is measured from.
+
+        x needs no datum: the centreline is the datum, because symmetry about it
+        is a requirement. y has no such natural zero -- the deck centre is
+        wherever body_h/2 happens to land, which is a function of the keyboard's
+        depth and carries no design meaning. Checking the vertical grid against
+        it tests nothing. Specs set this to a real datum, normally the control
+        band's bottom edge.
+        """
         self.bw, self.bh, self.mod = body_w, body_h, module
         self.title, self.finger = title, finger
+        self.y_datum = y_datum
         self.items, self.notes = [], []
 
     def add(self, *items):
@@ -205,6 +236,31 @@ class Panel:
         for it in self.items:
             k, x, y, w, h = it["kind"], it["x"], it["y"], it["w"], it["h"]
             tag = f'data-kind="{k}" data-label="{it["label"]}"'
+            if k == "keyboard":
+                s.append(f'<rect {tag} data-role="touch" x="{px(x-w/2)}" '
+                         f'y="{py(y+h/2)}" width="{w}" height="{h}" rx="1.5" '
+                         f'fill="#f7f7f8" stroke="{GHOST}" stroke-width="0.4"/>')
+                fw, fh = it.get("field") or (0, 0)
+                if fw:
+                    s.append(f'<rect x="{px(x-fw/2)}" y="{py(y+fh/2)}" '
+                             f'width="{fw}" height="{fh}" fill="none" '
+                             f'stroke="{GHOST}" stroke-width="0.25" '
+                             f'stroke-dasharray="1.5 1.5"/>')
+                    cols = int(round(fw / 19.05))
+                    for c in range(1, cols):
+                        gx = x - fw / 2 + c * 19.05
+                        s.append(f'<line x1="{px(gx)}" y1="{py(y+fh/2)}" '
+                                 f'x2="{px(gx)}" y2="{py(y-fh/2)}" '
+                                 f'stroke="{GRID}" stroke-width="0.2"/>')
+                    for r in range(1, 5):
+                        gy = y - fh / 2 + r * fh / 5
+                        s.append(f'<line x1="{px(x-fw/2)}" y1="{py(gy)}" '
+                                 f'x2="{px(x+fw/2)}" y2="{py(gy)}" '
+                                 f'stroke="{GRID}" stroke-width="0.2"/>')
+                s.append(f'<text x="{px(x)}" y="{py(y)+1.4}" fill="{GHOST}" '
+                         f'font-size="3.4" text-anchor="middle">{it["label"]} '
+                         f'{w:.2f} × {h:.2f}</text>')
+                continue
             if k == "plate":
                 s.append(f'<rect {tag} data-role="touch" x="{px(x-w/2)}" '
                          f'y="{py(y+h/2)}" width="{w}" height="{h}" fill="#f3f4f6" '
@@ -266,7 +322,7 @@ class Panel:
                  f'letter-spacing="0.3">{self.title}</text>')
         s.append(f'<text x="{W-pad}" y="{H-6}" fill="{GHOST}" font-size="2.6" '
                  f'text-anchor="end">{self.bw:.2f} × {self.bh:.2f} mm · '
-                 f'{self.mod:.2f} module · {self.finger:.1f} finger gap</text>')
+                 f'{self.mod:.3f} grid · {self.finger:.1f} finger gap</text>')
         s.append('</g></svg>')
         return "\n".join(s)
 
@@ -336,17 +392,26 @@ class Panel:
             k = keep.get(b["label"], b)
             eff.append(dict(b, w=max(b["w"], k["w"]), h=max(b["h"], k["h"])))
 
-        # 2. on the grid. The display is exempt by name -- its 84.80 x 63.60
-        #    active area is a metric part and lands on no inch grid at all.
+        # 2. on the grid. Two kinds are exempt by name, and only these two:
+        #    the display (84.80 x 63.60 active) and the keyboard (97.5 deep).
+        #    Both are metric vendor parts in an otherwise imperial panel and
+        #    land on no inch grid at any modulus. They are exempt because
+        #    nothing about them is ours to choose -- not because the grid is
+        #    inconvenient. Everything datumed OFF them declares y_from and is
+        #    still checked.
+        METRIC_PARTS = ("display", "keyboard")
         for b in eff:
-            if b["kind"] == "display":
+            if b["kind"] in METRIC_PARTS:
                 continue
-            for ax in ("x", "y"):
-                off = abs(b[ax]) % self.mod
+            yf = decl.get(b["label"], {}).get("y_from")
+            for ax, zero in (("x", 0.0),
+                             ("y", self.y_datum if yf is None else yf)):
+                off = abs(b[ax] - zero) % self.mod
                 off = min(off, self.mod - off)
                 if off > 1e-6:
-                    fail.append(f"OFF GRID  {b['label']:14s} {ax} = {b[ax]:+.2f}, "
-                                f"{off:.2f} off the {self.mod} module")
+                    fail.append(f"OFF GRID  {b['label']:14s} {ax} = {b[ax]:+.3f}, "
+                                f"{off:.3f} off the {self.mod} module"
+                                + (f" from y datum {zero:+.3f}" if ax == "y" else ""))
 
         # 3. nothing overlaps anything. A control inside its bay and a bay
         #    inside the plate are legitimate nesting and are skipped; a thing
@@ -421,10 +486,15 @@ class Panel:
 
 def main():
     spec_path, out_path = sys.argv[1], sys.argv[2]
+    # a spec may import its siblings (part tables, shared geometry), and
+    # importlib's loader does not put the spec's own directory on the path
+    import os
+    sys.path.insert(0, os.path.dirname(os.path.abspath(spec_path)))
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     spec = importlib.util.spec_from_file_location("spec", spec_path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    panel = mod.build(Panel, _ctl, display, plate, bay)
+    panel = mod.build(Panel, _ctl, display, plate, bay, keyboard)
 
     text = panel.svg()
     fail = panel.audit(text)
