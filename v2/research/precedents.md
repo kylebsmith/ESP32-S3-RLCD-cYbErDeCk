@@ -7,8 +7,11 @@ and this is an enclosure and control-surface study.*
 
 **The three findings that change the design:**
 
-1. **Pots are the wrong body for a re-mappable control, and this device has
-   nothing for a pot to do.** Drop all three. §4.
+1. **An absolute pot lies the moment it is re-aimed at a different lane**, and
+   it cannot be stepped blind — two real objections worth designing around.
+   (The third reason originally given here, that the device has nothing for a
+   pot to do, was wrong: `seq.h` already defines `SEQ_BIND_CC`. Struck — see
+   the correction in §4. The pots stay.)
 2. **At 13 mm key pitch, three key pitches (39 mm) is exactly MIL-STD-1472H's
    minimum edge-to-edge separation for a 14 mm knob** — so the encoder row and a
    ten-column thumb keyboard come out the same width, and the panel grid is
@@ -217,9 +220,27 @@ name, the way `kick` is a lane's name.
 
 ### Verdict on the proposed set
 
+> **Correction (checked against the firmware, not inferred from it).** The
+> claim below that "there is nothing for them to do" is wrong, and the reason
+> it is wrong matters: this deck is a **MIDI instrument**, not a synth. It has
+> no audio path because it was never going to have one — it drives external
+> gear over `blemidi` and `dinmidi`. And `firmware/components/seq/include/seq.h`
+> already defines **`SEQ_BIND_CC`**, documented as "a controller: 0 is 0 and 9
+> is 127", with a `cc` field on the binding struct. A continuous controller
+> sending MIDI CC is a first-class citizen of this firmware *today*. Absence of
+> a DAC says nothing about whether a knob has a job; a sequencer that sends CC
+> is exactly the thing a knob has a job on.
+>
+> Reasons (1) and (2) below — that an absolute pot lies when re-aimed, and that
+> it cannot be stepped blind — stand on their own and are worth designing
+> around. Reason (3), the well geometry, is a real constraint and is why §7
+> exists. But "nothing to do" is struck. **The pots stay; the user confirmed
+> standard panel-mount pots deliberately.**
+
+
 | Proposed | Verdict | Why |
 |---|---|---|
-| **3 pots** | **Cut all three.** | Three independent reasons, any one of which is sufficient. (1) A pot's absolute position *lies* the moment the control is re-aimed at another lane — which is the entire premise of v2. The industry fix is soft-takeover/pickup mode, which is an invisible mode, and the panel can't show it. (2) No detents, so no blind stepping and no "one more" gesture. (3) The pleasant pot knob is big: the canonical Davies 1900H is **12.7 mm diameter × 16.0 mm tall** ([Digi-Key](https://www.digikey.com.au/en/products/detail/davies-molding-llc/1900-H/6566304)), which cannot nestle in a slim panel without a well so wide it destroys the pitch (§7). And there is nothing for them to do: there is **no audio path anywhere in this project** — `firmware/components/` has no I²S, DAC or codec driver and `docs/HARDWARE.md` does not mention audio at all — so there is no master level; and the display is reflective, so there is no backlight to dim. |
+| **3 pots** | **Kept** — but read the correction above this table first. | Three independent reasons, any one of which is sufficient. (1) A pot's absolute position *lies* the moment the control is re-aimed at another lane — which is the entire premise of v2. The industry fix is soft-takeover/pickup mode, which is an invisible mode, and the panel can't show it. (2) No detents, so no blind stepping and no "one more" gesture. (3) The pleasant pot knob is big: the canonical Davies 1900H is **12.7 mm diameter × 16.0 mm tall** ([Digi-Key](https://www.digikey.com.au/en/products/detail/davies-molding-llc/1900-H/6566304)), which cannot nestle in a slim panel without a well so wide it destroys the pitch (§7). And there is nothing for them to do: there is **no audio path anywhere in this project** — `firmware/components/` has no I²S, DAC or codec driver and `docs/HARDWARE.md` does not mention audio at all — so there is no master level; and the display is reflective, so there is no backlight to dim. |
 | **3 encoders** | **Keep, make it 4.** | Endless + detented = re-mappable with no value jump, blind stepping, and a free discrete action per control via push. Four because the observed real-world mapping is four effect parameters (§1) and because four is the figure both OP-1 and Organelle landed on independently; eight (Push, Bitwig, Elektron) needs a desk. |
 | **2 sliders** | **Keep one. The second is redundant.** | MIL-STD-1472H is unusually blunt about faders: "Slide-levers may be used for low-force, continuous-adjustment, or gross-mode selection (**do not use for precise setting**)" (Table XI, [PDF](https://cvgstrategy.com/wp-content/uploads/2023/04/MIL-STD-1472G.pdf)). Exactly one quantity in a live-coding set has that shape — the coarse, bipolar, see-it-across-the-room A/B morph, i.e. the Octatrack crossfader. A second fader invites "two cutoffs", which the standard says faders are bad at, and which the encoders do better. |
 | **4 keys** | **Keep the count. Change what they are.** | 4 keys cannot address 16 lanes without a bank modifier, and a bank modifier is an invisible mode. So stop thinking of them as pads. They are **engraved function keys for the gestures you need when a hand is off the keyboard or when typing is too slow**: `play`/`stop`, mute-the-lane-under-the-cursor, commit, scene. Per-lane mute belongs on the QWERTY number row, which already exists and is free. Add a **fifth, guarded** key for `panic` — `docs/OS.md` already requires "a physical, no-screen-needed way to recover", and MIL-STD-1472H 5.1.4.2.1.1.4 requires "A channel or cover guard… when accidental actuation of the control must be prevented". |
