@@ -104,7 +104,7 @@ LAYER = {"plate": 0, "bay": 1, "keyboard": 0}
 
 
 def _ctl(kind, x, y, w, h, label, r=0.0, kw=None, kh=None, free=False,
-         on_plate=None, y_from=None, mirror=0.0):
+         on_plate=None, y_from=None, mirror=0.0, metric=False):
     """One control, centred at (x, y) in millimetres from the deck centre.
 
     kind    knob | encoder | key | slider | slot | sensor | display
@@ -127,7 +127,7 @@ def _ctl(kind, x, y, w, h, label, r=0.0, kw=None, kh=None, free=False,
     """
     return dict(kind=kind, x=x, y=y, w=w, h=h, label=label, r=r, free=free,
                 kw=w if kw is None else kw, kh=h if kh is None else kh,
-                layer=LAYER.get(kind, 2), y_from=y_from, mirror=mirror,
+                layer=LAYER.get(kind, 2), y_from=y_from, mirror=mirror, metric=metric,
                 on_plate=(kind not in ("plate", "display")
                           if on_plate is None else on_plate))
 
@@ -150,7 +150,8 @@ def keyboard(x, y, w, h, label="KEYBOARD", field=None):
     return it
 
 
-def bay(x, y, label, pattern="B", mirror=0.0):
+def bay(x, y, label, pattern="B", mirror=0.0, size=None, holes=None,
+        metric=False):
     """One interchangeable breakout bay.
 
     Pattern B is the vendor's own module: the NeoSlider, the NeoKey 1x4 and the
@@ -158,10 +159,11 @@ def bay(x, y, label, pattern="B", mirror=0.0):
     a bay does not know which of the three it holds. Pattern A is the 25.400 mm
     sensor breakout.
     """
-    w, h = {"B": PAT_B, "Bv": (PAT_B[1], PAT_B[0]),
-            "A": (PAT_A_W, PAT_A_W)}[pattern]
-    it = _ctl("bay", x, y, w, h, label, mirror=mirror)
+    w, h = size if size else {"B": PAT_B, "Bv": (PAT_B[1], PAT_B[0]),
+                              "A": (PAT_A_W, PAT_A_W)}[pattern]
+    it = _ctl("bay", x, y, w, h, label, mirror=mirror, metric=metric)
     it["pattern"] = pattern
+    it["holes"] = holes
     return it
 
 
@@ -273,9 +275,9 @@ class Panel:
                          f'y="{py(y+h/2)}" width="{w}" height="{h}" rx="2.54" '
                          f'fill="none" stroke="{GHOST}" stroke-width="0.3" '
                          f'stroke-dasharray="2 1"/>')
-                hx, hy = {"B": PAT_B_HOLES,
-                          "Bv": (PAT_B_HOLES[1], PAT_B_HOLES[0]),
-                          "A": (20.32, 20.32)}[it.get("pattern", "B")]
+                hx, hy = it.get("holes") or {
+                    "B": PAT_B_HOLES, "Bv": (PAT_B_HOLES[1], PAT_B_HOLES[0]),
+                    "A": (20.32, 20.32)}[it.get("pattern", "B")]
                 for sx in (-1, 1):
                     for sy in (-1, 1):
                         s.append(f'<circle cx="{px(x+sx*hx/2)}" '
@@ -407,7 +409,8 @@ class Panel:
         #    still checked.
         METRIC_PARTS = ("display", "keyboard")
         for b in eff:
-            if b["kind"] in METRIC_PARTS:
+            if (b["kind"] in METRIC_PARTS
+                    or decl.get(b["label"], {}).get("metric")):
                 continue
             yf = decl.get(b["label"], {}).get("y_from")
             for ax, zero in (("x", 0.0),

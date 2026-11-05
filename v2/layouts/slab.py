@@ -1,78 +1,94 @@
-"""The slab -- a desk instrument, one band, three equal columns.
+"""The slab -- a desk instrument. Display, a 2 x 3 control grid, a fader.
 
-Not handheld. It sits on a desk or a lap, so thumb reach stops being the
-constraint and the whole panel is in play with two hands.
+Not handheld: it sits on a desk or a lap, two hands, so thumb reach is not the
+constraint and the whole panel is in play.
 
-The module is the KEYBOARD'S OWN key unit, 19.05 mm, and the control field is
-15 u -- exactly the K9 Pro's switch field, 285.75 mm. So the band above the
-keys and the keys themselves are laid out on one grid, and the field divides
-into three equal 5 u columns with nothing left over:
+Left to right:
 
-        5 u              5 u              5 u
-    +------------+   +------------+   +------------+
-    |   SCREEN   |   |   FADER    |   |  ENCODERS  |
-    +------------+   +------------+   +------------+
-         95.25            95.25            95.25      = 285.75
+    DISPLAY            4 : 3     84.80 x 63.60    the metric part
+    2 x 3 GRID         8 : 5    101.60 x 63.50    4.000 x 2.500 inches
+      encoders on top, pots beneath
+    FADER                       21.59 x 76.20     one NeoSlider, stood on end
 
-The air inside a column is the column. That is the difference between
-structured space and a gap -- three elements on a 285.75 mm field are sparse
-however they are placed, so the field is divided first and the parts sit in the
-divisions, rather than the parts being placed and the leftovers called design.
+Two blocks of the SAME HEIGHT in two clean ratios, separated by two equal
+28.575 mm gaps, with the end margins equal to 0.08 mm. The grid stands 63.50
+tall and the display's active area is 63.60: they share a top line and a bottom
+line to within a tenth of a millimetre.
 
-The screen board is 93.90 wide and its column is 95.25: it fills its column to
-within 1.35 mm, which is why the screen is the left column and not a choice.
-Its left edge lands 1.975 mm off the interior wall, so the board's side ports
-reach that wall directly and need no channel across the slab.
+The band is 76.20 = 4 u because the NeoSlider's board IS 76.200 mm. Stood on
+end it is exactly the band, so the fader is the element that declares the
+band's depth and nothing was chosen to make it fit.
 
-Everything aligns to something, which is the difference between a grid and
-three centred objects. The encoder grid is 38.10 + 25.40 = 63.50 tall and the
-display's active area is 63.60: the knobs stand exactly as tall as the screen.
-The fader board is 76.20 long, which is the band height, so stood on end it
-meets both edges of the band and is the element that declares its depth.
+The grid centre sits at +36.195, which is the position that makes the left and
+right margins equal AND lands every knob column on the 0.635 grid. The display
+floats: at 93.90 its board width is on no inch grid, and it is the one part
+nothing here chose, so it absorbs the remainder instead of dragging the
+controls off the grid with it.
+
+CONSTRUCTION -- this layout is drawn for a three-layer build:
+  front   12.70 mm (0.5 in) CLEAR laser-cut acrylic
+  middle  a 3D-printed carrier plate holding every board and all the wiring,
+          routed on its top face so it reads through the acrylic
+  back    a laser-cut back panel
+
+At 12.70 the acrylic is thicker than any standard pot bushing, so it carries
+nothing: every control mounts to the carrier and its shaft passes up through a
+clearance hole. Shaft length above the carrier becomes the binding dimension
+and is being checked -- the NeoSlider's shank reaches only 15.50 above its PCB,
+against 12.70 of panel, so the fader may need a local pocket.
 """
 import _common as C
 import parts as P
 
-U = 19.050                  # the keyboard's key unit, and the panel's module
+U = 19.050
 FIELD = 15 * U              # 285.75, the K9 Pro's switch field exactly
-COL = 5 * U                 # 95.25, one third of the field
-BAND = 4 * U                # 76.200, and the vertical fader board fills it
+BAND = 4 * U                # 76.200, the NeoSlider board stood on end
+GAP = 1.5 * U               # 28.575, both gaps
 
-SCREEN_X, FADER_X, ENC_X = -COL, 0.0, COL
-ENC_PITCH = 2 * U           # 38.100; half of it is 19.050, on the grid
-ENC_KNOB = 25.400           # 1 in. Chosen so that pitch + knob = 63.50, which
-                            # is the display's 63.60 active height to within
-                            # 0.10 mm: the four knobs stand exactly as tall as
-                            # the screen. Knob gap is 12.70.
+KNOB = 25.400               # 1 in, every control. Six identical circles.
+PITCH = 2 * U               # 38.100 across and down
+GRID_X = 36.195             # 57 x 0.635: balances the margins, keeps the grid on grid
+GRID_W = 2 * PITCH + KNOB   # 101.600 = 4.000 in
+GRID_H = PITCH + KNOB       # 63.500 = 2.500 in
+
+DISP_BD = (93.900, 70.300)
+DISP_X = GRID_X - GRID_W / 2 - GAP - DISP_BD[0] / 2
+SLIDE_X = GRID_X + GRID_W / 2 + GAP + P.BAY_H / 2
 
 
 def build(Panel, ctl, display, plate, bay, keyboard):
     import layout as L
-    p = C.frame(L, BAND, "SLAB  screen / fader / encoders", board_band=False)
+    p = C.frame(L, BAND, "SLAB  display / 2x3 grid / fader", board_band=False)
     d = p.datums
     mid = d["band_lo"] + BAND / 2
 
     p.add(C.kbd(L, d))
     p.add(plate(0.0, mid, FIELD, BAND))
-    p.add(display(SCREEN_X, mid))
 
-    # the fader runs vertically: its 76.200 board is exactly the band height,
-    # so it meets the band's top and bottom edges and is the one element that
-    # declares the band's full depth
-    p.add(bay(FADER_X, mid, "_fader board", pattern="Bv", mirror=FADER_X))
-    p.add(ctl("slider", FADER_X, mid, P.SLIDER_SLOT[1], P.SLIDER_SLOT[0],
-              "FADER"))
+    # the display, and its board outline -- visible through clear acrylic, so
+    # the board is part of the composition, not hidden behind an aperture
+    p.add(bay(DISP_X, mid, "_display board", size=DISP_BD, holes=(84.0, 60.0),
+              mirror=DISP_X, metric=True))
+    p.add(display(DISP_X, mid))
 
-    for i, (sx, sy) in enumerate(((-1, 1), (1, 1), (-1, -1), (1, -1))):
-        x = ENC_X + sx * ENC_PITCH / 2
-        y = mid + sy * ENC_PITCH / 2
-        p.add(bay(x, y, f"_enc board {i+1}", pattern="A", mirror=ENC_X))
-        p.add(ctl("encoder", x, y, ENC_KNOB, ENC_KNOB, f"E{i+1}", mirror=ENC_X))
+    # the 2 x 3 grid: encoders on top, pots beneath. Position is the legend.
+    for i, cx in enumerate((-PITCH, 0.0, PITCH)):
+        x = GRID_X + cx
+        p.add(bay(x, mid + PITCH / 2, f"_enc board {i+1}", pattern="A",
+                  mirror=GRID_X))
+        p.add(ctl("encoder", x, mid + PITCH / 2, KNOB, KNOB, f"E{i+1}",
+                  mirror=GRID_X))
+        p.add(ctl("knob", x, mid - PITCH / 2, KNOB, KNOB, f"P{i+1}",
+                  mirror=GRID_X))
 
-    p.note(f"deck {p.bw:.2f} x {p.bh:.2f} mm, a flat slab")
-    p.note(f"field {FIELD:.2f} = 15 u = the keyboard's switch field; "
-           f"three columns of {COL:.2f}")
-    p.note("bay floor FLAT: the case bottom is one inclined plane at 3.374 deg "
-           "(measured from Keychron's STEP), so it seats flat and keeps its "
-           "own typing angle")
+    p.add(bay(SLIDE_X, mid, "_fader board", pattern="Bv", mirror=SLIDE_X))
+    p.add(ctl("slider", SLIDE_X, mid, P.SLIDER_SLOT[1], P.SLIDER_SLOT[0],
+              "FADER", mirror=SLIDE_X))
+
+    p.note(f"deck {p.bw:.2f} x {p.bh:.2f} mm, ratio {p.bw/p.bh:.4f}")
+    p.note(f"grid {GRID_W:.2f} x {GRID_H:.2f} = 4.000 x 2.500 in, 8:5 exactly; "
+           f"display 4:3 exactly; same height to 0.10 mm")
+    p.note(f"two gaps of {GAP:.3f}; end margins equal to 0.08 mm")
+    p.note("pots have no PCB -- they mount to the carrier, so the lower row "
+           "shows knobs and wiring where the upper row shows boards")
     return p

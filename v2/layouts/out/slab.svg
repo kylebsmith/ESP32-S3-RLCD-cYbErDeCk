@@ -785,47 +785,50 @@
 <line x1="20.5" y1="119.25" x2="306.25" y2="119.25" stroke="#e8eaee" stroke-width="0.2"/>
 <text x="163.375" y="149.225" fill="#8d93a0" font-size="3.4" text-anchor="middle">K9 PRO BAY 288.35 × 98.45</text>
 <rect data-kind="plate" data-label="PLATE" data-role="touch" x="20.5" y="19.2" width="285.75" height="76.2" fill="#f3f4f6" stroke="#111318" stroke-width="0.45"/>
-<rect data-kind="display" data-label="DISPLAY" data-role="touch" x="25.725" y="25.5" width="84.8" height="63.6" fill="#eef0f3" stroke="#8d93a0" stroke-width="0.35"/>
-<text x="68.125" y="58.699999999999996" fill="#8d93a0" font-size="3.4" text-anchor="middle">DISPLAY 84.8 × 63.6</text>
-<rect data-kind="bay" data-label="_fader board" data-role="touch" x="152.58" y="19.2" width="21.59" height="76.2" rx="2.54" fill="none" stroke="#8d93a0" stroke-width="0.3" stroke-dasharray="2 1"/>
-<circle cx="155.12" cy="76.35" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
-<circle cx="155.12" cy="38.25" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
-<circle cx="171.63" cy="76.35" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
-<circle cx="171.63" cy="38.25" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
-<rect data-kind="slider" data-label="FADER" data-role="touch" x="158.295" y="31.9" width="10.16" height="50.8" rx="5.08" fill="none" stroke="#111318" stroke-width="0.5"/>
-<text x="163.375" y="86.10000000000001" fill="#111318" font-size="2.5" text-anchor="middle" letter-spacing="0.12">FADER</text>
-<rect data-kind="bay" data-label="_enc board 1" data-role="touch" x="226.875" y="25.55" width="25.4" height="25.4" rx="2.54" fill="none" stroke="#8d93a0" stroke-width="0.3" stroke-dasharray="2 1"/>
-<circle cx="229.415" cy="48.41" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
-<circle cx="229.415" cy="28.09" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
-<circle cx="249.735" cy="48.41" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
-<circle cx="249.735" cy="28.09" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
-<circle data-kind="encoder" data-label="E1" data-role="touch" cx="239.575" cy="38.25" r="12.7" fill="none" stroke="#111318" stroke-width="0.5"/>
-<circle cx="239.575" cy="38.25" r="4.233333333333333" fill="#111318"/>
-<text x="239.575" y="54.35" fill="#111318" font-size="2.5" text-anchor="middle" letter-spacing="0.12">E1</text>
-<rect data-kind="bay" data-label="_enc board 2" data-role="touch" x="264.975" y="25.55" width="25.4" height="25.4" rx="2.54" fill="none" stroke="#8d93a0" stroke-width="0.3" stroke-dasharray="2 1"/>
-<circle cx="267.515" cy="48.41" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
-<circle cx="267.515" cy="28.09" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
-<circle cx="287.835" cy="48.41" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
-<circle cx="287.835" cy="28.09" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
-<circle data-kind="encoder" data-label="E2" data-role="touch" cx="277.675" cy="38.25" r="12.7" fill="none" stroke="#111318" stroke-width="0.5"/>
-<circle cx="277.675" cy="38.25" r="4.233333333333333" fill="#111318"/>
-<text x="277.675" y="54.35" fill="#111318" font-size="2.5" text-anchor="middle" letter-spacing="0.12">E2</text>
-<rect data-kind="bay" data-label="_enc board 3" data-role="touch" x="226.875" y="63.65" width="25.4" height="25.4" rx="2.54" fill="none" stroke="#8d93a0" stroke-width="0.3" stroke-dasharray="2 1"/>
-<circle cx="229.415" cy="86.51" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
-<circle cx="229.415" cy="66.19" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
-<circle cx="249.735" cy="86.51" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
-<circle cx="249.735" cy="66.19" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
-<circle data-kind="encoder" data-label="E3" data-role="touch" cx="239.575" cy="76.35" r="12.7" fill="none" stroke="#111318" stroke-width="0.5"/>
-<circle cx="239.575" cy="76.35" r="4.233333333333333" fill="#111318"/>
-<text x="239.575" y="92.45" fill="#111318" font-size="2.5" text-anchor="middle" letter-spacing="0.12">E3</text>
-<rect data-kind="bay" data-label="_enc board 4" data-role="touch" x="264.975" y="63.65" width="25.4" height="25.4" rx="2.54" fill="none" stroke="#8d93a0" stroke-width="0.3" stroke-dasharray="2 1"/>
-<circle cx="267.515" cy="86.51" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
-<circle cx="267.515" cy="66.19" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
-<circle cx="287.835" cy="86.51" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
-<circle cx="287.835" cy="66.19" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
-<circle data-kind="encoder" data-label="E4" data-role="touch" cx="277.675" cy="76.35" r="12.7" fill="none" stroke="#111318" stroke-width="0.5"/>
-<circle cx="277.675" cy="76.35" r="4.233333333333333" fill="#111318"/>
-<text x="277.675" y="92.45" fill="#111318" font-size="2.5" text-anchor="middle" letter-spacing="0.12">E4</text>
-<text x="16" y="231.45" fill="#111318" font-size="3.6" letter-spacing="0.3">SLAB  screen / fader / encoders</text>
+<rect data-kind="bay" data-label="_display board" data-role="touch" x="26.295" y="22.15" width="93.9" height="70.3" rx="2.54" fill="none" stroke="#8d93a0" stroke-width="0.3" stroke-dasharray="2 1"/>
+<circle cx="31.245" cy="87.3" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<circle cx="31.245" cy="27.3" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<circle cx="115.245" cy="87.3" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<circle cx="115.245" cy="27.3" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<rect data-kind="display" data-label="DISPLAY" data-role="touch" x="30.845" y="25.5" width="84.8" height="63.6" fill="#eef0f3" stroke="#8d93a0" stroke-width="0.35"/>
+<text x="73.245" y="58.699999999999996" fill="#8d93a0" font-size="3.4" text-anchor="middle">DISPLAY 84.8 × 63.6</text>
+<rect data-kind="bay" data-label="_enc board 1" data-role="touch" x="148.77" y="25.55" width="25.4" height="25.4" rx="2.54" fill="none" stroke="#8d93a0" stroke-width="0.3" stroke-dasharray="2 1"/>
+<circle cx="151.31" cy="48.41" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<circle cx="151.31" cy="28.09" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<circle cx="171.63" cy="48.41" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<circle cx="171.63" cy="28.09" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<circle data-kind="encoder" data-label="E1" data-role="touch" cx="161.47" cy="38.25" r="12.7" fill="none" stroke="#111318" stroke-width="0.5"/>
+<circle cx="161.47" cy="38.25" r="4.233333333333333" fill="#111318"/>
+<text x="161.47" y="54.35" fill="#111318" font-size="2.5" text-anchor="middle" letter-spacing="0.12">E1</text>
+<circle data-kind="knob" data-label="P1" data-role="touch" cx="161.47" cy="76.35" r="12.7" fill="none" stroke="#111318" stroke-width="0.5"/>
+<text x="161.47" y="92.45" fill="#111318" font-size="2.5" text-anchor="middle" letter-spacing="0.12">P1</text>
+<rect data-kind="bay" data-label="_enc board 2" data-role="touch" x="186.87" y="25.55" width="25.4" height="25.4" rx="2.54" fill="none" stroke="#8d93a0" stroke-width="0.3" stroke-dasharray="2 1"/>
+<circle cx="189.41" cy="48.41" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<circle cx="189.41" cy="28.09" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<circle cx="209.73" cy="48.41" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<circle cx="209.73" cy="28.09" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<circle data-kind="encoder" data-label="E2" data-role="touch" cx="199.57" cy="38.25" r="12.7" fill="none" stroke="#111318" stroke-width="0.5"/>
+<circle cx="199.57" cy="38.25" r="4.233333333333333" fill="#111318"/>
+<text x="199.57" y="54.35" fill="#111318" font-size="2.5" text-anchor="middle" letter-spacing="0.12">E2</text>
+<circle data-kind="knob" data-label="P2" data-role="touch" cx="199.57" cy="76.35" r="12.7" fill="none" stroke="#111318" stroke-width="0.5"/>
+<text x="199.57" y="92.45" fill="#111318" font-size="2.5" text-anchor="middle" letter-spacing="0.12">P2</text>
+<rect data-kind="bay" data-label="_enc board 3" data-role="touch" x="224.97" y="25.55" width="25.4" height="25.4" rx="2.54" fill="none" stroke="#8d93a0" stroke-width="0.3" stroke-dasharray="2 1"/>
+<circle cx="227.51" cy="48.41" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<circle cx="227.51" cy="28.09" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<circle cx="247.83" cy="48.41" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<circle cx="247.83" cy="28.09" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<circle data-kind="encoder" data-label="E3" data-role="touch" cx="237.67" cy="38.25" r="12.7" fill="none" stroke="#111318" stroke-width="0.5"/>
+<circle cx="237.67" cy="38.25" r="4.233333333333333" fill="#111318"/>
+<text x="237.67" y="54.35" fill="#111318" font-size="2.5" text-anchor="middle" letter-spacing="0.12">E3</text>
+<circle data-kind="knob" data-label="P3" data-role="touch" cx="237.67" cy="76.35" r="12.7" fill="none" stroke="#111318" stroke-width="0.5"/>
+<text x="237.67" y="92.45" fill="#111318" font-size="2.5" text-anchor="middle" letter-spacing="0.12">P3</text>
+<rect data-kind="bay" data-label="_fader board" data-role="touch" x="278.945" y="19.2" width="21.59" height="76.2" rx="2.54" fill="none" stroke="#8d93a0" stroke-width="0.3" stroke-dasharray="2 1"/>
+<circle cx="281.485" cy="76.35" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<circle cx="281.485" cy="38.25" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<circle cx="297.995" cy="76.35" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<circle cx="297.995" cy="38.25" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<rect data-kind="slider" data-label="FADER" data-role="touch" x="284.66" y="31.9" width="10.16" height="50.8" rx="5.08" fill="none" stroke="#111318" stroke-width="0.5"/>
+<text x="289.74" y="86.10000000000001" fill="#111318" font-size="2.5" text-anchor="middle" letter-spacing="0.12">FADER</text>
+<text x="16" y="231.45" fill="#111318" font-size="3.6" letter-spacing="0.3">SLAB  display / 2x3 grid / fader</text>
 <text x="310.75" y="231.45" fill="#8d93a0" font-size="2.6" text-anchor="end">294.75 × 185.45 mm · 0.635 grid · 6.0 finger gap</text>
 </g></svg>
