@@ -68,3 +68,56 @@ Thickness, not footprint, is the number to defend.
 
 Display, board, battery and port positions are proven. v2 refines the shell
 around them; it does not re-derive them. The firmware is not touched.
+
+## The recess is a counterbore, not a thicker panel
+
+The pots are **standard panel-mount**: a threaded bushing through the panel,
+a nut on the front, a knob on the shaft. That single fact constrains the
+recess more than anything else on the control band, because a panel-mount
+part is carried by the panel, and **the bushing length is the maximum panel
+thickness at that hole**. Bushings are a few millimetres. The front wall is
+2.40.
+
+So a recessed knob cannot be made by thickening the panel — the bushing would
+not reach through. It has to be a **counterbore**: the panel stays thin where
+the bushing passes, and the well around it is cut *into* a locally raised
+boss, or the knob sits in a pocket formed by raising the panel's neighbours
+rather than the panel itself.
+
+```
+        knob
+     ┌─────────┐          well wall (raised neighbour)
+  ───┤         ├───┐  ┌───
+     └────┬────┘   │  │        panel stays 2.40 at the bushing
+  ════════╪════════╪══╪════  ← front wall
+          │ nut
+       bushing  (length caps THIS thickness, not the well depth)
+          │
+        body (goes inside, sets enclosure depth here)
+```
+
+Three numbers decide whether a given pot can be recessed at all, and by how
+much:
+
+| | why it matters |
+|---|---|
+| bushing length | the hard cap on panel thickness at the hole |
+| shaft length above the panel face | how tall the knob can be, hence how deep the well |
+| body depth behind the panel | the enclosure depth under the control band |
+
+Encoders, keys and sliders are the opposite problem — they arrive on breakout
+PCBs, mounted *behind* the panel and standing off it, so their recess is a
+simple pocket and their depth is PCB + standoff + actuator. Two different
+mounting logics on one panel, and the panel has to resolve both at the same
+front face.
+
+One consequence for the parts research: a pot with an unusually **long
+bushing** is worth more than a nicer-feeling one with a short bushing, because
+it is the only kind that tolerates a thick panel. If none exists in the slim
+9 mm class, the knobs sit in wells formed by their neighbours, which is a
+layout constraint, not a detail — it means knobs cannot be isolated in open
+panel space.
+
+A reminder in the other direction: the wells must not shrink-wrap the knobs.
+A well sized to the knob's nominal diameter is a well a printed part cannot
+accept a real knob into.

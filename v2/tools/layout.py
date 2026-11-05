@@ -1,40 +1,64 @@
 #!/usr/bin/env python3
 """Draw a v2 front-panel layout as SVG, on a Swiss grid, from a spec.
 
-A layout is DATA, not a drawing. Every control is placed on a grid module and
-every number in the output is computed, so a layout can be re-rendered the
-moment a part dimension changes rather than redrawn by hand.
+A layout is DATA, not a drawing: every control sits on a grid module and every
+number is computed, so a layout re-renders the moment a part dimension changes
+rather than being redrawn by hand.
+
+The checks DO NOT read the spec. They parse the emitted SVG, recover the frame
+from the drawn body rectangle, and measure the drawn geometry. This is v1's
+discipline, arrived at the hard way three times: a check that computes from the
+same parameters as the thing it checks cannot see a drawing bug. Here the
+artefact is the SVG, so the SVG is what gets measured.
 
 Usage:  python3 v2/tools/layout.py <spec.py> <out.svg>
 """
 import importlib.util
 import sys
+import xml.etree.ElementTree as ET
 
-# ---- the deck, inherited from v1 and not up for negotiation ---------------
-BODY_W, BODY_H = 116.25, 140.25
-DISP_W, DISP_H = 84.80, 63.60
-DISP_CX, DISP_CY = -1.60, 31.775
-WALL = 3.20
+# ---- inherited from v1, proven, not re-derived ----------------------------
+DISP_W, DISP_H = 84.80, 63.60   # display active area
+WALL = 3.20                     # side wall thickness
 
-INK = "#111318"
-RULE = "#c9ccd4"
-GRID = "#e8eaee"
-LIVE = "#d8552a"
-GHOST = "#8d93a0"
+# ---- provisional, pending the ergonomics research ------------------------
+FINGER = 6.00   # minimum rim-to-rim gap between two things you turn
+
+INK, RULE, GRID = "#111318", "#c9ccd4", "#e8eaee"
+LIVE, GHOST = "#d8552a", "#8d93a0"
+TOL = 0.01      # mm: drawn-vs-declared disagreement that counts as a bug
+
+TURNABLE = ("knob", "encoder")
 
 
-def _ctl(kind, x, y, w, h, label, r=0.0):
-    return dict(kind=kind, x=x, y=y, w=w, h=h, label=label, r=r)
+def _ctl(kind, x, y, w, h, label, r=0.0, kw=None, kh=None, free=False):
+    """One control, centred at (x, y) in millimetres from the deck centre.
+
+    kind    knob | encoder | key | slider | slot | sensor | display
+    w, h    what a finger touches: knob diameter, keycap, slider slot
+    kw, kh  the keep-out -- actuator plus its mounting hardware. Overlaps are
+            checked on this, because a panel-mount nut needs a wrench and a
+            breakout PCB is wider than the actuator standing on it.
+    free    exempt from the mirror-symmetry check, deliberately
+    """
+    return dict(kind=kind, x=x, y=y, w=w, h=h, label=label, r=r, free=free,
+                kw=w if kw is None else kw, kh=h if kh is None else kh)
+
+
+def display(x, y, label="DISPLAY"):
+    return _ctl("display", x, y, DISP_W, DISP_H, label)
 
 
 class Panel:
     """Model space is millimetres, origin at the deck centre, +y up.
 
-    SVG is y-down, so every emitted y is negated once, here, and nowhere else.
+    SVG is y-down, so every emitted y is negated once, in py(), and nowhere
+    else.
     """
 
-    def __init__(self, body_w=BODY_W, body_h=BODY_H, module=4.75, title=""):
-        self.bw, self.bh, self.mod, self.title = body_w, body_h, module, title
+    def __init__(self, body_w, body_h, module=4.75, title="", finger=FINGER):
+        self.bw, self.bh, self.mod = body_w, body_h, module
+        self.title, self.finger = title, finger
         self.items, self.notes = [], []
 
     def add(self, *items):
@@ -45,115 +69,207 @@ class Panel:
         self.notes.append(text)
         return self
 
-    # -- grid helpers --------------------------------------------------
-    def snapped(self):
-        """Every control whose centre is off the grid module, with its error."""
-        bad = []
-        for it in self.items:
-            for axis in ("x", "y"):
-                off = abs(it[axis] % self.mod)
-                off = min(off, self.mod - off)
-                if off > 1e-6:
-                    bad.append((it["label"], axis, it[axis], off))
-        return bad
-
-    def overlaps(self):
-        """Pairs of controls whose footprints intersect, with the overlap."""
-        hit = []
-        for i, a in enumerate(self.items):
-            for b in self.items[i + 1:]:
-                dx = (a["w"] + b["w"]) / 2 - abs(a["x"] - b["x"])
-                dy = (a["h"] + b["h"]) / 2 - abs(a["y"] - b["y"])
-                if dx > 0 and dy > 0:
-                    hit.append((a["label"], b["label"], round(min(dx, dy), 2)))
-        return hit
-
-    def off_body(self):
-        """Controls that run outside the body, or into the wall."""
-        out = []
-        for it in self.items:
-            if (abs(it["x"]) + it["w"] / 2 > self.bw / 2 - WALL
-                    or abs(it["y"]) + it["h"] / 2 > self.bh / 2 - WALL):
-                out.append(it["label"])
-        return out
-
     # -- drawing -------------------------------------------------------
-    def svg(self, pad=16):
+    def _frame(self, pad):
         W, H = self.bw + 2 * pad, self.bh + 2 * pad + 20
-        ox, oy = pad + self.bw / 2, pad + self.bh / 2
+        return W, H, pad + self.bw / 2, pad + self.bh / 2
 
-        def px(x):
-            return round(ox + x, 3)
-
-        def py(y):
-            return round(oy - y, 3)
+    def svg(self, pad=16):
+        W, H, ox, oy = self._frame(pad)
+        px = lambda x: round(ox + x, 4)
+        py = lambda y: round(oy - y, 4)
 
         s = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W*3.2:.0f}" '
              f'height="{H*3.2:.0f}" viewBox="0 0 {W} {H}">',
              '<rect width="100%" height="100%" fill="#fbfbfc"/>',
              '<g font-family="Helvetica,Arial,sans-serif">']
 
-        # grid
         s.append(f'<g stroke="{GRID}" stroke-width="0.12">')
-        n = int(self.bw / 2 / self.mod) + 1
-        for i in range(-n, n + 1):
+        for i in range(-int(self.bw / 2 / self.mod) - 1,
+                       int(self.bw / 2 / self.mod) + 2):
             x = i * self.mod
             if abs(x) <= self.bw / 2:
                 s.append(f'<line x1="{px(x)}" y1="{py(self.bh/2)}" '
                          f'x2="{px(x)}" y2="{py(-self.bh/2)}"/>')
-        n = int(self.bh / 2 / self.mod) + 1
-        for i in range(-n, n + 1):
+        for i in range(-int(self.bh / 2 / self.mod) - 1,
+                       int(self.bh / 2 / self.mod) + 2):
             y = i * self.mod
             if abs(y) <= self.bh / 2:
                 s.append(f'<line x1="{px(-self.bw/2)}" y1="{py(y)}" '
                          f'x2="{px(self.bw/2)}" y2="{py(y)}"/>')
         s.append('</g>')
 
-        # centreline, body, display
         s.append(f'<line x1="{px(0)}" y1="{py(self.bh/2)}" x2="{px(0)}" '
                  f'y2="{py(-self.bh/2)}" stroke="{RULE}" stroke-width="0.25" '
                  f'stroke-dasharray="2 1.5"/>')
-        s.append(f'<rect x="{px(-self.bw/2)}" y="{py(self.bh/2)}" '
+        # the body rect is the fiducial: measure() recovers ox, oy from it
+        s.append(f'<rect data-kind="body" data-label="BODY" data-role="frame" '
+                 f'x="{px(-self.bw/2)}" y="{py(self.bh/2)}" '
                  f'width="{self.bw}" height="{self.bh}" rx="3" fill="none" '
                  f'stroke="{INK}" stroke-width="0.6"/>')
-        s.append(f'<rect x="{px(DISP_CX-DISP_W/2)}" y="{py(DISP_CY+DISP_H/2)}" '
-                 f'width="{DISP_W}" height="{DISP_H}" fill="#eef0f3" '
-                 f'stroke="{GHOST}" stroke-width="0.35"/>')
-        s.append(f'<text x="{px(DISP_CX)}" y="{py(DISP_CY)+1.4}" fill="{GHOST}" '
-                 f'font-size="3.4" text-anchor="middle">DISPLAY '
-                 f'{DISP_W:.1f} × {DISP_H:.1f}</text>')
 
-        # controls
         for it in self.items:
             k, x, y, w, h = it["kind"], it["x"], it["y"], it["w"], it["h"]
-            if k in ("knob", "encoder"):
-                s.append(f'<circle cx="{px(x)}" cy="{py(y)}" r="{w/2}" '
-                         f'fill="none" stroke="{INK}" stroke-width="0.5"/>')
-                s.append(f'<circle cx="{px(x)}" cy="{py(y)}" r="{w/2+1.6}" '
-                         f'fill="none" stroke="{LIVE}" stroke-width="0.3" '
-                         f'stroke-dasharray="1 1"/>')
+            tag = f'data-kind="{k}" data-label="{it["label"]}"'
+            if k == "display":
+                s.append(f'<rect {tag} data-role="touch" x="{px(x-w/2)}" '
+                         f'y="{py(y+h/2)}" width="{w}" height="{h}" '
+                         f'fill="#eef0f3" stroke="{GHOST}" stroke-width="0.35"/>')
+                s.append(f'<text x="{px(x)}" y="{py(y)+1.4}" fill="{GHOST}" '
+                         f'font-size="3.4" text-anchor="middle">{it["label"]} '
+                         f'{w:.1f} × {h:.1f}</text>')
+                continue
+            if k in TURNABLE:
+                s.append(f'<circle {tag} data-role="touch" cx="{px(x)}" '
+                         f'cy="{py(y)}" r="{w/2}" fill="none" stroke="{INK}" '
+                         f'stroke-width="0.5"/>')
                 if k == "encoder":
                     s.append(f'<circle cx="{px(x)}" cy="{py(y)}" r="{w/6}" '
                              f'fill="{INK}"/>')
-            elif k == "key":
-                s.append(f'<rect x="{px(x-w/2)}" y="{py(y+h/2)}" width="{w}" '
-                         f'height="{h}" rx="1" fill="none" stroke="{INK}" '
-                         f'stroke-width="0.5"/>')
-            else:  # slider / slot / sensor
-                s.append(f'<rect x="{px(x-w/2)}" y="{py(y+h/2)}" width="{w}" '
-                         f'height="{h}" rx="{it["r"] or min(w,h)/2}" '
+            else:
+                s.append(f'<rect {tag} data-role="touch" x="{px(x-w/2)}" '
+                         f'y="{py(y+h/2)}" width="{w}" height="{h}" '
+                         f'rx="{it["r"] or (1 if k == "key" else min(w,h)/2)}" '
                          f'fill="none" stroke="{INK}" stroke-width="0.5"/>')
-            s.append(f'<text x="{px(x)}" y="{py(y-h/2)+3.4}" fill="{INK}" '
-                     f'font-size="2.5" text-anchor="middle" '
+            if it["kw"] > w or it["kh"] > h:
+                if k in TURNABLE:
+                    s.append(f'<circle {tag} data-role="keep" cx="{px(x)}" '
+                             f'cy="{py(y)}" r="{it["kw"]/2}" fill="none" '
+                             f'stroke="{LIVE}" stroke-width="0.3" '
+                             f'stroke-dasharray="1 1"/>')
+                else:
+                    s.append(f'<rect {tag} data-role="keep" '
+                             f'x="{px(x-it["kw"]/2)}" y="{py(y+it["kh"]/2)}" '
+                             f'width="{it["kw"]}" height="{it["kh"]}" '
+                             f'fill="none" stroke="{LIVE}" stroke-width="0.3" '
+                             f'stroke-dasharray="1 1"/>')
+            s.append(f'<text x="{px(x)}" y="{py(y-max(h,it["kh"])/2)+3.4}" '
+                     f'fill="{INK}" font-size="2.5" text-anchor="middle" '
                      f'letter-spacing="0.12">{it["label"]}</text>')
 
         s.append(f'<text x="{pad}" y="{H-6}" fill="{INK}" font-size="3.6" '
                  f'letter-spacing="0.3">{self.title}</text>')
         s.append(f'<text x="{W-pad}" y="{H-6}" fill="{GHOST}" font-size="2.6" '
                  f'text-anchor="end">{self.bw:.2f} × {self.bh:.2f} mm · '
-                 f'{self.mod:.2f} mm module</text>')
+                 f'{self.mod:.2f} module · {self.finger:.1f} finger gap</text>')
         s.append('</g></svg>')
         return "\n".join(s)
+
+    # -- measurement: read the drawing back, never the spec ------------
+    def measure(self, svg_text):
+        """Recover body and control geometry from the emitted SVG.
+
+        Returns (body_w, body_h, [box, ...]) in model space. The frame comes
+        from the drawn body rectangle, so a frame bug shows up as a wrong body
+        size rather than silently shifting every control by the same amount.
+        """
+        root = ET.fromstring(svg_text)
+        els = [e for e in root.iter() if e.get("data-label")]
+        body = next((e for e in els if e.get("data-kind") == "body"), None)
+        if body is None:
+            raise AssertionError("the drawing has no body rectangle to measure from")
+        bw, bh = float(body.get("width")), float(body.get("height"))
+        ox = float(body.get("x")) + bw / 2
+        oy = float(body.get("y")) + bh / 2
+
+        boxes = []
+        for e in els:
+            if e.get("data-kind") == "body":
+                continue
+            tag = e.tag.rsplit("}", 1)[-1]
+            if tag == "circle":
+                r = float(e.get("r"))
+                x, y, w, h = float(e.get("cx")) - ox, oy - float(e.get("cy")), 2*r, 2*r
+            else:
+                w, h = float(e.get("width")), float(e.get("height"))
+                x = float(e.get("x")) - ox + w / 2
+                y = oy - float(e.get("y")) - h / 2
+            boxes.append(dict(label=e.get("data-label"), kind=e.get("data-kind"),
+                              role=e.get("data-role"), x=x, y=y, w=w, h=h))
+        return bw, bh, boxes
+
+    # -- the checks, all reading measured geometry ---------------------
+    def audit(self, svg_text):
+        bw, bh, boxes = self.measure(svg_text)
+        fail = []
+
+        if abs(bw - self.bw) > TOL or abs(bh - self.bh) > TOL:
+            fail.append(f"BODY      drawn {bw:.2f} × {bh:.2f}, "
+                        f"declared {self.bw:.2f} × {self.bh:.2f}")
+
+        decl = {it["label"]: it for it in self.items}
+        touch = [b for b in boxes if b["role"] == "touch"]
+        keep = {b["label"]: b for b in boxes if b["role"] == "keep"}
+
+        # 1. did the drawing draw what the spec said?
+        for b in touch:
+            d = decl.get(b["label"])
+            if d is None:
+                fail.append(f"GHOST     {b['label']} is drawn but not in the spec")
+                continue
+            for k in ("x", "y", "w", "h"):
+                if abs(b[k] - d[k]) > TOL:
+                    fail.append(f"MISDRAWN  {b['label']} {k}: drawn {b[k]:+.3f}, "
+                                f"spec {d[k]:+.3f}")
+        for lbl in decl:
+            if not any(b["label"] == lbl for b in touch):
+                fail.append(f"MISSING   {lbl} is in the spec but was not drawn")
+
+        # the box every other check uses: keep-out where there is one
+        eff = []
+        for b in touch:
+            k = keep.get(b["label"], b)
+            eff.append(dict(b, w=max(b["w"], k["w"]), h=max(b["h"], k["h"])))
+
+        # 2. on the grid
+        for b in eff:
+            if b["kind"] == "display":
+                continue
+            for ax in ("x", "y"):
+                off = abs(b[ax]) % self.mod
+                off = min(off, self.mod - off)
+                if off > 1e-6:
+                    fail.append(f"OFF GRID  {b['label']:14s} {ax} = {b[ax]:+.2f}, "
+                                f"{off:.2f} off the {self.mod} module")
+
+        # 3. nothing overlaps anything, keep-out to keep-out
+        for i, a in enumerate(eff):
+            for b in eff[i + 1:]:
+                dx = (a["w"] + b["w"]) / 2 - abs(a["x"] - b["x"])
+                dy = (a["h"] + b["h"]) / 2 - abs(a["y"] - b["y"])
+                if dx > TOL and dy > TOL:
+                    fail.append(f"OVERLAP   {a['label']} / {b['label']} "
+                                f"by {min(dx, dy):.2f} mm")
+
+        # 4. inside the body, clear of the wall
+        for b in eff:
+            ex = abs(b["x"]) + b["w"] / 2 - (bw / 2 - WALL)
+            ey = abs(b["y"]) + b["h"] / 2 - (bh / 2 - WALL)
+            if ex > TOL or ey > TOL:
+                fail.append(f"OFF BODY  {b['label']} runs {max(ex, ey):.2f} mm "
+                            f"into the {WALL} wall")
+
+        # 5. room for a finger between two things you turn
+        turn = [b for b in eff if b["kind"] in TURNABLE]
+        for i, a in enumerate(turn):
+            for b in turn[i + 1:]:
+                gap = (((a["x"] - b["x"]) ** 2 + (a["y"] - b["y"]) ** 2) ** 0.5
+                       - a["w"] / 2 - b["w"] / 2)
+                if gap < self.finger - TOL:
+                    fail.append(f"TIGHT     {a['label']} / {b['label']} rims "
+                                f"{gap:.2f} mm apart, want {self.finger:.2f}")
+
+        # 6. symmetry about the centreline -- a stated requirement
+        key = lambda b: (b["kind"], round(b["w"], 2), round(b["h"], 2),
+                         round(b["y"], 2))
+        for b in eff:
+            if decl.get(b["label"], {}).get("free") or abs(b["x"]) < TOL:
+                continue
+            if not any(abs(o["x"] + b["x"]) < TOL and key(o) == key(b)
+                       for o in eff if o is not b):
+                fail.append(f"ASYMMETRY {b['label']} at x = {b['x']:+.2f} has no "
+                            f"mirror at {-b['x']:+.2f}")
+        return fail
 
 
 def main():
@@ -161,19 +277,19 @@ def main():
     spec = importlib.util.spec_from_file_location("spec", spec_path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    panel = mod.build(Panel, _ctl)
+    panel = mod.build(Panel, _ctl, display)
 
-    bad, hits, out = panel.snapped(), panel.overlaps(), panel.off_body()
-    for lbl, ax, v, off in bad:
-        print(f"  OFF GRID  {lbl:16s} {ax} = {v:+.2f}, {off:.2f} off the module")
-    for a, b, d in hits:
-        print(f"  OVERLAP   {a} / {b} by {d} mm")
-    for lbl in out:
-        print(f"  OFF BODY  {lbl}")
-    open(out_path, "w").write(panel.svg())
-    print(f"  wrote {out_path}  ({len(panel.items)} controls, "
-          f"{len(bad)} off grid, {len(hits)} overlaps, {len(out)} off body)")
-    return 1 if (bad or hits or out) else 0
+    text = panel.svg()
+    fail = panel.audit(text)
+    for line in fail:
+        print(f"  {line}")
+    open(out_path, "w").write(text)
+    print(f"  {'FAIL' if fail else 'ok  '}  {out_path}  "
+          f"({len(panel.items)} controls, {len(fail)} problems, measured from "
+          f"the drawing)")
+    for n in panel.notes:
+        print(f"  note: {n}")
+    return 1 if fail else 0
 
 
 if __name__ == "__main__":

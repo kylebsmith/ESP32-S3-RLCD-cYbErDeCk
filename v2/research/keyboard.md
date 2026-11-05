@@ -45,6 +45,12 @@ Three findings drive the recommendation:
 **Fallback: NuPhy Air60 V2** (60%, BLE 5.1, 297.2 × 107.2 mm).
 Reasoning in §6.
 
+> **On width:** §10 chases the one thing that would beat the K7 Pro — a
+> narrow board that still has a number row. The short version is that
+> **nothing finished exists under 280 mm**, but 66–75 mm of width *is*
+> available from a PCB kit you assemble once. §10.3 has the deck sizes and
+> §10.4 costs the build.
+
 ---
 
 ## 1. What the device already hosts — the compatibility test
@@ -409,3 +415,198 @@ Listed because the enclosure cannot be drawn on an unverified figure.
 - [Corne (Deskthority)](https://deskthority.net/wiki/Corne) · [Choc vs MX spacing](https://kbd.news/switch-comparison/Gateron-KS-27-Low-Profile-Blue-vs-kailh-choc-white-166-67.html)
 - [nice!nano v2 (Mechboards)](https://www.mechboards.co.uk/products/nice-nano-v2)
 - [Solder Party BB Q20 docs](https://solder.party/docs/bbq20kbd/) · [Lectronz listing](https://www.lectronz.com/products/123)
+
+---
+
+# 10. The ortholinear question — can the narrow class have a radio?
+
+*Added after the first pass. §4 left a specific trade open: the ortho class is
+the right size (Preonic 231 × 104 mm) and the right layout (digits on a real
+row) and the only thing wrong with it was the radio. This section closes it.*
+
+## 10.1 The answer, plainly
+
+**There is no purchasable, finished BLE keyboard with a number row under
+280 mm.** Every assembled board that has a number row and a usable radio is
+either ≥296 mm wide, or a large split that is worse on depth and height than
+the K7 Pro:
+
+| Assembled BLE + number row | Size | Why it does not help |
+|---|---|---|
+| Keychron K7 Pro | 306 × 97.5 mm | the §6 recommendation — nothing narrower exists assembled |
+| NuPhy Air60 V2 | 297.2 × 107.2 mm | 9 mm narrower, height unresolved |
+| Logitech MX Keys Mini | 295.99 × 131.95 mm | 132 mm deep |
+| **MoErgo Glove80** | **372 × 168 mm, 60 mm high, 600 g** | wider than the K7 Pro *and* 60 mm tall |
+| **Dygma Defy** | **164.16 × 210.02 × 35.36 mm** (per Dygma's spec sheet) | 210 mm deep per half, ~1 kg, columnar — no number row confirmed |
+| **Kinesis Advantage360 Pro** | not published | contoured keywells; cannot sit in or on a flat chassis |
+
+**But the narrow class does exist with a radio — as a PCB kit, not a product.**
+Three real routes, all with a number row, all in the 230–250 mm class:
+
+| Board | Layout | Radio | Bought how |
+|---|---|---|---|
+| **splitkb Halcyon Lily58 / Elora** | column-staggered split, 58 / 62 keys, **number row** | **Vendor-supported.** splitkb's own nRF52840 Wireless Halcyon Controller, ZMK | **PCB arrives pre-soldered and tested**; controller is a drop-in |
+| **splitkb Aurora Helix** | **ortholinear** split, up to 64 keys, **number row**, MX spacing | ZMK build — nice!nano listed as a compatible controller | PCB kit; you solder the matrix |
+| **Keebio Nyquist** | **ortholinear** split 5 × 12, **number row** | ZMK mod — Pro Micro footprint takes a nice!nano | PCB kit; you solder; stock firmware is QMK/AVR |
+
+So the honest shape of the answer is **not** "no". It is: **the 75 mm of width
+is available, and the price of it is that you assemble the keyboard.** §10.4
+costs that out.
+
+## 10.2 The geometry, derived exactly
+
+Ortholinear is the one layout whose size is arithmetic rather than a vendor
+claim. MX spacing is 19.05 mm, so:
+
+```
+5 x 12 MX ortho switch field  = 228.60 x 95.25 mm     (12 x 19.05, 5 x 19.05)
+one 6 x 5 half                = 114.30 x 95.25 mm
+```
+
+That derivation checks against a shipping product: the Preonic's published
+outside size is **231 × 104 mm**, which is the 228.60 × 95.25 field plus
+**1.20 mm of bezel per side in width and 4.38 mm per side in depth**. So the
+field dominates and the outline is predictable to a millimetre or two.
+
+**Two Aurora Helix halves butted together are exactly a Preonic** — same
+228.60 mm of switch field, in two pieces of 114.30 mm. And 114.30 mm is within
+2 mm of the v1 deck's own width of 116.25 mm, which is a pleasing coincidence
+rather than a design input, but worth noticing.
+
+## 10.3 What each arrangement does to the deck
+
+Same v1 arithmetic as §5.1 (`body_w = max(pocket_w, 93.5) + 6.40`,
+`body_h = pocket_d + 81.10`), and `display_module_w = 91.00 mm`
+(`cad/parameters.scad:210`).
+
+| Arrangement | Keyboard footprint | **Deck W × H** | vs K7 Pro |
+|---|---|---|---|
+| **A** — Keychron K7 Pro, one bay | 306 × 97.5 | **313.8 × 179.6** | — |
+| **B** — 5 × 12 ortho pair butted, Preonic outline | 231 × 104 | **238.8 × 186.1** | **−75.0 mm W**, +6.5 mm H |
+| **B′** — same, generous PCB bezels + thumb row | 240 × 110 | **247.8 × 192.1** | −66.0 mm W, +12.5 mm H |
+| **C** — split halves **flanking** the 91 mm display | 325 × 104 | **332.8 × 186.1** | **+19.0 mm W** — worse |
+
+**The width saving is real and it is 66–75 mm.** It comes from deleting the
+65% layout's navigation column and the staggered layout's wasted edges, and it
+costs ~7–13 mm of depth because an ortho board's five rows sit slightly deeper
+than a 65%'s.
+
+**Arrangement C is a trap.** "Halves either side of the display" sounds like the
+split-native answer and it is the *widest* option in this entire document —
+19 mm wider than simply bolting on a K7 Pro. A split only pays off when the
+halves are **butted or stacked**, not spread. If the halves are to be spread,
+they should come off the chassis entirely and sit where the hands want them,
+which is a different instrument from the one being designed.
+
+## 10.4 Costing the build honestly
+
+Two routes, both reaching a BLE board with a number row in the 230–250 mm class.
+
+### Route 1 — splitkb Halcyon (vendor-supported wireless)
+
+| Part | Price |
+|---|---|
+| Halcyon Lily58 **or** Elora PCB — *pre-soldered, fully tested* | €61.94 ex-VAT |
+| Wireless Upgrade Bundle: 2 × nRF52840 controllers + module connection kit + USB-C dongle | €95.00 |
+| *(or just 2 controllers + module connection kit)* | *€61.94* |
+| 58–62 MX switches @ ~€0.35 | ~€22 |
+| 58–62 keycaps (blank 1u set) | ~€25–40 |
+| LiPo Power Board + cell, or Coin Cell Power Board | ~€10–20 |
+| Case | separate; 3D-printed in-house costs filament |
+| **Parts total** | **~€180–240** |
+
+**Effort: an afternoon, not a project.** The PCB arrives *"pre-soldered, fully
+tested"* — there is no matrix to solder. The wireless controller is *"a drop-in
+replacement for the wired RP2040 controller"* and the module uses a **CE- and
+FCC-certified** nRF52840 part. Switches push into hotswap sockets, keycaps
+press on, and the layout is changed in **ZMK Studio** or by compiling from
+splitkb's own [`zmk-halcyon-config`](https://github.com/splitkb/zmk-halcyon-config),
+which lists the Halcyon Wireless controller and the Elora rev2 / Lily58 rev2
+shields as supported boards. This is the least-risk way to get a radio onto a
+narrow board.
+
+### Route 2 — Aurora Helix + nice!nano (the true ortholinear)
+
+| Part | Price |
+|---|---|
+| Aurora Helix PCB kit (MX or Choc hotswap) | €31.36 ex-VAT |
+| 2 × nice!nano v2 @ ~$25 | ~€46 |
+| 2 × controller socket (recommended) | ~€5 |
+| 64 MX switches @ ~€0.35 | ~€22 |
+| 64 keycaps (blank ortho/DSA set) | ~€25–40 |
+| 2 × LiPo cell + 2 × power switch | ~€12 |
+| Case | separate |
+| **Parts total** | **~€145–185** |
+
+**Effort: a real soldering project, one or two evenings if you solder well.**
+The kit ships as bare PCBs plus **70 × 1N4148 diodes, 7 × 4.7 kΩ resistors,
+2 TRRS jacks, 2 reset buttons** and 64 hotswap sockets — all of which you fit
+yourself (the Choc hotswap variant substitutes SMD parts, which is harder, not
+easier). Then a ZMK config has to be written and built, because splitkb
+supports the Aurora line under QMK **or** ZMK but ships no wireless controller
+for it. nice!nano is listed as compatible, which is not the same as supported.
+
+### Would I recommend it to someone who wants a finished instrument?
+
+**Route 1: yes, with one caveat. Route 2: no.**
+
+Route 1 is the only path in this document that gets a number row into a
+~240 mm width with a vendor-supported radio and no matrix soldering. The
+caveat is that it is **not ortholinear** — Lily58 and Elora are
+column-staggered, and the Elora's arc thumb cluster adds depth. If the
+attraction of the ortho class was the grid itself rather than the width, Route 1
+does not deliver it.
+
+Route 2 delivers the actual grid, and it is the cheapest option on the page,
+but the deliverable here is an **instrument the user performs with on stage**.
+A hand-soldered 70-diode matrix with a community-maintained firmware target is
+a thing that fails in a venue, and it fails in a way nobody can diagnose under
+stage lights. The existing deck already earned its reliability the hard way —
+`STATUS.md` records three separate bugs behind a single "connects but types
+nothing" — and adding a self-built keyboard puts a second unproven link in the
+same chain. **Not for a performance instrument.**
+
+So the real decision is two lines long:
+
+- **Want it finished, and will accept 306 mm** → Keychron K7 Pro, §6. Deck
+  ~314 × 180 mm.
+- **Want it narrow, will accept assembling a keyboard once and losing the
+  ortho grid** → Halcyon Lily58 with the Wireless Halcyon Controller. Deck
+  ~239–248 × 186–192 mm.
+
+Nothing in between exists to buy.
+
+## 10.5 Risks specific to this route
+
+One line each, not scoped — the same discipline as §1.
+
+- **ZMK must stay on its 6KRO default**, per §1; `CONFIG_ZMK_HID_KEYBOARD_REPORT_SIZE`
+  is 6 unless changed, which matches what the deck decodes.
+- **Dongle mode is not useful here.** splitkb's coin-cell battery figure of
+  *"six to nine months"* is quoted *"when paired with the dongle"* — a dongle
+  is a USB device and §3 closes USB host, so this deck needs **direct BLE** and
+  the **LiPo Power Board**, with correspondingly shorter life.
+- **Keycap legends.** All these kits ship bare; a blank or ortho keycap set has
+  to be chosen, and `docs/OS.md` notes the deck has no backlight, so legends
+  and sculpting matter more here than on a lit desk.
+- **Split means two batteries and two radios.** ZMK links the halves over BLE
+  as well, so a split doubles the things that can go flat mid-set. A unibody
+  board is one radio and one cell.
+- **No vendor publishes an outside dimension for any PCB kit in §10.1.** The
+  switch-field derivation in §10.2 is exact, but the PCB outline must come from
+  the vendor's design files or a measured unit before any pocket is cut.
+
+## 10.6 Sources added for this section
+
+- [splitkb Aurora Helix](https://splitkb.com/products/aurora-helix) — ortho split, up to 64 keys, number row, MX spacing, nice!nano listed compatible, QMK or ZMK, kit contents and price
+- [splitkb Halcyon Lily58](https://splitkb.com/products/halcyon-lily58) · [Halcyon Elora](https://splitkb.com/products/halcyon-elora) — 58 / 62 keys, number row, pre-soldered PCB assembly, €61.94 ex-VAT
+- [Wireless Halcyon Controller](https://splitkb.com/products/wireless-halcyon-controller) — nRF52840, ZMK, €28.92 single / €61.94 pair + module kit / €95.00 upgrade bundle
+- [splitkb: Introducing Halcyon Wireless](https://blog.splitkb.com/introducing-halcyon-wireless/) — drop-in replacement for the wired RP2040 controller, CE/FCC-certified module, coin-cell vs LiPo power boards, dongle
+- [splitkb Aurora series build guide](https://docs.splitkb.com/product-guides/aurora-series) · [keyboard kits index](https://splitkb.com/collections/keyboard-kits)
+- [MoErgo Glove80 technical specification](https://www.moergo.com/pages/glove80-technical-specification) — 372 × 168 × 60 mm, 600 g, 80 keys, BLE 5.0, ZMK, 2 × nRF52840 · [pricing](https://www.moergo.com/collections/glove80-keyboards)
+- [Dygma tech specs](https://support.dygma.com/hc/en-us/articles/22597472943517-What-are-the-tech-specs-of-Dygma-keyboards) — Defy 164.16 × 210.02 × 35.36 mm, ~1 kg, BT up to 5 devices + RF
+- [Kinesis Advantage360 Professional](https://kinesis-ergo.com/shop/adv360pro/) — 76 keys, BLE, ZMK, assembled
+- [Keebio Nyquist (QMK readme)](https://cgit.krebsco.de/qmk_firmware/plain/keyboards/keebio/nyquist/readme.md) — "split 60% split 5x12 ortholinear keyboard made and sold by Keebio", Pro Micro hardware
+- [Keebio Quefrency](https://keeb.io/collections/all/products/quefrency-rev-2-pcbs-60-65-split-staggered-keyboard) — split 60/65% with number row, **wired only**, no vendor wireless
+- [Mechboards Lily58 kit](https://mechboards.co.uk/products/lily58-kit?country=US) — confirms the pattern: pre-built variants are **wired** RP2040; the **wireless** variant is a solder kit
+- [nice!nano v2 (Mechboards)](https://www.mechboards.co.uk/products/nice-nano-v2) — 34.1 × 18.3 × 3.3 mm, nRF52840 · [reach.dog pricing](https://reach.dog/shop/little-keyboards/products/nice-nano) $24.99
