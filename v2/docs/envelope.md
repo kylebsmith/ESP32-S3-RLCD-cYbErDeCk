@@ -67,6 +67,20 @@ really is implied by the geometry, not merely suggested by the styling.
 Lay the deck out on that module and an arrangement can be re-cut without
 re-cutting bosses.
 
+### The grid module is 4.7625 mm, and it was derived rather than chosen
+
+The vendor's pitch is imperial. 19.05 mm is exactly 0.75 in, and
+
+```
+19.05 / 4.75   = 4.0105...      a round metric module misses it
+19.05 / 4.7625 = 4.000000       4.7625 mm = 3/16 in, exactly
+```
+
+So the module is **4.7625 mm**. The 76.200 × 21.590 board is 16 × 4.533 of it;
+the four-encoder pitch is 4 modules; the hole quad is 8 × 3.467. Choose a nice
+round number instead and nothing lands on anything — which is the opposite of a
+perfect grid, however tidy the number looked.
+
 ## Arrangement A, and the 45 mm that decides it
 
 ```
@@ -161,14 +175,44 @@ A hole sized to a knob's nominal diameter is a hole no real knob goes into.
    removable — the biggest single lever on deck thickness.
 2. **The acrylic stack**: how many layers, what thickness, and how a sheet
    tolerance of ±10 % is absorbed so the plate still reads flush.
-3. **Encoder pitch: 19.05 or 39 mm.** The 5752 fixes four encoders at 19.05.
-   MIL-STD-1472H wants 25 mm minimum edge-to-edge for a 14 mm knob, which gave
-   the 39 mm figure. Either the knobs get smaller or the quad board is wrong
-   for a row you play. This is a real conflict, not a rounding question.
-4. **Alignment to the display.** 84.80 / 4 = 21.2 mm per encoder, about half the
+3. **Alignment to the display.** 84.80 / 4 = 21.2 mm per encoder, about half the
    ergonomic minimum, so four encoders *cannot* align to display columns. Push's
    legibility depends entirely on that alignment. Either the display grows or
    the panel earns its legibility another way.
+
+## Settled by arithmetic: the encoder pitch
+
+This was an open conflict — the Quad Rotary fixes four encoders at 19.05 mm
+while MIL-STD-1472H asks for 25 mm minimum edge-to-edge separation for a 14 mm
+knob, which is where the 39 mm figure came from. It is not a conflict, because
+one side of it is impossible:
+
+```
+13 mm knob + 25 mm separation      = 38.00 mm pitch
+four encoders at 38.00             = 127.00 mm span
+the Quad Rotary board is             76.20 mm wide
+                                     short by 50.80 mm — two thirds of the board
+```
+
+MIL's separation cannot be had on this part at any knob size. So:
+
+```
+19.05 pitch − 6.00 finger gap = 13.05 mm   largest knob the vendor pitch allows
+MIL-STD-1472H minimum knob    = 13.00 mm   smallest knob it permits at all
+                                ────────
+window                          0.05 mm
+```
+
+**The encoder knob is 13.00 mm.** It is the only diameter that satisfies both,
+and the margin is five hundredths of a millimetre — worth knowing before someone
+picks a 16 mm knob because it feels nicer in the hand.
+
+The resolution of the standard, stated so it is not re-litigated: MIL's 25 mm is
+for controls that must be **found blind under stress**, and that is what the
+three pots are — widely spaced, shape-coded, set and left. The encoder row is
+played as a *row*, where the hand finds the group and counts across it, which is
+what every instrument from the OP-1 to the Digitakt actually does at roughly this
+pitch. Two different jobs, two different spacings, one standard correctly read.
 
 ## Not up for negotiation
 

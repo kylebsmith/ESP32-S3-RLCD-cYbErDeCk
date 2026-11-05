@@ -26,6 +26,21 @@ def clean():
     return p
 
 
+def plated():
+    """A plate carrying three Pattern B bays, with controls sitting on them."""
+    p = L.Panel(240.0, 200.0, title="PLATED")
+    p.add(L.display(0.0, 62.0))
+    p.add(L.plate(0.0, -9.525, 190.5, 76.2))
+    for i, y in enumerate((14.2875, -9.525, -33.3375)):
+        p.add(L.bay(0.0, y, f"BAY{i+1}"))
+    # Four encoders at the vendor's own 19.05 pitch. The knob is 13.00 and not
+    # 14.00 because 19.05 - 6.00 finger gap = 13.05 is the whole budget, and
+    # MIL-STD-1472H's minimum knob is 13 mm. The window is 0.05 mm wide.
+    for i, x in enumerate((-28.575, -9.525, 9.525, 28.575)):
+        p.add(L._ctl("encoder", x, 14.2875, 13.0, 13.0, f"ENC{i+1}"))
+    return p
+
+
 def expect(name, fails, want):
     got = [f.split()[0] for f in fails]
     ok = want in got
@@ -65,6 +80,35 @@ def main():
     dropped = re.sub(r'<circle data-kind="knob" data-label="POT1"[^/]*/>', "",
                      text, count=1)
     bad += not expect("a control not drawn at all", p.audit(dropped), "MISSING")
+
+    # --- the plate and the vendor grid ---
+    q = plated()
+    f = q.audit(q.svg())
+    if f:
+        print(f"  FAIL  a clean plated layout must pass; got {f}")
+        bad += 1
+    else:
+        print("  ok    a plate carrying bays carrying controls passes")
+        print("  ok    a control on a bay is not an overlap (different layers)")
+
+    q = plated()
+    q.add(L._ctl("knob", -90.4875, -9.525, 16, 16, "HANGL"),
+          L._ctl("knob", 90.4875, -9.525, 16, 16, "HANGR"))
+    bad += not expect("a control overhanging the plate", q.audit(q.svg()), "OFF")
+
+    q = L.Panel(240.0, 200.0, title="SHIFTED")
+    q.add(L.plate(9.525, -9.525, 190.5, 76.2))
+    bad += not expect("a plate off the centreline", q.audit(q.svg()), "OFF")
+
+    q = plated()
+    q.add(L.bay(0.0, 19.05, "BAYCLASH"))
+    bad += not expect("two bays overlapping", q.audit(q.svg()), "OVERLAP")
+
+    q = plated()
+    q.items = [it for it in q.items if it["kind"] != "display"]
+    q.add(L.display(0.0, 28.0))          # dropped until it touches the plate
+    bad += not expect("the display running into the plate", q.audit(q.svg()),
+                      "OVERLAP")
 
     # and the spec-level checks
     cases = [

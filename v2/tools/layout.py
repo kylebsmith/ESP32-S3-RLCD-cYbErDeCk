@@ -21,6 +21,19 @@ import xml.etree.ElementTree as ET
 DISP_W, DISP_H = 84.80, 63.60   # display active area
 WALL = 3.20                     # side wall thickness
 
+# ---- the vendor's grid, measured from the STEP files (parts.md 1.1) ------
+PAT_B = (76.200, 21.590)        # NeoSlider 5295 = NeoKey 4980 = Quad Rotary 5752
+PAT_B_HOLES = (38.10, 16.51)    # the four M2.5 mounting holes, centre to centre
+PAT_A_W = 25.400                # Adafruit sensor / ADC breakout width
+HOLE_D = 2.50
+
+# The grid module is DERIVED, not chosen. The vendor's pitch is imperial:
+# 19.05 mm is exactly 0.75 in, and 19.05 / 4.75 = 4.0105..., so a round metric
+# 4.75 module misses it. 19.05 / 4 = 4.7625 mm = 3/16 in, exactly, and the
+# 76.200 x 21.590 board outline is 16 x 4.5333 of it. Pick the module the parts
+# are already on and the grid closes; pick a nice round number and nothing lands.
+MODULE = 4.7625
+
 # ---- provisional, pending the ergonomics research ------------------------
 FINGER = 6.00   # minimum rim-to-rim gap between two things you turn
 
@@ -29,6 +42,12 @@ LIVE, GHOST = "#d8552a", "#8d93a0"
 TOL = 0.01      # mm: drawn-vs-declared disagreement that counts as a bug
 
 TURNABLE = ("knob", "encoder")
+
+
+# Which things may overlap which: a control sits ON a bay and a bay sits ON
+# the plate, so overlap is only ever checked within one layer. Containment is
+# what gets checked between them.
+LAYER = {"plate": 0, "bay": 1}
 
 
 def _ctl(kind, x, y, w, h, label, r=0.0, kw=None, kh=None, free=False):
@@ -42,11 +61,33 @@ def _ctl(kind, x, y, w, h, label, r=0.0, kw=None, kh=None, free=False):
     free    exempt from the mirror-symmetry check, deliberately
     """
     return dict(kind=kind, x=x, y=y, w=w, h=h, label=label, r=r, free=free,
-                kw=w if kw is None else kw, kh=h if kh is None else kh)
+                kw=w if kw is None else kw, kh=h if kh is None else kh,
+                layer=LAYER.get(kind, 2),
+                on_plate=kind not in ("plate", "display"))
 
 
 def display(x, y, label="DISPLAY"):
+    """The display sits in the shell, not on the control plate."""
     return _ctl("display", x, y, DISP_W, DISP_H, label)
+
+
+def plate(x, y, w, h, label="PLATE"):
+    """The flush laser-cut acrylic plate. Everything on_plate must fit inside."""
+    return _ctl("plate", x, y, w, h, label)
+
+
+def bay(x, y, label, pattern="B"):
+    """One interchangeable breakout bay.
+
+    Pattern B is the vendor's own module: the NeoSlider, the NeoKey 1x4 and the
+    Quad Rotary are all 76.200 x 21.590 on the same 38.10 x 16.51 hole quad, so
+    a bay does not know which of the three it holds. Pattern A is the 25.400 mm
+    sensor breakout.
+    """
+    w, h = PAT_B if pattern == "B" else (PAT_A_W, PAT_A_W)
+    it = _ctl("bay", x, y, w, h, label)
+    it["pattern"] = pattern
+    return it
 
 
 class Panel:
@@ -56,7 +97,7 @@ class Panel:
     else.
     """
 
-    def __init__(self, body_w, body_h, module=4.75, title="", finger=FINGER):
+    def __init__(self, body_w, body_h, module=MODULE, title="", finger=FINGER):
         self.bw, self.bh, self.mod = body_w, body_h, module
         self.title, self.finger = title, finger
         self.items, self.notes = [], []
@@ -111,6 +152,27 @@ class Panel:
         for it in self.items:
             k, x, y, w, h = it["kind"], it["x"], it["y"], it["w"], it["h"]
             tag = f'data-kind="{k}" data-label="{it["label"]}"'
+            if k == "plate":
+                s.append(f'<rect {tag} data-role="touch" x="{px(x-w/2)}" '
+                         f'y="{py(y+h/2)}" width="{w}" height="{h}" fill="#f3f4f6" '
+                         f'stroke="{INK}" stroke-width="0.45"/>')
+                continue
+            if k == "bay":
+                s.append(f'<rect {tag} data-role="touch" x="{px(x-w/2)}" '
+                         f'y="{py(y+h/2)}" width="{w}" height="{h}" rx="2.54" '
+                         f'fill="none" stroke="{GHOST}" stroke-width="0.3" '
+                         f'stroke-dasharray="2 1"/>')
+                hx, hy = (PAT_B_HOLES if it.get("pattern", "B") == "B"
+                          else (20.32, 20.32))
+                for sx in (-1, 1):
+                    for sy in (-1, 1):
+                        s.append(f'<circle cx="{px(x+sx*hx/2)}" '
+                                 f'cy="{py(y+sy*hy/2)}" r="{HOLE_D/2}" '
+                                 f'fill="none" stroke="{GHOST}" '
+                                 f'stroke-width="0.25"/>')
+                s.append(f'<text x="{px(x)}" y="{py(y-h/2)+3.4}" fill="{GHOST}" '
+                         f'font-size="2.2" text-anchor="middle">{it["label"]}</text>')
+                continue
             if k == "display":
                 s.append(f'<rect {tag} data-role="touch" x="{px(x-w/2)}" '
                          f'y="{py(y+h/2)}" width="{w}" height="{h}" '
@@ -232,14 +294,45 @@ class Panel:
                     fail.append(f"OFF GRID  {b['label']:14s} {ax} = {b[ax]:+.2f}, "
                                 f"{off:.2f} off the {self.mod} module")
 
-        # 3. nothing overlaps anything, keep-out to keep-out
+        # 3. nothing overlaps anything. A control inside its bay and a bay
+        #    inside the plate are legitimate nesting and are skipped; a thing
+        #    that merely intersects a plate or bay is a collision, which is how
+        #    the display running into the plate gets caught.
+        lay = {it["label"]: it.get("layer", 2) for it in self.items}
+
+        def nested(outer, inner):
+            return (abs(inner["x"] - outer["x"]) + inner["w"] / 2
+                    <= outer["w"] / 2 + TOL
+                    and abs(inner["y"] - outer["y"]) + inner["h"] / 2
+                    <= outer["h"] / 2 + TOL)
+
         for i, a in enumerate(eff):
             for b in eff[i + 1:]:
+                la, lb = lay.get(a["label"], 2), lay.get(b["label"], 2)
+                if la != lb:
+                    outer, inner = (a, b) if la < lb else (b, a)
+                    if nested(outer, inner):
+                        continue
                 dx = (a["w"] + b["w"]) / 2 - abs(a["x"] - b["x"])
                 dy = (a["h"] + b["h"]) / 2 - abs(a["y"] - b["y"])
                 if dx > TOL and dy > TOL:
                     fail.append(f"OVERLAP   {a['label']} / {b['label']} "
                                 f"by {min(dx, dy):.2f} mm")
+
+        # 3b. everything that belongs to the plate is actually on the plate
+        pl = next((b for b in eff if b["kind"] == "plate"), None)
+        if pl is not None:
+            if abs(pl["x"]) > TOL and not decl.get(pl["label"], {}).get("free"):
+                fail.append(f"OFF AXIS  the plate's centre is x = {pl['x']:+.2f}, "
+                            f"not on the centreline")
+            for b in eff:
+                if not decl.get(b["label"], {}).get("on_plate", False):
+                    continue
+                ex = abs(b["x"] - pl["x"]) + b["w"] / 2 - pl["w"] / 2
+                ey = abs(b["y"] - pl["y"]) + b["h"] / 2 - pl["h"] / 2
+                if ex > TOL or ey > TOL:
+                    fail.append(f"OFF PLATE {b['label']} overhangs the plate by "
+                                f"{max(ex, ey):.2f} mm")
 
         # 4. inside the body, clear of the wall
         for b in eff:
@@ -277,7 +370,7 @@ def main():
     spec = importlib.util.spec_from_file_location("spec", spec_path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    panel = mod.build(Panel, _ctl, display)
+    panel = mod.build(Panel, _ctl, display, plate, bay)
 
     text = panel.svg()
     fail = panel.audit(text)
