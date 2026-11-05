@@ -1,86 +1,70 @@
-# The v2 envelope budget
+# The v2 envelope
 
-Everything below is measured out of v1's `cad/parameters.scad`, which is frozen
-and traceable. These are the numbers v2 inherits before a single new part is
-placed.
+## The brief, stated correctly
 
-## What v1 actually is
+v2 is **bigger than v1**. The footprint is not a constraint to squeeze into —
+it grows to fit the instrument. Three things it has to carry:
+
+1. the **display and board**, proven in v1 and carried over unchanged;
+2. a **keyboard**, which stays — and should get *better*, not disappear;
+3. a **control surface**: rotaries, pots, sliders, keys, and the gestural
+   sensors.
+
+**This is an enclosure exercise.** The firmware already works and is not being
+touched. What the controls are *for* matters only insofar as it decides how
+many there are, how big they are and where a performer's hands expect them.
+
+## What carries over from v1, unchanged
 
 | | mm |
 |---|---|
-| deck body | 116.25 × 140.25 × 16.85 |
-| front wall / back / side | 2.40 / 3.20 / 3.20 |
-| display active | 84.80 × 63.60, centred (−1.60, +31.78) |
-| — spans y | **−0.03 … +63.58** |
-| board | 11.25 deep, 11.00 stack, centred y +31.78 |
+| display active | 84.80 × 63.60 |
+| board | 11.25 deep, 11.00 stack |
 | battery cowl | 82.80 × 27.10, rising 11.00 off the back |
-| keyboard bay | 109.85 × 59.15 × **11.00 deep**, centred y −36.15 |
-| — spans y | **−65.72 … −6.57** |
-| keyboard aperture | 106.50 × 55.80 |
+| front wall / back / side | 2.40 / 3.20 / 3.20 |
 
-## The one fact that shapes v2
+v1's whole deck was 116.25 × 140.25 × 16.85, with the keyboard bay
+109.85 × 59.15 × 11.00 at the bottom. Those are the *reference* proportions,
+not a cage.
 
-**The keyboard bay is the control surface.** Taking the Rii out frees a
-pocket **109.85 × 59.15 and 11.00 mm deep**, in the lower half of the front
-face, that is *already inside the proven envelope*. Panel area for the controls
-therefore costs **nothing** in footprint — the device does not have to grow to
-gain a control surface, it only has to stop wasting that volume on a bad
-keyboard.
+## The real problem: arrangement, then size
 
-What it may cost is **thickness**, and that is the whole design problem.
+With the footprint free, the question stops being "what fits" and becomes
+**what order do the bands go in, and how far apart**. A performer's hands have
+to find the controls without looking, while their eyes are on the display and
+their fingers are on the keys.
 
-## The depth problem, stated before the parts arrive
-
-The bay gives 11.00 mm between the front face and the bay floor. Every control
-has to fit a stack of:
+The candidate arrangements, to be drawn and judged rather than argued:
 
 ```
-keycap / knob / slider cap   ──┐
-actuator body (switch, EC11, pot)   ├── must fit 11.00 mm, or the body grows
-breakout PCB                 ──┘
+A   display  /  controls  /  keyboard        controls between eyes and hands
+B   display  /  keyboard  /  controls        controls below, furthest reach
+C   controls /  display   /  keyboard        controls at the top edge
+D   display + controls side by side / keyboard     wider, shorter
 ```
 
-A Cherry MX switch alone is about 11.6 mm above its PCB before a keycap, and an
-EC11 encoder body is about 12–13 mm with its shaft. So the naive stack does
-**not** fit, and that is exactly why the user's instinct to **recess** the
-controls is the right one: recessing is not styling here, it is what buys the
-depth back. A knob whose top sits 2 mm below the panel is a knob whose body
-starts 2 mm deeper into a bay that has none to spare.
+Each has a different total height and a different hand journey. The study has
+to cost all four, not pick one.
 
-The real budget is therefore:
+## What sets the thickness
+
+The deck is 16.85 thick. Every control adds a stack behind the panel:
 
 ```
-available = kbd_depth (11.00) + front_t (2.40) + whatever the body grows
-needed    = PCB + actuator + (cap − recess)
+cap / knob / keycap      ──┐
+actuator (switch, EC11, pot) ├── sets the panel-to-floor depth
+breakout PCB             ──┘
 ```
 
-and the layouts have to be costed against it, not drawn and hoped for.
+A Cherry MX switch is about 11.6 mm above its PCB before a keycap; an EC11
+body about 12–13 with its shaft. So the control band is **thicker than the
+display band**, and the shell either steps or carries the thickest case
+everywhere. Recessing the controls is what pulls the worst of it back: a knob
+whose top sits below the panel is a knob whose body starts lower.
 
-## The area problem
+Thickness, not footprint, is the number to defend.
 
-59.15 mm of bay height has to hold whatever rows the control complement needs.
-A first pass at row heights, before the real part numbers land:
+## Not up for negotiation
 
-| row | height needed |
-|---|---|
-| 3 rotary encoders with knobs | ~25 mm |
-| 3 potentiometers | ~25 mm |
-| 2 sliders, if laid across | ~15 mm |
-| 4 keys at 19.05 mm pitch | ~20 mm |
-
-That is already past 59 mm for four rows. So one of these is true, and the
-layout studies have to pick:
-
-1. the body grows in **y** (it has room to: the deck is 140.25 and the mouth
-   end is mostly collar);
-2. some controls move off the front face — the **top edge** above the display,
-   or the flanks;
-3. the complement shrinks.
-
-No guessing: this gets decided against measured part dimensions and against
-the control complement the precedents research argues for.
-
-## What is NOT up for negotiation
-
-The display, the board, the battery and the port positions are proven and
-stay. v2 refines the shell around them; it does not re-derive them.
+Display, board, battery and port positions are proven. v2 refines the shell
+around them; it does not re-derive them. The firmware is not touched.
