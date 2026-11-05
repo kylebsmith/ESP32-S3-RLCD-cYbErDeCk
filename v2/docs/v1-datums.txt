@@ -1,0 +1,7 @@
+v1 datums carried forward (from cad/parameters.scad):
+  deck body      116.25 x 140.25 x 16.85
+  display active  84.80 x  63.60 at (-1.60, +31.775)
+  board depth     11.25, stack 11.00
+  battery cowl    82.80 x  27.10
+  front wall       2.40, back 3.20, side 3.20
+  corner blend    11.20, superellipse n = 3.20

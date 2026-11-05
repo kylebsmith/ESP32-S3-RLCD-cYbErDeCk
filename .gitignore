@@ -47,3 +47,6 @@ firmware/components/ssh/vendor/.git/
 # Finder metadata. Tracked once, and it silently aborted a history rewrite
 # twice in one session because filter-branch refuses to run with a dirty tree.
 .DS_Store
+
+# v2: downloaded vendor CAD is reference material, not ours to redistribute
+v2/parts/models/
