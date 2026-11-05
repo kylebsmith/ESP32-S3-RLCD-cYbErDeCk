@@ -104,7 +104,7 @@ LAYER = {"plate": 0, "bay": 1, "keyboard": 0}
 
 
 def _ctl(kind, x, y, w, h, label, r=0.0, kw=None, kh=None, free=False,
-         on_plate=None, y_from=None):
+         on_plate=None, y_from=None, mirror=0.0):
     """One control, centred at (x, y) in millimetres from the deck centre.
 
     kind    knob | encoder | key | slider | slot | sensor | display
@@ -127,14 +127,15 @@ def _ctl(kind, x, y, w, h, label, r=0.0, kw=None, kh=None, free=False,
     """
     return dict(kind=kind, x=x, y=y, w=w, h=h, label=label, r=r, free=free,
                 kw=w if kw is None else kw, kh=h if kh is None else kh,
-                layer=LAYER.get(kind, 2), y_from=y_from,
+                layer=LAYER.get(kind, 2), y_from=y_from, mirror=mirror,
                 on_plate=(kind not in ("plate", "display")
                           if on_plate is None else on_plate))
 
 
-def display(x, y, label="DISPLAY"):
+def display(x, y, label="DISPLAY", mirror=None):
     """The display sits in the shell, not on the control plate."""
-    return _ctl("display", x, y, DISP_W, DISP_H, label)
+    return _ctl("display", x, y, DISP_W, DISP_H, label,
+                mirror=x if mirror is None else mirror)
 
 
 def plate(x, y, w, h, label="PLATE"):
@@ -149,7 +150,7 @@ def keyboard(x, y, w, h, label="KEYBOARD", field=None):
     return it
 
 
-def bay(x, y, label, pattern="B"):
+def bay(x, y, label, pattern="B", mirror=0.0):
     """One interchangeable breakout bay.
 
     Pattern B is the vendor's own module: the NeoSlider, the NeoKey 1x4 and the
@@ -157,8 +158,9 @@ def bay(x, y, label, pattern="B"):
     a bay does not know which of the three it holds. Pattern A is the 25.400 mm
     sensor breakout.
     """
-    w, h = PAT_B if pattern == "B" else (PAT_A_W, PAT_A_W)
-    it = _ctl("bay", x, y, w, h, label)
+    w, h = {"B": PAT_B, "Bv": (PAT_B[1], PAT_B[0]),
+            "A": (PAT_A_W, PAT_A_W)}[pattern]
+    it = _ctl("bay", x, y, w, h, label, mirror=mirror)
     it["pattern"] = pattern
     return it
 
@@ -271,16 +273,19 @@ class Panel:
                          f'y="{py(y+h/2)}" width="{w}" height="{h}" rx="2.54" '
                          f'fill="none" stroke="{GHOST}" stroke-width="0.3" '
                          f'stroke-dasharray="2 1"/>')
-                hx, hy = (PAT_B_HOLES if it.get("pattern", "B") == "B"
-                          else (20.32, 20.32))
+                hx, hy = {"B": PAT_B_HOLES,
+                          "Bv": (PAT_B_HOLES[1], PAT_B_HOLES[0]),
+                          "A": (20.32, 20.32)}[it.get("pattern", "B")]
                 for sx in (-1, 1):
                     for sy in (-1, 1):
                         s.append(f'<circle cx="{px(x+sx*hx/2)}" '
                                  f'cy="{py(y+sy*hy/2)}" r="{HOLE_D/2}" '
                                  f'fill="none" stroke="{GHOST}" '
                                  f'stroke-width="0.25"/>')
-                s.append(f'<text x="{px(x)}" y="{py(y-h/2)+3.4}" fill="{GHOST}" '
-                         f'font-size="2.2" text-anchor="middle">{it["label"]}</text>')
+                if not it["label"].startswith("_"):
+                    s.append(f'<text x="{px(x)}" y="{py(y-h/2)+3.4}" '
+                             f'fill="{GHOST}" font-size="2.2" '
+                             f'text-anchor="middle">{it["label"]}</text>')
                 continue
             if k == "display":
                 s.append(f'<rect {tag} data-role="touch" x="{px(x-w/2)}" '
@@ -314,9 +319,10 @@ class Panel:
                              f'width="{it["kw"]}" height="{it["kh"]}" '
                              f'fill="none" stroke="{LIVE}" stroke-width="0.3" '
                              f'stroke-dasharray="1 1"/>')
-            s.append(f'<text x="{px(x)}" y="{py(y-max(h,it["kh"])/2)+3.4}" '
-                     f'fill="{INK}" font-size="2.5" text-anchor="middle" '
-                     f'letter-spacing="0.12">{it["label"]}</text>')
+            if not it["label"].startswith("_"):
+                s.append(f'<text x="{px(x)}" y="{py(y-max(h,it["kh"])/2)+3.4}" '
+                         f'fill="{INK}" font-size="2.5" text-anchor="middle" '
+                         f'letter-spacing="0.12">{it["label"]}</text>')
 
         s.append(f'<text x="{pad}" y="{H-6}" fill="{INK}" font-size="3.6" '
                  f'letter-spacing="0.3">{self.title}</text>')
@@ -420,6 +426,18 @@ class Panel:
         lay = {it["label"]: it.get("layer", 2) for it in self.items}
 
         def nested(outer, inner):
+            """Does inner legitimately belong to outer?
+
+            A bay inside the plate has to be wholly inside it. A CONTROL on a
+            bay only has to be CENTRED on it: a knob sits above its breakout
+            and may be wider than it -- a 38.10 knob on a 25.40 board overhangs
+            by 6.35 a side and nothing collides, because the overhang is in the
+            air above the PCB. What still matters there is knob-to-knob and
+            board-to-board, and both are checked within their own layer.
+            """
+            if outer["kind"] == "bay":
+                return (abs(inner["x"] - outer["x"]) <= outer["w"] / 2 + TOL
+                        and abs(inner["y"] - outer["y"]) <= outer["h"] / 2 + TOL)
             return (abs(inner["x"] - outer["x"]) + inner["w"] / 2
                     <= outer["w"] / 2 + TOL
                     and abs(inner["y"] - outer["y"]) + inner["h"] / 2
@@ -475,12 +493,18 @@ class Panel:
         key = lambda b: (b["kind"], round(b["w"], 2), round(b["h"], 2),
                          round(b["y"], 2))
         for b in eff:
-            if decl.get(b["label"], {}).get("free") or abs(b["x"]) < TOL:
+            d0 = decl.get(b["label"], {})
+            if d0.get("free"):
                 continue
-            if not any(abs(o["x"] + b["x"]) < TOL and key(o) == key(b)
+            ax = d0.get("mirror", 0.0)
+            if abs(b["x"] - ax) < TOL:          # on its own zone's axis
+                continue
+            want = 2 * ax - b["x"]
+            if not any(abs(o["x"] - want) < TOL and key(o) == key(b)
+                       and abs(decl.get(o["label"], {}).get("mirror", 0.0) - ax) < TOL
                        for o in eff if o is not b):
-                fail.append(f"ASYMMETRY {b['label']} at x = {b['x']:+.2f} has no "
-                            f"mirror at {-b['x']:+.2f}")
+                fail.append(f"ASYMMETRY {b['label']} at x = {b['x']:+.3f} has no "
+                            f"mirror at {want:+.3f} about its axis {ax:+.3f}")
         return fail
 
 

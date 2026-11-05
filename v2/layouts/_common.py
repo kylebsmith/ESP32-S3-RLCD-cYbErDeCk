@@ -18,12 +18,32 @@ PLATE_W = 266.700           # 14 key units, 420 x 0.635. Leaves 10.825 mm of
                             # to the bay row (285.75) does not leave.
 
 
-def frame(L, ctrl_band_h, title):
-    """A Panel sized from the K9 Pro, datumed on the control band's bottom edge."""
-    bw, bh, d = L.deck(P.KBD_W, P.KBD_D, ctrl_band_h)
+def frame(L, ctrl_band_h, title, board_band=True):
+    """A Panel sized from the K9 Pro, datumed on the control band's bottom edge.
+
+    board_band False means the display lives INSIDE the control band rather
+    than in a band of its own -- the slab arrangement, where the screen sits
+    beside the controls instead of above them. That removes a whole band and
+    its spine from the depth.
+    """
+    if board_band:
+        bw, bh, d = L.deck(P.KBD_W, P.KBD_D, ctrl_band_h)
+    else:
+        kw = P.KBD_W + L.KBD_FIT[0]
+        kh = P.KBD_D + L.KBD_FIT[1]
+        bw = max(kw, L.BOARD_POCKET[0]) + 2 * L.WALL
+        bh = L.BOTTOM_WALL + kh + SPINE + ctrl_band_h + L.WALL
+        kbd_top = L.BOTTOM_WALL + kh
+        half = bh / 2
+        d = dict(kbd_top=kbd_top - half, band_lo=kbd_top + SPINE - half,
+                 band_hi=kbd_top + SPINE + ctrl_band_h - half,
+                 kbd_pocket=(kw, kh))
     panel = L.Panel(bw, bh, title=title, y_datum=d["band_lo"])
-    disp_y = d["band_hi"] + SPINE + BOARD_POCKET_H / 2
-    panel.add(L.display(0.0, disp_y))
+    if board_band:
+        disp_y = d["band_hi"] + SPINE + BOARD_POCKET_H / 2
+        panel.add(L.display(0.0, disp_y))
+    else:
+        disp_y = d["band_lo"] + ctrl_band_h / 2
     panel.datums, panel.disp_y, panel.band = d, disp_y, ctrl_band_h
     return panel
 
