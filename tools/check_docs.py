@@ -65,8 +65,12 @@ WORDS = _Words()
 # manager. Its documentation links point into Espressif's own repository
 # layout and cannot resolve here, and it is not ours to correct. The version
 # is pinned by dependencies.lock, which IS committed.
+# "models" is v2/parts/models: downloaded vendor CAD and the READMEs that come
+# with it, gitignored for the same reason "reference" is. A vendor's own
+# relative links point into a tree we did not clone, and they are not ours to
+# correct either.
 SKIP_DIRS = {".git", "reference", "build", "stl", "__pycache__", ".github",
-             "managed_components"}
+             "managed_components", "models"}
 
 
 def repo_files():

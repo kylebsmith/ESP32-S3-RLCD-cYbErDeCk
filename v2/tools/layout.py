@@ -27,15 +27,68 @@ PAT_B_HOLES = (38.10, 16.51)    # the four M2.5 mounting holes, centre to centre
 PAT_A_W = 25.400                # Adafruit sensor / ADC breakout width
 HOLE_D = 2.50
 
-# The grid module is DERIVED, not chosen. The vendor's pitch is imperial:
-# 19.05 mm is exactly 0.75 in, and 19.05 / 4.75 = 4.0105..., so a round metric
-# 4.75 module misses it. 19.05 / 4 = 4.7625 mm = 3/16 in, exactly, and the
-# 76.200 x 21.590 board outline is 16 x 4.5333 of it. Pick the module the parts
-# are already on and the grid closes; pick a nice round number and nothing lands.
-MODULE = 4.7625
+# The grid is DERIVED from the parts, not chosen, and it took two wrong answers
+# to get there. Adafruit lays boards out in inches:
+#
+#   4.7625 (3/16 in)  divides  4 of 14 placement dimensions. Rejected: it
+#                     divides the 19.05 pitch family and nothing else -- not
+#                     21.590, not 25.400, not 16.510.
+#   1.2700 (0.050 in) divides 12 of 14. Rejected for one reason: an EVEN
+#                     number of items at 19.05 pitch, centred, lands on
+#                     half-pitches (+/-9.525, +/-28.575), and 9.525/1.27 = 7.5.
+#                     A four-encoder row is exactly that case.
+#   0.6350 (0.025 in) divides all twelve AND the half-pitches. This is the
+#                     placement grid, and it still catches an arbitrary round
+#                     metric number, which is what the check is for.
+#
+# The two it cannot divide are the display's 84.80 and 91.00 -- a metric part
+# in an imperial world. They are exempted by name, not by loosening the grid.
+MODULE = 0.635                  # placement snap, 0.025 in
+MODULE_BOARD = 1.27             # Adafruit's own board grid, 0.050 in
+MODULE_COARSE = 6.35            # coarse layout rhythm, 1/4 in
+TILE = 25.40                    # the plate's visible tile, 1 in
+
+# ---- the deck identity, from cad/parameters.scad -------------------------
+# v1 makes the deck a function of the keyboard and tools/validate.py asserts
+# it every run. These are the same identities, so a layout's body size is
+# DERIVED from the keyboard rather than typed in.
+WALL = 3.20                     # parameters.scad: wall
+SPINE = 3.20                    # the rib between two bands
+BOTTOM_WALL = 4.40              # wall + 1.2
+BOARD_POCKET = (93.90, 70.30)   # board_w/h_max + 2 * board_fit
+KBD_FIT = (1.35, 0.95)          # kbd_pocket = keyboard + this
+
+
+def deck(keyboard_w, keyboard_d, ctrl_band_h=None):
+    """Deck size and the datums a layout needs, in model space.
+
+    ctrl_band_h None reproduces v1's two bands (keyboard, board). A number adds
+    the third band of arrangement A between them, with its own spine.
+
+    Returns (body_w, body_h, datums), where datums are model-space y values:
+    the keyboard bay's top edge, and the control band's bottom and top edges.
+    """
+    kw = keyboard_w + KBD_FIT[0]
+    kh = keyboard_d + KBD_FIT[1]
+    body_w = max(kw, BOARD_POCKET[0]) + 2 * WALL
+
+    band = 0.0 if ctrl_band_h is None else ctrl_band_h + SPINE
+    body_h = BOTTOM_WALL + kh + SPINE + band + BOARD_POCKET[1] + WALL
+
+    # measured up from the outside bottom, then shifted to deck-centre origin
+    kbd_top = BOTTOM_WALL + kh
+    band_lo = kbd_top + SPINE
+    band_hi = band_lo + (ctrl_band_h or 0.0)
+    half = body_h / 2
+    return body_w, body_h, dict(kbd_top=kbd_top - half,
+                                band_lo=band_lo - half,
+                                band_hi=band_hi - half,
+                                kbd_pocket=(kw, kh))
+
 
 # ---- provisional, pending the ergonomics research ------------------------
 FINGER = 6.00   # minimum rim-to-rim gap between two things you turn
+THUMB = 45.00   # a control played while typing stays within this of the keys
 
 INK, RULE, GRID = "#111318", "#c9ccd4", "#e8eaee"
 LIVE, GHOST = "#d8552a", "#8d93a0"
@@ -283,7 +336,8 @@ class Panel:
             k = keep.get(b["label"], b)
             eff.append(dict(b, w=max(b["w"], k["w"]), h=max(b["h"], k["h"])))
 
-        # 2. on the grid
+        # 2. on the grid. The display is exempt by name -- its 84.80 x 63.60
+        #    active area is a metric part and lands on no inch grid at all.
         for b in eff:
             if b["kind"] == "display":
                 continue

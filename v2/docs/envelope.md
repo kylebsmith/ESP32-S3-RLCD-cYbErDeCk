@@ -67,19 +67,47 @@ really is implied by the geometry, not merely suggested by the styling.
 Lay the deck out on that module and an arrangement can be re-cut without
 re-cutting bosses.
 
-### The grid module is 4.7625 mm, and it was derived rather than chosen
+### The grid module is 0.635 mm, and it took two wrong answers to get there
 
-The vendor's pitch is imperial. 19.05 mm is exactly 0.75 in, and
+Adafruit lays boards out in inches, so the grid is imperial. Finding which
+imperial grid took three attempts, and the first two are recorded because the
+failure mode is instructive: each looked right and each was checked against too
+few of the parts.
 
 ```
-19.05 / 4.75   = 4.0105...      a round metric module misses it
-19.05 / 4.7625 = 4.000000       4.7625 mm = 3/16 in, exactly
+4.7625  (3/16 in)   divides  4 of 14 placement dimensions
+1.2700  (0.050 in)  divides 12 of 14
+0.6350  (0.025 in)  divides 12 of 14, and the half-pitches too
 ```
 
-So the module is **4.7625 mm**. The 76.200 × 21.590 board is 16 × 4.533 of it;
-the four-encoder pitch is 4 modules; the hole quad is 8 × 3.467. Choose a nice
-round number instead and nothing lands on anything — which is the opposite of a
-perfect grid, however tidy the number looked.
+**4.7625 was wrong.** It came from 19.05 / 4 and it divides the 19.05 pitch
+family and nothing else — not 21.590, not 25.400, not 16.510, not 20.320. It was
+checked against the one dimension it was derived from, which is no check at all.
+
+**1.27 — Adafruit's actual board grid, 0.050 in — fails on one case, and it is a
+case this panel always produces.** An *even* number of items at 19.05 pitch,
+centred on the axis, lands on half-pitches: ±9.525 and ±28.575. And
+9.525 / 1.27 = 7.5. A four-encoder row is exactly that. Symmetry about the
+centreline and an even control count together force a half-pitch.
+
+**0.635 mm = 0.025 in** divides every board dimension *and* the half-pitches,
+and still catches an arbitrary round metric number, which is what the check is
+for — 14.25, −3.30 and 95.00 all fail it.
+
+So there is a hierarchy, not a single number:
+
+| | mm | in | what it is |
+|---|---|---|---|
+| placement | **0.635** | 0.025 | the snap every control is checked against |
+| board | 1.27 | 0.050 | Adafruit's own layout grid |
+| coarse | 6.35 | ¼ | the layout's visible rhythm |
+| tile | 25.40 | 1 | the plate's tile |
+
+**The display is the one honest exception.** Its 84.80 × 63.60 active area lands
+on no inch grid at any of these moduli — it is a metric part in an imperial
+world. It is exempted *by name* in the checker rather than by loosening the grid
+for everything else, because the alternative is a grid that excuses whatever
+does not fit it.
 
 ## Arrangement A, and the 45 mm that decides it
 

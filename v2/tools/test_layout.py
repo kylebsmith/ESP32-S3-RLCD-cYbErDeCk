@@ -17,27 +17,28 @@ import layout as L  # noqa: E402
 
 
 def clean():
-    p = L.Panel(200.0, 160.0, module=5.0, title="TEST")
-    p.add(L.display(0.0, 40.0))
-    for i, x in enumerate((-25.0, 0.0, 25.0)):
-        p.add(L._ctl("knob", x, -20.0, 16.0, 16.0, f"POT{i+1}", kw=19.0, kh=19.0))
-    p.add(L._ctl("slider", -35.0, -50.0, 50.0, 10.0, "SLIDE L"))
-    p.add(L._ctl("slider", 35.0, -50.0, 50.0, 10.0, "SLIDE R"))
+    p = L.Panel(200.66, 160.02, title="TEST")
+    p.add(L.display(0.0, 40.005))
+    for i, x in enumerate((-25.4, 0.0, 25.4)):
+        p.add(L._ctl("knob", x, -20.32, 16.51, 16.51, f"POT{i+1}",
+                     kw=19.05, kh=19.05))
+    p.add(L._ctl("slider", -35.56, -50.8, 50.8, 10.16, "SLIDE L"))
+    p.add(L._ctl("slider", 35.56, -50.8, 50.8, 10.16, "SLIDE R"))
     return p
 
 
 def plated():
     """A plate carrying three Pattern B bays, with controls sitting on them."""
     p = L.Panel(240.0, 200.0, title="PLATED")
-    p.add(L.display(0.0, 62.0))
-    p.add(L.plate(0.0, -9.525, 190.5, 76.2))
-    for i, y in enumerate((14.2875, -9.525, -33.3375)):
+    p.add(L.display(0.0, 62.23))
+    p.add(L.plate(0.0, -10.16, 190.5, 76.2))
+    for i, y in enumerate((13.97, -10.16, -34.29)):
         p.add(L.bay(0.0, y, f"BAY{i+1}"))
     # Four encoders at the vendor's own 19.05 pitch. The knob is 13.00 and not
     # 14.00 because 19.05 - 6.00 finger gap = 13.05 is the whole budget, and
     # MIL-STD-1472H's minimum knob is 13 mm. The window is 0.05 mm wide.
     for i, x in enumerate((-28.575, -9.525, 9.525, 28.575)):
-        p.add(L._ctl("encoder", x, 14.2875, 13.0, 13.0, f"ENC{i+1}"))
+        p.add(L._ctl("encoder", x, 13.97, 13.0, 13.0, f"ENC{i+1}"))
     return p
 
 
@@ -81,6 +82,31 @@ def main():
                      text, count=1)
     bad += not expect("a control not drawn at all", p.audit(dropped), "MISSING")
 
+    # --- the deck identity must reproduce v1, or it is not the repo's rule ---
+    w, h, _ = L.deck(108.50, 58.20)
+    if abs(w - 116.25) > 1e-9 or abs(h - 140.25) > 1e-9:
+        print(f"  FAIL  deck() gives {w:.2f} x {h:.2f}, v1 is 116.25 x 140.25")
+        bad += 1
+    else:
+        print("  ok    deck() reproduces the v1 deck from the v1 keyboard")
+
+    w, h, d = L.deck(287.00, 97.50, 0.0)
+    if abs(w - 294.75) > 1e-9 or abs(h - 182.75) > 1e-9:
+        print(f"  FAIL  deck() gives {w:.2f} x {h:.2f} for the K9 Pro floor")
+        bad += 1
+    else:
+        print("  ok    deck() gives 294.75 x 182.75 as the K9 Pro floor")
+
+    # the band datums have to bracket the band, in order, in model space
+    w, h, d = L.deck(287.00, 97.50, 71.4375)
+    if not (d["kbd_top"] < d["band_lo"] < d["band_hi"]
+            and abs((d["band_hi"] - d["band_lo"]) - 71.4375) < 1e-9
+            and abs((d["band_lo"] - d["kbd_top"]) - L.SPINE) < 1e-9):
+        print(f"  FAIL  band datums out of order or wrong span: {d}")
+        bad += 1
+    else:
+        print("  ok    band datums bracket the band, one spine off the keys")
+
     # --- the plate and the vendor grid ---
     q = plated()
     f = q.audit(q.svg())
@@ -92,37 +118,38 @@ def main():
         print("  ok    a control on a bay is not an overlap (different layers)")
 
     q = plated()
-    q.add(L._ctl("knob", -90.4875, -9.525, 16, 16, "HANGL"),
-          L._ctl("knob", 90.4875, -9.525, 16, 16, "HANGR"))
+    q.add(L._ctl("knob", -90.17, -10.16, 16, 16, "HANGL"),
+          L._ctl("knob", 90.17, -10.16, 16, 16, "HANGR"))
     bad += not expect("a control overhanging the plate", q.audit(q.svg()), "OFF")
 
     q = L.Panel(240.0, 200.0, title="SHIFTED")
-    q.add(L.plate(9.525, -9.525, 190.5, 76.2))
+    q.add(L.plate(9.525, -10.16, 190.5, 76.2))
     bad += not expect("a plate off the centreline", q.audit(q.svg()), "OFF")
 
     q = plated()
-    q.add(L.bay(0.0, 19.05, "BAYCLASH"))
+    q.add(L.bay(0.0, 20.32, "BAYCLASH"))
     bad += not expect("two bays overlapping", q.audit(q.svg()), "OVERLAP")
 
     q = plated()
     q.items = [it for it in q.items if it["kind"] != "display"]
-    q.add(L.display(0.0, 28.0))          # dropped until it touches the plate
+    q.add(L.display(0.0, 28.575))        # dropped until it touches the plate
     bad += not expect("the display running into the plate", q.audit(q.svg()),
                       "OVERLAP")
 
     # and the spec-level checks
     cases = [
-        ("off the grid", lambda p: p.add(L._ctl("knob", -3.3, -70.0, 16, 16, "X")), "OFF"),
+        ("off the grid", lambda p: p.add(
+            L._ctl("knob", -3.3, -69.85, 16.51, 16.51, "X")), "OFF"),
         ("two knobs too close", lambda p: p.add(
-            L._ctl("knob", -60.0, -20.0, 16, 16, "L"),
-            L._ctl("knob", 60.0, -20.0, 16, 16, "R"),
-            L._ctl("knob", -45.0, -20.0, 16, 16, "L2"),
-            L._ctl("knob", 45.0, -20.0, 16, 16, "R2")), "OVERLAP"),
+            L._ctl("knob", -60.96, -20.32, 16.51, 16.51, "L"),
+            L._ctl("knob", 60.96, -20.32, 16.51, 16.51, "R"),
+            L._ctl("knob", -45.72, -20.32, 16.51, 16.51, "L2"),
+            L._ctl("knob", 45.72, -20.32, 16.51, 16.51, "R2")), "OVERLAP"),
         ("outside the body", lambda p: p.add(
-            L._ctl("key", 95.0, 60.0, 18, 18, "W"),
-            L._ctl("key", -95.0, 60.0, 18, 18, "W2")), "OFF"),
+            L._ctl("key", 95.25, 60.96, 18.0, 18.0, "W"),
+            L._ctl("key", -95.25, 60.96, 18.0, 18.0, "W2")), "OFF"),
         ("no mirror partner", lambda p: p.add(
-            L._ctl("knob", 70.0, -20.0, 16, 16, "LONE")), "ASYMMETRY"),
+            L._ctl("knob", 69.85, -20.32, 16.51, 16.51, "LONE")), "ASYMMETRY"),
     ]
     for name, mutate, want in cases:
         q = clean()
