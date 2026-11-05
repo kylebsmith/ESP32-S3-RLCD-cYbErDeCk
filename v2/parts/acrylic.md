@@ -12,7 +12,7 @@ estimated.*
 1. **The plate is two laminae, not one sheet, and the reason is arithmetic
    rather than taste.** Three parts demand three different local thicknesses of
    the same panel: an MX switch needs **exactly 1.5 mm** at its clips
-   `[DS cherry-mx]`, a PEC11 encoder bushing permits **≤4.1 mm** of panel
+   `[DS cherry-mx]`, a PEC11 encoder bushing permits **≤2.6 mm** of panel
    `[DERIVED §1]`, and a 254 mm-wide plate wants **3 mm or more** to be a plate
    rather than a membrane. A laser cuts constant thickness. Two bonded or
    clamped laminae give all three. §2.
@@ -101,7 +101,8 @@ washer 0.4  +  nut 2.0  =  2.40 mm            [DS bourns-PTV09 p3]
 | bushing | max panel |
 |---|---|
 | 5.0 mm | **2.60** |
-| 6.5 mm — PEC11 encoder, stock 16 mm Alpha, Adafruit 562 | **4.10** |
+| 5.0 mm — PEC11 encoder with a 15 mm shaft (**corrected**, was 6.5) | **2.60** |
+| 6.5 mm — stock 16 mm Alpha, Adafruit 562 (`[STEP 562]` measured 6.6 directly) | **4.10** |
 | 7.0 mm — RD901F `B3`/`E3` | **4.60** |
 | 8.0 mm — RV16AF length code `4` | **5.60** |
 | **10.0 mm — RD901F `B6`/`E6`** | **7.60** |
@@ -116,7 +117,7 @@ Now the full demand list:
 |---|---|---|---|
 | pot bushing, stock 6.5 mm | ≤ 4.10 mm | Ø7.4 finished | `[DERIVED]` |
 | pot bushing, RD901F 10 mm | ≤ 7.60 mm | Ø7.4 (Ø9.4 for the E variants) | `[DERIVED]` |
-| encoder bushing (PEC11, 6.5 mm) **if nutted** | ≤ 4.10 mm | Ø7.4 | `[DERIVED]` |
+| encoder bushing (PEC11, **5.0 mm**) **if nutted** | ≤ **2.60 mm** | Ø7.4 | `[DERIVED]` |
 | **MX switch, clips engaged** | **1.524 ± 0.10 mm** | **14.00 ± 0.05 sq**, corner R ≤ 0.3 | `[DS cherry-mx p3]` |
 | NeoSlider shank | any — pot body sits behind the plate | slot ≥ 2.5 wide × 75 long | `[STEP 5295]`, `parts.md` §3 |
 | 5880 NeoPixel light hole | any | Ø2.5–3.0, **10.41 mm off the knob axis** | `[STEP 4991/5880]` |

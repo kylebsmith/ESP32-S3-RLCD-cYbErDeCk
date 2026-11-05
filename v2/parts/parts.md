@@ -165,7 +165,8 @@ same family (`PEC11+SWITCH` in the STEP).
 | Envelope (square keep-out, board-aligned) | **16.70 × 16.70** | `[STEP bbox]` |
 | Body thickness, PCB front face → panel mounting surface | **6.50** | `[STEP]` |
 | Bushing thread | **M7 × 0.75** | `[DS PEC11 p2]` |
-| Bushing length | **6.5** | `[DS PEC11 p2]` |
+| Bushing length | **5.0** for a 15 mm shaft; **7.0** for 20/25/30 | `[DS pec11 p3]` |
+| ~~Bushing length~~ | ~~6.5~~ — **WRONG, corrected.** 6.5 is the BODY height from the PCB face to the mounting surface. The drawing carries 6.5 as a standalone leader for the body and `LB` for the threaded portion; 6.5 was read twice, once correctly as the body and once incorrectly as the bushing. Max panel the stock encoder can be nutted to is therefore **2.60**, not 4.10. | `[DS pec11 p3]` |
 | Shaft | **Ø6.0, flatted to 4.5** (D-shaft, Bourns "F" type) | `[DS PEC11 p2]` |
 | Bushing + shaft from mounting surface (L1) | **15.0** (also 20 / 25 / 30 available) | `[DS PEC11 p2]` |
 | Shaft tip above PCB front face | **21.40** ( = 6.50 + 14.90) | `[STEP]` — reconciles with L1 = 15.0 to within 0.1 mm |

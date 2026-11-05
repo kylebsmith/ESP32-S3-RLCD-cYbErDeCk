@@ -100,7 +100,7 @@ TURNABLE = ("knob", "encoder")
 # Which things may overlap which: a control sits ON a bay and a bay sits ON
 # the plate, so overlap is only ever checked within one layer. Containment is
 # what gets checked between them.
-LAYER = {"plate": 0, "bay": 1, "keyboard": 0}
+LAYER = {"plate": 0, "bay": 1, "keyboard": 0, "route": 3}
 
 
 def _ctl(kind, x, y, w, h, label, r=0.0, kw=None, kh=None, free=False,
@@ -143,6 +143,26 @@ def plate(x, y, w, h, label="PLATE"):
     return _ctl("plate", x, y, w, h, label)
 
 
+def route(label, pts, w=4.00):
+    """A wiring channel in the carrier plate's top face, as a polyline.
+
+    The wiring is a visible surface here -- it is seen through the clear
+    acrylic -- so it is laid out and checked, not left to the builder. pts are
+    (x, y) in model space. Width is the channel, not the wire.
+    """
+    xs = [p[0] for p in pts]
+    ys = [p[1] for p in pts]
+    # w/h are the CENTRELINE span, because that is what the drawing emits and
+    # what measure() reads back. The channel's own width is the keep-out.
+    it = _ctl("route", (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2,
+              max(xs) - min(xs), max(ys) - min(ys), label,
+              kw=max(xs) - min(xs) + w, kh=max(ys) - min(ys) + w,
+              on_plate=True)
+    it["pts"] = list(pts)
+    it["chan"] = w
+    return it
+
+
 def keyboard(x, y, w, h, label="KEYBOARD", field=None):
     """The keyboard bay. field is the switch field (w, h) drawn inside it."""
     it = _ctl("keyboard", x, y, w, h, label, on_plate=False)
@@ -151,7 +171,7 @@ def keyboard(x, y, w, h, label="KEYBOARD", field=None):
 
 
 def bay(x, y, label, pattern="B", mirror=0.0, size=None, holes=None,
-        metric=False):
+        metric=False, layer=None):
     """One interchangeable breakout bay.
 
     Pattern B is the vendor's own module: the NeoSlider, the NeoKey 1x4 and the
@@ -164,6 +184,8 @@ def bay(x, y, label, pattern="B", mirror=0.0, size=None, holes=None,
     it = _ctl("bay", x, y, w, h, label, mirror=mirror, metric=metric)
     it["pattern"] = pattern
     it["holes"] = holes
+    if layer is not None:
+        it["layer"] = layer
     return it
 
 
@@ -240,6 +262,16 @@ class Panel:
         for it in self.items:
             k, x, y, w, h = it["kind"], it["x"], it["y"], it["w"], it["h"]
             tag = f'data-kind="{k}" data-label="{it["label"]}"'
+            if k == "route":
+                pts = " ".join(f"{px(a)},{py(b)}" for a, b in it["pts"])
+                s.append(f'<polyline {tag} data-role="touch" points="{pts}" '
+                         f'fill="none" stroke="#dfe3ea" '
+                         f'stroke-width="{it["chan"]}" stroke-linejoin="miter" '
+                         f'stroke-linecap="butt"/>')
+                s.append(f'<polyline points="{pts}" fill="none" '
+                         f'stroke="{LIVE}" stroke-width="0.5" '
+                         f'stroke-linejoin="miter"/>')
+                continue
             if k == "keyboard":
                 s.append(f'<rect {tag} data-role="touch" x="{px(x-w/2)}" '
                          f'y="{py(y+h/2)}" width="{w}" height="{h}" rx="1.5" '
@@ -356,6 +388,18 @@ class Panel:
             if e.get("data-kind") == "body":
                 continue
             tag = e.tag.rsplit("}", 1)[-1]
+            if tag == "polyline":
+                pts = [(float(a) - ox, oy - float(b)) for a, b in
+                       (q.split(",") for q in e.get("points").split())]
+                xs = [p[0] for p in pts]
+                ys = [p[1] for p in pts]
+                boxes.append(dict(label=e.get("data-label"),
+                                  kind=e.get("data-kind"),
+                                  role=e.get("data-role"), pts=pts,
+                                  x=(min(xs) + max(xs)) / 2,
+                                  y=(min(ys) + max(ys)) / 2,
+                                  w=max(xs) - min(xs), h=max(ys) - min(ys)))
+                continue
             if tag == "circle":
                 r = float(e.get("r"))
                 x, y, w, h = float(e.get("cx")) - ox, oy - float(e.get("cy")), 2*r, 2*r
@@ -409,7 +453,11 @@ class Panel:
         #    still checked.
         METRIC_PARTS = ("display", "keyboard")
         for b in eff:
-            if (b["kind"] in METRIC_PARTS
+            # A route's bounding-box centre is an artefact of its extent, not a
+            # placement: a span of an odd number of units has its midpoint on a
+            # half unit and that means nothing. Every VERTEX is checked in 5b,
+            # which is the real constraint.
+            if (b["kind"] in METRIC_PARTS or b["kind"] == "route"
                     or decl.get(b["label"], {}).get("metric")):
                 continue
             yf = decl.get(b["label"], {}).get("y_from")
@@ -449,6 +497,8 @@ class Panel:
         for i, a in enumerate(eff):
             for b in eff[i + 1:]:
                 la, lb = lay.get(a["label"], 2), lay.get(b["label"], 2)
+                if 3 in (la, lb):
+                    continue
                 if la != lb:
                     outer, inner = (a, b) if la < lb else (b, a)
                     if nested(outer, inner):
@@ -461,6 +511,7 @@ class Panel:
 
         # 3b. everything that belongs to the plate is actually on the plate
         pl = next((b for b in eff if b["kind"] == "plate"), None)
+        _ = pl
         if pl is not None:
             if abs(pl["x"]) > TOL and not decl.get(pl["label"], {}).get("free"):
                 fail.append(f"OFF AXIS  the plate's centre is x = {pl['x']:+.2f}, "
@@ -492,12 +543,51 @@ class Panel:
                     fail.append(f"TIGHT     {a['label']} / {b['label']} rims "
                                 f"{gap:.2f} mm apart, want {self.finger:.2f}")
 
+        # 5b. the wiring, which is a visible surface and so is checked
+        drawn_pts = {b["label"]: b.get("pts") for b in touch if b.get("pts")}
+        bays = [b for b in eff if b["kind"] == "bay"]
+        for lbl, pts in drawn_pts.items():
+            d0 = decl.get(lbl, {})
+            for i, (a, b) in enumerate(zip(pts, pts[1:])):
+                if abs(a[0] - b[0]) > TOL and abs(a[1] - b[1]) > TOL:
+                    fail.append(f"DIAGONAL  {lbl} segment {i+1} runs "
+                                f"{a[0]:+.2f},{a[1]:+.2f} to {b[0]:+.2f},"
+                                f"{b[1]:+.2f} -- channels are orthogonal")
+            for i, (vx, vy) in enumerate(pts):
+                for ax, v, zero in (("x", vx, 0.0), ("y", vy, self.y_datum)):
+                    off = abs(v - zero) % self.mod
+                    off = min(off, self.mod - off)
+                    if off > 1e-6:
+                        fail.append(f"OFF GRID  {lbl} vertex {i+1} {ax} = "
+                                    f"{v:+.3f}, {off:.3f} off the module")
+            # the CHANNEL is what gets cut, not the centreline, so the half
+            # width has to clear the plate too -- checking vertices alone lets
+            # a run overhang while passing
+            half = d0.get("chan", 4.0) / 2
+            if pl is not None:
+                for i, (vx, vy) in enumerate(pts):
+                    ex = abs(vx - pl["x"]) + half - pl["w"] / 2
+                    ey = abs(vy - pl["y"]) + half - pl["h"] / 2
+                    if ex > TOL or ey > TOL:
+                        fail.append(f"OFF PLATE {lbl} vertex {i+1} at "
+                                    f"{vx:+.2f},{vy:+.2f} puts its channel "
+                                    f"{max(ex, ey):.2f} mm past the plate")
+            # a channel hidden under a board defeats the point of a clear panel
+            for i, (a, b) in enumerate(zip(pts, pts[1:])):
+                mx, my = (a[0] + b[0]) / 2, (a[1] + b[1]) / 2
+                for bd in bays:
+                    inside = lambda p: (abs(p[0] - bd["x"]) <= bd["w"] / 2 + TOL
+                                        and abs(p[1] - bd["y"]) <= bd["h"] / 2 + TOL)
+                    if (inside((mx, my)) and not inside(a) and not inside(b)):
+                        fail.append(f"BURIED    {lbl} segment {i+1} crosses "
+                                    f"under {bd['label']} without ending there")
+
         # 6. symmetry about the centreline -- a stated requirement
         key = lambda b: (b["kind"], round(b["w"], 2), round(b["h"], 2),
                          round(b["y"], 2))
         for b in eff:
             d0 = decl.get(b["label"], {})
-            if d0.get("free"):
+            if d0.get("free") or b["kind"] == "route":
                 continue
             ax = d0.get("mirror", 0.0)
             if abs(b["x"] - ax) < TOL:          # on its own zone's axis
@@ -521,7 +611,7 @@ def main():
     spec = importlib.util.spec_from_file_location("spec", spec_path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    panel = mod.build(Panel, _ctl, display, plate, bay, keyboard)
+    panel = mod.build(Panel, _ctl, display, plate, bay, keyboard, route)
 
     text = panel.svg()
     fail = panel.audit(text)

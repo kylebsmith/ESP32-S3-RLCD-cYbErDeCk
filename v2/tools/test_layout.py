@@ -136,6 +136,47 @@ def main():
     bad += not expect("the display running into the plate", q.audit(q.svg()),
                       "OVERLAP")
 
+    # --- the wiring, which is a visible surface and so is checked ---
+    def wired(route_pts, w=4.0, extra=None):
+        q = L.Panel(240.0, 200.0, title="WIRED", y_datum=-10.16)
+        q.add(L.plate(0.0, -10.16, 190.5, 76.2))
+        q.add(L.bay(0.0, -10.16, "_board", pattern="A"))
+        q.add(L.route("RUN", route_pts, w=w))
+        if extra:
+            extra(q)
+        return q
+
+    q = wired([(-50.80, -40.64), (-50.80, -27.94), (-25.40, -27.94)])
+    f = q.audit(q.svg())
+    if f:
+        print(f"  FAIL  a clean orthogonal run must pass; got {f}")
+        bad += 1
+    else:
+        print("  ok    an orthogonal, on-grid run inside the plate passes")
+
+    bad += not expect("a diagonal channel", wired(
+        [(-50.80, -40.64), (-25.40, -27.94)]).audit(
+        wired([(-50.80, -40.64), (-25.40, -27.94)]).svg()), "DIAGONAL")
+
+    q = wired([(-50.80, -40.64), (-50.80, -27.94), (-25.41, -27.94)])
+    bad += not expect("an off-grid vertex", q.audit(q.svg()), "OFF")
+
+    q = wired([(-50.80, -46.99), (-25.40, -46.99)])
+    bad += not expect("a channel overhanging the plate", q.audit(q.svg()), "OFF")
+
+    # a run that crosses under a board without ending there is invisible
+    q = wired([(-25.40, -10.16), (25.40, -10.16)])
+    bad += not expect("a channel buried under a board", q.audit(q.svg()), "BURIED")
+
+    # ...but one that ENDS at the board is how a cable legitimately arrives
+    q = wired([(-25.40, -10.16), (-12.70, -10.16)])
+    f = [x for x in q.audit(q.svg()) if x.startswith("BURIED")]
+    if f:
+        print(f"  FAIL  a run ending at a board must not read as buried; {f}")
+        bad += 1
+    else:
+        print("  ok    a run ending at a board is not buried")
+
     # and the spec-level checks
     cases = [
         ("off the grid", lambda p: p.add(
