@@ -56,8 +56,10 @@ DISP_X = GRID_X - GRID_W / 2 - GAP - DISP_BD[0] / 2
 SLIDE_X = GRID_X + GRID_W / 2 + GAP + P.BAY_H / 2
 
 
-def build(Panel, ctl, display, plate, bay, keyboard):
+def build(k):
     import layout as L
+    ctl, display, plate, bay = k.ctl, k.display, k.plate, k.bay
+    route = k.route
     p = C.frame(L, BAND, "SLAB  display / 2x3 grid / fader", board_band=False)
     d = p.datums
     mid = d["band_lo"] + BAND / 2

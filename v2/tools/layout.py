@@ -15,6 +15,7 @@ Usage:  python3 v2/tools/layout.py <spec.py> <out.svg>
 """
 import importlib.util
 import sys
+from types import SimpleNamespace
 import xml.etree.ElementTree as ET
 
 # ---- inherited from v1, proven, not re-derived ----------------------------
@@ -601,6 +602,10 @@ class Panel:
         return fail
 
 
+KIT = SimpleNamespace(Panel=Panel, ctl=_ctl, display=display, plate=plate,
+                      bay=bay, keyboard=keyboard, route=route)
+
+
 def main():
     spec_path, out_path = sys.argv[1], sys.argv[2]
     # a spec may import its siblings (part tables, shared geometry), and
@@ -611,7 +616,11 @@ def main():
     spec = importlib.util.spec_from_file_location("spec", spec_path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    panel = mod.build(Panel, _ctl, display, plate, bay, keyboard, route)
+    # One kit object, not seven positional arguments. Threading helpers
+    # positionally meant that adding `route` silently broke every spec that
+    # had not been re-run -- which is exactly what happened, and the tests
+    # missed it because they build panels directly instead of through build().
+    panel = mod.build(KIT)
 
     text = panel.svg()
     fail = panel.audit(text)

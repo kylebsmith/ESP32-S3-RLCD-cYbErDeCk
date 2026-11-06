@@ -43,8 +43,10 @@ POT_TRUNK_DY = -33.655          # 53 x 0.635, below the pot row, inside the band
 POT_BODY = 16.000               # Alpha RV16 class body, what you see on the plate
 
 
-def build(Panel, ctl, display, plate, bay, keyboard, route):
+def build(k):
     import layout as L
+    ctl, display, plate, bay = k.ctl, k.display, k.plate, k.bay
+    route = k.route
     p = C.frame(L, BAND, "CARRIER  the wiring is the interior",
                 board_band=False)
     d = p.datums

@@ -50,3 +50,6 @@ firmware/components/ssh/vendor/.git/
 
 # v2: downloaded vendor CAD is reference material, not ours to redistribute
 v2/parts/models/
+
+# python bytecode from the layout specs
+v2/layouts/__pycache__/

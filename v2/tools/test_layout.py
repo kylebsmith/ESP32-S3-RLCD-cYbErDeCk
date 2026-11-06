@@ -197,6 +197,36 @@ def main():
         mutate(q)
         bad += not expect(name, q.audit(q.svg()), want)
 
+    # Every spec in v2/layouts must actually render. The checks above build
+    # panels directly, so they cannot see a change to the tool that breaks the
+    # spec interface -- and one did: adding route() to build()'s argument list
+    # left slab.py unrenderable and nothing noticed until a reader tried it.
+    import glob
+    import importlib.util
+    import os
+    here = os.path.dirname(os.path.abspath(__file__))
+    specs = sorted(glob.glob(os.path.join(here, "..", "layouts", "*.py")))
+    specs = [s for s in specs if not os.path.basename(s).startswith("_")
+             and os.path.basename(s) != "parts.py"]
+    import sys as _sys
+    _sys.path.insert(0, os.path.join(here, "..", "layouts"))
+    for path in specs:
+        name = os.path.basename(path)
+        try:
+            sp = importlib.util.spec_from_file_location("spec_" + name, path)
+            mod = importlib.util.module_from_spec(sp)
+            sp.loader.exec_module(mod)
+            panel = mod.build(L.KIT)
+            fails = panel.audit(panel.svg())
+            if fails:
+                print(f"  FAIL  {name} renders but does not pass: {fails[:2]}")
+                bad += 1
+            else:
+                print(f"  ok    {name} renders and passes")
+        except Exception as e:
+            print(f"  FAIL  {name} does not render: {type(e).__name__}: {e}")
+            bad += 1
+
     print(f"  {'ALL PASS' if not bad else str(bad) + ' CHECK(S) BLIND'}")
     return 1 if bad else 0
 
