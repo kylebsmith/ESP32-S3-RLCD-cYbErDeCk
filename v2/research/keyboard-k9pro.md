@@ -822,3 +822,74 @@ no keyboard in hand.**
 - `v2/research/keyboard.md` §4.1, §4.3, §5.1, §5.2, §10.3 — the K7 Pro baseline and the deck identity reused here
 - `v2/parts/parts.md` §1, §4 — Cherry MX `[DS]` figures, the 76.200 × 21.590 breakout outline
 - `cad/parameters.scad:210, 748-749, 904, 913, 1014` — the identities and the v1 lip
+
+
+---
+
+## 14. Does the CAD contain the internals? Yes — and what that means
+
+*Added after extracting `K9-Pro-US-Full-Model-20241128.stp.zip`, which had been
+sitting unopened inside the archive the user supplied.*
+
+The full model is **37.7 MB, 84 distinct named products, 904 solids**, and it
+contains the actual components rather than a case shell:
+
+```
+K9PRO_PCB                    the PCB
+K9PRO-PLATE                  the switch plate
+BATTERY-3030130              the cell
+GATERON-A_ASM                the switches
+1-KEY / TAB / BACKSPACE / ENTER / CAPS / SHIFT_L / 1_25KEY   keycaps
+LEFT-PET, RIGHT-PET          insulators
+TYPE-C_16PIN                 the USB-C connector
+KS-2P02B02                   the toggles
+CK8876_TOP_84-WG             top case
+CK8876_K3_BOTTOM_43_20       bottom case
+```
+
+So **a stripped build could be designed from data already in hand.**
+
+### What was measured, and what was not
+
+| | mm | |
+|---|---|---|
+| battery | **130.000 × 32.121 × 4.881** | `[STEP]` |
+| battery position | rear third of the case | `[STEP]` |
+| plate assembly | y −6.88 … −0.97 | `[STEP]` |
+| bottom case | y −13.41 … −1.18 | `[STEP]` |
+
+**The PCB's underside height is NOT measured and is not quoted.** Point
+classification against this model returns material through the entire height at
+every probe — it reports a solid 26 mm column where there is plainly a cavity —
+which it does not do on the smaller NeoSlider model. Some of the 904 solids are
+not closed, so the classifier is unreliable here. The per-solid bounding boxes
+above are trustworthy; a layer-by-layer section of this file is not.
+
+### The judgement
+
+`§8.1` already advised against stripping, and extracting the internals does not
+change the reasoning — it sharpens it. The K9 Pro is **tray mount**: the PCB and
+the cell screw into the ABS bottom case and the aluminium is a cosmetic top
+frame. The bottom case is not packaging, it **is** the chassis. Removing it
+means taking on:
+
+- mounting the plate, which is what carries the switches;
+- supporting the PCB across 287 mm so it does not flex under typing;
+- holding the cell;
+- bringing out USB-C and both toggles ourselves;
+- and owning the keyboard's power and charging permanently.
+
+Against that, stripping would give: the wedge becomes ours to choose, the stack
+loses whatever the bottom case contributes beneath the PCB, and the keyboard
+stops being "a keyboard dropped into a hole" — which also deletes the retention
+problem and the thin void frame in the slab.
+
+**Recommendation: mount it whole for this iteration.** Everything is drawn for
+that and the measurements support it. Keep stripping as a second-iteration move,
+when there is a working deck to compare against and a spare keyboard to risk —
+`docs/roadmap.md` already contemplates that iteration.
+
+**And the cheap way to settle it is not this file.** The keyboard arrives
+tomorrow. Opening it and putting a caliper on the PCB underside, the plate
+thickness and the tray's screw bosses takes ten minutes and gives better numbers
+than a 37 MB model whose solids will not classify.
