@@ -249,7 +249,26 @@ With the body under a 2.40 mm panel, the shank stands **15.50 − 6.50 − 2.40 
 6.60 mm** proud. **The nubbin then has to reach down to the shank**, so check
 its bore depth before fixing the panel thickness.
 
-### Travel: **NOT SOURCED** — see §10
+### Travel: **NOT SOURCED** — and the STEP cannot give it
+
+Measured from `5295 NeoSlider Stemma.step` on the y = 0 centreline by point
+classification, not from its face list:
+
+| | mm | |
+|---|---|---|
+| shank tip from the PCB front face | **15.50** | `[STEP]` |
+| slide-pot body front face | **6.00** | `[STEP]` |
+| **shank proud of its body** | **9.50** | `[DERIVED]` |
+| shank width | **5.00**, centred at x = +0.10 | `[STEP]` |
+
+**The slot is not modelled.** The pot's cover is drawn as solid material across
+the full 69 mm of the body and the shank simply passes through it, so there is
+no opening in the model to measure and *travel cannot be derived from this
+file*. Scanning every z level between the cover and the shank tip returns one
+run — the shank — and no gap anywhere along the body.
+
+So the 9.50 mm protrusion is now measured rather than quoted, and travel stays
+open: calipers on the real part, or Adafruit's fab files. §10.
 Neither the Adafruit page, the Learn guide, nor the STEP gives the electrical
 or mechanical travel. The STEP models the pot with the shank at centre and does
 not cut the slot, so travel cannot be derived from it. **Measure it.** (The
