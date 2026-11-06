@@ -35,10 +35,12 @@ def frame(L, ctrl_band_h, title, board_band=True):
         bh = L.BOTTOM_WALL + kh + SPINE + ctrl_band_h + L.WALL
         kbd_top = L.BOTTOM_WALL + kh
         half = bh / 2
-        d = dict(kbd_top=kbd_top - half, band_lo=kbd_top + SPINE - half,
+        d = dict(wall=L.WALL, bottom_wall=L.BOTTOM_WALL,
+                 kbd_top=kbd_top - half, band_lo=kbd_top + SPINE - half,
                  band_hi=kbd_top + SPINE + ctrl_band_h - half,
                  kbd_pocket=(kw, kh))
-    panel = L.Panel(bw, bh, title=title, y_datum=d["band_lo"])
+    panel = L.Panel(bw, bh, title=title, y_datum=d["band_lo"],
+                    wall=d["wall"], bottom_wall=d["bottom_wall"])
     if board_band:
         disp_y = d["band_hi"] + SPINE + BOARD_POCKET_H / 2
         panel.add(L.display(0.0, disp_y))

@@ -17,7 +17,7 @@ import layout as L  # noqa: E402
 
 
 def clean():
-    p = L.Panel(200.66, 160.02, title="TEST")
+    p = L.Panel(200.66, 160.02, title="TEST", wall=3.20, bottom_wall=3.20)
     p.add(L.display(0.0, 40.005))
     for i, x in enumerate((-25.4, 0.0, 25.4)):
         p.add(L._ctl("knob", x, -20.32, 16.51, 16.51, f"POT{i+1}",
@@ -29,7 +29,7 @@ def clean():
 
 def plated():
     """A plate carrying three Pattern B bays, with controls sitting on them."""
-    p = L.Panel(240.0, 200.0, title="PLATED")
+    p = L.Panel(240.0, 200.0, title="PLATED", wall=3.20, bottom_wall=3.20)
     p.add(L.display(0.0, 62.23))
     p.add(L.plate(0.0, -10.16, 190.5, 76.2))
     for i, y in enumerate((13.97, -10.16, -34.29)):
@@ -83,14 +83,14 @@ def main():
     bad += not expect("a control not drawn at all", p.audit(dropped), "MISSING")
 
     # --- the deck identity must reproduce v1, or it is not the repo's rule ---
-    w, h, _ = L.deck(108.50, 58.20)
+    w, h, _ = L.deck(108.50, 58.20, wall=3.20)
     if abs(w - 116.25) > 1e-9 or abs(h - 140.25) > 1e-9:
         print(f"  FAIL  deck() gives {w:.2f} x {h:.2f}, v1 is 116.25 x 140.25")
         bad += 1
     else:
         print("  ok    deck() reproduces the v1 deck from the v1 keyboard")
 
-    w, h, d = L.deck(287.00, 97.50, 0.0)
+    w, h, d = L.deck(287.00, 97.50, 0.0, wall=3.20)
     if abs(w - 294.75) > 1e-9 or abs(h - 182.75) > 1e-9:
         print(f"  FAIL  deck() gives {w:.2f} x {h:.2f} for the K9 Pro floor")
         bad += 1
@@ -98,7 +98,7 @@ def main():
         print("  ok    deck() gives 294.75 x 182.75 as the K9 Pro floor")
 
     # the band datums have to bracket the band, in order, in model space
-    w, h, d = L.deck(287.00, 97.50, 71.4375)
+    w, h, d = L.deck(287.00, 97.50, 71.4375, wall=3.20)
     if not (d["kbd_top"] < d["band_lo"] < d["band_hi"]
             and abs((d["band_hi"] - d["band_lo"]) - 71.4375) < 1e-9
             and abs((d["band_lo"] - d["kbd_top"]) - L.SPINE) < 1e-9):
@@ -122,7 +122,7 @@ def main():
           L._ctl("knob", 90.17, -10.16, 16, 16, "HANGR"))
     bad += not expect("a control overhanging the plate", q.audit(q.svg()), "OFF")
 
-    q = L.Panel(240.0, 200.0, title="SHIFTED")
+    q = L.Panel(240.0, 200.0, title="SHIFTED", wall=3.20, bottom_wall=3.20)
     q.add(L.plate(9.525, -10.16, 190.5, 76.2))
     bad += not expect("a plate off the centreline", q.audit(q.svg()), "OFF")
 
@@ -138,7 +138,8 @@ def main():
 
     # --- the wiring, which is a visible surface and so is checked ---
     def wired(route_pts, w=4.0, extra=None):
-        q = L.Panel(240.0, 200.0, title="WIRED", y_datum=-10.16)
+        q = L.Panel(240.0, 200.0, title="WIRED", y_datum=-10.16,
+                    wall=3.20, bottom_wall=3.20)
         q.add(L.plate(0.0, -10.16, 190.5, 76.2))
         q.add(L.bay(0.0, -10.16, "_board", pattern="A"))
         q.add(L.route("RUN", route_pts, w=w))

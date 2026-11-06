@@ -53,14 +53,23 @@ TILE = 25.40                    # the plate's visible tile, 1 in
 # v1 makes the deck a function of the keyboard and tools/validate.py asserts
 # it every run. These are the same identities, so a layout's body size is
 # DERIVED from the keyboard rather than typed in.
-WALL = 3.20                     # parameters.scad: wall
+# 8.125 is not a round number and it is not meant to be: it is the wall that
+# makes the deck EXACTLY 8:5, the same ratio as the control grid.
+#   body_w = 288.35 + 2w        body_h = 106.05 + band + w
+#   5 * body_w == 8 * body_h    =>   w = 8.125,  304.60 x 190.375
+# The interior is unchanged at 288.35, so the keyboard pocket, the 15 u
+# control field and every control position stay exactly where they were.
+WALL = 8.125                    # sides and rear: overbuilt, deliberately
 SPINE = 3.20                    # the rib between two bands
-BOTTOM_WALL = 4.40              # wall + 1.2
+BOTTOM_WALL = 4.40              # the FRONT wall, and it stays thin on purpose:
+                                # it is where the heels of the hands land, and
+                                # it is the one edge that must not be overbuilt
 BOARD_POCKET = (93.90, 70.30)   # board_w/h_max + 2 * board_fit
 KBD_FIT = (1.35, 0.95)          # kbd_pocket = keyboard + this
 
 
-def deck(keyboard_w, keyboard_d, ctrl_band_h=None):
+def deck(keyboard_w, keyboard_d, ctrl_band_h=None, wall=WALL,
+         bottom_wall=BOTTOM_WALL):
     """Deck size and the datums a layout needs, in model space.
 
     ctrl_band_h None reproduces v1's two bands (keyboard, board). A number adds
@@ -71,17 +80,18 @@ def deck(keyboard_w, keyboard_d, ctrl_band_h=None):
     """
     kw = keyboard_w + KBD_FIT[0]
     kh = keyboard_d + KBD_FIT[1]
-    body_w = max(kw, BOARD_POCKET[0]) + 2 * WALL
+    body_w = max(kw, BOARD_POCKET[0]) + 2 * wall
 
     band = 0.0 if ctrl_band_h is None else ctrl_band_h + SPINE
-    body_h = BOTTOM_WALL + kh + SPINE + band + BOARD_POCKET[1] + WALL
+    body_h = bottom_wall + kh + SPINE + band + BOARD_POCKET[1] + wall
 
     # measured up from the outside bottom, then shifted to deck-centre origin
-    kbd_top = BOTTOM_WALL + kh
+    kbd_top = bottom_wall + kh
     band_lo = kbd_top + SPINE
     band_hi = band_lo + (ctrl_band_h or 0.0)
     half = body_h / 2
-    return body_w, body_h, dict(kbd_top=kbd_top - half,
+    return body_w, body_h, dict(wall=wall, bottom_wall=bottom_wall,
+                                kbd_top=kbd_top - half,
                                 band_lo=band_lo - half,
                                 band_hi=band_hi - half,
                                 kbd_pocket=(kw, kh))
@@ -198,7 +208,7 @@ class Panel:
     """
 
     def __init__(self, body_w, body_h, module=MODULE, title="", finger=FINGER,
-                 y_datum=0.0):
+                 y_datum=0.0, wall=WALL, bottom_wall=BOTTOM_WALL):
         """y_datum is the horizontal line the vertical grid is measured from.
 
         x needs no datum: the centreline is the datum, because symmetry about it
@@ -211,6 +221,7 @@ class Panel:
         self.bw, self.bh, self.mod = body_w, body_h, module
         self.title, self.finger = title, finger
         self.y_datum = y_datum
+        self.wall, self.bottom_wall = wall, bottom_wall
         self.items, self.notes = [], []
 
     def add(self, *items):
@@ -526,13 +537,21 @@ class Panel:
                     fail.append(f"OFF PLATE {b['label']} overhangs the plate by "
                                 f"{max(ex, ey):.2f} mm")
 
-        # 4. inside the body, clear of the wall
+        # 4. inside the body, clear of the wall -- and the walls are not all
+        #    the same. The front is BOTTOM_WALL and thinner on purpose, so a
+        #    check that assumes one thickness all round reports the keyboard
+        #    bay as overrunning a wall that is not there.
         for b in eff:
-            ex = abs(b["x"]) + b["w"] / 2 - (bw / 2 - WALL)
-            ey = abs(b["y"]) + b["h"] / 2 - (bh / 2 - WALL)
-            if ex > TOL or ey > TOL:
-                fail.append(f"OFF BODY  {b['label']} runs {max(ex, ey):.2f} mm "
-                            f"into the {WALL} wall")
+            ex = abs(b["x"]) + b["w"] / 2 - (bw / 2 - self.wall)
+            e_rear = (b["y"] + b["h"] / 2) - (bh / 2 - self.wall)
+            e_front = (b["h"] / 2 - b["y"]) - (bh / 2 - self.bottom_wall)
+            worst, which = max((ex, f"{self.wall} side"),
+                               (e_rear, f"{self.wall} rear"),
+                               (e_front, f"{self.bottom_wall} front"),
+                               key=lambda t: t[0])
+            if worst > TOL:
+                fail.append(f"OFF BODY  {b['label']} runs {worst:.2f} mm "
+                            f"into the {which} wall")
 
         # 5. room for a finger between two things you turn
         turn = [b for b in eff if b["kind"] in TURNABLE]
