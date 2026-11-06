@@ -826,6 +826,12 @@
 <text x="237.67" y="54.35" fill="#111318" font-size="2.5" text-anchor="middle" letter-spacing="0.12">E3</text>
 <circle data-kind="knob" data-label="P3" data-role="touch" cx="237.67" cy="76.35" r="8.0" fill="none" stroke="#111318" stroke-width="0.5"/>
 <text x="237.67" y="87.75" fill="#111318" font-size="2.5" text-anchor="middle" letter-spacing="0.12">P3</text>
+<rect data-kind="bay" data-label="RP2040 DVI" data-role="touch" x="253.545" y="19.2" width="22.86" height="50.8" rx="2.54" fill="none" stroke="#8d93a0" stroke-width="0.3" stroke-dasharray="2 1"/>
+<circle cx="242.115" cy="53.8075" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<circle cx="242.115" cy="35.3925" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<circle cx="287.835" cy="53.8075" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<circle cx="287.835" cy="35.3925" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<text x="264.975" y="73.4" fill="#8d93a0" font-size="2.2" text-anchor="middle">RP2040 DVI</text>
 <rect data-kind="bay" data-label="_fader board" data-role="touch" x="278.945" y="19.2" width="21.59" height="76.2" rx="2.54" fill="none" stroke="#8d93a0" stroke-width="0.3" stroke-dasharray="2 1"/>
 <circle cx="281.485" cy="76.35" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
 <circle cx="281.485" cy="38.25" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
@@ -839,8 +845,10 @@
 <polyline points="174.17,38.25 186.87,38.25" fill="none" stroke="#d8552a" stroke-width="0.5" stroke-linejoin="miter"/>
 <polyline data-kind="route" data-label="E2-E3" data-role="touch" points="212.27,38.25 224.97,38.25" fill="none" stroke="#dfe3ea" stroke-width="4.0" stroke-linejoin="miter" stroke-linecap="butt"/>
 <polyline points="212.27,38.25 224.97,38.25" fill="none" stroke="#d8552a" stroke-width="0.5" stroke-linejoin="miter"/>
-<polyline data-kind="route" data-label="E3-FADER" data-role="touch" points="250.37,38.25 250.37,23.01 289.74,23.01" fill="none" stroke="#dfe3ea" stroke-width="4.0" stroke-linejoin="miter" stroke-linecap="butt"/>
-<polyline points="250.37,38.25 250.37,23.01 289.74,23.01" fill="none" stroke="#d8552a" stroke-width="0.5" stroke-linejoin="miter"/>
+<polyline data-kind="route" data-label="E3-FADER" data-role="touch" points="250.37,38.25 250.37,86.51 289.74,86.51" fill="none" stroke="#dfe3ea" stroke-width="4.0" stroke-linejoin="miter" stroke-linecap="butt"/>
+<polyline points="250.37,38.25 250.37,86.51 289.74,86.51" fill="none" stroke="#d8552a" stroke-width="0.5" stroke-linejoin="miter"/>
+<polyline data-kind="route" data-label="UART" data-role="touch" points="112.575,52.22 121.465,52.22 121.465,22.375 264.975,22.375" fill="none" stroke="#dfe3ea" stroke-width="3.0" stroke-linejoin="miter" stroke-linecap="butt"/>
+<polyline points="112.575,52.22 121.465,52.22 121.465,22.375 264.975,22.375" fill="none" stroke="#d8552a" stroke-width="0.5" stroke-linejoin="miter"/>
 <polyline data-kind="route" data-label="ADC" data-role="touch" points="112.575,67.46 121.465,67.46 121.465,90.955 237.67,90.955" fill="none" stroke="#dfe3ea" stroke-width="3.0" stroke-linejoin="miter" stroke-linecap="butt"/>
 <polyline points="112.575,67.46 121.465,67.46 121.465,90.955 237.67,90.955" fill="none" stroke="#d8552a" stroke-width="0.5" stroke-linejoin="miter"/>
 <polyline data-kind="route" data-label="P1 wiper" data-role="touch" points="161.47,90.955 161.47,83.97" fill="none" stroke="#dfe3ea" stroke-width="3.0" stroke-linejoin="miter" stroke-linecap="butt"/>
