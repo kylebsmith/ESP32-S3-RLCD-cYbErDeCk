@@ -111,7 +111,8 @@ TURNABLE = ("knob", "encoder")
 # Which things may overlap which: a control sits ON a bay and a bay sits ON
 # the plate, so overlap is only ever checked within one layer. Containment is
 # what gets checked between them.
-LAYER = {"plate": 0, "bay": 1, "keyboard": 0, "route": 3}
+LAYER = {"plate": 0, "slab": 0, "bay": 1, "keyboard": 0, "route": 3,
+         "screw": 2}
 
 
 def _ctl(kind, x, y, w, h, label, r=0.0, kw=None, kh=None, free=False,
@@ -178,6 +179,30 @@ def keyboard(x, y, w, h, label="KEYBOARD", field=None):
     """The keyboard bay. field is the switch field (w, h) drawn inside it."""
     it = _ctl("keyboard", x, y, w, h, label, on_plate=False)
     it["field"] = field
+    return it
+
+
+def slab(w, h, void=None, label="SLAB"):
+    """The acrylic, as the whole footprint with the keyboard cut out of it.
+
+    void is (x, y, w, h) for the keyboard opening. Anything that belongs to the
+    slab has to be inside it AND clear of the void -- a screw over the opening
+    is a screw into air.
+    """
+    it = _ctl("slab", 0.0, 0.0, w, h, label)
+    it["void"] = void
+    return it
+
+
+def screw(x, y, d=3.40, label=None, edge=None, mirror=0.0):
+    """A fastener through the acrylic into a heat-set insert in the carrier.
+
+    d is the CLEARANCE hole. edge is the material acrylic wants between the
+    hole and any free edge; the default is 1.5 x d, which is why M4 does not
+    fit this slab's margins and M3 does.
+    """
+    it = _ctl("screw", x, y, d, d, label or f"M{round((d-0.4))}", mirror=mirror)
+    it["edge"] = edge if edge is not None else 1.5 * d
     return it
 
 
@@ -308,6 +333,25 @@ class Panel:
                 s.append(f'<text x="{px(x)}" y="{py(y)+1.4}" fill="{GHOST}" '
                          f'font-size="3.4" text-anchor="middle">{it["label"]} '
                          f'{w:.2f} × {h:.2f}</text>')
+                continue
+            if k == "screw":
+                s.append(f'<circle {tag} data-role="touch" cx="{px(x)}" '
+                         f'cy="{py(y)}" r="{w/2}" fill="none" stroke="{INK}" '
+                         f'stroke-width="0.5"/>')
+                for dx, dy in ((w/2, 0), (0, w/2)):
+                    s.append(f'<line x1="{px(x-dx)}" y1="{py(y-dy)}" '
+                             f'x2="{px(x+dx)}" y2="{py(y+dy)}" stroke="{INK}" '
+                             f'stroke-width="0.35"/>')
+                continue
+            if k == "slab":
+                s.append(f'<rect {tag} data-role="touch" x="{px(-w/2)}" '
+                         f'y="{py(h/2)}" width="{w}" height="{h}" rx="2" '
+                         f'fill="#f3f4f6" stroke="{INK}" stroke-width="0.6"/>')
+                v = it.get("void")
+                if v:
+                    s.append(f'<rect x="{px(v[0]-v[2]/2)}" y="{py(v[1]+v[3]/2)}" '
+                             f'width="{v[2]}" height="{v[3]}" rx="1.5" '
+                             f'fill="#fbfbfc" stroke="{INK}" stroke-width="0.5"/>')
                 continue
             if k == "plate":
                 s.append(f'<rect {tag} data-role="touch" x="{px(x-w/2)}" '
@@ -469,7 +513,9 @@ class Panel:
             # placement: a span of an odd number of units has its midpoint on a
             # half unit and that means nothing. Every VERTEX is checked in 5b,
             # which is the real constraint.
-            if (b["kind"] in METRIC_PARTS or b["kind"] == "route"
+            # the slab is the body outline, centred on the deck, not a
+            # placement on the band's grid
+            if (b["kind"] in METRIC_PARTS or b["kind"] in ("route", "slab")
                     or decl.get(b["label"], {}).get("metric")):
                 continue
             yf = decl.get(b["label"], {}).get("y_from")
@@ -511,6 +557,8 @@ class Panel:
                 la, lb = lay.get(a["label"], 2), lay.get(b["label"], 2)
                 if 3 in (la, lb):
                     continue
+                if "slab" in (a["kind"], b["kind"]):
+                    continue        # the slab IS the body; it contains things
                 if la != lb:
                     outer, inner = (a, b) if la < lb else (b, a)
                     if nested(outer, inner):
@@ -522,8 +570,26 @@ class Panel:
                                 f"by {min(dx, dy):.2f} mm")
 
         # 3b. everything that belongs to the plate is actually on the plate
-        pl = next((b for b in eff if b["kind"] == "plate"), None)
-        _ = pl
+        pl = next((b for b in eff if b["kind"] in ("plate", "slab")), None)
+        slab_decl = next((it for it in self.items if it["kind"] == "slab"), None)
+        if pl is not None and slab_decl is not None:
+            vx, vy, vw, vh = slab_decl["void"] or (0, 0, 0, 0)
+            for b in eff:
+                d0 = decl.get(b["label"], {})
+                if (not d0.get("on_plate", False)
+                        or b["kind"] in ("route", "slab")):
+                    continue
+                need = d0.get("edge", 0.0)
+                # over the keyboard void, or too close to its edge
+                if (abs(b["x"] - vx) - b["w"] / 2 < vw / 2 + need - TOL
+                        and abs(b["y"] - vy) - b["h"] / 2 < vh / 2 + need - TOL):
+                    fail.append(f"OVER VOID {b['label']} is over the keyboard "
+                                f"opening, or within {need:.2f} mm of its edge")
+                for ax, v, span in (("x", b["x"], pl["w"]), ("y", b["y"], pl["h"])):
+                    gap = span / 2 - (abs(v) + b["w" if ax == "x" else "h"] / 2)
+                    if need and gap < need - TOL:
+                        fail.append(f"EDGE      {b['label']} sits {gap:.2f} mm "
+                                    f"from the slab's {ax} edge, wants {need:.2f}")
         if pl is not None:
             if abs(pl["x"]) > TOL and not decl.get(pl["label"], {}).get("free"):
                 fail.append(f"OFF AXIS  the plate's centre is x = {pl['x']:+.2f}, "
@@ -542,6 +608,8 @@ class Panel:
         #    check that assumes one thickness all round reports the keyboard
         #    bay as overrunning a wall that is not there.
         for b in eff:
+            if b["kind"] in ("slab", "screw"):
+                continue
             ex = abs(b["x"]) + b["w"] / 2 - (bw / 2 - self.wall)
             e_rear = (b["y"] + b["h"] / 2) - (bh / 2 - self.wall)
             e_front = (b["h"] / 2 - b["y"]) - (bh / 2 - self.bottom_wall)
@@ -622,7 +690,8 @@ class Panel:
 
 
 KIT = SimpleNamespace(Panel=Panel, ctl=_ctl, display=display, plate=plate,
-                      bay=bay, keyboard=keyboard, route=route)
+                      bay=bay, keyboard=keyboard, route=route, slab=slab,
+                      screw=screw)
 
 
 def main():

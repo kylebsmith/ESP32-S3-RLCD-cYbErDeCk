@@ -130,4 +130,8 @@ def build(k):
            "end, 17.780 at the HDMI end, 45.720 between columns. Adafruit "
            "moved them to clear the HDMI shell. A drilled rectangle is 0.625 "
            "out on two bosses")
+    p.note("so it mounts the simple way: a printed pocket on the board's "
+           "outline, two M2.5 at the USB end on the standard 19.050 spacing, "
+           "and the HDMI end held by the pocket wall. Two screws, no pair of "
+           "bosses at mismatched spacings")
     return p

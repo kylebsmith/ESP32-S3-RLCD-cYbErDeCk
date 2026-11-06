@@ -48,6 +48,7 @@ GAP = 1.5 * U               # 28.575, both gaps
 KNOB = 25.400               # 1 in, every control. Six identical circles.
 PITCH = 2 * U               # 38.100 across and down
 GRID_X = 36.195             # 57 x 0.635: balances the margins, keeps the grid on grid
+SCREW_X = 144.780           # 228 x 0.635, outboard of every board
 GRID_W = 2 * PITCH + KNOB   # 101.600 = 4.000 in
 GRID_H = PITCH + KNOB       # 63.500 = 2.500 in
 
@@ -59,13 +60,27 @@ SLIDE_X = GRID_X + GRID_W / 2 + GAP + P.BAY_H / 2
 def build(k):
     import layout as L
     ctl, display, plate, bay = k.ctl, k.display, k.plate, k.bay
-    route = k.route
+    route, slab, screw = k.route, k.slab, k.screw
     p = C.frame(L, BAND, "SLAB  display / 2x3 grid / fader", board_band=False)
     d = p.datums
     mid = d["band_lo"] + BAND / 2
 
     p.add(C.kbd(L, d))
-    p.add(plate(0.0, mid, FIELD, BAND))
+
+    # The acrylic is the WHOLE footprint with the keyboard cut out of it, not a
+    # panel over the control band. That makes the frame around the void thin --
+    # 8.125 at the sides, 4.40 at the front -- so no fastener can live there and
+    # the only solid acrylic is the 87.525 mm rear region. The front rail is not
+    # a cantilever: it rests on the carrier's own front wall for its full length.
+    kw, kh = d["kbd_pocket"]
+    p.add(slab(p.bw, p.bh, void=(0.0, d["kbd_top"] - kh / 2, kw, kh)))
+
+    # M3, not M4. At the only screw line that is both symmetric and on the
+    # grid, M4's 4.5 clearance hole leaves 5.27 mm to the slab edge against the
+    # 6.75 acrylic wants; M3's 3.4 leaves 5.82 against 5.10.
+    for sx, side in ((-1, "L"), (1, "R")):
+        for n, dy in enumerate((31.750, 0.0, -31.750)):
+            p.add(screw(sx * SCREW_X, mid + dy, 3.40, label=f"M3 {side}{n+1}"))
 
     # the display, and its board outline -- visible through clear acrylic, so
     # the board is part of the composition, not hidden behind an aperture

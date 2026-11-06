@@ -804,7 +804,26 @@
 <line x1="25.425" y1="143.225" x2="311.175" y2="143.225" stroke="#e8eaee" stroke-width="0.2"/>
 <line x1="25.425" y1="124.175" x2="311.175" y2="124.175" stroke="#e8eaee" stroke-width="0.2"/>
 <text x="168.3" y="154.15" fill="#8d93a0" font-size="3.4" text-anchor="middle">K9 PRO BAY 288.35 × 98.45</text>
-<rect data-kind="plate" data-label="PLATE" data-role="touch" x="25.425" y="24.125" width="285.75" height="76.2" fill="#f3f4f6" stroke="#111318" stroke-width="0.45"/>
+<rect data-kind="slab" data-label="SLAB" data-role="touch" x="16.0" y="16.0" width="304.6" height="190.375" rx="2" fill="#f3f4f6" stroke="#111318" stroke-width="0.6"/>
+<rect x="24.125" y="103.525" width="288.35" height="98.45" rx="1.5" fill="#fbfbfc" stroke="#111318" stroke-width="0.5"/>
+<circle data-kind="screw" data-label="M3 L1" data-role="touch" cx="23.52" cy="30.475" r="1.7" fill="none" stroke="#111318" stroke-width="0.5"/>
+<line x1="21.82" y1="30.475" x2="25.22" y2="30.475" stroke="#111318" stroke-width="0.35"/>
+<line x1="23.52" y1="32.175" x2="23.52" y2="28.775" stroke="#111318" stroke-width="0.35"/>
+<circle data-kind="screw" data-label="M3 L2" data-role="touch" cx="23.52" cy="62.225" r="1.7" fill="none" stroke="#111318" stroke-width="0.5"/>
+<line x1="21.82" y1="62.225" x2="25.22" y2="62.225" stroke="#111318" stroke-width="0.35"/>
+<line x1="23.52" y1="63.925" x2="23.52" y2="60.525" stroke="#111318" stroke-width="0.35"/>
+<circle data-kind="screw" data-label="M3 L3" data-role="touch" cx="23.52" cy="93.975" r="1.7" fill="none" stroke="#111318" stroke-width="0.5"/>
+<line x1="21.82" y1="93.975" x2="25.22" y2="93.975" stroke="#111318" stroke-width="0.35"/>
+<line x1="23.52" y1="95.675" x2="23.52" y2="92.275" stroke="#111318" stroke-width="0.35"/>
+<circle data-kind="screw" data-label="M3 R1" data-role="touch" cx="313.08" cy="30.475" r="1.7" fill="none" stroke="#111318" stroke-width="0.5"/>
+<line x1="311.38" y1="30.475" x2="314.78" y2="30.475" stroke="#111318" stroke-width="0.35"/>
+<line x1="313.08" y1="32.175" x2="313.08" y2="28.775" stroke="#111318" stroke-width="0.35"/>
+<circle data-kind="screw" data-label="M3 R2" data-role="touch" cx="313.08" cy="62.225" r="1.7" fill="none" stroke="#111318" stroke-width="0.5"/>
+<line x1="311.38" y1="62.225" x2="314.78" y2="62.225" stroke="#111318" stroke-width="0.35"/>
+<line x1="313.08" y1="63.925" x2="313.08" y2="60.525" stroke="#111318" stroke-width="0.35"/>
+<circle data-kind="screw" data-label="M3 R3" data-role="touch" cx="313.08" cy="93.975" r="1.7" fill="none" stroke="#111318" stroke-width="0.5"/>
+<line x1="311.38" y1="93.975" x2="314.78" y2="93.975" stroke="#111318" stroke-width="0.35"/>
+<line x1="313.08" y1="95.675" x2="313.08" y2="92.275" stroke="#111318" stroke-width="0.35"/>
 <rect data-kind="bay" data-label="_display board" data-role="touch" x="31.22" y="27.075" width="93.9" height="70.3" rx="2.54" fill="none" stroke="#8d93a0" stroke-width="0.3" stroke-dasharray="2 1"/>
 <circle cx="36.17" cy="92.225" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
 <circle cx="36.17" cy="32.225" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
