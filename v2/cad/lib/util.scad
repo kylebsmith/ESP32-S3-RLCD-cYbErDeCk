@@ -39,3 +39,20 @@ module slot2d(L, W) {
 module insert_pocket(d, depth, t) {
     translate([0, 0, t - depth]) cylinder(d = d, h = depth + 0.01);
 }
+
+// ONE ROUND DATUM AND N SLOTS, for a fastener pattern that bolts dissimilar
+// materials together. pts is a list of [x, y] and i is the index of the datum.
+// Every other hole becomes a slot of overall length L pointing BACK AT THE
+// DATUM, so differential expansion runs along the slot and never across it.
+//  This lives here, with no dimensions in it, so that the slab and the back
+//  panel cannot drift apart: they bolt into the SAME printed bosses, so they
+//  have to float the same way or one of them binds.
+module datum_and_slots(pts, i, d, L) {
+    for (k = [0 : len(pts) - 1])
+        translate(pts[k])
+            if (k == i)
+                circle(d = d);
+            else
+                rotate(atan2(pts[i][1] - pts[k][1], pts[i][0] - pts[k][0]))
+                    slot2d(L, d);
+}
