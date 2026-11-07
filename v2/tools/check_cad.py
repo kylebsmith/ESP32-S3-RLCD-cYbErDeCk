@@ -169,9 +169,35 @@ def main():
         notes.append(f"slab.dxf: {len(loops)} contours, "
                      f"{outer[2]:.3f} x {outer[3]:.3f} mm")
 
+    # ---------------- the back panel --------------------------------------
+    dxf = os.path.join(ROOT, "export", "dxf", "backpanel.dxf")
+    if os.path.exists(dxf):
+        loops = dxf_loops(dxf)
+        shapes = [describe(l) for l in loops]
+        outer = max(shapes, key=lambda s: s[2] * s[3])
+        need(abs(outer[2] - env["body_w"]) < TOL,
+             f"backpanel width {outer[2]:.3f}, want {env['body_w']:.3f}")
+        need(abs(outer[3] - env["body_h"]) < TOL,
+             f"backpanel height {outer[3]:.3f}, want {env['body_h']:.3f}")
+        holes = [s for s in shapes if s[4]
+                 and abs(s[5] - env["screw_m3_clear_d"]) < 0.3]
+        need(len(holes) == 6, f"{len(holes)} back fastener holes, want 6")
+        # the back screws must not meet the front screws inside the rim
+        for b in holes:
+            for dy in (env["screw_dy"], 0.0, -env["screw_dy"]):
+                fy = env["band_mid"] + dy
+                if abs(b[0]) > 1 and abs(b[1] - fy) < env["insert_m3_depth"] * 2:
+                    fails.append(
+                        f"back screw at y={b[1]:+.1f} is within "
+                        f"{abs(b[1]-fy):.1f} mm of a front screw at {fy:+.1f}; "
+                        f"two M3 inserts nose to nose need "
+                        f"{env['insert_m3_depth']*2:.1f}")
+        notes.append(f"backpanel.dxf: {len(loops)} contours, "
+                     f"{outer[2]:.3f} x {outer[3]:.3f} mm")
+
     # ---------------- the meshes ------------------------------------------
     import trimesh
-    for name in ("slab",):
+    for name in ("slab", "backpanel"):
         stl = os.path.join(ROOT, "export", "stl", f"{name}.stl")
         if not os.path.exists(stl):
             fails.append(f"missing {stl}")
@@ -182,8 +208,11 @@ def main():
                               f"guess at what you meant")
         need(m.is_volume, f"{name}.stl is not a valid volume")
         ext = m.extents
-        need(abs(ext[2] - env["acrylic_t"]) < TOL,
-             f"{name}.stl is {ext[2]:.3f} thick, want {env['acrylic_t']:.3f}")
+        want_t = {"slab": env["acrylic_t"], "backpanel": env["back_t"],
+                  "carrier": env["carrier_h"]}.get(name)
+        if want_t is not None:
+            need(abs(ext[2] - want_t) < TOL,
+                 f"{name}.stl is {ext[2]:.3f} thick, want {want_t:.3f}")
         notes.append(f"{name}.stl: {len(m.faces)} facets, "
                      f"{ext[0]:.2f} x {ext[1]:.2f} x {ext[2]:.2f}, "
                      f"watertight={m.is_watertight}")

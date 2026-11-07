@@ -91,7 +91,7 @@ field       = 15 * U;           // [DERIVED] 285.750, the K9 Pro switch field
 // ---------------------------------------------------------------------------
 
 acrylic_t   = 12.700;           // [DESIGN] 0.5 in clear, laser cut
-carrier_t   = 6.000;            // [PROVISIONAL] printed floor thickness
+carrier_t   = 6.000;            // [PROVISIONAL] the printed floor's thickness
 back_t      = 3.000;            // [PROVISIONAL] laser-cut back panel
 
 //  The acrylic's underside is set by the TALLEST thing under it, and since the
@@ -101,6 +101,21 @@ back_t      = 3.000;            // [PROVISIONAL] laser-cut back panel
 //  making the display assembly 5.53 above its PCB front face. 6.350 (0.25 in)
 //  clears it by 1.270.
 acrylic_z0  = 6.350;            // [DERIVED] v2/parts/knobs.md 1.1
+
+//  The carrier is a floor with a perimeter rim. The rim has to span the gap
+//  between the floor's top face and the acrylic's underside, because that gap
+//  is where the boards and the wiring live and the acrylic has to land on
+//  something at its edge.
+carrier_rim_h = acrylic_z0;     // [DERIVED] 6.350, the rim above the floor
+carrier_h     = carrier_t + carrier_rim_h;      // 12.350 overall
+
+//  So the deck is, from the desk up:
+//      back panel   3.000
+//      carrier      12.350   (6.000 floor + 6.350 rim)
+//      acrylic      12.700
+//                   ------
+deck_t        = back_t + carrier_h + acrylic_t;  // 28.050
+
 
 // ---------------------------------------------------------------------------
 // 4. THE CONTROL FIELD
@@ -159,6 +174,12 @@ screw_x     = 144.780;          // [DERIVED] 228 x grid. The only screw line
                                 //   M4 leaves 5.27 against 6.75 and does not
                                 //   fit; that is why these are M3.
 screw_dy    = 31.750;           // [DESIGN] 1.25 in, three per side
+
+//  The back panel fastens UP into the same perimeter rim, from below, at the
+//  same x line so the fastener geometry reads as one system front and back.
+//  Different y, so the two sets of inserts do not meet inside a 12.350 rim:
+//  an M3 insert is 6.700 deep and two of them nose to nose need 13.400.
+back_screw_y = [-20.000, -55.000, -85.000];     // [DESIGN] in the key region
 acrylic_edge_min = 1.5 * screw_m3_clear_d;   // [STANDARD] 5.100
 
 // ---------------------------------------------------------------------------
