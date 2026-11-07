@@ -291,6 +291,50 @@ knob_bore_shaft_d = 6.000;      // [DATASHEET] PEC11 D-shaft
 //  Both fall out of the stack in section 3; neither was free.
 knob_counterbore_d = 12.000;    // [DERIVED] 2.000 over an M7 nut's O10
 knob_counterbore_h = 6.350;     // [DERIVED] 0.25 in, 10 x grid
+knob_shaft_bore_h  = 8.000;     // [DESIGN] above the counterbore floor. The
+                                //   encoder's shaft tip lands at 22.970 and
+                                //   the pot's at 20.680, so 8.000 takes the
+                                //   deeper of the two with 0.905 to spare.
+
+//  TWO BORES, AND THE SECOND ONE IS NOT A STYLE CHOICE.
+//  The encoder is a PEC11: O6.0 flatted to 4.5 over a 7.00 mm window, so its
+//  knob is a plain D-bore and knobs.md 's "one bore geometry serves every
+//  shaft" holds for it.
+//  The pot is NOT. The brief says non-D-shaft pots, and the house model of the
+//  562 shows a PERFECT O6.000 cylinder over z 11..16 -- no flat, no spline --
+//  which is a vendor model and not a measurement of the real shaft's form.
+//  Either way the knob cannot use a grub screw, and the reason is geometric
+//  rather than a preference:
+//
+//      pot shaft tip   pot_web_z + pot_above  =  20.680
+//      deck's top face                           22.225
+//
+//  the shaft stops 1.545 BELOW the deck's own surface, so there is nowhere on
+//  the knob that is both outside the acrylic AND over the shaft. No knob
+//  height fixes it; the knob is 6.350 proud and the grub would still be inside
+//  the bore. So the pot knob grips on its bore alone, and it is given six
+//  internal ribs rather than a smooth press fit: ribs bite a round shaft AND a
+//  T18 spline, which makes the knob correct either way while the shaft's real
+//  form is NOT SOURCED.
+knob_bore_d    = 6.100;         // [DERIVED] O6.0 shaft + 0.100
+knob_bore_flat = 4.600;         // [DATASHEET] pec11 p3, flatted to 4.5 + 0.100
+knob_rib_n     = 6;             // [DESIGN] on the pot knob only
+knob_rib_h     = 0.300;         // [DESIGN] bites 0.300 into a O6.000 shaft
+knob_rib_w     = 1.200;         // [DESIGN] 3 x 0.4 nozzle at the root, so it
+                                //   prints as solid perimeter and not as a
+                                //   single under-extruded line
+
+//  The grip is entirely the proud part and the rim, because a finger cannot
+//  enter the bore: MIL-STD-1472H fig 57 puts minimal finger access to the
+//  first joint at 32 mm and the annular gap here is 2.000. So the brim does
+//  all the work and it gets flutes.
+knob_flutes    = 12;            // [DESIGN]
+knob_flute_d   = 3.175;         // [DESIGN] 0.125 in cutter, 5 x grid
+knob_flute_cut = 0.800;         // [DESIGN] how far each flute bites the rim
+knob_mark      = [2.000, 1.000];    // [DESIGN] the indicator: one groove
+                                    //   across the top face. The panel carries
+                                    //   no engraving at all, so the knob's own
+                                    //   line is the only legend on the deck.
 
 // ---------------------------------------------------------------------------
 // 5b. FITS
