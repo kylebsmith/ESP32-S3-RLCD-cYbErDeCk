@@ -33,8 +33,22 @@
 //  CAST OR PRINTED. The brief allows either: printed in PETG, or cast in
 //  acrylic from a printed mould. Everything here is drawn with that second
 //  route in mind -- no undercuts on the outside, the flutes are cylindrical
-//  cuts with a clear draw direction, and the bore features are on the inside
-//  where a cast part takes a separate core.
+//  cuts with a clear draw direction, and the bore features are on the inside.
+//  The mould is v2/cad/knob_mould.scad, and drawing it settled two things
+//  this comment used to leave open:
+//    the parting plane is at acrylic_t, the brim's underside, which is the
+//      widest section and also a face that bears on NOTHING -- the knob hangs
+//      on its shaft -- so the flash line there is cosmetic only;
+//    "a separate core" for the bore turned out to be only half right. The
+//      counterbore is cast, because 1 degree of draft over 6.350 costs 0.222
+//      of a 2.000 clearance. The D-BORE IS NOT: the same draft over
+//      knob_shaft_bore_h is 0.279 diametral against the 0.100 that
+//      knob_bore_d - knob_bore_shaft_d allows, so it is 2.8x the whole fit.
+//      It is drilled and filed after casting, and the sprue is put on the
+//      axis so the drill removes the gate.
+//    AND THE POT VARIANT CANNOT BE CAST AT ALL. Its six 0.300 ribs would need
+//      draft on an interference, and machining them is a broach. Cast knobs
+//      are the three encoders; the three pot knobs are printed.
 // ===========================================================================
 
 include <parameters.scad>

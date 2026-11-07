@@ -336,6 +336,91 @@ knob_mark      = [2.000, 1.000];    // [DESIGN] the indicator: one groove
                                     //   no engraving at all, so the knob's own
                                     //   line is the only legend on the deck.
 
+//  THE ROEHM EDGE SHORTFALL ON THESE SIX BORES: EXAMINED, COSTED, ACCEPTED.
+//  check_cad.py measures it and deliberately does not gate it, and says the
+//  decision is this file's. It is, so here it is.
+//
+//  WHAT IS ACTUALLY THERE. [MEASURED] off export/dxf/slab.dxf, nearest cut to
+//  each bore CENTRE, against 1.5 x bore_d = 33.000:
+//    upper row, y +68.013   27.100  an adjacent bore's wall; the sheet's rear
+//                                   edge is 27.175, barely farther. short 5.900
+//    lower row, y +29.913   23.533  the keyboard VOID's rear edge.  short 9.467
+//  All three bores in a row read identically; check_cad names
+//  (+74.295,+29.912) only because its sort has to pick one. Note what the
+//  nearest cut is NOT: for neither row is it the sheet edge that governs, and
+//  for the upper row the limit is the knob PITCH -- which is the one thing
+//  fabrication.md 1.4's applied block does check, and it passes there because
+//  1.4 reads centre-to-CENTRE (38.100 >= 33.000) where check_cad reads
+//  centre-to-WALL (27.100 < 33.000). Same rule, two readings, and the
+//  difference is 11.000.
+//
+//  THE RULE'S PRIMARY STATEMENT, read from the source rather than from memory
+//  [ROEHM acrylite-kb] -- the ACRYLITE knowledge base article whose URL
+//  v2/parts/acrylic.md 8.4 carries, quoted in acrylic.md 5.3:
+//      "the distance from the hole center to the edge of the sheet should be
+//       at least 1.5 times the diameter of the drilled hole"
+//  It is written for DRILLING holes to support sheet by POINT FASTENING. The
+//  page says nothing about sawing or laser cutting. And the part that decides
+//  how much weight it can carry here: IT GIVES NO RATIONALE FOR THE EDGE
+//  DISTANCE. The only reason it states anywhere is for the companion
+//  hole-DIAMETER rule -- "adequate clearance for thermal and moisture
+//  expansion and contraction" -- plus a rubber grommet "to prevent cracking
+//  along the drill hole". So the rule's BASIS IS NOT SOURCED. It cannot be
+//  shown to be a drilling-stress rule rather than a service-robustness one,
+//  and it is therefore NOT waved away on the grounds that a laser does not
+//  wedge the sheet the way a drill does. It is treated as binding and then
+//  answered on geometry.
+//
+//  IT CANNOT BE MET. That is arithmetic, not reluctance. Both rows live in one
+//  corridor, between the keyboard void's rear edge and the sheet's rear edge,
+//  and they are pitch apart inside it:
+//      corridor    95.1875 - 6.3800                    =  88.8075  [MEASURED]
+//      rule needs  33.000 + pitch 38.100 + 33.000      = 104.100   [DERIVED]
+//      short by                                           15.2925
+//  A 15.2925 deficit in an 88.8075 corridor cannot be translated away, so each
+//  move was costed rather than gestured at:
+//    MOVE THE BAND -- centring it in the corridor gives both rows 25.354 and
+//      merely EQUALISES the shortfall at 7.646. It also moves band_mid
+//      +1.82125, which drags the display, the fader, the six slab screws, the
+//      back panel's screw line and the cowl window with it. A worst-case
+//      improvement from 9.467 to 7.646 does not buy that.
+//    DROP THE PITCH -- the rule wants the rows <= 22.8075 apart against
+//      38.100. At 22.8075 two O22.000 bores in a column leave 0.8075 of web
+//      and the O25.400 brims overlap outright. It would manufacture a worse
+//      violation than the one it cures.
+//    SHRINK THE BORE -- 23.533 satisfies 1.5 x O for O <= 15.688, and the bore
+//      has to pass knob_body_d = 18.000. Refused by the part.
+//    MOVE THE VOID FORWARD -- it would have to travel the whole 15.2925, which
+//      is 2.69 x the entire front rail (5.6825, section 8a item 5), and the
+//      carrier's front rim at 2.495 is already the thinnest wall in that part.
+//      Refused by the part.
+//    GROW THE DECK -- 190.375 + 15.2925 = 205.6675 deep, and at the 8:5 the
+//      deck is held to, 329.068 wide: +24.468 of instrument. The ratio is the
+//      user's; this is not the thing to spend it on.
+//
+//  ACCEPTED, on a load-path fact rather than on optimism: THESE SIX BORES
+//  CARRY NOTHING. The rule is stated for a hole that POINT-FASTENS the sheet,
+//  one a bolt is pulled through. Nothing is bolted through a O22.000 bore and
+//  nothing bears on its wall -- the knob is a flanged plug standing in a 2.000
+//  annular gap, the pot's shoulder and nut clamp to the CARRIER's pot_web
+//  (section 7: pot_web_z is "the face the pot's shoulder bears on", with 0.635
+//  of air left over the web precisely so it cannot foul the slab), and the
+//  encoder stands on a breakout behind the panel. The acrylic's only job at a
+//  bore is to be a hole, which is the same reason the bores can afford the
+//  laser's taper.
+//  The robustness reading is what remains, and the mitigation is structural
+//  [DESIGN]: the slab is bolted flat to the carrier on a 289.560 x 63.500
+//  screw grid over a ribbed 6.350 floor with the 3.175 back panel beneath, so
+//  the web between a bore and the void is a supported plate in compression,
+//  not a free edge in bending. On the only other published figure that speaks
+//  to it -- "minimum web / gap between cuts >= 1 x thickness", acrylic.md 4.4,
+//  and that tag is [3P fab-guides], the weakest in the book -- the worst LAND
+//  of 12.533 against 12.700 is 0.167 short, i.e. 98.7% of the guideline rather
+//  than the 71% that 23.533/33.000 looks like.
+//  THIS IS AN ACCEPTED SHORTFALL AND NOT A CLOSED ONE. If a test coupon ever
+//  cracks from a bore toward the keyboard void, the only move left is growing
+//  the deck; the four cheaper ones are costed above and all refuse.
+
 // ---------------------------------------------------------------------------
 // 5b. FITS
 // ---------------------------------------------------------------------------
@@ -546,7 +631,7 @@ disp_board    = [disp_pcb_sz()[0] + 2*pocket_fit,
                                     //   the base stays and asked for 71.373;
                                     //   it does not stay.
 disp_active   = [84.800, 63.600];   // [VENDOR]
-disp_x        = grid_x - grid_w/2 - gap - disp_board[0]/2;   // -90.130
+disp_x        = grid_x - grid_w/2 - gap - disp_board[0]/2;   // -90.065
 
 slide_x       = grid_x + grid_w/2 + gap + pat_b[1]/2;        // 126.365
 
@@ -586,8 +671,80 @@ kbd_frame_cz  =  56.750;                //   model's own axes (X 8..276.5 etc)
 
 kbd_switch_field = [15*kbd_U, 5*kbd_U]; // [DERIVED] 285.000 x 95.000, switch
                                         //   CENTRES on the measured lattice
-kbd_cap_field    = [284.000, 94.000];   // [DERIVED] keycap outer edges:
-                                        //   15u - 1u + an 18.000 cap
+kbd_cap_field    = [284.325, 94.200];   // [CAD-MESH] keycap outer edges, and
+                                        //   this is now a MEASUREMENT of all
+                                        //   61 caps rather than arithmetic on
+                                        //   a nominal cap. Every vertex above
+                                        //   the cap's widest section (model
+                                        //   y = +5.200) in
+                                        //   models/k9pro-internals/
+                                        //   k9pro-stripped-assembly.stl spans
+                                        //   model X -9.1000..275.2250 and
+                                        //   Z 9.9000..104.1000.
+                                        //   The same mesh returns the frame as
+                                        //   exactly 287.0000 x 97.5000 against
+                                        //   a [CAD-EXACT] 287.000 x 97.500, so
+                                        //   it does not undersize its extrema
+                                        //   and that is the control for this
+                                        //   number.
+                                        //   WHAT THIS REPLACED: "15u - 1u + an
+                                        //   18.000 cap" = 284.000 x 94.000.
+                                        //   18.000 is in no record in this
+                                        //   repo. THE CAP IS 18.2000 SQUARE
+                                        //   [CAD-EXACT], read off Keychron's
+                                        //   own B-rep with AddOptimal (1u
+                                        //   18.2000 x 18.2000; the 1.25u key
+                                        //   22.9500 x 18.2000, and 22.950 =
+                                        //   18.200 + 0.25 x 19.000, so the cap
+                                        //   and the 19.000 lattice agree
+                                        //   exactly). It leaves a 0.800
+                                        //   inter-cap gap, which is what a
+                                        //   keyboard actually has.
+                                        //   AND THE TWO BIGGER FIGURES IN THIS
+                                        //   REPO ARE BOTH BOUNDING-BOX
+                                        //   ARTEFACTS, not measurements:
+                                        //   OCCT's plain BRepBndLib::Add
+                                        //   inflates a box by the shape's
+                                        //   tolerance and returns 18.2252,
+                                        //   which is exactly what the
+                                        //   extraction's detail.json carries;
+                                        //   and manifest.json's 18.7314 --
+                                        //   which keyboard-strip.md 5.2 step 3
+                                        //   repeats as "18.731 square" -- is a
+                                        //   coarser one. That manifest is
+                                        //   provably inflated: it records the
+                                        //   frame as 287.3004 x 97.8004 where
+                                        //   the frame is 287.000 x 97.500 both
+                                        //   [CAD-EXACT] and [VENDOR].
+                                        //   In Z the lattice is clean
+                                        //   (every row is a 1u-deep cap) and
+                                        //   76.000 + 18.200 = 94.200 exactly.
+                                        //   In X the envelope is set by the
+                                        //   WIDE caps, not the 1u lattice --
+                                        //   row 4's outer 1.25u key reaches
+                                        //   275.2250 -- which is why X is
+                                        //   284.325 and not 284.200, and why
+                                        //   the field is not centred (below).
+kbd_cap_field_d  = [0.0625, -0.250];    // [CAD-MESH] the cap field's centre in
+                                        //   DECK axes relative to the frame's,
+                                        //   and it is not zero on either axis.
+                                        //   From the spans above: X centre
+                                        //   133.0625 vs the frame's 133.000;
+                                        //   Z centre 57.0000 vs the frame's
+                                        //   56.750 -- and keyboard-strip.md
+                                        //   1.6's [CAD-EXACT] row table gives
+                                        //   that Z centre independently (rows
+                                        //   19/38/57/76/95, so 57.000).
+                                        //   THE SIGN MATTERS AND WAS WRONG
+                                        //   HERE: kbd_dy() has d/dmz = -1, so
+                                        //   +0.250 in model Z is -0.250 in
+                                        //   deck y, i.e. the field sits 0.250
+                                        //   TOWARDS THE FRONT of the frame,
+                                        //   not rearward. The frame's Z bezel
+                                        //   is 1.500 at the rear (9.500 -
+                                        //   8.000) and 1.000 at the front
+                                        //   (105.500 - 104.500), which is the
+                                        //   same fact read off the extents.
 kbd_cap_h        =  9.842;              // [CAD-EXACT] keycap top above the
                                         //   plate top, and the cap plane is
                                         //   FLAT (per-row maxima spread
@@ -663,13 +820,27 @@ kbd_socket_field_cz =  57.955;          //   NOT the frame's
 //    2. "all parts recessed ... it allows things to sink back into the
 //       enclosure and therefore is more robust" is the brief's own rule, and
 //       the keyboard is a part;
-//    3. the recess is acrylic_t - kbd_cap_h - gap, so it is FORCED by
-//       half-inch acrylic against a low-profile keycap, not chosen;
+//    3. the recess is acrylic_t + kbd_plate_gap - kbd_cap_h = 3.493, so it is
+//       FORCED by half-inch acrylic against a low-profile keycap, not chosen.
+//       The gap ADDS and does not subtract: the plate top sits kbd_plate_gap
+//       BELOW the acrylic's underside, so the cap top drops by the gap as well
+//       and the acrylic above it gets thicker. Written the other way round --
+//       acrylic_t - kbd_cap_h - gap -- it gives 2.223, and it is wrong by
+//       2 * kbd_plate_gap. ("gap" is also this file's own 28.575 mm board
+//       clearance, which is why the operand is named in full here.)
+//       The derived kbd_recess below has always been right;
 //    4. it collapses the carrier under the keyboard from a 9.000 mm plinth to
 //       a 2.015 mm seat, and lands the socket-field pocket floor on the
 //       wiring plane to within 0.076 mm;
 //    5. it widens the slab's governing web: a smaller void takes less out of
-//       the sheet, so the front rail goes 4.400 -> 5.625.
+//       the sheet, so the front rail goes 4.400 -> 5.6825. [MEASURED] off
+//       export/dxf/slab.dxf -- the void's front straight edge at y -89.5050
+//       against the outline's at -95.1875, and the min distance between the
+//       two loops anywhere is the same 5.6825, so the front rail IS the
+//       narrowest web in the part. 4.400 is front_wall, which is what the
+//       rail would be in the FLUSH branch, where the void is kbd_pocket.
+//       (The 5.625 this line used to carry was the rail for a 96.000-deep
+//       void; at kbd_void[1] = 95.885 it is 5.6825.)
 //
 //  The cost, stated plainly, is in 8c: 3.295 mm has to come off the rear
 //  skirt on a mill.
@@ -683,9 +854,9 @@ kbd_plate_gap    = 0.635;               // [DESIGN] one grid of air between the
                                         //   slab lands on the carrier's rim,
                                         //   and only on the carrier's rim.
 
-kbd_plate_top_z  = acrylic_z0 - kbd_plate_gap;              //  5.715
-kbd_seat_z       = kbd_plate_top_z - kbd_seat_below;        //  2.015
-kbd_cap_top_z    = kbd_plate_top_z + kbd_cap_h;             // 15.557
+kbd_plate_top_z  = acrylic_z0 - kbd_plate_gap;              //  8.890
+kbd_seat_z       = kbd_plate_top_z - kbd_seat_below;        //  5.190
+kbd_cap_top_z    = kbd_plate_top_z + kbd_cap_h;             // 18.732
 kbd_recess       = acrylic_z0 + acrylic_t - kbd_cap_top_z;  //  3.493
 
 // ---------------------------------------------------------------------------
@@ -704,8 +875,17 @@ kbd_recess       = acrylic_z0 + acrylic_t - kbd_cap_top_z;  //  3.493
 //    1. positive tilt EXTENDS the wrist, and wrist extension is the posture
 //       that hurts. Flat or negative is better -- which is why the ergonomic
 //       market sells negative tilt and nobody sells positive;
-//    2. keeping 3.37914 deg costs kbd_frame[1] * tan = 5.639 mm of extra
-//       carrier depth at the rear, on a deck that is 28.050 thick in total;
+//    2. keeping 3.37914 deg costs kbd_frame[1] * tan(kbd_wedge_stock_deg)
+//       = 97.500 * 0.05904559 = 5.757 mm of extra carrier depth at the rear,
+//       on a deck_t of 31.750. [DERIVED] The operand is named because this
+//       line twice was not: the cost is measured over the RETAINED FRAME's
+//       own depth, 97.500, because the frame is the part being tilted and its
+//       rear rim is what the carrier has to grow to clear. It is NOT the
+//       plate's 95.500 outline depth (keyboard-strip.md 1.6), which lies
+//       inside the frame and sets nothing -- and 95.500 * tan = 5.639 is
+//       exactly the figure this line used to carry, so that is where it came
+//       from. v2/layouts/README.md quotes the 5.639 downstream and needs the
+//       same correction;
 //    3. height was the thing worth defending and it was defended: dropping
 //       the keyboard through the carrier costs 3 mm over a bare keyboard
 //       rather than 9.
@@ -736,29 +916,85 @@ function kbd_dy(mz) = kbd_frame_rear_y - (mz - 8.000);
 //  overlaps the frame's rim and closes the kbd_plate_gap under it. Both
 //  numbers are on the grid and both are bracketed: bigger than the KEYCAPS by
 //  enough to clear them, smaller than the FRAME by enough to still overlap
-//  after the laser's +/-0.230. Centred on the frame, not on the switch field,
-//  whose centre is 0.250 rearward of it.
+//  after the laser's +/-0.230. Centred on the frame, not on the cap field,
+//  whose centre sits 0.250 TOWARDS THE FRONT of it and 0.0625 to +x --
+//  kbd_cap_field_d, and that is a measurement, not an assumption.
 kbd_void      = [285.750, 95.885];      // [DESIGN] 450 x grid, 151 x grid
 kbd_void_y    = kbd_frame_y;
 
-//  The void's corner radius is bracketed from BOTH sides and it is the one
-//  number in section 8 that is a compromise rather than a consequence.
-//  Too big and the void's corner swings outside the frame's R4.400 and the
-//  overlap goes negative; too small and the squarer corner collides with the
-//  corner keycap. Solving both inequalities for a SQUARE 18.000 cap:
-//      r must be <= 3.512   (cap clears)   and  >= ~2.0  (frame overlaps)
-//  3.175 (5 x grid) sits near the top of that window, which is the right end
-//  to favour: it gives 0.494 of frame overlap, and the cap clearance it
-//  leaves -- 0.139 against a perfectly square cap -- is only that small
-//  because a square cap is a fiction. At a 1.000 mm cap corner radius it is
-//  0.546 and at 1.500 it is 0.741, i.e. the same as the straight edges.
-//  The keycap's own corner radius is NOT SOURCED; check_cad.py reports the
-//  square-cap figure so the assumption cannot hide.
+//  THE VOID'S CORNER RADIUS. Bracketed from both sides: too big and the
+//  void's corner swings outside the frame's R4.400 and the overlap goes
+//  negative; too small and the squarer corner closes on the corner keycap.
+//
+//  THIS PARAGRAPH USED TO CARRY TWO NUMBERS AND BOTH WERE READ ON THE WRONG
+//  CORNER. It said the cap clearance was +0.139 and the window closed at
+//  r <= 3.512. Both are the LOOSE corner: they follow from a Y gap of
+//  1.1925 = 0.9425 + 0.250, i.e. the cap field displaced and then measured on
+//  the side the displacement helps. The field is displaced TOWARDS THE FRONT,
+//  so the governing corner is the FRONT one at 0.9425 - 0.250, and against a
+//  perfectly square cap it does not clear at all. Measured off
+//  export/dxf/slab.dxf with the artefact's own 96-gon arc, square cap, field
+//  displaced by kbd_cap_field_d:
+//      an 18.000 cap   FRONT -0.2110   REAR +0.1376  <- the old "0.139"
+//      the real 18.200 cap, at the measured envelope corner       -0.4376
+//  (read CONCENTRICALLY, which is what check_cad.py computes, an 18.000 cap
+//  gives -0.0316 -- also not the governing corner, just a different wrong one.)
+//
+//  SO WHY IS R3.175 STILL RIGHT? Because the clash is in the SQUARE CAP, not
+//  in the part, and the square cap is no longer the best available fact. Every
+//  vertex of all 61 caps above the cap's widest section, mapped by this file's
+//  own kbd_dx/kbd_dy and measured against the exported polygon:
+//      WORST REAL CLEARANCE  +0.3691  at deck (+141.2242, -88.6843)
+//      = model X 274.224, Z 103.872 -- the front-right 1.25u cap's own rounded
+//      corner, which is the corner that governs. Per quadrant: front +0.3691
+//      and +0.3745, rear +0.6500 and +0.6995.
+//  The gap between -0.4376 and +0.3691 is the keycap's rounded corner, and the
+//  reason the old note could call that "NOT SOURCED" is that it was looking
+//  for the wrong kind of number. THE CAP HAS NO CORNER RADIUS TO SOURCE: its
+//  77 faces include six cylinders and NOT ONE of them has a vertical axis, so
+//  the plan corner is a swept blend on a tapered shell, not a fillet, and its
+//  effective plan radius varies with height. A support-function fit of the
+//  plan envelope over 720 directions gives an effective rc = 1.683 at rms
+//  0.0068 (1.742 with the half-width pinned to 9.100) -- useful for intuition
+//  and NOT what the +0.3691 rests on. That figure is every cap VERTEX against
+//  the exported polygon, so it needs no radius, no fit and no idealised cap at
+//  all. The honest statement is not "assume a radius" but "stop needing one".
+//
+//  AND THE SQUARE-CAP BRANCH IS NOT AVAILABLE ANYWAY. Shrinking r until the
+//  void clears a square cap is the move that removes the dependency, and it
+//  was solved rather than assumed. Both inequalities, against the measured
+//  cap and the [CAD-EXACT] R4.400 frame:
+//      clears a SQUARE cap at the measured envelope corner   r <= ~2.11
+//      corner overlap still positive after a +0.230 cut      r >= 2.522
+//  THOSE DO NOT INTERSECT. There is no corner radius that clears a square cap
+//  and also keeps the frame overlap this file already commits to -- so the
+//  dependency on the cap's corner cannot be removed, only measured, and it is
+//  measured. The window is empty for every cap width at or above 18.200, so no
+//  value on the 0.635 grid fits it either: 2.540 (4 x grid) leaves the square
+//  cap at -0.1748, and 1.905 (3 x grid) has the frame overlap already negative
+//  at -0.0238 before any kerf.
+//
+//  3.175 (5 x grid) is also where the real trade-off is flattest. Taking the
+//  worse of (real cap clearance, corner overlap after a +0.230 cut):
+//      2.800 -> 0.1135    3.000 -> 0.1945    3.175 -> 0.2640    3.500 -> 0.2431
+//  so 3.175 is at the max-min and on the grid, which is the rare case where
+//  the tidy number is also the right one. It gives 0.494 of frame overlap
+//  nominal and 0.264 after the laser's worst outboard excursion.
 kbd_void_r    = 3.175;          // [DESIGN]
-kbd_cap_clear = [(kbd_void[0] - kbd_cap_field[0])/2,
-                 (kbd_void[1] - kbd_cap_field[1])/2];   // 0.875, 0.943
+
+//  Straight-edge clearances, per side. ASYMMETRIC in both axes, because the
+//  cap field is not centred on the frame and the void is. The old 2-vector
+//  computed as if they were concentric and so could not show the tight side.
+kbd_cap_clear = [(kbd_void[0] - kbd_cap_field[0])/2 - kbd_cap_field_d[0],
+                 (kbd_void[0] - kbd_cap_field[0])/2 + kbd_cap_field_d[0],
+                 (kbd_void[1] - kbd_cap_field[1])/2 + kbd_cap_field_d[1],
+                 (kbd_void[1] - kbd_cap_field[1])/2 - kbd_cap_field_d[1]];
+                                // [DERIVED] +x, -x, FRONT, REAR
+                                //   0.650, 0.775, 0.5925, 1.0925
+                                //   front is the tight one and it is the one
+                                //   the corner argument above turns on
 kbd_overlap   = [(kbd_frame[0] - kbd_void[0])/2,
-                 (kbd_frame[1] - kbd_void[1])/2];       // 0.625, 0.808
+                 (kbd_frame[1] - kbd_void[1])/2];       // 0.625, 0.8075
 
 //  THE SKIRT WAS THE REAL COST OF STRIPPING, AND THE RE-DERIVED STACK PAID IT.
 //  The frame is one part, so keeping the plate keeps the skirt, and the skirt
@@ -938,8 +1174,9 @@ interior_y1   =  body_h/2 - wall;               //  87.0625, the rear face
 //  The front rim comes out at 2.495 and that is forced, not chosen: the
 //  carrier is inset 1.905 all round and its inner face cannot move rearward
 //  because the keyboard frame's front face is already at -90.3125. The acrylic
-//  above it is 5.625 wide (the void shrank, so the front rail grew from
-//  4.400), and the wrist load is compression on a 2.495 x 9.525 PETG web with
+//  above it is 5.6825 wide (the void shrank, so the front rail grew from
+//  front_wall's 4.400; [MEASURED] off export/dxf/slab.dxf, section 8a item 5),
+//  and the wrist load is compression on a 2.495 x 9.525 PETG web with
 //  the 6.350 floor and the 3.175 back panel under it. It carries; it is
 //  recorded because it is the thinnest wall in the part.
 rim_front_w   = (body_h/2 - carrier_inset) - (-interior_y0);    // 2.495
@@ -1040,12 +1277,27 @@ function cowl_flange() = 7.620;         // [DERIVED] 12 x grid. It was 6.350
 function cowl_h()      = disp_18650_proud + cowl_clear() + cowl_floor();  // 3.820
 function disp_pcb_sz() = [92.500, 69.100];      // [MEASURED]
 
-//  The window, shared by all three parts.
+//  The window, shared by all three parts. 87.000 x 21.103 is the 18650
+//  holder's own footprint on the rear face, [MEASURED] -- v2/parts/
+//  board-models.md 2.8, which reads it off the vendor STEP by B-rep query
+//  ("[step]" in that document's tag vocabulary) as U 2.748..89.748 and
+//  V 4.600..25.703. That is the source for BOTH numbers here and for the
+//  centres below; this section used to state the spans without naming where
+//  they came from.
+//    ONE CAVEAT, AND IT IS THE DOCUMENT'S OWN. board-models.md 5 item 6
+//  records that v1 carries 77.800 for the holder's length along U,
+//  caliper-confirmed on hardware, against the 87.000 the STEP gives. The two
+//  are measuring different things -- body against footprint including the end
+//  contacts -- and that is NOT RECONCILED. 87.000 is the conservative value
+//  in every role it plays: a window too wide only enlarges a cover's own
+//  aperture, so the unreconciled 9.200 costs nothing here. It would matter if
+//  this window ever became a structural edge; it is not one.
 function cowl_window() = [87.000 + 2*pocket_fit, 21.103 + 2*pocket_fit];
 
-//  Where it is. The holder spans U 2.748..89.748 and V 4.600..25.703 on the
-//  display's own board, so its centre is (46.248, 15.152) against a board
-//  centre of (46.250, 34.550).
+//  Where it is. [MEASURED], same source: the spans above put the holder's
+//  centre at (46.248, 15.152) on the display's own board, against a board
+//  centre of (46.250, 34.550) -- so the holder is centred in U to within
+//  0.002 and sits 19.398 off centre in V, hard against the 18650 edge.
 function cowl_xy() = [disp_x   + 46.248 - disp_pcb_sz()[0]/2,
                       band_mid + 15.152 - disp_pcb_sz()[1]/2];
 
