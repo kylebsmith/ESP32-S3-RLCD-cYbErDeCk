@@ -230,12 +230,10 @@ module kbd_pilot_cut() {
 //  ships a stand base that bolts to those same four; it is DISCARDED and this
 //  pocket floor replaces it, which is why the pocket is sized to the PCB
 //  (92.500 x 69.100) and not to the base's 70.103.
-disp_pcb = [92.500, 69.100];            // [MEASURED]
-
 module disp_pocket_cut() {
     translate([disp_x, band_mid, disp_mount_z])
         linear_extrude(carrier_rim_h - disp_mount_z + 1)
-            square([disp_pcb[0] + 2*pocket_fit, disp_pcb[1] + 2*pocket_fit],
+            square([disp_pcb_sz()[0] + 2*pocket_fit, disp_pcb_sz()[1] + 2*pocket_fit],
                    center = true);
 }
 
@@ -270,11 +268,8 @@ module disp_hdr_cut() {
 //  cowl is a separate printed part this file does not draw. What this file
 //  owes it is the window.
 module disp_18650_cut() {
-    translate([disp_x + (2.748 + 89.748)/2 - disp_pcb[0]/2,
-               band_mid + 15.152 - disp_pcb[1]/2, -carrier_t - 1])
-        linear_extrude(carrier_t + 10)
-            square([87.000 + 2*pocket_fit, 21.103 + 2*pocket_fit],
-                   center = true);
+    translate(concat(cowl_xy(), [-carrier_t - 1]))
+        linear_extrude(carrier_t + 10) square(cowl_window(), center = true);
 }
 
 // ---------------------------------------------------------------------------
@@ -434,6 +429,16 @@ module back_insert_cut() {
                 insert_pocket(insert_m25_hole_d, insert_m25_depth, 0);
 }
 
+//  Four M2.5 inserts around the 18650 window. The cowl's screws pass up
+//  through the back panel and into these, so one fastener stack clamps cowl,
+//  panel and carrier together and nothing is bonded.
+module cowl_insert_cut() {
+    for (p = cowl_screw_pts())
+        translate([p[0], p[1], -carrier_t])
+            rotate([180, 0, 0])
+                insert_pocket(insert_m25_hole_d, insert_m25_depth, 0);
+}
+
 // ---------------------------------------------------------------------------
 //  THE PART
 // ---------------------------------------------------------------------------
@@ -469,6 +474,7 @@ module carrier_3d() {
         wiring_cut();
         slab_insert_cut();
         back_insert_cut();
+        cowl_insert_cut();
     }
 }
 

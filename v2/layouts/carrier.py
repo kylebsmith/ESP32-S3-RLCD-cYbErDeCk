@@ -32,7 +32,13 @@ GAP = 1.5 * U
 KNOB, PITCH = 25.400, 2 * U
 GRID_X = 36.195
 GRID_W = 2 * PITCH + KNOB
-DISP_BD = (93.900, 70.300)
+# The display pocket is sized to the PCB (92.500 x 69.100) plus one grid per
+# side, NOT to the 70.103 acrylic stand base: that base bolts to the same four
+# SMTSO standoffs the enclosure uses, so it is discarded and the carrier IS the
+# stand base. v2/parts/board-models.md 2.3, v2/cad/parameters.scad 3.
+DISP_PCB = (92.500, 69.100)
+POCKET_FIT = 0.635
+DISP_BD = (DISP_PCB[0] + 2 * POCKET_FIT, DISP_PCB[1] + 2 * POCKET_FIT)
 DISP_X = GRID_X - GRID_W / 2 - GAP - DISP_BD[0] / 2
 SLIDE_X = GRID_X + GRID_W / 2 + GAP + P.BAY_H / 2
 COLS = (GRID_X - PITCH, GRID_X, GRID_X + PITCH)
@@ -67,9 +73,25 @@ def build(k):
     p.add(bay(DISP_X, mid, "_display board", size=DISP_BD, holes=(84.0, 60.0),
               mirror=DISP_X, metric=True))
     # layer 2: the header sits UNDER the display board, so it nests there
-    # rather than colliding with it
-    p.add(bay(HDR_X, mid, "2x8", size=(5.080, 20.320), holes=(2.54, 17.78),
-              mirror=HDR_X, layer=2))
+    # rather than colliding with it.
+    #
+    # ITS LONG AXIS IS X, NOT Y, and it is not where this file used to put it.
+    # Measured three ways from the solid -- the moulded housing's box, its nine
+    # internal partition walls, and the sixteen 1.600 holes in its top face --
+    # P1 runs 8 positions 2.540 apart along U (= our x) and 2 rows 2.540 apart
+    # across it, housing centre (U 46.149, V 33.852) against a board centre of
+    # (46.250, 34.550). So it is 20.320 x 5.080, 0.101 left and 0.698 forward
+    # of the board's own centre -- not 5.080 x 20.320 at an arbitrary x.
+    # v2/parts/board-models.md 0 item 6 and 2.6.
+    # metric=True for the same reason the display board carries it, and the
+    # exemption is inherited rather than invented: this header's position is
+    # measured off the display's own solid, and the display is the one honest
+    # exception to the imperial grid in the whole deck. A feature dimensioned
+    # off an exempt part cannot be made to land on the grid without moving the
+    # exempt part. Everything dimensioned off the PANEL still has to be on it.
+    p.add(bay(DISP_X - 0.101, mid - 0.698, "2x8", size=(20.320, 5.080),
+              holes=(17.78, 2.54), mirror=DISP_X - 0.101, layer=2,
+              metric=True))
 
     for i, x in enumerate(COLS):
         p.add(bay(x, enc_y, f"_enc board {i+1}", pattern="A", mirror=GRID_X))

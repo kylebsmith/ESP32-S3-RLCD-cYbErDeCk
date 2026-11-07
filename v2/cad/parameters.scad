@@ -242,9 +242,9 @@ disp_clear     = acrylic_z0 - disp_front_z;                         // 1.320
 disp_18650_z   = disp_mount_z + disp_standoff - disp_18650_below;   // -11.345
 disp_18650_proud = deck_bot_z - disp_18650_z;   // [DERIVED] 1.820 below the
                                                 //   deck's own underside
-foot_h_min     = 1.820 + 1.270;         // [DERIVED] 3.090 -- a foot shorter
+foot_h_min     = cowl_h() + 1.270;      // [DERIVED] 5.090. A foot shorter
                                         //   than this and the deck rocks on
-                                        //   its own battery holder
+                                        //   its own battery cowl. Section 12.
 // ---------------------------------------------------------------------------
 // 4. THE CONTROL FIELD
 // ---------------------------------------------------------------------------
@@ -532,9 +532,19 @@ pot_z_bottom  = pot_web_z - pot_shoulder_below;  // -4.120, inside the floor
 //  is 1.003 mm wider in Y than the board it sits on. A pocket drawn to the
 //  board does not accept the module at all.
 //  v2/parts/board-models.md 2.1, v2/docs/fabrication.md 3 row 4
-disp_stand    = [92.500, 70.103];   // [MEASURED] vendor STEP
-disp_board    = [disp_stand[0] + 2*pocket_fit,
-                 disp_stand[1] + 2*pocket_fit];     // 93.770 x 71.373
+disp_stand    = [92.500, 70.103];   // [MEASURED] vendor STEP, and the base
+                                    //   overhangs the PCB by 1.000 on the
+                                    //   18650 edge ONLY -- v1 flagged that
+                                    //   trap and the B-rep confirms which edge
+disp_board    = [disp_pcb_sz()[0] + 2*pocket_fit,
+                 disp_pcb_sz()[1] + 2*pocket_fit];  // 93.770 x 70.370
+                                    //   Sized to the PCB, NOT the stand base.
+                                    //   The base bolts to the same four SMTSO
+                                    //   standoffs the enclosure uses, so it is
+                                    //   discarded and the carrier IS the stand
+                                    //   base. fabrication.md 3 row 4 assumed
+                                    //   the base stays and asked for 71.373;
+                                    //   it does not stay.
 disp_active   = [84.800, 63.600];   // [VENDOR]
 disp_x        = grid_x - grid_w/2 - gap - disp_board[0]/2;   // -90.130
 
@@ -1001,3 +1011,54 @@ slider_slot_l = slider_travel + slider_cap_w + 2.000;
 corner_r    = 2.000;            // [DESIGN] just enough to kill a cutting edge
                                 //   on a 12.70 slab. Square would be more
                                 //   brutal and less kind to a forearm.
+
+// ---------------------------------------------------------------------------
+// 12. THE 18650 COWL
+// ---------------------------------------------------------------------------
+//  The Waveshare board's 18650 holder reaches 15.200 behind the PCB's rear
+//  face -- 6.500 deeper than anything else on it -- which puts it 1.820 BELOW
+//  the deck's own underside. It cannot be contained and v1 built a cowl around
+//  exactly this fact. So three parts have to agree about one window: the
+//  carrier's floor, the back panel, and the cowl that covers it.
+//
+//  EVERY ENTRY HERE IS A FUNCTION, DELIBERATELY. These depend on disp_x,
+//  band_mid and pocket_fit, which are assigned in sections 4, 5b and 7 -- and
+//  OpenSCAD evaluates assignments in order, so a variable here would be a
+//  silent undef. Functions are lazy, so they can live at the end of the file
+//  where they read, and still be called from section 3.
+function cowl_clear()  = 0.500;         // [DESIGN]
+function cowl_floor()  = 1.500;         // [DESIGN] it is a cover, not a
+                                        //   structure: 1.500 is 3.54 lines
+function cowl_wall()   = 2.000;         // [DESIGN]
+function cowl_flange() = 7.620;         // [DERIVED] 12 x grid. It was 6.350
+                                        //   and the checker refused it: at
+                                        //   6.350 the screw's edge stands
+                                        //   3.175 - 1.450 = 1.725 off the
+                                        //   window, under the 2.000 hard floor
+                                        //   (10 x the 0.200 kerf). 7.620 gives
+                                        //   2.360.
+function cowl_h()      = disp_18650_proud + cowl_clear() + cowl_floor();  // 3.820
+function disp_pcb_sz() = [92.500, 69.100];      // [MEASURED]
+
+//  The window, shared by all three parts.
+function cowl_window() = [87.000 + 2*pocket_fit, 21.103 + 2*pocket_fit];
+
+//  Where it is. The holder spans U 2.748..89.748 and V 4.600..25.703 on the
+//  display's own board, so its centre is (46.248, 15.152) against a board
+//  centre of (46.250, 34.550).
+function cowl_xy() = [disp_x   + 46.248 - disp_pcb_sz()[0]/2,
+                      band_mid + 15.152 - disp_pcb_sz()[1]/2];
+
+//  EDGE MIDPOINTS, NOT CORNERS, and the checker is why. On the corners the
+//  two lower screws land 5.306 from the display's own O5.500 screw-head
+//  clearance holes, which leaves a 1.104 mm web in 3.175 mm acrylic -- below
+//  the 2.000 hard floor and worse than the part's recorded baseline. It is the
+//  same vendor collision that makes those two head holes merge into the window
+//  in the first place: the 18650 holder's edge runs through the display's
+//  lower mounting holes. Moved to the midpoints, the nearest approach to
+//  anything is 13.07.
+function cowl_screw_pts() =
+    [[cowl_xy()[0] + cowl_window()[0]/2 + cowl_flange()/2, cowl_xy()[1]],
+     [cowl_xy()[0] - cowl_window()[0]/2 - cowl_flange()/2, cowl_xy()[1]],
+     [cowl_xy()[0], cowl_xy()[1] + cowl_window()[1]/2 + cowl_flange()/2],
+     [cowl_xy()[0], cowl_xy()[1] - cowl_window()[1]/2 - cowl_flange()/2]];

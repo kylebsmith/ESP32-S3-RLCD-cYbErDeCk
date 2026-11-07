@@ -40,8 +40,16 @@ against 12.70 of panel, so the fader may need a local pocket.
 import _common as C
 import parts as P
 
-U = 19.050
-FIELD = 15 * U              # 285.75, the K9 Pro's switch field exactly
+U = 19.050                  # [VENDOR] the MX key unit, and the module the
+                            # CONTROL field is laid on. NOT the keyboard's
+                            # pitch, which is 19.000 (_common.KBD_U).
+
+#  There was a `FIELD = 15 * U` here, commented "285.75, the K9 Pro's switch
+#  field exactly". It was wrong twice: the K9 Pro's pitch is 19.000, so its
+#  switch field is 285.000 x 95.000, and nothing in this spec ever read the
+#  value. cad/parameters.scad section 2 deleted the same variable, with the
+#  same comment, for the same two reasons.
+
 BAND = 4 * U                # 76.200, the NeoSlider board stood on end
 GAP = 1.5 * U               # 28.575, both gaps
 

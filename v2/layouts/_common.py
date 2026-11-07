@@ -12,10 +12,26 @@ import parts as P  # noqa: E402
 
 SPINE = 3.20
 BOARD_POCKET_H = 70.30
-PLATE_W = 266.700           # 14 key units, 420 x 0.635. Leaves 10.825 mm of
-                            # shell each side of a 288.35 interior -- enough for
-                            # the seat and the drawn reveal, which a plate sized
-                            # to the bay row (285.75) does not leave.
+PLATE_W = 266.700           # 14 CONTROL key units, 420 x 0.635. Leaves
+                            # 10.825 mm of shell each side of a 288.35
+                            # interior -- enough for the seat and the drawn
+                            # reveal, which a plate sized to the bay row
+                            # (285.000) does not leave.
+
+# The keyboard's grid, and it is NOT the control unit. All 61 of the K9 Pro's
+# switch holes land on an exact 19.000 mm lattice in BOTH axes, read off the
+# analytic hole axes in Keychron's own 37.7 MB assembly, and every position
+# agrees with Keychron's own QMK LAYOUT_61_ansi to 0.000 on the 1 u keys. This
+# repo took the keyboard's pitch to be the 19.050 MX unit in five files and was
+# 0.750 mm out on the field. cad/parameters.scad carries both, as U and kbd_U.
+KBD_U = 19.000              # [CAD-EXACT] v2/parts/keyboard-strip.md 1.6
+KBD_FIELD = (15 * KBD_U, 5 * KBD_U)
+                            # [DERIVED] 285.000 x 95.000 -- switch CENTRES.
+                            # The wide keys are nudged off the nominal unit
+                            # centre by up to 0.040; nothing here places a
+                            # single key, so the field is the lattice's extent
+                            # and the measured per-key column in 1.6 is what a
+                            # per-key position must come from.
 
 
 def frame(L, ctrl_band_h, title, board_band=True):
@@ -54,7 +70,7 @@ def kbd(L, d):
     """The keyboard bay, centred, sitting on the bottom wall."""
     kw, kh = d["kbd_pocket"]
     return L.keyboard(0.0, d["kbd_top"] - kh / 2, kw, kh,
-                      "K9 PRO BAY", field=(285.75, 95.25))
+                      "K9 PRO BAY", field=KBD_FIELD, pitch=KBD_U)
 
 
 def rows(d, ctrl_band_h, stack):

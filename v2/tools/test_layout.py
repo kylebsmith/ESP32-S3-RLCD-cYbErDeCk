@@ -11,9 +11,152 @@ Usage:  python3 v2/tools/test_layout.py
 """
 import re
 import sys
+import xml.etree.ElementTree as ET
 
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 import layout as L  # noqa: E402
+
+# ---------------------------------------------------------------------------
+# The keyboard's pitch, and the control pitch it is NOT.
+#
+# These two literals are the whole point of switch_field() below, and they are
+# deliberately NOT imported from layouts/_common.py, from the spec under test,
+# or from layout.py. A check that asks the drawing what pitch it used cannot
+# see a wrong pitch -- which is exactly how this bug lived in five files: the
+# field was 15 x 19.05 and the lattice was drawn on a hard-coded 19.05, so the
+# drawing agreed with itself and the SVG looked right.
+#
+# 19.000 is measured: all 61 of the K9 Pro's switch holes land on an exact
+# 19.000 mm lattice in BOTH axes, read off the analytic hole axes in Keychron's
+# own assembly, agreeing with Keychron's own QMK LAYOUT_61_ansi to 0.000 on the
+# 1 u keys. 19.050 is the MX key unit and is still right for the CONTROL field,
+# which is why the two have to be told apart rather than reconciled.
+KBD_PITCH = 19.000              # [CAD-EXACT] v2/parts/keyboard-strip.md 1.6
+CTRL_PITCH = 19.050             # [VENDOR] 0.75 in, the MX unit, Adafruit's grid
+# The field's EXTENT in pitches, and it is checked as well as the pitch,
+# because the pitch alone does not pin the field down: a field drawn
+# 285.000 x 76.000 is on a perfect 19.000 lattice in both axes and spans a
+# whole number of pitches in both, and it has lost the bottom key row -- an
+# aperture cut to it would clip the spacebar row entirely. 1.6 gives five row
+# axes at Z 19 / 38 / 57 / 76 / 95 and an X column reaching 263.650, which is
+# inside 15 u and outside 14.
+KBD_COLS, KBD_ROWS = 15, 5      # [CAD-EXACT] v2/parts/keyboard-strip.md 1.6
+# px()/py() round to 4 decimals, and the two pitches are 0.050 apart, so a
+# tolerance three orders of magnitude inside that gap still separates them.
+PITCH_TOL = 0.002
+
+
+def switch_field(name, svg_text, require_bay=False):
+    """Measure the DRAWN switch lattice off the SVG and check its pitch.
+
+    This reads the artefact and nothing else: the frame comes from the body
+    rect, the field from the rect the drawing tagged data-kind="switch-field",
+    and the lattice from the lines it tagged switch-col / switch-row. Those
+    carry no data-label, so they are invisible to measure() and cannot become
+    controls the audit expects -- they exist so the pitch can be measured
+    rather than trusted.
+
+    A keyboard bay in a v2 layout must draw its field: the field, not the bay,
+    is what an aperture is cut to, and an undrawn field is an unchecked one.
+
+    require_bay closes the hole that sentence otherwise only asserted. Called
+    on a panel built by the test itself, a missing bay means nothing -- most of
+    those panels have no keyboard. Called on a v2 DECK SPEC it means the spec
+    stopped drawing the keyboard, and returning [] for that is the project's
+    own failure mode in miniature: the pitch check goes silent at exactly the
+    moment there is no pitch left to check, and the suite reads ALL PASS. So
+    the spec loop passes require_bay=True and a bayless deck is red.
+    """
+    root = ET.fromstring(svg_text)
+    els = list(root.iter())
+    body = next((e for e in els if e.get("data-kind") == "body"), None)
+    if body is None:
+        return [f"PITCH     {name}: no body rect, nothing to measure from"]
+    bw, bh = float(body.get("width")), float(body.get("height"))
+    ox = float(body.get("x")) + bw / 2
+    oy = float(body.get("y")) + bh / 2
+
+    bays = [e for e in els if e.get("data-kind") == "keyboard"]
+    fields = [e for e in els if e.get("data-kind") == "switch-field"]
+    if not bays:
+        if require_bay:
+            return [f"FIELD     {name}: no keyboard bay is drawn at all, so "
+                    f"there is no pitch to measure -- a v2 deck layout is "
+                    f"sized from the K9 Pro and must draw its bay"]
+        return []                      # no keyboard drawn, nothing to measure
+    if not fields:
+        return [f"PITCH     {name}: a keyboard bay is drawn with no switch "
+                f"field, so its pitch cannot be measured"]
+
+    cols = [float(e.get("x1")) - ox for e in els
+            if e.get("data-kind") == "switch-col"]
+    rows = [oy - float(e.get("y1")) for e in els
+            if e.get("data-kind") == "switch-row"]
+
+    fail = []
+    for f in fields:
+        x0 = float(f.get("x")) - ox
+        x1 = x0 + float(f.get("width"))
+        y1 = oy - float(f.get("y"))
+        y0 = y1 - float(f.get("height"))
+
+        # the field has to be inside the bay it belongs to, or it is measuring
+        # a lattice that is not over the keys
+        bay = min(bays, key=lambda b: abs((float(b.get("x"))
+                                           + float(b.get("width")) / 2) - ox
+                                          - (x0 + x1) / 2))
+        bx0 = float(bay.get("x")) - ox
+        bx1 = bx0 + float(bay.get("width"))
+        by1 = oy - float(bay.get("y"))
+        by0 = by1 - float(bay.get("height"))
+        if x0 < bx0 - PITCH_TOL or x1 > bx1 + PITCH_TOL \
+                or y0 < by0 - PITCH_TOL or y1 > by1 + PITCH_TOL:
+            fail.append(f"FIELD     {name}: the drawn switch field "
+                        f"{x0:+.3f}..{x1:+.3f} / {y0:+.3f}..{y1:+.3f} is not "
+                        f"inside the bay {bx0:+.3f}..{bx1:+.3f} / "
+                        f"{by0:+.3f}..{by1:+.3f}")
+
+        for axis, lo, hi, cut in (("x", x0, x1, cols), ("y", y0, y1, rows)):
+            inner = sorted(v for v in cut if lo - PITCH_TOL < v < hi + PITCH_TOL)
+            edges = [lo] + inner + [hi]
+            steps = [b - a for a, b in zip(edges, edges[1:])]
+            for i, step in enumerate(steps):
+                if abs(step - KBD_PITCH) <= PITCH_TOL:
+                    continue
+                why = (" -- that is the CONTROL pitch, not the keyboard's"
+                       if abs(step - CTRL_PITCH) <= PITCH_TOL else "")
+                fail.append(f"PITCH     {name}: drawn lattice step {i} in "
+                            f"{axis} measures {step:.4f}, want "
+                            f"{KBD_PITCH:.3f}{why}")
+            span = hi - lo
+            n = len(steps)
+            if abs(span - n * KBD_PITCH) > PITCH_TOL:
+                fail.append(f"FIELD     {name}: drawn switch field {axis} span "
+                            f"{span:.4f} is not {n} x {KBD_PITCH:.3f} = "
+                            f"{n * KBD_PITCH:.3f}")
+            want_n = KBD_COLS if axis == "x" else KBD_ROWS
+            if n != want_n:
+                fail.append(f"FIELD     {name}: drawn switch field spans {n} "
+                            f"pitch(es) in {axis}, want {want_n} -- the K9 "
+                            f"Pro's field is {KBD_COLS} u x {KBD_ROWS} u "
+                            f"({KBD_COLS * KBD_PITCH:.3f} x "
+                            f"{KBD_ROWS * KBD_PITCH:.3f})")
+    return fail
+
+
+def keyed(pitch=KBD_PITCH, field=None):
+    """A panel that is nothing but a keyboard bay and its drawn switch field.
+
+    The body, the walls and the pocket are the real deck's (parameters.scad
+    section 2 and 8c: 304.600 x 190.375, walls 8.125 / 4.400, pocket
+    288.350 x 98.450 centred at y = -41.5625) so the field sits in the bay it
+    really sits in, rather than in a frame invented for the test. -41.5625 is
+    the pocket seated on the front wall: -190.375/2 + 4.400 + 98.450/2.
+    """
+    p = L.Panel(304.600, 190.375, title="KEYED", wall=8.125, bottom_wall=4.40)
+    p.add(L.keyboard(0.0, -41.5625, 288.350, 98.450, "K9 PRO BAY",
+                     field=field or (15 * pitch, 5 * pitch), pitch=pitch))
+    return p
 
 
 def clean():
@@ -178,6 +321,85 @@ def main():
     else:
         print("  ok    a run ending at a board is not buried")
 
+    # --- the keyboard's pitch, measured off the drawing -------------------
+    # The bug this guards: the field was 15 x 19.05 and layout.py drew the
+    # lattice on a hard-coded 19.05, so the two agreed and the SVG looked
+    # right. The measured pitch is 19.000. The check carries that number
+    # itself; the drawing is not consulted about it.
+    k = keyed()
+    text = k.svg()
+    f = k.audit(text) + switch_field("keyed", text)
+    if f:
+        print(f"  FAIL  a keyboard on its measured pitch must pass; got {f}")
+        bad += 1
+    else:
+        print("  ok    the drawn 285.000 x 95.000 field measures 19.000 in "
+              "both axes")
+
+    # a field with no pitch at all is an error, not a 19.05 default
+    try:
+        L.keyboard(0.0, 0.0, 288.350, 98.450, "NO PITCH",
+                   field=(285.0, 95.0))
+        print("  FAIL  a switch field with no pitch must raise, not default")
+        bad += 1
+    except ValueError:
+        print("  ok    a switch field with no stated pitch raises")
+
+    # the bug itself, as the artefact: a field and a lattice both on 19.050.
+    # Nothing in the drawing is inconsistent -- which is why only an
+    # independently sourced pitch can catch it.
+    q = keyed(pitch=CTRL_PITCH)
+    bad += not expect("the field drawn on the control pitch",
+                      switch_field("ctrl-pitch", q.svg()), "PITCH")
+
+    # ...and the field right but the lattice wrong, which is the same bug the
+    # other way round: a 285.000 field divided 19.050 at a time. Done on the
+    # SVG TEXT, with the field's own left edge read back out of it, so the
+    # drawing code gets no say in where the lines land.
+    q = keyed()
+    text = q.svg()
+    left = float(re.search(r'<rect data-kind="switch-field" x="([-0-9.]+)"',
+                           text).group(1))
+    seen = []
+
+    def relattice(m):
+        seen.append(m)
+        return m.group(1) + f"{left + len(seen) * CTRL_PITCH:.4f}"
+
+    wrong = re.sub(r'(data-kind="switch-col" x1=")([-0-9.]+)', relattice, text)
+    if len(seen) != 14:
+        print(f"  FAIL  expected 14 lattice lines to rewrite, found {len(seen)}")
+        bad += 1
+    else:
+        bad += not expect("a 19.050 lattice inside a 285.000 field",
+                          switch_field("relattice", wrong), "PITCH")
+
+    # one line nudged in the SVG text alone: proof the check reads the drawing
+    q = keyed()
+    nudged = re.sub(r'(data-kind="switch-col" x1=")([0-9.]+)',
+                    lambda m: m.group(1) + f"{float(m.group(2)) + 0.5:.4f}",
+                    q.svg(), count=1)
+    bad += not expect("one lattice line nudged 0.5 mm in the SVG",
+                      switch_field("nudged", nudged), "PITCH")
+
+    # the field dropped from the drawing while the bay stays
+    q = keyed()
+    gone = re.sub(r'<rect data-kind="switch-field"[^/]*/>', "", q.svg(), count=1)
+    bad += not expect("the switch field not drawn at all",
+                      switch_field("nofield", gone), "PITCH")
+
+    # a field that is drawn but not over the keys
+    q = keyed()
+    moved = re.sub(r'(<rect data-kind="switch-field" x=")([-0-9.]+)',
+                   lambda m: m.group(1) + f"{float(m.group(2)) - 12.0:.4f}",
+                   q.svg(), count=1)
+    if moved == q.svg():
+        print("  FAIL  the test's own field substitution missed -- fix it")
+        bad += 1
+    else:
+        bad += not expect("the switch field slid out of its bay",
+                          switch_field("outside", moved), "FIELD")
+
     # and the spec-level checks
     cases = [
         ("off the grid", lambda p: p.add(
@@ -218,7 +440,9 @@ def main():
             mod = importlib.util.module_from_spec(sp)
             sp.loader.exec_module(mod)
             panel = mod.build(L.KIT)
-            fails = panel.audit(panel.svg())
+            text = panel.svg()
+            fails = panel.audit(text) + switch_field(name, text,
+                                                     require_bay=True)
             if fails:
                 print(f"  FAIL  {name} renders but does not pass: {fails[:2]}")
                 bad += 1

@@ -784,25 +784,25 @@
 <line x1="168.3" y1="16.0" x2="168.3" y2="206.375" stroke="#c9ccd4" stroke-width="0.25" stroke-dasharray="2 1.5"/>
 <rect data-kind="body" data-label="BODY" data-role="frame" x="16.0" y="16.0" width="304.6" height="190.375" rx="3" fill="none" stroke="#111318" stroke-width="0.6"/>
 <rect data-kind="keyboard" data-label="K9 PRO BAY" data-role="touch" x="24.125" y="103.525" width="288.35" height="98.45" rx="1.5" fill="#f7f7f8" stroke="#8d93a0" stroke-width="0.4"/>
-<rect x="25.425" y="105.125" width="285.75" height="95.25" fill="none" stroke="#8d93a0" stroke-width="0.25" stroke-dasharray="1.5 1.5"/>
-<line x1="44.475" y1="105.125" x2="44.475" y2="200.375" stroke="#e8eaee" stroke-width="0.2"/>
-<line x1="63.525" y1="105.125" x2="63.525" y2="200.375" stroke="#e8eaee" stroke-width="0.2"/>
-<line x1="82.575" y1="105.125" x2="82.575" y2="200.375" stroke="#e8eaee" stroke-width="0.2"/>
-<line x1="101.625" y1="105.125" x2="101.625" y2="200.375" stroke="#e8eaee" stroke-width="0.2"/>
-<line x1="120.675" y1="105.125" x2="120.675" y2="200.375" stroke="#e8eaee" stroke-width="0.2"/>
-<line x1="139.725" y1="105.125" x2="139.725" y2="200.375" stroke="#e8eaee" stroke-width="0.2"/>
-<line x1="158.775" y1="105.125" x2="158.775" y2="200.375" stroke="#e8eaee" stroke-width="0.2"/>
-<line x1="177.825" y1="105.125" x2="177.825" y2="200.375" stroke="#e8eaee" stroke-width="0.2"/>
-<line x1="196.875" y1="105.125" x2="196.875" y2="200.375" stroke="#e8eaee" stroke-width="0.2"/>
-<line x1="215.925" y1="105.125" x2="215.925" y2="200.375" stroke="#e8eaee" stroke-width="0.2"/>
-<line x1="234.975" y1="105.125" x2="234.975" y2="200.375" stroke="#e8eaee" stroke-width="0.2"/>
-<line x1="254.025" y1="105.125" x2="254.025" y2="200.375" stroke="#e8eaee" stroke-width="0.2"/>
-<line x1="273.075" y1="105.125" x2="273.075" y2="200.375" stroke="#e8eaee" stroke-width="0.2"/>
-<line x1="292.125" y1="105.125" x2="292.125" y2="200.375" stroke="#e8eaee" stroke-width="0.2"/>
-<line x1="25.425" y1="181.325" x2="311.175" y2="181.325" stroke="#e8eaee" stroke-width="0.2"/>
-<line x1="25.425" y1="162.275" x2="311.175" y2="162.275" stroke="#e8eaee" stroke-width="0.2"/>
-<line x1="25.425" y1="143.225" x2="311.175" y2="143.225" stroke="#e8eaee" stroke-width="0.2"/>
-<line x1="25.425" y1="124.175" x2="311.175" y2="124.175" stroke="#e8eaee" stroke-width="0.2"/>
+<rect data-kind="switch-field" x="25.8" y="105.25" width="285.0" height="95.0" fill="none" stroke="#8d93a0" stroke-width="0.25" stroke-dasharray="1.5 1.5"/>
+<line data-kind="switch-col" x1="44.8" y1="105.25" x2="44.8" y2="200.25" stroke="#e8eaee" stroke-width="0.2"/>
+<line data-kind="switch-col" x1="63.8" y1="105.25" x2="63.8" y2="200.25" stroke="#e8eaee" stroke-width="0.2"/>
+<line data-kind="switch-col" x1="82.8" y1="105.25" x2="82.8" y2="200.25" stroke="#e8eaee" stroke-width="0.2"/>
+<line data-kind="switch-col" x1="101.8" y1="105.25" x2="101.8" y2="200.25" stroke="#e8eaee" stroke-width="0.2"/>
+<line data-kind="switch-col" x1="120.8" y1="105.25" x2="120.8" y2="200.25" stroke="#e8eaee" stroke-width="0.2"/>
+<line data-kind="switch-col" x1="139.8" y1="105.25" x2="139.8" y2="200.25" stroke="#e8eaee" stroke-width="0.2"/>
+<line data-kind="switch-col" x1="158.8" y1="105.25" x2="158.8" y2="200.25" stroke="#e8eaee" stroke-width="0.2"/>
+<line data-kind="switch-col" x1="177.8" y1="105.25" x2="177.8" y2="200.25" stroke="#e8eaee" stroke-width="0.2"/>
+<line data-kind="switch-col" x1="196.8" y1="105.25" x2="196.8" y2="200.25" stroke="#e8eaee" stroke-width="0.2"/>
+<line data-kind="switch-col" x1="215.8" y1="105.25" x2="215.8" y2="200.25" stroke="#e8eaee" stroke-width="0.2"/>
+<line data-kind="switch-col" x1="234.8" y1="105.25" x2="234.8" y2="200.25" stroke="#e8eaee" stroke-width="0.2"/>
+<line data-kind="switch-col" x1="253.8" y1="105.25" x2="253.8" y2="200.25" stroke="#e8eaee" stroke-width="0.2"/>
+<line data-kind="switch-col" x1="272.8" y1="105.25" x2="272.8" y2="200.25" stroke="#e8eaee" stroke-width="0.2"/>
+<line data-kind="switch-col" x1="291.8" y1="105.25" x2="291.8" y2="200.25" stroke="#e8eaee" stroke-width="0.2"/>
+<line data-kind="switch-row" x1="25.8" y1="181.25" x2="310.8" y2="181.25" stroke="#e8eaee" stroke-width="0.2"/>
+<line data-kind="switch-row" x1="25.8" y1="162.25" x2="310.8" y2="162.25" stroke="#e8eaee" stroke-width="0.2"/>
+<line data-kind="switch-row" x1="25.8" y1="143.25" x2="310.8" y2="143.25" stroke="#e8eaee" stroke-width="0.2"/>
+<line data-kind="switch-row" x1="25.8" y1="124.25" x2="310.8" y2="124.25" stroke="#e8eaee" stroke-width="0.2"/>
 <text x="168.3" y="154.15" fill="#8d93a0" font-size="3.4" text-anchor="middle">K9 PRO BAY 288.35 × 98.45</text>
 <rect data-kind="plate" data-label="PLATE" data-role="touch" x="25.425" y="24.125" width="285.75" height="76.2" fill="#f3f4f6" stroke="#111318" stroke-width="0.45"/>
 <rect data-kind="bay" data-label="_display board" data-role="touch" x="31.22" y="27.075" width="93.9" height="70.3" rx="2.54" fill="none" stroke="#8d93a0" stroke-width="0.3" stroke-dasharray="2 1"/>

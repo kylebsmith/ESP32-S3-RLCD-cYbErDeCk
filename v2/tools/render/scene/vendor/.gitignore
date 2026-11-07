@@ -1,0 +1,5 @@
+# three.js r0.160.1, fetched by render.py (ensure_three). Build input, not
+# source: it is 1.3 MB of vendor JavaScript and this repository does not
+# redistribute it. Delete the directory and render.py refetches it.
+*
+!.gitignore

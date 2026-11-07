@@ -24,8 +24,21 @@ many there are, how big they are and where a performer's hands expect them.
 | arrangement | **A** — display far, controls middle, keyboard near | Push, OP-1, Digitakt, Organelle and Octatrack all converge on it, and it is the only option the thumb envelope permits. |
 | pots | **three standard panel-mount**, knobs | Confirmed deliberately. |
 
-Still being confirmed: whether the K9 Pro shares the K7 Pro's footprint, and
-whether its base plate comes off.
+Still being confirmed: whether the K9 Pro shares the K7 Pro's footprint.
+
+**The base plate comes off — and that answers less than it was expected to.**
+Measured from Keychron's own 37.7 MB assembly (`../parts/keyboard-strip.md`):
+there is **no separate switch plate**. The plate **is** the top 1.200 mm of the
+aluminium top frame, one part, with the 61 cutouts in it and the visible frame
+as its skirt. `K9PRO-PLATE`, which the name invites you to read as the switch
+plate, is a 0.500 mm SECC steel shield lying under the PCB in the bottom
+assembly, and it is discarded. So what comes off is the **ABS tray**, and the
+strip keeps the whole 287.000 × 97.500 shell *and* its 1.000 mm skirt. Total
+retained height is 22.137 mm against the stock keyboard's 23.116: stripping
+saves **0.979 mm** and nothing more, because it is the frame's skirt, not the
+tray, that reaches down. What it does buy is a **flat seat** and a chassis we
+control — see "Open, and blocking geometry" below, where this was listed as the
+biggest lever on thickness and is not.
 
 ## What carries over from v1, unchanged
 
@@ -92,7 +105,10 @@ centreline and an even control count together force a half-pitch.
 
 **0.635 mm = 0.025 in** divides every board dimension *and* the half-pitches,
 and still catches an arbitrary round metric number, which is what the check is
-for — 14.25, −3.30 and 95.00 all fail it.
+for — 14.25, −3.30 and 40.00 all fail it. (The third example used to be 95.00.
+It has been changed because 95.000 is now a *measured datum* — the keyboard's
+switch-field depth, 5 × 19.000 — and a real measurement makes a poor
+illustration of an arbitrary number.)
 
 So there is a hierarchy, not a single number:
 
@@ -102,6 +118,19 @@ So there is a hierarchy, not a single number:
 | board | 1.27 | 0.050 | Adafruit's own layout grid |
 | coarse | 6.35 | ¼ | the layout's visible rhythm |
 | tile | 25.40 | 1 | the plate's tile |
+| control unit | 19.050 | 0.75 | the MX key unit: the Quad Rotary's pitch, the knob pitch, the band |
+| **keyboard unit** | **19.000** | — | **the K9 Pro's own switch lattice, and it is not the one above** |
+
+**The last row is the trap, and this repo fell into it five times.** 19.050 is
+the MX key unit and it is right for everything *we* lay out. It is not the
+keyboard's: all 61 of the K9 Pro's switch holes land on an exact **19.000 mm**
+lattice in both axes, read off the analytic hole axes in Keychron's own
+assembly and agreeing with Keychron's own QMK `LAYOUT_61_ansi` to 0.000 on the
+1 u keys (`../parts/keyboard-strip.md` §1.6). The keyboard's switch field is
+therefore **285.000 × 95.000**, not 285.75 × 95.25, and five files in this repo
+said otherwise. `../cad/parameters.scad` carries both, as `U` and `kbd_U`.
+The two agree to 0.050 mm per unit and drift to 0.750 mm across the field —
+which is why nothing may be datumed off "the key unit" without saying *whose*.
 
 **The display is the one honest exception.** Its 84.80 × 63.60 active area lands
 on no inch grid at any of these moduli — it is a metric part in an imperial
@@ -199,8 +228,16 @@ A hole sized to a knob's nominal diameter is a hole no real knob goes into.
 
 ## Open, and blocking geometry
 
-1. **K9 Pro outside dimensions**, and whether its aluminium base plate is
-   removable — the biggest single lever on deck thickness.
+1. ~~**K9 Pro outside dimensions**, and whether its aluminium base plate is
+   removable — the biggest single lever on deck thickness.~~ **Closed, and the
+   premise was wrong on both counts.** The outside footprint is
+   **287.000 × 97.500** with **R4.400** corners `[CAD-EXACT]`, matching
+   Keychron's published 287 × 97.5. What is removable is the **ABS** tray, not
+   an aluminium base plate, and it is nowhere near the biggest lever on
+   thickness: it is worth **0.979 mm**, because the aluminium frame's own skirt
+   reaches 8.595 mm below the PCB seat and the frame stays. The levers that are
+   real are dropping the keyboard *through* the carrier and the 12.700 mm
+   acrylic. See "Decisions taken" above and `../parts/keyboard-strip.md` §2.2.
 2. **The acrylic stack**: how many layers, what thickness, and how a sheet
    tolerance of ±10 % is absorbed so the plate still reads flush.
 3. **Alignment to the display.** 84.80 / 4 = 21.2 mm per encoder, about half the

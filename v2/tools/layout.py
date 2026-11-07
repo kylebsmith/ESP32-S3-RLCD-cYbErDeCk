@@ -175,10 +175,23 @@ def route(label, pts, w=4.00):
     return it
 
 
-def keyboard(x, y, w, h, label="KEYBOARD", field=None):
-    """The keyboard bay. field is the switch field (w, h) drawn inside it."""
+def keyboard(x, y, w, h, label="KEYBOARD", field=None, pitch=None):
+    """The keyboard bay. field is the switch field (w, h) drawn inside it.
+
+    pitch is the lattice the field is drawn on, and it is the SPEC's to state.
+    It used to be a 19.05 literal down in the drawing code, which made the
+    drawn lattice unfalsifiable: a tool that knows the pitch cannot check the
+    pitch, and the number it knew was wrong. The K9 Pro's switch holes land on
+    an exact 19.000 mm lattice in both axes -- not the 19.050 MX unit the
+    control field uses (v2/parts/keyboard-strip.md 1.6). There is deliberately
+    no default: a field with no pitch is an error, not a guess.
+    """
+    if field and not pitch:
+        raise ValueError(f"keyboard {label!r}: a switch field must state "
+                         "its pitch; the drawing will not supply one")
     it = _ctl("keyboard", x, y, w, h, label, on_plate=False)
     it["field"] = field
+    it["pitch"] = pitch
     return it
 
 
@@ -315,19 +328,30 @@ class Panel:
                          f'fill="#f7f7f8" stroke="{GHOST}" stroke-width="0.4"/>')
                 fw, fh = it.get("field") or (0, 0)
                 if fw:
-                    s.append(f'<rect x="{px(x-fw/2)}" y="{py(y+fh/2)}" '
+                    # The lattice comes from the item, never from here, and it
+                    # is TAGGED INTO THE SVG so a reader can measure the pitch
+                    # off the artefact instead of trusting this code. These
+                    # carry data-kind and no data-label on purpose: measure()
+                    # keys on data-label, so the lattice is available to a
+                    # check without becoming a control the audit expects.
+                    pitch = it["pitch"]
+                    s.append(f'<rect data-kind="switch-field" x="{px(x-fw/2)}" '
+                             f'y="{py(y+fh/2)}" '
                              f'width="{fw}" height="{fh}" fill="none" '
                              f'stroke="{GHOST}" stroke-width="0.25" '
                              f'stroke-dasharray="1.5 1.5"/>')
-                    cols = int(round(fw / 19.05))
+                    cols = int(round(fw / pitch))
+                    rows = int(round(fh / pitch))
                     for c in range(1, cols):
-                        gx = x - fw / 2 + c * 19.05
-                        s.append(f'<line x1="{px(gx)}" y1="{py(y+fh/2)}" '
+                        gx = x - fw / 2 + c * pitch
+                        s.append(f'<line data-kind="switch-col" '
+                                 f'x1="{px(gx)}" y1="{py(y+fh/2)}" '
                                  f'x2="{px(gx)}" y2="{py(y-fh/2)}" '
                                  f'stroke="{GRID}" stroke-width="0.2"/>')
-                    for r in range(1, 5):
-                        gy = y - fh / 2 + r * fh / 5
-                        s.append(f'<line x1="{px(x-fw/2)}" y1="{py(gy)}" '
+                    for r in range(1, rows):
+                        gy = y - fh / 2 + r * pitch
+                        s.append(f'<line data-kind="switch-row" '
+                                 f'x1="{px(x-fw/2)}" y1="{py(gy)}" '
                                  f'x2="{px(x+fw/2)}" y2="{py(gy)}" '
                                  f'stroke="{GRID}" stroke-width="0.2"/>')
                 s.append(f'<text x="{px(x)}" y="{py(y)+1.4}" fill="{GHOST}" '

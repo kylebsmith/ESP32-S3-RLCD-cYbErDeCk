@@ -34,6 +34,32 @@ module backpanel_2d() {
         rrect(body_w, body_h, corner_r);
         datum_and_slots(back_screw_pts(), screw_datum_i,
                         screw_m3_clear_back, screw_slot_l_back);
+
+        //  THE DISPLAY'S FOUR SCREW HEADS LIVE IN THIS PANEL. The display
+        //  hangs on four SMTSO-M2.5-7ET standoffs and the enclosure drives
+        //  M2.5 UP into them, so the heads end up on the carrier floor's
+        //  underside -- which is this panel's top face. There is only 3.175 of
+        //  floor under that pocket, so a counterbore in the carrier would
+        //  leave a 0.175 membrane. O5.500 clearance here instead: a cap head
+        //  is 2.500 tall in a 3.175 panel, so it is swallowed with 0.675 to
+        //  spare and the deck still sits flat. A laser cannot counterbore;
+        //  this is the laser's version of one.
+        //  TWO OF THESE FOUR MERGE INTO THE WINDOW BELOW, and that is a
+        //  vendor fact rather than a drawing error: the 18650 holder's own
+        //  edge (V 4.600) runs straight through the display's two lower
+        //  mounting holes (V 3.500). The union is harmless -- a screw head in
+        //  a bigger hole is still clear -- but it is drawn knowing it happens,
+        //  because an unintended merge and an intended one look identical in
+        //  a contour count.
+        for (sx = [-1, 1], sy = [-1, 1])
+            translate([disp_x + sx * 85.500/2, band_mid + sy * 62.100/2])
+                circle(d = 5.500);
+
+        //  And the window the 18650 holder goes through on its way out, with
+        //  the cowl's four screws around it. Section 12.
+        translate(cowl_xy()) square(cowl_window(), center = true);
+        for (p = cowl_screw_pts())
+            translate(p) circle(d = screw_m25_clear_d);
     }
 }
 
