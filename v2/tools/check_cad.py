@@ -125,17 +125,33 @@ WEB_BASELINE = {
     # part          min web   what it is between
     "slab":         3.798,  # [MEASURED 2026-11-07, v2/export/dxf/slab.dxf]
                             #   outline <-> the -x middle fastener SLOT
-    "backpanel":    2.360,  # [MEASURED 2026-11-07, v2/export/dxf/backpanel.dxf]
-                            # Was 4.320. The loss is deliberate and it is the
-                            # cowl's four screws, which stand 2.360 off the
-                            # 18650 window by design (cowl_flange = 7.620 was
-                            # raised from 6.350 for exactly this). It is above
-                            # the 2.000 hard floor. The first attempt put them
-                            # on the window's CORNERS, which landed them 5.306
-                            # from the display's own screw-head clearance holes
-                            # -- a 1.104 web -- and this check is what caught
-                            # it.
-                            #   18650 window <-> a cowl screw
+    "backpanel":    2.675,  # [MEASURED 2026-11-07, v2/export/dxf/backpanel.dxf]
+                            # Was 4.320, then 2.360, now 2.6748 -- and the
+                            # binding PAIR has moved twice. At 4.320 it was the
+                            # outline. At 2.360 it was the 18650 window against
+                            # one of the cowl's four screws, which stood at the
+                            # window's edge midpoints. Those four moved to the
+                            # flange's corners (parameters.scad 12 has why: three
+                            # of the four had no thread in the carrier at all),
+                            # so they are 4.860 and 4.9315 further out and the
+                            # window is no longer the nearest thing to them.
+                            # What is, is a back-panel fastener SLOT.
+                            #   fastener 4 <-> cowl screw
+                            # ABOVE THE 2.000 HARD FLOOR BY 0.6748, where the
+                            # old pair cleared it by 0.3600.
+                            #   AND THE REFUTATION THAT USED TO CLOSE THIS NOTE
+                            # WAS STALE. It said the corner layout "landed them
+                            # 5.306 from the display's own screw-head clearance
+                            # holes -- a 1.104 web -- and this check is what
+                            # caught it". Both figures were computed at
+                            # cowl_flange = 6.350, the value the same sentence
+                            # says was refused. At the live 7.620 the window's
+                            # corner is (-42.122, +14.568), the nearest head
+                            # hole is (-47.315, +17.9125), the centres are
+                            # 6.1768 apart and the web is 1.9768: refused by
+                            # 0.0232, not by 0.896. The 2 x 2 recorded now is
+                            # NOT that layout and its own web to the same head
+                            # hole is 2.0496.
 }
 
 def part_layers():
@@ -1424,11 +1440,15 @@ def cowl_xy(env):
 
 
 def cowl_screw_pts(env):
+    #  A 2 x 2 ON THE FLANGE'S CORNERS, and it USED TO BE FOUR EDGE MIDPOINTS
+    #  at cowl_xy() +/- (window/2 + flange/2). Three of those four had no
+    #  material to live in; parameters.scad 12 carries the four measurements.
+    #  dx and dy are a TRANSCRIPTION of cowl_screw_dx()/cowl_screw_dy(), for
+    #  the same reason the flange was: datums() cannot evaluate a function.
     cx, cy = cowl_xy(env)
-    w, h = cowl_window(env)
-    f = 7.620 / 2                       # cowl_flange() / 2
-    return [(cx + w / 2 + f, cy), (cx - w / 2 - f, cy),
-            (cx, cy + h / 2 + f), (cx, cy - h / 2 - f)]
+    dx, dy = 48.895, 15.875             # cowl_screw_dx(), cowl_screw_dy()
+    return [(cx + sx * dx, cy + sy * dy)
+            for sx in (-1, 1) for sy in (-1, 1)]
 
 
 def disp_head_pts(env):
@@ -1497,7 +1517,7 @@ def label_backpanel(rings, env, taken, fails, lines):
     lines.append(f"    18650: window {'present' if win else 'MISSING'}, "
                  f"{found_heads}/4 display heads cut "
                  f"({4 - found_heads} merged into the window, expected 2), "
-                 f"{found_screws}/4 cowl screws")
+                 f"{found_screws}/{len(cowl_screw_pts(env))} cowl screws")
 
 
 def check_edge_distance(rings, fast, env, fails, lines):
@@ -1810,9 +1830,20 @@ CARRIER_PLANES = (
      "DOWN",  105.8206,  1, "HDMI window ceiling [REPO carrier.scad:344-347, "
                             "a literal: the shell's 7.789 + 0.500]"),
     (lambda e: e["kbd_boss_top_z"],
-     "UP",    138.1314, 11, "the 11 plate bosses' tops, 7 screwed + 4 props. "
+     "UP",    122.2541, 11, "the 11 plate bosses' tops, 7 screwed + 4 props. "
                             "THIS IS THE ROW THAT CATCHES THE FLOATING-BOSS "
-                            "BUG: 11 x the O4.000 96-gon's 12.5574"),
+                            "BUG -- and it could not catch the one it was "
+                            "sitting on. It recorded 138.1314, which is 11 x "
+                            "the O4.000 96-gon's 12.5574 EXACTLY: eleven solid "
+                            "discs, because kbd_pilot_cut() translated to "
+                            "kbd_boss_top_z + 1 and extruded UPWARD and so "
+                            "removed nothing at all. An area cannot tell a "
+                            "solid disc from a disc whose pilot was never "
+                            "drawn; only the ring count can, and this table "
+                            "records areas. Now 4 x 12.5574 + 7 x (12.5574 - "
+                            "the O1.700 96-gon's 2.2682) = 122.2541, with 7 "
+                            "interior rings. See also the +3.871 row, which is "
+                            "the other end of the same seven holes"),
     (lambda e: e["kbd_seat_plane_z"] + 1.000,
      "DOWN",   15.2628,  3, "cut-overshoot ceilings: kbd_cell_cut and "
                             "kbd_toggle_cut both extrude seat - z + 1, so "
@@ -1822,6 +1853,11 @@ CARRIER_PLANES = (
     (lambda e: e["pot_web_z"],
      "DOWN", 1391.8028,  3, "the pot pockets' ceilings -- the face the pot's "
                             "shoulder bears on"),
+    (lambda e: e["kbd_boss_top_z"] - e["kbd_boss_pilot_depth"],
+     "UP",     15.8773,  7, "the 7 screwed bosses' pilot-hole floors. 7 x the "
+                            "O1.700 96-gon's 2.2682. ADDED when kbd_pilot_cut() "
+                            "was made to cut: this plane did not exist before, "
+                            "and the UNDECLARED-plane gate is what reported it"),
     (lambda e: e["kbd_socket_z"],
      "UP",  20227.4603,  2, "socket-field pocket floor"),
     (lambda e: e["carrier_rim_h"] - e["insert_m3_depth"],
@@ -1847,13 +1883,30 @@ CARRIER_PLANES = (
      "UP",   1139.1707,  3, "Feather seat [REPO carrier.scad:332 "
                             "feather_seat_d, a local in the part file]"),
     (lambda e: -e["carrier_t"] + e["insert_m25_depth"],
-     "DOWN",  139.4939, 13, "M2.5 insert ceilings, back panel and cowl. 10 "
-                            "whole + 3 fragments; see CARRIER_INSERT_OPEN"),
+     "DOWN",  125.5741, 10, "M2.5 insert ceilings, THE BACK PANEL'S TEN AND "
+                            "NOTHING ELSE: 10 x the O4.000 96-gon's 12.5574, "
+                            "all whole. It recorded 139.4939 over 13 regions -- "
+                            "the ten, plus three FRAGMENTS of the cowl's four "
+                            "bores (10.3160 + 3.2022 + 0.4016, the fourth "
+                            "absent) that other cavities had eaten. The cowl's "
+                            "four are captive nuts now and live on the -4.150 "
+                            "row; CARRIER_INSERT_OPEN above has the whole "
+                            "history"),
     (lambda e: -e["chan_qt_d"],
-     "UP",   1401.0427,  6, "wiring channel floors"),
+     "UP",   1410.9436,  5, "wiring channel floors. Was 1401.0427 over SIX "
+                            "regions: the cowl's old +x insert bore crossed the "
+                            "analogue trunk at exit_x and cut this floor in "
+                            "two, 9.9009 mm2 of it. One hole fewer is one "
+                            "region fewer, which is the honest direction for a "
+                            "count to move"),
     (lambda e: e["disp_mount_z"],
-     "UP",   4407.3789,  1, "display pocket floor, where the four "
-                            "SMTSO-M2.5-7ET standoffs land"),
+     "UP",   4427.0834,  1, "display pocket floor, where the four "
+                            "SMTSO-M2.5-7ET standoffs land. Was 4407.3789: two "
+                            "of the cowl's old O4.000 insert bores punched "
+                            "straight THROUGH this 3.175 floor and a third "
+                            "clipped its edge, and the 19.7045 mm2 they took is "
+                            "back. The region count was 1 either way, which is "
+                            "why the area is the gate here"),
     (lambda e: -3.460,
      "UP",   3261.3483, 16, "the 4 breakout seats + 12 island scallops "
                             "[REPO carrier.scad:300 brk_seat_d = 2.960 + "
@@ -1862,46 +1915,75 @@ CARRIER_PLANES = (
      "UP",   1352.4278,  1, "the annulus the frame's skirt hangs in"),
     (lambda e: -e["insert_m2_depth"],
      "UP",    128.5878, 16, "the 16 M2 breakout-insert pocket floors"),
+    (lambda e: -e["carrier_t"] + e["nut_m25_pocket_d"],
+     "DOWN",   93.6692,  4, "the 4 cowl captive-nut pocket ceilings. 4 x a "
+                            "regular hexagon of across-flats nut_m25_pocket_af "
+                            "5.200, which is 23.4173. ADDED with the nut "
+                            "family; the UNDECLARED-plane gate reported it. "
+                            "ONE REGION FEWER HERE IS A LOST THREAD, so the "
+                            "count matters as much as the area"),
     (lambda e: e["pot_z_bottom"],
      "UP",   1513.8607,  3, "the three pot body pockets' floors"),
     (lambda e: -e["insert_m25_depth"],
      "UP",     25.1148,  2, "the 2 Feather M2.5 insert pocket floors"),
     (lambda e: -e["carrier_t"],
-     "DOWN",53775.4026,  1, "floor underside, the print's bed face"),
+     "DOWN",53725.2587,  1, "floor underside, the print's bed face. Was "
+                            "53775.4026: the cowl's four hexagonal nut pockets "
+                            "open on this face and the four insert bores they "
+                            "replaced were smaller in plan, three of them "
+                            "merged into cavities that were already here"),
 )
 
-#  AN OPEN DEFECT IN carrier.scad, RECORDED SO IT CANNOT SPREAD OR BE FORGOTTEN
+#  THE DEFECT THIS DICT WAS CARRYING IS CLOSED, AND IT STAYS A DICT AND GOES
+#  EMPTY. Empty means the strict branch of check_carrier_inserts applies to
+#  every family: a pocket that goes missing or gets eaten into is a FAIL and
+#  not a recorded baseline. An entry here is a floor, never a target, and the
+#  only correct end state for one is deletion.
 #
-#  Three of the four cowl M2.5 insert pockets DO NOT EXIST in the part. They are
-#  drawn -- cowl_insert_cut() loops over cowl_screw_pts() like back_insert_cut()
-#  loops over back_screw_pts() -- and then other cavities swallow them, so there
-#  is nothing for an insert to be pressed into. MEASURED on carrier.stl by
-#  probing every horizontal facet containing each declared axis:
+#  WHAT IT USED TO RECORD, kept because the reason is the useful part. Three of
+#  the four cowl M2.5 insert pockets did not exist in the part. They were drawn
+#  -- cowl_insert_cut() looped over cowl_screw_pts() exactly as
+#  back_insert_cut() loops over back_screw_pts() -- and other cavities swallowed
+#  them. MEASURED on carrier.stl by probing every horizontal facet containing
+#  each declared axis, and the four end faces came to 10.3160 + 3.2022 + 0.4016
+#  + 0.0000 = 13.9198 mm2 of a nominal 4 x 12.5574:
 #
-#    (-138.012, +29.5645)   -1.350 ceiling, 0.000 floor above it  -- CORRECT
-#    ( -42.122, +29.5645)   no horizontal facet at all: a wiring channel
-#                           (floor -chan_qt_d, ceiling +1.000) crosses the
-#                           pocket, so the two merge and the bore opens
+#    (-138.012, +29.5645)   -1.350 ceiling, but ERODED to 10.3160 of 12.5574 by
+#                           the display pocket's left wall
+#    ( -42.122, +29.5645)   no horizontal facet at all: the analogue trunk at
+#                           exit_x (floor -chan_qt_d, ceiling +1.000) crosses
+#                           the pocket, so the two merge and the bore opens
 #                           straight into the visible wiring plane
-#    ( -90.067, +44.561)    no horizontal facet at all: inside the display
-#    ( -90.067, +14.568)    pocket (x -136.950..-43.180, y +13.778..+84.148,
-#                           floor disp_mount_z = -3.175). The floor there is
-#                           3.175 thick and the pocket wants 5.000, so it
-#                           punches a O4.000 through-hole in the display's own
-#                           seating floor instead
+#    ( -90.067, +14.568)    no horizontal facet at all: inside the display
+#                           pocket (x -136.950..-43.180, y +13.778..+84.148,
+#                           floor disp_mount_z = -3.175), where the floor is
+#                           3.175 and the pocket wants 5.000, so it punched a
+#                           O4.000 through-hole in the display's own seating
+#                           floor
+#    ( -90.067, +44.561)    no horizontal facet, AND THE DIAGNOSIS ABOVE WAS
+#                           WRONG FOR THIS ONE. It is 0.1065 inside
+#                           disp_hdr_cut()'s THROUGH slot (y +44.4545..
+#                           +52.0745), so there is no floor there at any depth
+#                           and no pocket of any depth could have existed.
+#                           Ray-cast at x -90.067: solid [-6.350,-3.175] at
+#                           y +42.000, NOTHING from +43.000 to +52.000, solid
+#                           again at +53.000.
 #
-#  back_insert_cut()'s comment is the diagnosis, one size up: "an M3 pocket is
+#  back_insert_cut()'s comment was the diagnosis one size up -- "an M3 pocket is
 #  6.700 deep and the floor is 6.350, so pressing M3 from below would break the
-#  visible wiring plane". The same arithmetic applies to M2.5 in a 3.175 floor.
-#  So the cowl's fastener stack has ONE insert of four, and this file is not the
-#  place to fix it -- carrier.scad is.
-#
-#  Gated as a floor, not accepted as a target: if a fourth goes, this fires; if
-#  someone fixes carrier.scad, the row reads STALE in the good direction and
-#  says so.
+#  visible wiring plane" -- and the same arithmetic applies to M2.5 wherever the
+#  floor is not 6.350. THE FIX WAS NOT TO MOVE THE POINTS. A depth map of the
+#  underside taken off the exported mesh is bimodal: under this cowl the floor
+#  is 0.000, 2.645, 3.175, 4.350, 6.350, 6.980, 9.449, 11.531, 14.031 or 15.875
+#  thick and nothing in between, so a 5.000 pocket is in the full 6.350 or it is
+#  nowhere, and the two x bands that qualify are further out than the cowl's own
+#  flange can reach without landing on back_screw_pts()[4] and [5]. The thread
+#  got shallower instead: a 2.200 captive-nut pocket, ceiling -4.150, which is
+#  under the display pocket's floor and under every channel's. The cowl's four
+#  are now their own family in insert_families(), on their own plane, with their
+#  own hexagonal end-face area, and all four are whole.
 CARRIER_INSERT_OPEN = {
     # family                               present as a whole pocket
-    "M2.5, back panel + cowl": 10,  # [MEASURED 2026-11-07] of 14 declared
 }
 
 
@@ -2009,11 +2091,25 @@ def insert_families(env):
         ("M3, slab -> rim", env["insert_m3_hole_d"], env["insert_m3_depth"],
          env["carrier_rim_h"] - env["insert_m3_depth"], "UP",
          slab_screw_pts(env), "slab_screw_pts()"),
-        ("M2.5, back panel + cowl", env["insert_m25_hole_d"],
+        ("M2.5, back panel", env["insert_m25_hole_d"],
          env["insert_m25_depth"],
          -env["carrier_t"] + env["insert_m25_depth"], "DOWN",
-         back_screw_pts(env) + cowl_screw_pts(env),
-         "back_screw_pts() + cowl_screw_pts()"),
+         back_screw_pts(env), "back_screw_pts()"),
+        #  THE COWL IS NO LONGER IN THAT ROW, and it is not an oversight. Its
+        #  four points took an insert_m25 pocket whose ceiling is -1.350, and
+        #  three of them had no material: under disp_pocket_cut() the floor is
+        #  3.175 and a 5.000 pocket punches through it. They are captive HEX
+        #  NUTS now -- a 2.200 pocket whose ceiling is -4.150 -- so they are a
+        #  family of their own, on their own plane, with their own end-face
+        #  area. SIX FACETS AND NOT 96: ngon_area is exact for any regular
+        #  polygon, so the hexagon drawn to nut_m25_pocket_af across the flats
+        #  is ngon_area(af / cos 30, 6) = 23.4173 and nothing here has to carry
+        #  a second area formula.
+        ("M2.5 nut, cowl",
+         env["nut_m25_pocket_af"] / math.cos(math.radians(30)),
+         env["nut_m25_pocket_d"],
+         -env["carrier_t"] + env["nut_m25_pocket_d"], "DOWN",
+         cowl_screw_pts(env), "cowl_screw_pts()", 6),
         ("M2.5, Feather", env["insert_m25_hole_d"], env["insert_m25_depth"],
          -env["insert_m25_depth"], "UP",
          [(env["feather_x"] + sx * env["feather_holes_usb"] / 2,
@@ -2044,8 +2140,10 @@ def check_carrier_inserts(m, env, groups, fails, lines):
     lines.append("    inserts -- every heat-set pocket, probed at its own axis")
     lines.append(f"      {'family':26s} {'O':>6s} {'deep':>6s} {'floor z':>8s} "
                  f"{'whole':>7s} {'part':>5s} {'gone':>5s} {'want':>5s}")
-    for (nm, d, depth, z, dr, pts, src) in insert_families(env):
-        want = ngon_area(d, fn)
+    for fam in insert_families(env):
+        (nm, d, depth, z, dr, pts, src), ffn = fam[:7], (fam[7] if len(fam) > 7
+                                                         else fn)
+        want = ngon_area(d, ffn)
         faces = next((f for (zz, dd), f in groups.items()
                       if dd == dr and abs(zz - z) <= PLANE_Z_TOL), [])
         comps = _components(m, faces)
@@ -2175,8 +2273,22 @@ MESHES = (
     # name              z datum     plan w      plan d    volume      euler
     ("slab",            "acrylic_t", 304.600, 190.375, 350042.7559, -26),
     ("backpanel",       "back_t",    304.600, 190.375, 177036.5845, -32),
-    ("carrier",         "carrier_h", 300.790, 186.565, 444256.5134, -20),
-    ("cowl",            None,        107.510,  41.613,  12143.2409,  -6),
+    #  carrier: WAS 444256.5134 / -20. The volume lost 91.3346 -- seven
+    #  O1.700 x 3.810 pilots that kbd_pilot_cut() had been failing to cut
+    #  (60.4866) and four hexagonal nut pockets (206.0722), against 175.2242
+    #  of material RETURNED by dropping the four cowl insert bores. The euler
+    #  moved +6, which is exactly THREE HANDLES CLOSED: three of those four
+    #  bores were through-holes. The seven pilots and the four nut pockets are
+    #  blind, so neither adds a handle, which is the independent confirmation
+    #  that the +6 is the three bores and nothing else.
+    ("carrier",         "carrier_h", 300.790, 186.565, 444165.1788, -14),
+    #  cowl: WAS 12143.2409. The plan and the euler do NOT move -- four
+    #  clearance holes before and after, and the bounding box is still
+    #  window + 2*(wall + flange), which is what export.py transcribes. The
+    #  124.3940 is four O4.900 x 2.540 head counterbores and the 82.1133 is two
+    #  washer scallops at back_screw_pts()[4] and [5], whose O6.000 washers
+    #  overlapped this part's rim by 6.1013 and 8.4883 mm2.
+    ("cowl",            None,        107.510,  41.613,  11936.7336,  -6),
     ("foot",            "foot_h",     13.970,  34.290,   2433.7571,   2),
     ("knob_encoder",    "knob_h",     25.247,  25.247,   5400.8707,   2),
     ("knob_pot",        "knob_h",     25.247,  25.247,   5372.3497,   2),

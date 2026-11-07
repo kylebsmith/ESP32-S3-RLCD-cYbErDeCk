@@ -212,15 +212,38 @@ module kbd_toggle_cut() {
               kbd_seat_plane_z - z + 1]);
 }
 
-//  Pilot holes for the stock self-tapping screws. O1.700 leaves 1.150 of wall
-//  in a O4.000 boss, which is under the house 1.600 -- but that figure is for
-//  a O4.000 INSERT bore, not a 2 mm self-tapper, and PETG self-taps acceptably
-//  at this size. The stock screws are already the right length, so the first
-//  build uses them and buys no new hardware.
+//  Pilot holes for the stock self-tapping screws, cut DOWNWARD into the boss
+//  from its top. IT USED TO REMOVE NOTHING. The translate was
+//  kbd_boss_top_z + 1 with the cylinder extruded 10.000 UP, so it occupied
+//  z +8.681..+18.681 while the boss top is +7.681: the whole cut stood in air
+//  above the part, and the paragraph below described a feature the part did
+//  not have. MEASURED off export/stl/carrier.stl before the fix, the +7.681 UP
+//  plane was 138.1314 mm2 over 11 regions with ZERO interior rings, and
+//  11 x the O4.000 96-gon's 12.5574 is 138.1314 exactly -- eleven solid discs.
+//  check_cad.py's own row for that plane calls itself THE ROW THAT CATCHES THE
+//  FLOATING-BOSS BUG, and it could not catch this one, because an area is the
+//  same whether the discs are solid or whether the pilots were never drawn:
+//  only the ring count tells them apart, and it recorded the area.
+//    O1.700 leaves 1.150 of wall in a O4.000 boss, which is under the house
+//  1.600 -- but that figure is for a O4.000 INSERT bore, not a 2 mm
+//  self-tapper, and PETG self-taps acceptably at this size. The stock screws
+//  are already the right length, so the first build uses them and buys no new
+//  hardware.
+//    TWO OF THE SEVEN HAVE LESS WALL THAN THAT, and it is pre-existing.
+//  [MEASURED off the export by intersecting every triangle with a horizontal
+//  plane and taking the distance from the boss axis to the nearest material
+//  boundary] bosses 3 and 5, at (+/-47.500, -0.3125), measure 1.999 at z
+//  +7.000 and only 1.692 from z +6.000 down, because kbd_cell_cut's overshoot
+//  ceiling at kbd_seat_plane_z + 1.000 = +6.181 already undercuts them by
+//  0.308 -- the condition check_cad.py's +6.181 row records in its own words as
+//  "they undercut the spine and two bosses". So those two carry 0.842 of wall
+//  below +6.181 against 1.150 at the other five, and only the pilot's top
+//  1.500 is at the full wall. The cut does not create that; it is what the
+//  undercut means for a boss that is finally hollow.
 module kbd_pilot_cut() {
     for (p = kbd_screw_mxz)
-        translate(concat(kxy(p), [kbd_boss_top_z + 1]))
-            cylinder(d = kbd_boss_pilot_d, h = 10.000);
+        translate(concat(kxy(p), [kbd_boss_top_z - kbd_boss_pilot_depth]))
+            cylinder(d = kbd_boss_pilot_d, h = kbd_boss_pilot_depth + 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -429,14 +452,42 @@ module back_insert_cut() {
                 insert_pocket(insert_m25_hole_d, insert_m25_depth, 0);
 }
 
-//  Four M2.5 inserts around the 18650 window. The cowl's screws pass up
-//  through the back panel and into these, so one fastener stack clamps cowl,
-//  panel and carrier together and nothing is bonded.
-module cowl_insert_cut() {
+//  FOUR CAPTIVE M2.5 NUTS AROUND THE 18650 WINDOW, AND NOT FOUR INSERTS. The
+//  reason is back_insert_cut()'s own arithmetic one line up, applied where it
+//  was never applied: an insert_m25 pocket is 5.000 deep and its ceiling lands
+//  at -1.350, which is fine under the 6.350 floor and is a THROUGH-HOLE under
+//  disp_pocket_cut(), where the floor is 3.175 and its own top is -3.175. Three
+//  of the four points this loop used to visit had no pocket in the mesh at all;
+//  parameters.scad 12's cowl_screw_pts() has the four measurements and the
+//  depth map that says no fourth position exists. nut_m25_pocket_d is 2.200, so
+//  this ceiling is -4.150 -- 0.975 under the display pocket's floor and 2.150
+//  under a wiring channel's -- and the floor's thickness stops being a
+//  constraint.
+//    WHAT THE JOINT IS NOW, because carrier.scad used to claim something else
+//  here and the claim has to change with the mechanism. The pocket is BLIND in
+//  this floor and OPEN at the back panel, so the panel is what retains the nut
+//  and the screw pulls the nut ONTO the panel: the clamp closes cowl to panel
+//  from both of the panel's faces, and this floor only stops the nut turning.
+//  So it is still one fastener stack and still nothing bonded -- but the
+//  preload no longer runs through the 3.175 of floor the display board sits on,
+//  which is the one thing the old geometry did do and the reason it broke it.
+//    PRESSED FROM THIS FACE, which is the face the ten insert bores already
+//  open on, so it adds no overhang and no bridge to the print. Assembly gains
+//  one step and fabrication.md has to carry it: invert the carrier with the
+//  boards in, drop four nuts into these four pockets, then fit the panel.
+//  Nothing geometric can check that a nut is present, and a loose M2.5 nut
+//  inside a closed deck is a conductive object on the visible wiring plane.
+//    THE HEXAGON IS DRAWN TO nut_m25_pocket_af ACROSS THE FLATS, so $fn = 6 on
+//  a circle of af/cos(30) puts vertices at 0, 60, ... and a flat at 90. Every
+//  clearance in parameters.scad 12 is taken on the across-CORNERS 3.0022 and
+//  not on the 2.600 across-flats, so the phase this renders at cannot spend a
+//  web: at the tightest neighbour the as-drawn phase measures 2.2009 of PETG
+//  and the worst phase 1.7993, both over insert_m25_wall.
+module cowl_nut_cut() {
     for (p = cowl_screw_pts())
-        translate([p[0], p[1], -carrier_t])
-            rotate([180, 0, 0])
-                insert_pocket(insert_m25_hole_d, insert_m25_depth, 0);
+        translate([p[0], p[1], -carrier_t - 0.01])
+            linear_extrude(nut_m25_pocket_d + 0.01)
+                circle(d = nut_m25_pocket_af / cos(30), $fn = 6);
 }
 
 // ---------------------------------------------------------------------------
@@ -474,7 +525,7 @@ module carrier_3d() {
         wiring_cut();
         slab_insert_cut();
         back_insert_cut();
-        cowl_insert_cut();
+        cowl_nut_cut();
     }
 }
 

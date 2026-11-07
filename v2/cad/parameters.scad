@@ -504,6 +504,50 @@ insert_m25_hole_d = 4.000;      // [DERIVED] was 3.200, the M2 row. Wrong.
 insert_m25_depth  = 5.000;      // [DERIVED] 4.000 insert + 1.000
 insert_m25_wall   = 1.600;      // [STANDARD] M3's, because it is M3's knurl
 
+//  A CAPTIVE M2.5 HEX NUT, AND WHY THIS FAMILY EXISTS AT ALL. Section 9b's
+//  arithmetic one size up -- "an M3 pocket is 6.700 deep and the floor is
+//  6.350, so pressing M3 from below would break the visible wiring plane" --
+//  is also true of M2.5 wherever the floor is NOT 6.350. Under
+//  disp_pocket_cut() the floor is 3.175 and an insert_m25 pocket is 5.000, so
+//  its ceiling lands at -1.350 where the floor's own top is -3.175: the bore
+//  does not make a thread, it punches a O4.000 hole through the display
+//  board's seating floor. The same pocket reaches 0.650 past a wiring
+//  channel's -2.000 floor. A 2.200 nut pocket's ceiling is -4.150, which is
+//  0.975 under the display pocket's floor and 2.150 under a channel's, so it
+//  is the one M2.5 thread that can live in this floor at all. Section 12's
+//  cowl_screw_pts() is the whole of its use; the ten back-panel points keep
+//  their inserts, because out there the floor IS 6.350.
+//    THE PRECEDENT IS THE REPOSITORY'S OWN, twice over: knobs.md 830 settles
+//  the knob's grub screw as "a captive nut ... Recommended for printed knobs.
+//  A printed M3 thread strips; a captive nut does not", and pot_nut_h /
+//  pot_nut_d below already declare a hex nut's m and s as [STANDARD].
+nut_m25_af        = 5.000;      // [STANDARD] ISO 4032 / DIN 934 M2.5, s,
+                                //   across the flats -- tagged exactly as
+                                //   pot_nut_d is, and with the same gap: the
+                                //   ISO 4762 page of [3P fastener-tables] that
+                                //   gave screw_m25_head_d/h carries no nut
+                                //   rows, so a caliper on the nut that is
+                                //   actually bought is what closes both.
+nut_m25_t         = 2.000;      // [STANDARD] ISO 4032 M2.5, m. THIS IS THE ONE
+                                //   THAT CAN HURT: the pocket is this + 0.200
+                                //   and the cover over it under the display
+                                //   pocket is 3.175 minus the pocket, so an m
+                                //   of 2.400 would drive that cover from 0.975
+                                //   to 0.575.
+nut_m25_pocket_af = nut_m25_af + 0.200;  // [DESIGN] 5.200. The 0.200 is
+                                //   pot_bore_d's own convention for a bought
+                                //   metal part in a printed bore ("M7 x 0.75
+                                //   bushing + 0.200"), not a new number.
+nut_m25_pocket_d  = nut_m25_t + 0.200;   // [DERIVED] 2.200, and the 0.200 is
+                                //   insert_m25_depth's own relief convention
+                                //   one order smaller.
+//  EVERY CLEARANCE IS TAKEN ON THE ACROSS-CORNERS AND NOT THE 2.600
+//  ACROSS-FLATS, because a hexagon's rotational phase is not a datum anybody
+//  should have to trust: a pocket drawn with a flat facing a cavity and
+//  printed with a vertex facing it would lose 0.402 of web and nothing would
+//  say so.
+function nut_m25_r_corner() = nut_m25_pocket_af / (2 * cos(30));  // 3.0022
+
 //  A boss OD is its bore plus twice the minimum wall, rounded UP onto the
 //  module -- stack.md 5.4's own convention, carried forward.
 boss_m2_od   = 6.350;           // [DERIVED] 3.200 + 2*1.300 = 5.800 -> 10*grid
@@ -738,7 +782,24 @@ screw_m25_head_h = 2.500;       // [STANDARD] ISO 4762 M2.5, k
 //  neither bottoms.  [DERIVED]
 //    THE COWL'S OWN FOUR SCREWS NEED NONE, and they are not in these ten:
 //  their heads bear on the printed cowl's flange, not on PMMA, and the panel
-//  sees that flange over its whole 7.620 width.
+//  sees that flange over its whole 7.620 width -- which stays true now that the
+//  head is counterborne, because the counterbore is in the cowl's DESK-side
+//  face and the rim that lands on the panel is untouched.
+//    AND THEY ARE NOT M2.5 x 8 EITHER. Nothing in this project stated a length
+//  for them at all; foot.scad's "the screws stay M2.5 x 8 at all ten holes" is
+//  about the ten above. From the head's bearing face at the bottom of
+//  cowl.scad's cw_head_cb counterbore the stack is 1.280 of cowl + back_t 3.175
+//  = 4.455 to the nut pocket's mouth, the nut is nut_m25_t 2.000 and is pulled
+//  DOWN onto the panel, and the pocket's ceiling is 0.200 above it. So the
+//  screw must be at least 6.455 to pass the nut and at most 6.655 before it
+//  bottoms on the pocket's ceiling, and one standard length is in that window.
+//  M2.5 x 8 misses it by 1.345 and the only material it could bore into is the
+//  0.975 of floor over the pocket.
+cowl_screw_l = 6.000;           // [DERIVED] M2.5 x 6, and it is FORCED: 1.545
+                                //   of the nut's 2.000 engaged (3.4 threads at
+                                //   P 0.45), tip 0.655 clear of the pocket's
+                                //   ceiling. Deepening the pocket to accept
+                                //   x 8 wants 3.545 against 3.175 of floor.
 //    ONE HONEST LIMIT ON THE 12.9691. A 0.500 washer bridging a 2.900 slot
 //  dishes, so that figure is the washer's FOOTPRINT and not a uniform pressure
 //  distribution: the real peak sits over the slot's two long edges. It is an
@@ -1355,6 +1416,21 @@ kbd_boss_pilot_d  = 1.700;      // [CAD-EXACT] its cored pilot. That leaves
                                 //   self-tap on the first build. An M2 insert
                                 //   would need the boss stepped out to
                                 //   O7.000 below the PCB.
+//  HOW DEEP, AND THE NUMBER IS BRACKETED AND NOT DERIVED. The boss is
+//  kbd_boss_top_z - kbd_seat_plane_z = 2.500 tall, so a pilot has to pass
+//  through all of it; a pilot that STOPPED at the seat plane would end exactly
+//  coplanar with it, which is the kiss-a-wall case this project has already
+//  paid CGAL for, so it keeps going. 1.310 past the boss's own base puts the
+//  bottom in solid plinth: [MEASURED off export/stl/carrier.stl, ray-cast at
+//  each of the eleven boss axes] every one is solid from the bed face -6.350
+//  to the boss top +7.681, 14.031 mm with nothing in it, so depth is limited
+//  by what it is sensible to remove and not by what is there.
+//    THE STOCK SCREW'S LENGTH IS NOT RECORDED ANYWHERE IN THIS PROJECT, which
+//  is the one thing that would fix this number: a screw longer than the pilot
+//  bottoms out and jacks the plate instead of clamping it. Caliper the screw
+//  and this becomes a derivation.
+kbd_boss_pilot_depth = 3.810;   // [DESIGN] 6 x grid = the boss's own 2.500
+                                //   plus 1.310
 kbd_pcb_hole_d    = 5.000;      // [CAD-EXACT] the PCB's own holes, which the
                                 //   O4.000 boss passes through
 
@@ -1547,6 +1623,28 @@ function cowl_flange() = 7.620;         // [DERIVED] 12 x grid. It was 6.350
                                         //   window, under the 2.000 hard floor
                                         //   (10 x the 0.200 kerf). 7.620 gives
                                         //   2.360.
+//  AND IT IS NOW BRACKETED FROM BOTH SIDES, which it was not when it was
+//  raised. From above by the foot at back_screw_pts()[3]: the cowl's rear edge
+//  is band_mid + 15.152 - disp_pcb_sz()[1]/2 + cowl_window()[1]/2 + cowl_wall()
+//  + cowl_flange(), and the foot's plan starts at y +53.408 [MEASURED off
+//  export/stl/foot.stl at its declared position], so cowl_flange() < 10.657 or
+//  the deck stands on its own battery cover instead of its feet. From below by
+//  the two x bands of sound floor, which want it >= 11.578 before a O2.900 hole
+//  3.050 inside the flange can reach one -- see cowl_screw_pts() below, and the
+//  nut family in section 6 that exists because those two brackets cross.
+//    THE FLANGE ALSO LANDS ON TWO SCREW HEADS THAT ARE ALREADY THERE, and
+//  nothing had measured it. back_screw_pts()[4] and [5] at (-144.780, +48.9625)
+//  and (-144.780, +17.2125) are two of the six that carry a O6.000 DIN 125
+//  washer (section 6b), their heads are on the panel's UNDERSIDE at z -9.525,
+//  and that is the same face the cowl's rim lands on. MEASURED off
+//  export/stl/cowl.stl, plan outlines and not bounding boxes, the washers
+//  overlap the cowl by 6.1013 and 8.4883 mm2 and 2.0420 mm in x; the bare
+//  O4.500 heads by 2.7415 and 3.7751; even the bare O2.900 holes by 0.4908 and
+//  0.7424. The deck as drawn could not be closed. The flange cannot retreat
+//  (it would have to stand at -141.280 or further right, and then no hole on it
+//  reaches sound floor) and it cannot pass them (10.657), so cowl.scad scallops
+//  it, locally, at exactly those two centres.
+function cowl_washer_relief_d() = screw_m25_washer_od + 2*cowl_clear();  // 7.000
 function cowl_h()      = disp_18650_proud + cowl_clear() + cowl_floor();  // 3.820
 function disp_pcb_sz() = [92.500, 69.100];      // [MEASURED]
 
@@ -1574,19 +1672,90 @@ function cowl_window() = [87.000 + 2*pocket_fit, 21.103 + 2*pocket_fit];
 function cowl_xy() = [disp_x   + 46.248 - disp_pcb_sz()[0]/2,
                       band_mid + 15.152 - disp_pcb_sz()[1]/2];
 
-//  EDGE MIDPOINTS, NOT CORNERS, and the checker is why. On the corners the
-//  two lower screws land 5.306 from the display's own O5.500 screw-head
-//  clearance holes, which leaves a 1.104 mm web in 3.175 mm acrylic -- below
-//  the 2.000 hard floor and worse than the part's recorded baseline. It is the
-//  same vendor collision that makes those two head holes merge into the window
-//  in the first place: the 18650 holder's edge runs through the display's
-//  lower mounting holes. Moved to the midpoints, the nearest approach to
-//  anything is 13.07.
+//  A 2 x 2 ON THE FLANGE'S CORNERS, AND THE EDGE MIDPOINTS IT REPLACES WERE
+//  THREE QUARTERS AIR. The midpoints were drawn as cowl_xy() +/- (window/2 +
+//  flange/2) on each axis and three of the four had no material to live in.
+//  MEASURED off export/stl/carrier.stl, every horizontal facet of the -1.350
+//  DOWN plane that covers each declared axis:
+//      (-138.012, +29.5645)  a pocket, but ERODED to 10.3160 of its 12.5574
+//                            end face by the display pocket's left wall
+//      ( -42.122, +29.5645)  no facet: the analogue trunk at exit_x crosses it,
+//                            floor -2.000, so the bore opened into the wiring
+//                            plane -- the exact failure section 9b's insert
+//                            comment exists to forbid, 0.650 past it
+//      ( -90.067, +14.5680)  no facet: inside disp_pocket_cut(), where the
+//                            floor is 3.175 and a 5.000 pocket punches a
+//                            O4.000 THROUGH-HOLE in the display's seating floor
+//      ( -90.067, +44.5610)  no facet, and NOT for that reason: it is 0.1065
+//                            inside disp_hdr_cut()'s THROUGH slot
+//                            (y +44.4545..+52.0745), so there is no floor there
+//                            at any depth. Ray-cast at x -90.067: solid
+//                            [-6.350,-3.175] at y +42.000, NOTHING from y
+//                            +43.000 to +52.000, solid again at +53.000.
+//  Their four end faces together measured 10.3160 + 3.2022 + 0.4016 + 0.0000 =
+//  13.9198 mm2 of a nominal 4 x 12.5574 = 50.2296. One sound thread of four.
+//
+//  WHY NOT JUST MOVE THE FOUR POINTS. A depth map of the underside taken off
+//  the exported mesh -- the solid interval that starts at the bed face, per
+//  0.25 mm cell, then eroded by the bore's own radius -- is BIMODAL: the floor
+//  under this cowl is 0.000, 2.645, 3.175, 4.350, 6.350, 6.980, 9.449, 11.531,
+//  14.031 or 15.875 thick and NOTHING in between. There is no cell at all
+//  between 4.350 and 6.350, so a 5.000 insert pocket is in the full 6.350 floor
+//  or it is nowhere, and "nudge it clear" buys exactly zero. With the bore's
+//  2.000 and the house 1.600 that leaves two x bands under this cowl,
+//  x <= -140.550 and x >= -36.810, and the cowl's own edge cannot reach either:
+//  to put a O2.900 hole 3.050 inside the flange at x -140.550 the flange has to
+//  stand at -143.600, and back_screw_pts()[4] and [5] carry a O6.000 DIN 125
+//  washer (section 6b) whose +x edge is at -141.780. Growing the flange until
+//  it swallows them instead needs cowl_flange() >= 11.578, and the foot at
+//  back_screw_pts()[3] stands at y +53.408..+87.697 [MEASURED off
+//  export/stl/foot.stl], so the flange may not pass 10.657 before the deck
+//  stands on its own battery cover. Closed by 0.921 mm. FOUR INSERTS AT FOUR
+//  EDGE MIDPOINTS, OR AT FOUR CORNERS, OR ANYWHERE ELSE UNDER THIS COWL, DO
+//  NOT EXIST.
+//
+//  SO THE THREAD GOT SHALLOWER INSTEAD OF MOVING, which is section 6's
+//  nut_m25 family: a 2.200 nut pocket's ceiling is -4.150, under the display
+//  pocket's floor and under every channel's, so the floor's thickness stops
+//  being a constraint and the points go where the OTHER constraints want them.
+//  77 x grid and 25 x grid, symmetric about both of the window's own axes,
+//  where the edge midpoints were on the grid in neither axis (47.945, 14.9965).
+//  [DERIVED, every margin MEASURED off the export]
+//      land in the cowl's flange      4.860 in x, 4.9315 in y   (want 3.050)
+//      hex to the 18650 window        3.6791  -- the hex clears the window's
+//                                     CORNER diagonally, not an edge
+//      hex to back_screw_pts()[5]'s
+//        own insert bore              1.7993  -- the tightest, and it is taken
+//                                     on the across-corners, so the hexagon's
+//                                     print phase cannot spend it
+//      hex to the display's O2.900
+//        through-bores                3.0056 and 3.0023
+//      cover over the pocket          0.975 where it is under the display
+//                                     pocket, 2.150 under a channel, 4.150
+//                                     elsewhere. It carries nothing: the screw
+//                                     pulls the nut toward the panel, away
+//                                     from it.
+//
+//  AND THE REFUTATION THAT USED TO BE HERE WAS STALE BY A FACTOR OF 18. It
+//  read "on the corners the two lower screws land 5.306 from the display's own
+//  O5.500 screw-head clearance holes, which leaves a 1.104 mm web". Those two
+//  figures were computed at cowl_flange() = 6.350 -- the value the same
+//  paragraph said the checker REFUSED. At the live 7.620 the corner is
+//  (-42.122, +14.568), the nearest head hole is (-47.315, +17.9125), the centre
+//  distance is sqrt(5.193^2 + 3.3445^2) = 6.1768 and the web is
+//  6.1768 - 1.450 - 2.750 = 1.9768. So the corner layout was refused by 0.0232
+//  and not by 0.896, which nobody could have known from the number as written.
+//  The 2 x 2 below is NOT that layout: it is on the flange's corners, 4.860 and
+//  4.9315 further out, and its own web to the same head hole is 2.0496.
+//  The "nearest approach to anything is 13.07" that closed the old paragraph is
+//  not reproducible from any artefact in this repository and is not carried
+//  forward; check_cad.py measures the panel's narrowest contour pair every run.
+function cowl_screw_dx() = 48.895;      // [DERIVED] 77 x grid
+function cowl_screw_dy() = 15.875;      // [DERIVED] 25 x grid = 0.625 in
 function cowl_screw_pts() =
-    [[cowl_xy()[0] + cowl_window()[0]/2 + cowl_flange()/2, cowl_xy()[1]],
-     [cowl_xy()[0] - cowl_window()[0]/2 - cowl_flange()/2, cowl_xy()[1]],
-     [cowl_xy()[0], cowl_xy()[1] + cowl_window()[1]/2 + cowl_flange()/2],
-     [cowl_xy()[0], cowl_xy()[1] - cowl_window()[1]/2 - cowl_flange()/2]];
+    [for (sx = [-1, 1], sy = [-1, 1])
+        [cowl_xy()[0] + sx * cowl_screw_dx(),
+         cowl_xy()[1] + sy * cowl_screw_dy()]];
 
 //  WHERE THE FOUR FEET GO. A FUNCTION FOR THE SAME REASON AS EVERYTHING ELSE
 //  IN THIS SECTION: it reads slab_screw_pts() and back_screw_kbd out of

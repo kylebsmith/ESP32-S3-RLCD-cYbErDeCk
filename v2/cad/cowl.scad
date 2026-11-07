@@ -12,16 +12,23 @@
 //  deck's own underside. v1 built a cowl around exactly this fact and so does
 //  this one; it is the only part of the whole object that is not flat.
 //
-//  It is held by the SAME four screws that pass up through the back panel into
-//  inserts in the carrier's floor, so cowl, panel and carrier are one fastener
-//  stack and nothing is bonded. Take four screws out and the holder is
-//  reachable without disturbing anything else.
+//  It is held by four M2.5 x 6 passing up through the back panel into four
+//  captive nuts sunk in the carrier's floor, so cowl, panel and carrier are one
+//  fastener stack and nothing is bonded. Take four screws out and the holder is
+//  reachable without disturbing anything else. THEY USED TO GO INTO INSERTS AND
+//  THREE OF THE FOUR INSERTS DID NOT EXIST; parameters.scad 12's
+//  cowl_screw_pts() carries the four measurements and the depth map that says
+//  why no four-insert pattern can exist under this cowl at all.
 //
 //  PRINT IT CLOSED SIDE DOWN, floor on the bed, open side up. Inverted it
 //  would have to bridge the cavity's floor -- 1.500 over an 88.270 x 22.373
 //  opening -- which is far too wide. This way the only upward-facing surfaces
-//  are the cavity's own floor and the rim that lands on the panel, there is
-//  no overhang anywhere, and the face on the bed is the one nobody sees.
+//  are the cavity's own floor, the rim that lands on the panel, and the four
+//  head counterbores' ceilings, and the face on the bed is the one nobody sees.
+//  THAT THIRD ITEM IS NEW AND THIS HEADER USED TO SAY "no overhang anywhere":
+//  each counterbore is a O4.900 void opening at the bed face, so 1.280 of PETG
+//  bridges 4.900 above it. 4.900 is a routine bridge and the alternative was
+//  the deck standing on four screw heads -- see cw_head_cb.
 // ===========================================================================
 
 include <parameters.scad>
@@ -43,6 +50,28 @@ cw_outer = [cowl_window()[0] + 2*(cowl_wall() + cowl_flange()),
             cowl_window()[1] + 2*(cowl_wall() + cowl_flange())];
 cw_cav   = [cowl_window()[0] + 2*cowl_clear(),
             cowl_window()[1] + 2*cowl_clear()];
+
+//  THE HEAD HAS TO BE BURIED, AND THE DECK USED TO STAND ON IT. This file cut
+//  four plain O2.900 holes with no counterbore, so an ISO 4762 M2.5 cap bore on
+//  the cowl's OUTER face -- the lowest surface on the whole deck. MEASURED and
+//  derived from the z stack: deck_bot_z -9.525 less cowl_h() 3.820 puts that
+//  face at -13.345, screw_m25_head_h 2.500 puts the head's underside at
+//  -15.845, and the desk is deck_bot_z - foot_h = -15.240. The heads stood
+//  0.605 BELOW the plane the four feet stand on, in the middle of a 304.600 mm
+//  span. foot_h_min = cowl_h() + 1.270 is the rule that is supposed to prevent
+//  exactly this and it reasons about the cowl's BODY only; check_cad.py reports
+//  it as a tagged datum it cannot evaluate, because the right-hand side calls a
+//  function, so nothing gated it either.
+//    4 x grid sinks the head 0.040 PROUD OF NOTHING -- it is 0.040 recessed --
+//  so the cowl's own face governs the desk clearance again at the full
+//  foot_h - cowl_h() = 1.895, and foot_h_min's derivation becomes true of the
+//  part instead of nearly true. It leaves 1.280 of PETG over the head: a
+//  12.2522 mm2 annulus in pure COMPRESSION between the head and the panel, not
+//  a wall and not a floor spanning a cavity, which is what cowl_floor()'s 1.500
+//  is justified as. The shallowest counterbore that still satisfies the 1.270
+//  rule is 1.875; 2.540 was taken instead because it costs 0.595 of a membrane
+//  that carries nothing and buys the whole 0.625 of air back.
+cw_head_cb = 2.540;     // [DESIGN] 4 x grid, 0.040 over screw_m25_head_h
 
 module cowl_3d() {
     difference() {
@@ -72,10 +101,42 @@ module cowl_3d() {
         translate([0, 0, cowl_floor()])
             linear_extrude(cowl_h())
                 rrect(cw_cav[0], cw_cav[1], corner_r);
-        //  four clearance holes, on the same centres as the carrier's inserts
+        //  four clearance holes, on the same centres as the carrier's nut
+        //  pockets, each with its head SUNK -- see cw_head_cb
         for (p = cowl_screw_pts())
-            translate([p[0] - cowl_xy()[0], p[1] - cowl_xy()[1], -1])
+            translate([p[0] - cowl_xy()[0], p[1] - cowl_xy()[1], -1]) {
                 cylinder(d = screw_m25_clear_d, h = cowl_h() + 2);
+                cylinder(d = screw_m25_head_d + 0.400, h = cw_head_cb + 1);
+            }
+        //  AND THE TWO WASHER SCALLOPS. Not a choice and not decoration:
+        //  back_screw_pts()[4] and [5] carry a O6.000 DIN 125 washer under a
+        //  O4.500 cap head, and the head's bearing face and this part's rim
+        //  land on the SAME face -- the panel's underside at z -9.525.
+        //  MEASURED off this file's own earlier export, the washers overlapped
+        //  that rim by 6.1013 and 8.4883 mm2 and 2.0420 mm in x, the bare heads
+        //  by 2.7415 and 3.7751, and even the bare O2.900 holes by 0.4908 and
+        //  0.7424: the deck as drawn could not be closed.
+        //    WHY A SCALLOP AND NOT A SMALLER FLANGE. parameters.scad 12's
+        //  cowl_flange() has the brackets. Retreating clear of the washers caps
+        //  the flange at 5.078 and then no hole on it reaches sound floor;
+        //  growing past them wants 11.578 and the foot at back_screw_pts()[3]
+        //  caps it at 10.657. Both doors are shut, so the flange stays 7.620
+        //  and gives way only where the washer actually is.
+        //    IT CROSSES THE EDGE AND DOES NOT KISS IT, which is this project's
+        //  CGAL lesson: the centre stands 0.958 OUTSIDE the rim and the radius
+        //  is 3.500, so the circle cuts 2.542 in. The bounding box does not
+        //  move -- the rim still reaches x -53.755 either side of the bite --
+        //  which is why export.py's plan transcription still measures
+        //  window + 2*(wall + flange).
+        //    WHICH POINTS, DERIVED AND NOT TYPED: any back_screw_pts() whose
+        //  relief envelope reaches this plan at all. The test is the plan's
+        //  rectangle grown by the relief's radius, and it selects exactly two
+        //  -- the next nearest misses in y by 26.842.
+        for (p = back_screw_pts())
+            if (abs(p[0] - cowl_xy()[0]) < cw_outer[0]/2 + cowl_washer_relief_d()/2
+             && abs(p[1] - cowl_xy()[1]) < cw_outer[1]/2 + cowl_washer_relief_d()/2)
+                translate([p[0] - cowl_xy()[0], p[1] - cowl_xy()[1], -1])
+                    cylinder(d = cowl_washer_relief_d(), h = cowl_h() + 2);
     }
 }
 

@@ -166,11 +166,42 @@ sock_x    = [-8.514,  6.587];  // [cad] relative to the key centre, this frame
 sock_y    = [-7.950,  6.041];  // [cad] note the sign flip from model Z
 sock_z    = -2.091;            // [derived] model y -5.791 + 3.700
 
-// Keycap, LSA. 18.731 square for 1u on a 19.000 pitch, so 0.269 between caps.
-cap_gap   =  0.269;   // [derived] 19.000 - 18.731
+// Keycap, LSA. 18.2000 square for 1u on a 19.000 pitch, so 0.800 between caps.
+// THIS FILE CARRIED 18.731 AND IT IS A BOUNDING-BOX ARTEFACT, not a cap. It is
+// manifest.json's figure, and that manifest pads every face of this very shape
+// by a uniform +0.2657: it records the 1u cap at [-9.3657, 2.7343, 9.6343,
+// 9.3657, 9.841, 28.3657] where k9pro-keycap-1u-one.stl's own mesh is EXACTLY
+// x -9.1000..+9.1000, y 3.0000..9.5753, z 9.9000..28.1000 -- 18.2000 square.
+// The control is the frame: the same manifest records it as 287.3004 x 97.8004
+// where k9pro-topcase-switchplate.stl measures EXACTLY 287.000 x 97.500, both
+// [CAD-EXACT] and [VENDOR]. So the pad is real and it is PER SHAPE (0.5314 on
+// the cap's span, 0.3004 on the frame's), which is why parameters.scad 965-986
+// settles the cap at 18.2000 [CAD-EXACT] off the B-rep with AddOptimal and puts
+// the inter-cap gap at 0.800. At 0.269 every 1u cap in the render spanned
+// 18.7310 -- 0.531 too wide, with 0.269 of air between neighbours instead of
+// 0.800, 61 times over.
+cap_gap   =  0.800;   // [cad-exact] 19.000 - 18.200, parameters.scad 965-986
 cap_bot_z =  6.643;   // [cad] model y +2.943 + 3.700
 cap_top_z = 13.542;   // [cad] model y +9.842 + 3.700
-// Measured spacebar plan is 118.511; the formula gives 118.481. 0.030 apart.
+// THE SPACEBAR LINE, AND IT IS FLAGGED RATHER THAN RECONCILED. It read
+// "Measured spacebar plan is 118.511; the formula gives 118.481. 0.030 apart."
+// The formula is 6.25 x 19.000 - cap_gap, which is identically
+// 5.25 x 19.000 + cap_width, so at 18.200 it gives 117.950 and the residual
+// against 118.511 is 0.561 and not 0.030.
+//   WHAT WOULD RESCUE THE 0.030, exactly: the residual is measured - 99.750 -
+// cap_width, so a bbox pad present in BOTH terms cancels and the residual is
+// invariant to it. If 118.511 is itself a manifest-convention figure carrying
+// this cap family's own +0.5314 on the span, its true plan is 117.9796 and the
+// residual is 0.0296 -- the line's own 0.030, arriving back.
+//   IT CANNOT BE DECIDED HERE AND IT IS NOT GUESSED. 118.511 appears in NONE of
+// the extraction's seven files -- manifest.json, detail.json, measured.json,
+// parts.json, tree.json, cylinders.json, wires.json (the only near match is
+// 118.525, a PCB wire's bbox) -- and the extraction carries no 6.25u cap solid
+// to measure, so its provenance is unrecorded and the pad is per shape and so
+// not transferable from the 1u cap. CLOSES BY isolating the 6.25u cap out of
+// k9pro-stripped-assembly.stl (617 solids; union-find over faces sharing a
+// vertex, which check_cad.mesh_bodies already does) and taking its plan: a mesh
+// bbox carries no pad, so that one number decides between 117.950 and 118.511.
 
 // ====================================================== bosses and the screws
 
