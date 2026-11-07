@@ -1,0 +1,14 @@
+# The repository root .gitignore carries a blanket
+#
+#     *.html
+#     !docs/**/*.html
+#
+# added to stop scraped research pages being swept into a commit. It also
+# excludes THIS TOOL'S OWN PAGE, which is the file Playwright loads and
+# without which the renderer does not run at all. A deeper .gitignore wins, so
+# re-include it here. (The rule that a re-include cannot work applies to files
+# under an excluded DIRECTORY; `*.html` excludes files, so this is allowed.)
+#
+# This was not theoretical: commit b9608f2 committed v2/tools/render/ without
+# index.html for exactly this reason.
+!index.html

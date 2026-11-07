@@ -203,6 +203,32 @@ def _(c):
     return c.validate()
 
 
+@case("ONE VERTEX of the outer profile dragged 0.300 mm: the segment COUNT is "
+      "untouched, and |area| and centroid are integral quantities that barely "
+      "move, so only a vertex-by-vertex comparison against the RAW export can "
+      "see it",
+      "the shipped DXF's geometry is not the raw export's")
+def _(c):
+    # THE HOLE THIS CASE EXISTS FOR. Before the conservation check in
+    # validate_dxf() section 5b, every other check here passed on this file:
+    # by bisection, a vertex of the slab's outline could be dragged 6.782 mm
+    # before the |area| comparison in handedness() noticed (0.300 mm moves the
+    # area by 4.4e-08 relative against TOL_AREA_REL 1e-06, and the centroid by
+    # 7.9e-06 mm against TOL_MAP 1e-03). A 6.782 mm notch in a 12.700 mm
+    # acrylic perimeter shipped silently.   [MEASURED 2026-11-07]
+    import ezdxf
+    d = ezdxf.readfile(c.dxf)
+    for e in d.modelspace():
+        if e.dxftype() == "LWPOLYLINE" and e.dxf.layer == "CUT_OUTER":
+            pts = [(p[0], p[1]) for p in e.get_points()]
+            pts[0] = (pts[0][0] + 0.300, pts[0][1])
+            e.set_points(pts, format="xy")
+            e.close(True)
+            break
+    d.saveas(c.dxf)
+    return c.validate()
+
+
 @case("a contour's closed flag cleared (70 -> 0): an OPEN path",
       "is not flagged closed")
 def _(c):
@@ -419,6 +445,18 @@ def _(c):
 # ---------------------------------------------------------------------------
 #  8. the SVG's own guarantees -- fabrication.md 4.2 items 1 and 3
 # ---------------------------------------------------------------------------
+@case("one subpath's closepath (z) removed from the SVG: fabrication.md 4.2 "
+      "item 5's second half, which was recorded as a fact and never asserted",
+      "carry no closepath")
+def _(c):
+    txt = open(c.svg, encoding="utf-8").read()
+    # the last ' z' that belongs to the PART's path, not the fiducial's
+    i = txt.rfind(" z", 0, txt.find('id="' + dp.FID_SVG_ID + '"'))
+    assert i > 0, "no part closepath found"
+    open(c.svg, "w", encoding="utf-8").write(txt[:i] + txt[i + 2:])
+    return c.validate()
+
+
 @case("the SVG's fill put back to lightgray: an accidental raster engrave",
       "that is how you order a raster engrave by accident")
 def _(c):

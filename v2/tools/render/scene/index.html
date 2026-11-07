@@ -1,0 +1,67 @@
+<!doctype html>
+<!--
+  v2/tools/render/scene/index.html
+  The page Playwright loads. It contains no geometry and no dimension: the
+  scene is built entirely from /manifest.json, which render.py writes out of
+  v2/cad/parameters.scad. See scene.js.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>cYbErDeCk v2 assembly render</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #000; overflow: hidden; }
+  canvas { display: block; }
+  /* The annotation layer. It is DOM, not geometry, so it cannot be mistaken
+     for part of the model, and it is screenshotted with the canvas. */
+  #ann {
+    position: fixed; inset: 0; pointer-events: none;
+    font: 12px/1.45 ui-monospace, "DejaVu Sans Mono", monospace;
+    color: #e8e8ea;
+  }
+  /* Every text block gets its own scrim. Without one the legend sat on top
+     of the deck and was unreadable over the keycaps -- and a caption you
+     cannot read is worse than no caption, because the provenance it carries
+     is the whole reason the annotation exists. */
+  #ann .cap, #ann .pad, #ann .legend {
+    background: rgba(8, 9, 11, 0.82);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 3px;
+    padding: 9px 13px;
+    backdrop-filter: blur(3px);
+  }
+  #ann .pad { position: absolute; left: 22px; bottom: 20px; max-width: 52ch; }
+  #ann .cap { position: absolute; left: 22px; top: 18px;
+              font-size: 15px; letter-spacing: .06em; color: #fff; }
+  #ann .sub { font-size: 11px; color: #9aa0a6; letter-spacing: .02em;
+              margin-top: 3px; }
+  #ann h4 { margin: 0 0 3px; font-size: 11px; letter-spacing: .1em;
+            text-transform: uppercase; color: #9aa0a6; font-weight: 600; }
+  #ann ul { margin: 0 0 9px; padding: 0; list-style: none; }
+  #ann ul:last-child { margin-bottom: 0; }
+  #ann li { white-space: pre; }
+  #ann .k { display: inline-block; width: 1.1ch; margin-right: 6px; }
+  #ann .exported  { color: #7fd6a3; }
+  #ann .reference { color: #8ab6e8; }
+  #ann .vendor    { color: #d6c07f; }
+  #ann .absent    { color: #e8897f; }
+  #ann .legend { position: absolute; right: 22px; bottom: 20px;
+                 text-align: left; max-width: 46ch; }
+</style>
+</head>
+<body>
+<div id="ann" hidden></div>
+<!--
+  three.js's addons (STLLoader, RoomEnvironment) import from the bare
+  specifier "three", which a browser cannot resolve on its own. The import map
+  points it at the vendored build. Without this the page fails with
+  "Failed to resolve module specifier" before any of scene.js runs, so
+  window.__deck is never assigned and shoot.js times out with nothing to
+  report -- which is exactly how it failed the first time.
+-->
+<script type="importmap">
+{ "imports": { "three": "/scene/vendor/three.module.js" } }
+</script>
+<script type="module" src="/scene/scene.js"></script>
+</body>
+</html>

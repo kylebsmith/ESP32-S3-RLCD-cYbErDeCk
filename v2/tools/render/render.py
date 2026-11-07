@@ -68,6 +68,11 @@ CAD = os.path.join(ROOT, "cad")
 PARTS_SCAD = os.path.join(CAD, "parts")
 EXPORT_STL = os.path.join(ROOT, "export", "stl")
 OUT_DEFAULT = os.path.join(ROOT, "export", "render")
+#  The reference bodies depend only on v2/cad/parts/*.scad and bodies.scad,
+#  never on where the PNGs go, so they are cached in ONE place. Without
+#  this, check_render.py --prove rebuilds all 18 of them into a fresh
+#  scratch directory -- 105 s of pure waste before the first break.
+BODIES_CACHE = os.path.join(ROOT, "export", "render", ".bodies")
 SCENE = os.path.join(HERE, "scene")
 VENDOR_JS = os.path.join(SCENE, "vendor")
 
@@ -321,8 +326,17 @@ MATERIALS = {
         "roughness": 0.02,                         # [ARTISTIC] as-cast faces
         "metalness": 0.0,                          # [PHYSICAL] a dielectric
         "clearcoat": 0.0,                          # [PHYSICAL] no coating
-        "specularIntensity": 1.0,
-        "envMapIntensity": 1.0, "side": "front",
+        "specularIntensity": 1.0,                  # [PHYSICAL] F0 from the IOR
+        #  THE ONE PLACE THIS RENDER KNOWINGLY LEAVES PHYSICS. At 1.0 the
+        #  studio IBL's broad soft source reflects off the whole top face and
+        #  veils the interior -- which is what a real softbox over a real
+        #  polished sheet does, and it is also the thing the brief most wants
+        #  not to happen ("you should be able to SEE the wiring"). 0.45 keeps
+        #  the Fresnel edge reflection, which is where the 12.700 mm actually
+        #  reads, and takes the sheen off the middle. A photographer solves
+        #  this with a polarising filter; this is the render's version of one.
+        "envMapIntensity": 0.45,                   # [ARTISTIC]
+        "side": "front",
     },
     #  The back panel. acrylic.md 2.5 recommends the opaque plate; this is a
     #  dark cast sheet, so it is the same substrate without the transmission.
@@ -416,6 +430,27 @@ VIEWS = {
                            projection="orthographic", ortho_w=330.0,
                            explode=0, hide=["acrylic"], annotate=False,
                            caption=""),
+    #  One mask per fabricated part, each showing that part ALONE. C1 needs
+    #  the part's own silhouette, and C2's through-hole count is only that
+    #  part's holes if nothing is behind it: the slab and the back panel have
+    #  the same 304.600 x 190.375 outline, so a combined mask would hide
+    #  exactly the mix-up C2 exists to catch.
+    "mask_slab": dict(azimuth=0, elevation=90, projection="orthographic",
+                      ortho_w=330.0, explode=0, materials="mask", dpr=1,
+                      only=["slab"], annotate=False, caption=""),
+    "mask_backpanel": dict(azimuth=0, elevation=90, projection="orthographic",
+                           ortho_w=330.0, explode=0, materials="mask", dpr=1,
+                           only=["backpanel"], annotate=False, caption=""),
+    "mask_carrier": dict(azimuth=0, elevation=90, projection="orthographic",
+                         ortho_w=330.0, explode=0, materials="mask", dpr=1,
+                         only=["carrier"], annotate=False, caption=""),
+    #  The three fabricated layers in elevation, and nothing else: the
+    #  encoder's shaft tip stands 0.745 above the acrylic's top face, so a
+    #  full-assembly elevation would measure the shaft and not the stack.
+    "mask_elev_deck": dict(azimuth=0, elevation=0, projection="orthographic",
+                           ortho_w=330.0, explode=0, materials="mask", dpr=1,
+                           only=["acrylic", "carrier", "back"],
+                           annotate=False, caption=""),
     #  the free one. --azimuth/--elevation/--explode/--annotate steer THIS
     #  view and only this view, so a flag on the command line can never move
     #  the camera of a measurement view out from under check_render.py.
@@ -423,7 +458,68 @@ VIEWS = {
                   explode=0, annotate=False, caption="cYbErDeCk v2"),
 }
 DEFAULT_VIEWS = ["hero", "plan", "exploded"]
-CHECK_VIEWS = ["mask_plan", "mask_elev", "plan", "plan_noacrylic"]
+CHECK_VIEWS = ["mask_slab", "mask_backpanel", "mask_carrier",
+               "mask_elev_deck", "plan", "plan_noacrylic"]
+
+
+# ===========================================================================
+#  7b. THE DELIBERATE BREAKS
+# ===========================================================================
+#  A check nobody has watched fail is not a check, so each check in
+#  check_render.py has a switch here that breaks the thing it measures. These
+#  produce a KNOWINGLY WRONG render; `broken` goes into the manifest and into
+#  every sidecar so a broken PNG can never be mistaken for a good one, and
+#  check_render.py --prove is the only thing that is supposed to use them.
+BREAK_MODES = {
+    "scale": "every body's matrix scaled by 1.02: the scene is 2 % larger "
+             "than the meshes it was built from",
+    "swap":  "the slab and the back panel staged into each other's "
+             "filenames: the same outline, a different hole count",
+    "z":     "the slab lifted 6.000 mm, opening a gap between the carrier's "
+             "rim and the acrylic",
+    "transmission": "the acrylic's transmission set to 0: the standard "
+                    "clear-acrylic render lie",
+    "blank": "every body hidden: what a lost WebGL context looks like",
+    "stl":   "handled by check_render.py, which mutates a COPY of the "
+             "exported mesh and points the checker at it",
+}
+
+
+def apply_break(mode, bodies, mats):
+    """Break the render on purpose. Returns a note for the manifest."""
+    if not mode or mode == "stl":
+        return None
+    if mode not in BREAK_MODES:
+        die(f"unknown --break {mode!r}. known: {', '.join(BREAK_MODES)}")
+    note = f"{mode}: {BREAK_MODES[mode]}"
+    if mode == "scale":
+        for b in bodies:
+            M = list(b["matrix"])
+            for i in (0, 1, 2, 4, 5, 6, 8, 9, 10):
+                M[i] *= 1.02
+            b["matrix"] = M
+    elif mode == "z":
+        for b in bodies:
+            if b["id"] == "slab":
+                M = list(b["matrix"])
+                M[14] += 6.0
+                b["matrix"] = M
+    elif mode == "swap":
+        a = next((b for b in bodies if b["id"] == "slab"), None)
+        c = next((b for b in bodies if b["id"] == "backpanel"), None)
+        if a and c:
+            a["stl"], c["stl"] = c["stl"], a["stl"]
+            a["sha256"], c["sha256"] = c["sha256"], a["sha256"]
+            #  the geometry hash has to follow the mesh too, or the swap
+            #  would be caught by C6 instead of by C2 and prove nothing
+            #  about C2.
+            a["geom_sha"], c["geom_sha"] = c["geom_sha"], a["geom_sha"]
+    elif mode == "transmission":
+        mats["acrylic_clear"]["transmission"] = 0.0
+    elif mode == "blank":
+        for b in bodies:
+            b["layer"] = "__hidden__"
+    return note
 
 
 # ===========================================================================
@@ -453,7 +549,7 @@ def newer(a, bs):
     return any(os.path.exists(b) and os.path.getmtime(b) > ta for b in bs)
 
 
-def export_deck_parts(rows, do_export):
+def export_deck_parts(rows, do_export, stl_dir=None):
     """Make sure each fabricated part's STL exists and is not stale.
 
     The STL is produced by v2/tools/export.py, which is the fabricator's
@@ -461,6 +557,20 @@ def export_deck_parts(rows, do_export):
     source it is REGENERATED rather than rendered, because a render of a stale
     export is the single most expensive lie this tool could tell.
     """
+    #  A FROZEN SNAPSHOT is explicitly not live, so it is not checked for
+    #  staleness: --stl-dir says "render exactly these meshes". It exists
+    #  because check_render.py --prove must be hermetic, and v2/export/stl is
+    #  a live directory that another author's export.py rewrites underneath it.
+    if stl_dir:
+        found = {}
+        for pid in (r[0] for r in rows):
+            p = os.path.join(stl_dir, f"{pid}.stl")
+            if os.path.exists(p):
+                found[pid] = p
+            else:
+                print(f"  ABSENT {pid:10s} not in the frozen {rel(stl_dir)}")
+        return found, [f"frozen snapshot: {rel(stl_dir)}"]
+
     deps = [os.path.join(CAD, "parameters.scad"),
             os.path.join(CAD, "lib", "util.scad")]
     srcof = {r[0]: os.path.join(CAD, r[1]) for r in rows}
@@ -482,21 +592,54 @@ def export_deck_parts(rows, do_export):
         if r.returncode != 0:
             die("export.py failed; the render would be of a stale part")
         print(f"  ok    export.py {dt:5.1f}s")
+    #  Re-check, because the answer matters: a render of a stale export is the
+    #  one thing this tool must never produce quietly.
+    #
+    #  parameters.scad is authored concurrently with this tool, so an export
+    #  that was fresh when it finished can be stale again seconds later. That
+    #  is not the same failure as "nobody ran export.py" and it must not be
+    #  treated as one: it gets ONE retry, and if a source is still moving the
+    #  render goes ahead with the staleness WRITTEN INTO EVERY SIDECAR, so the
+    #  admission travels with the picture instead of only with the terminal.
+    stale_note = []
+    for attempt in (1, 2):
+        still = [p for p in found
+                 if os.path.exists(found[p])
+                 and newer(found[p], [srcof[p]] + deps)]
+        if not still:
+            break
+        if not do_export:
+            die(f"{', '.join(still)}: the STL is older than its source and "
+                f"--no-export was given. Run v2/tools/export.py "
+                f"{' '.join(still)} first.")
+        if attempt == 1:
+            print(f"  retry  export.py {' '.join(still)} (a source moved "
+                  f"during the export)")
+            r, dt = run([sys.executable, os.path.join(TOOLS, "export.py")]
+                        + still, timeout=3600)
+            if r.returncode != 0:
+                die("export.py failed on the retry")
+            continue
+        for p in still:
+            why = [rel(d) for d in [srcof[p]] + deps
+                   if os.path.exists(d)
+                   and os.path.getmtime(d) > os.path.getmtime(found[p])]
+            age = max(os.path.getmtime(d) for d in why
+                      if os.path.exists(d)) - os.path.getmtime(found[p])
+            stale_note.append(
+                f"{p}.stl is {age:.0f} s older than {', '.join(why)} -- it "
+                f"was re-exported twice and the source kept moving")
+            print(f"  WARN  {stale_note[-1]}")
     for pid in list(found):
         if not os.path.exists(found[pid]):
             print(f"  ABSENT {pid:10s} no STL at {rel(found[pid])}")
             del found[pid]
-        elif newer(found[pid], [srcof[pid]] + deps):
-            die(f"{pid}.stl is older than {rel(srcof[pid])} and the export "
-                f"was suppressed. Run v2/tools/export.py {pid} first -- a "
-                f"render of a stale export is the one thing this tool must "
-                f"never produce.")
-    return found
+    return found, stale_note
 
 
 def export_ref_bodies(workdir, fn, do_build):
     """One openscad run per material group. Cached on source mtime."""
-    stldir = os.path.join(workdir, "stl")
+    stldir = BODIES_CACHE
     os.makedirs(stldir, exist_ok=True)
     bodies_scad = os.path.join(HERE, "bodies.scad")
     out = {}
@@ -609,6 +752,59 @@ def measure(stl):
                 bounds=[lo.tolist(), hi.tolist()])
 
 
+def geom_sha(stl):
+    """A hash of the GEOMETRY, invariant to how the file happens to be laid
+    out. Equal iff the two meshes are the same set of triangles.
+
+    WHY THIS EXISTS, AND IT IS NOT AN OPTIMISATION.
+    export.py's carrier is NOT byte-reproducible. Running it twice on an
+    unchanged v2/cad/carrier.scad produces two files of identical length and
+    different sha256, with identical geometry by every measure taken:
+    35868 faces, euler 35868, bounds and volume equal to 6 decimal places
+    [MEASURED 2026-11-07, three consecutive exports: deb5387abc6019a2,
+    70aac9aa02a7e1a0, 38c9d406e30bddfa]. OpenSCAD's CGAL tessellation does not
+    promise a triangle order and this build does not deliver one.
+
+    So a sha256 over the FILE is the wrong invariant for C6: it goes red on
+    every re-export whether or not the part changed, and a check that cries
+    wolf is a check that gets switched off. C6 keeps the byte hash as its fast
+    path -- equal bytes still prove equal geometry -- and falls back to this
+    when the bytes differ, so that only a real change in the part fails.
+
+    Canonicalisation: coordinates rounded to 6 dp (float32 STL round-trip slop
+    over this part is 2.44e-5, v2/docs/fabrication.md 4.7, so 6 dp is well
+    inside the noise floor); each triangle rotated to start at its
+    lexicographically smallest corner, which preserves winding; then the
+    triangles sorted. Two files describing the same solid hash the same.
+    """
+    import numpy as np
+    import trimesh
+    m = trimesh.load(stl, force="mesh", process=False)
+    t = np.round(np.asarray(m.vertices[m.faces], dtype=np.float64), 6) + 0.0
+    if len(t) == 0:
+        return hashlib.sha256(b"").hexdigest()[:16]
+
+    def less(p, q):
+        return ((p[:, 0] < q[:, 0])
+                | ((p[:, 0] == q[:, 0])
+                   & ((p[:, 1] < q[:, 1])
+                      | ((p[:, 1] == q[:, 1]) & (p[:, 2] < q[:, 2])))))
+
+    a, b, c = t[:, 0, :], t[:, 1, :], t[:, 2, :]
+    start = np.zeros(len(t), dtype=np.int64)
+    start = np.where(less(b, a), 1, start)
+    best = np.where((start == 1)[:, None], b, a)
+    start = np.where(less(c, best), 2, start)
+    rows = np.arange(len(t))
+    rot = np.empty_like(t)
+    for k in range(3):
+        rot[:, k, :] = t[rows, (start + k) % 3, :]
+    flat = np.ascontiguousarray(rot.reshape(len(t), 9))
+    flat = flat[np.lexsort(flat.T[::-1])]
+    return hashlib.sha256(
+        np.ascontiguousarray(flat).tobytes()).hexdigest()[:16]
+
+
 def mat4(t, rdeg):
     """T(t) . Rz . Ry . Rx, column-major, the order deck_params.scad declares."""
     rx, ry, rz = (math.radians(a) for a in rdeg)
@@ -640,7 +836,8 @@ def build_manifest(args, workdir):
     K, P = dump_params(workdir, want_carrier=os.path.exists(
         os.path.join(CAD, "carrier.scad")))
     K["carrier_h_calc"] = K["carrier_t"] + K["carrier_rim_h"]
-    deck = export_deck_parts(DECK_PARTS, not args.no_export)
+    deck, stale_note = export_deck_parts(DECK_PARTS,
+                                         not args.no_export, args.stl_dir)
     refs = export_ref_bodies(workdir, args.fn, not args.no_bodies)
     vend = prepare_vendor(workdir, K)
 
@@ -658,9 +855,32 @@ def build_manifest(args, workdir):
         g = measure(deck[pid])
         zmin = g["bounds"][0][2]
         if z0k is None:
-            #  carrier.scad places itself in the deck frame already; prove it
+            #  carrier.scad places itself in the deck frame already; prove it.
+            #  This USED to be the bare `tz = 0.0` with declared_z copied from
+            #  the measurement, which is a tautology: it agreed with itself
+            #  whatever the mesh did, and if carrier.scad's datum moved the
+            #  render would have followed it in silence. So state the datum
+            #  and measure it. carrier.scad's floor is
+            #      translate([0, 0, -carrier_t]) linear_extrude(carrier_t)
+            #  and its rim runs to carrier_rim_h, so the mesh must span
+            #  -carrier_t .. carrier_rim_h in the deck frame. Both names come
+            #  from the echo dump, so no literal is retyped here.
+            #  TOL is float32 STL round-trip slop: fabrication.md 4.7 measures
+            #  the worst case over this part at 2.44e-5 mm, and 0.001 is 40x
+            #  it [DERIVED].
+            TOL = 0.001
+            want_lo, want_hi = -K["carrier_t"], K["carrier_rim_h"]
+            zmax = g["bounds"][1][2]
+            if abs(zmin - want_lo) > TOL or abs(zmax - want_hi) > TOL:
+                die(f"carrier.stl does not sit in the deck frame: it spans "
+                    f"{zmin:.6f} .. {zmax:.6f}, but carrier.scad's datum "
+                    f"declares -carrier_t .. carrier_rim_h = "
+                    f"{want_lo:.6f} .. {want_hi:.6f} "
+                    f"(d {abs(zmin - want_lo):.6f} / {abs(zmax - want_hi):.6f}"
+                    f" > {TOL}). Placing it at tz = 0 would put the picture's "
+                    f"carrier somewhere the deck frame does not have one.")
             tz = 0.0
-            declared = [zmin, g["bounds"][1][2]]
+            declared = [want_lo, want_hi]
         else:
             tz = K[z0k] - zmin
             declared = [K[z0k], K[z0k] + K[tk]]
@@ -715,6 +935,12 @@ def build_manifest(args, workdir):
                 shutil.copy2(b["copy_from"], dst)
         b["sha256"] = hashlib.sha256(
             open(dst, "rb").read()).hexdigest()[:16]
+        #  the byte hash proves the file; the geometry hash proves the PART,
+        #  and only the second survives a non-reproducible exporter. See
+        #  geom_sha(). Only the fabricated parts are compared by C6, so only
+        #  they pay for the extra mesh load.
+        if b["provenance"] == "EXPORTED":
+            b["geom_sha"] = geom_sha(dst)
         b.pop("copy_from")
 
     #  scene bounds, in mm, from the placed meshes -- this is what the camera
@@ -745,13 +971,17 @@ def build_manifest(args, workdir):
         mats["acrylic_clear"]["transmission"] = args.acrylic_transmission
         mats["acrylic_clear"]["_overridden"] = "transmission"
 
+    broken = apply_break(getattr(args, "break_mode", None), bodies, mats)
+    if broken:
+        print(f"  BROKEN ON PURPOSE  {broken}")
+
     return dict(
         generated=time.strftime("%Y-%m-%dT%H:%M:%S"),
         three=THREE_VERSION, params=K, placements=P,
         bodies=bodies, absent=absent, materials=mats,
-        scene_bounds=[lo, hi],
+        scene_bounds=[lo, hi], broken=broken, stale_sources=stale_note,
         deck_z=[K["deck_bot_z"], K["deck_top_z"]],
-        layers=["back", "carrier", "components", "acrylic"],
+        layers=["back", "carrier", "components", "acrylic", "__hidden__"],
     )
 
 
@@ -767,6 +997,7 @@ def shoot(workdir, outdir, views, args):
         v["name"] = name
         v.setdefault("materials", "physical")
         v.setdefault("hide", [])
+        v.setdefault("only", None)
         v.setdefault("dpr", args.dpr)
         v["width"] = args.width
         v["height"] = args.height
@@ -822,6 +1053,19 @@ def main():
     ap.add_argument("--acrylic-transmission", type=float, default=None,
                     help="override the acrylic's transmission. This is the "
                          "break switch check_render.py --prove uses.")
+    ap.add_argument("--break", dest="break_mode", default=None,
+                    choices=sorted(BREAK_MODES),
+                    help="BREAK THE RENDER ON PURPOSE. Writes a knowingly "
+                         "wrong picture, with 'broken' set in the manifest "
+                         "and in every sidecar. check_render.py --prove uses "
+                         "this and nothing else should.")
+    ap.add_argument("--stl-dir", default=None,
+                    help="render a FROZEN snapshot of the fabricated meshes "
+                         "instead of the live v2/export/stl. Not checked for "
+                         "staleness, because a snapshot is not live. "
+                         "check_render.py --prove uses this so that another "
+                         "author re-running export.py cannot move the ground "
+                         "under a proof.")
     ap.add_argument("--no-export", action="store_true",
                     help="never invoke v2/tools/export.py; fail on a stale STL")
     ap.add_argument("--no-bodies", action="store_true",
@@ -853,6 +1097,10 @@ def main():
     print(f"  ABSENT    {len(man['absent']):3d}  "
           f"{', '.join(a['id'] for a in man['absent'])}")
     print(f"  scene     {man['scene_bounds'][0]} .. {man['scene_bounds'][1]}")
+    if man["broken"]:
+        print(f"  BROKEN    {man['broken']}")
+    for n in man["stale_sources"]:
+        print(f"  STALE     {n}")
     print()
     if args.list_bodies:
         return 0
@@ -864,10 +1112,12 @@ def main():
         side = os.path.join(args.out, f"{v['name']}.json")
         with open(side, "w") as fh:
             json.dump(dict(view=v, generated=man["generated"],
-                           three=man["three"],
+                           three=man["three"], broken=man["broken"],
+                           stale_sources=man["stale_sources"],
                            bodies=[{k: b[k] for k in
                                     ("id", "provenance", "material", "layer",
-                                     "source", "sha256")}
+                                     "source", "sha256", "geom_sha")
+                                    if k in b}
                                    for b in man["bodies"]],
                            absent=man["absent"],
                            materials=man["materials"],

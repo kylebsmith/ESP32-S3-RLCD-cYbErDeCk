@@ -91,7 +91,9 @@ WEB_ADVISORY_T = 1.0        # x material thickness. The web/gap guidance that
                             #   [3P fab-guides, via fabrication.md 1.4]
 WEB_HARD_FLOOR = 2.000      # mm = 10 x the 0.200 mm kerf. Below this a web is
                             #   not a web.  [REPO fabrication.md 4.1 item 11]
-WEB_BASELINE_TOL = 0.010    # mm. Baseline slack: the DXF's own resolution.
+WEB_BASELINE_TOL = 0.010    # mm. Baseline slack: 10x the DXF's own 0.001
+                            #   quantisation, same basis as TOL_DXF.
+                            #   [DERIVED]
 
 #  THE RECORDED WEB BASELINE, and it is a MEASUREMENT, not a target.
 #
@@ -122,7 +124,7 @@ WEB_BASELINE = {
                             # from the display's own screw-head clearance holes
                             # -- a 1.104 web -- and this check is what caught
                             # it.
-                            #   outline <-> the -x middle fastener SLOT
+                            #   18650 window <-> a cowl screw
 }
 
 PART_LAYERS = ("CUT_OUTER", "CUT_INNER")    # dxf_post.py's own convention; the
@@ -1040,12 +1042,33 @@ def check_part(part, env, export, fails, lines):
             fails.append(f"{part}: cut contour at {r.cx:+.3f},{r.cy:+.3f} "
                          f"({r.kind}, {r.w:.3f} x {r.h:.3f}) is in the DXF and "
                          f"matches no declared feature")
+    #  THE INVENTORY COUNTS WHAT IS THERE, NOT WHAT WAS ORDERED. Writing
+    #  "1 void ... 1 fader slot" as literals made this line report a part it
+    #  had not measured: with fader_slot() commented out the DXF loses a
+    #  contour, nothing is left over, and the line still read
+    #  "+ 1 fader slot = 14 contours, complete" beside a FAIL saying the fader
+    #  slot is absent. A vanished feature leaves no unaccounted contour, so
+    #  `loose` alone cannot see it -- and a spec that silently stops rendering
+    #  while the artefact still looks right is this repo's own named failure
+    #  (fabrication.md 4.1's preamble). Both halves are counted now.
     nb = sum(1 for r in rings if r.label.startswith("bore"))
+    nv = sum(1 for r in rings if r.label == "keyboard void")
+    nf = sum(1 for r in rings if r.label == "fader slot")
     inv = f"1 outline + {len(fast)} fasteners"
+    short = []
     if part == "slab":
-        inv += f" + 1 void + {nb} bores + 1 fader slot"
+        inv += f" + {nv} void + {nb} bores + {nf} fader slot"
+        for got, want, what in ((nv, 1, "void"), (nb, 6, "bores"),
+                                (nf, 1, "fader slot")):
+            if got != want:
+                short.append(f"{what} {got}/{want}")
+    verdict = []
+    if loose:
+        verdict.append(f"{len(loose)} UNACCOUNTED")
+    if short:
+        verdict.append("MISSING " + ", ".join(short))
     lines.append(f"    inventory: {inv} = {len(rings)} contours, "
-                 + ("complete" if not loose else f"{len(loose)} UNACCOUNTED"))
+                 + ("complete" if not verdict else "; ".join(verdict)))
 
     check_faceting(rings, nominals, fails, lines)
     t = env["acrylic_t"] if part == "slab" else env["back_t"]

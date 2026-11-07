@@ -202,7 +202,12 @@ SVG_HAIRLINE = 0.100  # [DESIGN] half the 0.200 mm kerf, so the stroke can
 SVG_MARGIN = 1.270    # [DESIGN] 2 x 0.635. Sheet padding around the union of
                       #   the part and the fiducial.
 
-TOL_JOIN = 1e-6       # mm. The rounding check_cad.stitch()'s own key() uses.
+TOL_JOIN = 1e-6       # mm. [CAD-EXACT] Not a choice: it is check_cad.stitch()'s
+                      #   own default (`def stitch(segs, tol=1e-6)`) and the
+                      #   rounding of its key() (`round(p[0], 6)`), and
+                      #   closed_rings() keys its conservation argument on the
+                      #   same _key(). A different value here would make the
+                      #   stitcher and the proof of closure disagree.
 TOL_MAP = 1e-3        # mm. OpenSCAD writes both files at 6 significant
                       #   figures from the same geometry, so matching
                       #   landmarks are bit-identical decimal strings and the
@@ -306,24 +311,46 @@ def closed_rings(segs):
     return rings, loose, note
 
 
+#  One coordinate pair of an SVG path's `d`. Shared by the two readers below
+#  so that they can never disagree about what counts as a subpath.
+_COORD_PAIR = (r'(-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?),'
+               r'(-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)')
+
+
+def _svg_chunks(path):
+    """Every subpath of every <path> in the SVG, as (points, chunk_text)."""
+    txt = open(path, encoding="utf-8").read()
+    out = []
+    for d in re.findall(r'<path[^>]*\bd="(.*?)"', txt, re.S):
+        for chunk in d.split("M"):
+            if not chunk.strip():
+                continue
+            pts = [(float(a), float(b))
+                   for a, b in re.findall(_COORD_PAIR, chunk)]
+            if len(pts) > 2:
+                out.append((pts, chunk))
+    return out
+
+
 def svg_subpaths(path):
     """Every subpath of every <path> in the SVG, as a ring of (x, y).
 
     Coordinates are returned exactly as the file states them -- i.e. in SVG's
     own Y-DOWN frame. Converting them is handedness()'s job, not this one's.
     """
-    txt = open(path, encoding="utf-8").read()
-    rings = []
-    for d in re.findall(r'<path[^>]*\bd="(.*?)"', txt, re.S):
-        for chunk in d.split("M"):
-            if not chunk.strip():
-                continue
-            pts = [(float(a), float(b)) for a, b in re.findall(
-                r'(-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?),'
-                r'(-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)', chunk)]
-            if len(pts) > 2:
-                rings.append(pts)
-    return rings
+    return [pts for pts, _ in _svg_chunks(path)]
+
+
+def svg_closures(path):
+    """(subpaths, how many carry an explicit closepath) -- fabrication.md 4.2
+    item 5, whose second half is "every subpath ends in z".
+
+    Counting "z" over the whole file would also count a closepath belonging to
+    a subpath svg_subpaths() discards, and would miss an uppercase "Z", so the
+    split here is the same one svg_subpaths() uses.
+    """
+    chunks = _svg_chunks(path)
+    return len(chunks), sum(1 for _, c in chunks if "z" in c or "Z" in c)
 
 
 # ---------------------------------------------------------------------------
@@ -698,6 +725,7 @@ def validate_dxf(dest, raw):
     drawn = 0
     fid_ring = None
     part_rings = []
+    loose_segs = []
     for e in msp:
         if e.dxftype() == "LWPOLYLINE":
             pts = [(p[0], p[1]) for p in e.get_points()]
@@ -714,11 +742,58 @@ def validate_dxf(dest, raw):
                 drawn += len(pts)
         elif e.dxftype() == "LINE":
             drawn += 1
+            loose_segs.append(((e.dxf.start.x, e.dxf.start.y),
+                               (e.dxf.end.x, e.dxf.end.y)))
     facts["segments_drawn"] = drawn
     if drawn != n_raw:
         fails.append(f"the part's contours account for {drawn} segments but "
                      f"OpenSCAD drew {n_raw} -- the rewrite changed the "
                      f"geometry")
+
+    # 5b. THE GEOMETRY ITSELF, VERTEX BY VERTEX, AGAINST THE RAW EXPORT.
+    #
+    #     The count above is only a count, and the only other comparison
+    #     between the two files is per-contour |area| and centroid -- both
+    #     INTEGRAL quantities that a single displaced vertex barely moves. On
+    #     the real slab a vertex of the outer profile could be dragged
+    #     6.782 mm before any other check here noticed: at that displacement
+    #     the contour's area moves 1.000e-06 relative (TOL_AREA_REL 1e-06)
+    #     and its centroid 1.799e-04 mm (TOL_MAP 1e-03), so the file was
+    #     ACCEPTED with a 6.782 mm notch in a 12.700 mm acrylic perimeter
+    #     [MEASURED 2026-11-07, by bisection on v2/export/dxf/slab.dxf].
+    #     So "lossless" is asserted here as what it claims to be: the shipped
+    #     file's segment multiset must EQUAL the raw export's, exactly.
+    #
+    #     This is the conservation argument closed_rings() already uses, but
+    #     asserted on what is ON DISK rather than inside the writer that
+    #     produced it -- the raw OpenSCAD export is the artefact being
+    #     measured against, so no parameter is consulted either side.
+    #     The fiducial is excluded: the rewrite invents it, so it is the one
+    #     contour that is deliberately NOT in the raw file.
+    want_segs = Counter(frozenset((_key(a), _key(b))) for a, b in raw_segs)
+    got_segs = Counter()
+    for ring in part_rings:
+        got_segs.update(
+            frozenset((_key(ring[i]), _key(ring[(i + 1) % len(ring)])))
+            for i in range(len(ring)))
+    got_segs.update(frozenset((_key(a), _key(b))) for a, b in loose_segs)
+    if got_segs != want_segs:
+        missing = want_segs - got_segs
+        extra = got_segs - want_segs
+        n_missing, n_extra = sum(missing.values()), sum(extra.values())
+        sample = ""
+        for src, label in ((extra, "invented"), (missing, "lost")):
+            if src:
+                pts = sorted(next(iter(src)))
+                sample = (f" e.g. {label} "
+                          + " -> ".join(f"{p[0]:.4f},{p[1]:.4f}" for p in pts))
+                break
+        facts["segment_conservation"] = (n_missing, n_extra)
+        fails.append(
+            f"the shipped DXF's geometry is not the raw export's: "
+            f"{n_extra} segment(s) appear that OpenSCAD did not draw and "
+            f"{n_missing} that it did are gone -- the rewrite moved "
+            f"material.{sample}")
     n_loose = facts["entities"].get("LINE", 0)
     facts["loose_lines"] = n_loose
     if n_loose:
@@ -880,10 +955,20 @@ def validate_pair(svg, part_rings, fid_ring):
                      "raster engrave by accident")
     n_sub = len(svg_rings)
     facts["svg_subpaths"] = n_sub
-    facts["svg_z"] = txt.count(" z")
     if n_sub != len(all_dxf):
         fails.append(f"{n_sub} SVG subpaths against {len(all_dxf)} DXF "
                      f"contours")
+    # fabrication.md 4.2 item 5's SECOND half: every subpath ends in z. An
+    # unclosed subpath is the SVG's version of the open contour item 5 of 4.1
+    # refuses in the DXF, and it is invisible on screen because a renderer
+    # closes the fill for you. This was recorded as a fact and never asserted,
+    # so a subpath with no closepath shipped silently [MEASURED 2026-11-07].
+    n_sub_z, n_closed = svg_closures(svg)
+    facts["svg_z"] = n_closed
+    if n_closed != n_sub_z:
+        fails.append(f"{n_sub_z - n_closed} of the SVG's {n_sub_z} subpaths "
+                     f"carry no closepath (z) -- an open contour in the file "
+                     f"the fabricator reads")
     return fails, facts
 
 

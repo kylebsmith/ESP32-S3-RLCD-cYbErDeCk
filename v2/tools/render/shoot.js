@@ -117,8 +117,18 @@ function serve() {
     await page.setViewportSize({ width: group[0].width,
                                  height: group[0].height });
     await page.goto(base, { waitUntil: 'load' });
-    await page.waitForFunction('window.__deck && window.__deck.ready',
-                               null, { timeout: 180000 });
+    try {
+      await page.waitForFunction('window.__deck && window.__deck.ready',
+                                 null, { timeout: 180000 });
+    } catch (e) {
+      //  Report what the page said BEFORE throwing. A module that fails to
+      //  resolve never runs scene.js at all, so window.__deck is never
+      //  assigned and the only evidence is in these two handlers.
+      console.log('THE SCENE NEVER BECAME READY. What the page said:');
+      if (errs.length === 0) console.log('  (nothing)');
+      errs.slice(0, 20).forEach(x => console.log('  ' + x));
+      throw e;
+    }
     const err = await page.evaluate('window.__deck.error');
     if (err) { console.log('SCENE ERROR\n' + err); bad++; break; }
     const loaded = await page.evaluate('window.__deck.loaded');

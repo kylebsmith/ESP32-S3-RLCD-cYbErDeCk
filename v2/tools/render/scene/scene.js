@@ -121,21 +121,48 @@ function buildLights(scene, renderer, radius) {
   pmrem.compileEquirectangularShader();
   const env = pmrem.fromScene(new RoomEnvironment(renderer), 0.04);
   scene.environment = env.texture;
-  scene.environmentIntensity = 1.0;
 
-  const key = new THREE.DirectionalLight(0xfff6ec, 2.1);
+  const key = new THREE.DirectionalLight(0xfff6ec, 1.45);
   key.position.set(-0.55, -0.70, 1.00).multiplyScalar(radius * 3);
   scene.add(key);
 
-  const fill = new THREE.DirectionalLight(0xdfeaff, 0.42);
+  const fill = new THREE.DirectionalLight(0xdfeaff, 0.30);
   fill.position.set(0.85, 0.35, 0.45).multiplyScalar(radius * 3);
   scene.add(fill);
 
-  const rim = new THREE.DirectionalLight(0xffffff, 1.25);
+  //  The rim exists for ONE feature: the slab's 12.700 mm edge. That edge is
+  //  the only place the thickness is directly visible and it is the brief's
+  //  whole reason for the half-inch sheet, so it gets a light of its own,
+  //  raked along the rear edge at a glancing angle.
+  const rim = new THREE.DirectionalLight(0xffffff, 1.05);
   rim.position.set(0.10, 1.00, 0.22).multiplyScalar(radius * 3);
   scene.add(rim);
 
-  return () => { env.dispose?.(); pmrem.dispose(); };
+  return { texture: env.texture,
+           dispose: () => { env.dispose?.(); pmrem.dispose(); } };
+}
+
+// ---------------------------------------------------------------------------
+//  THE BACKDROP. [ARTISTIC], and it is the only thing in the frame that is
+//  not geometry: a vertical gradient on a canvas, which is the studio sweep a
+//  product shot is taken against. It is a Texture on scene.background and NOT
+//  a mesh, deliberately -- a floor plane would be a body in the scene, and
+//  this tool's whole contract is that every body in the scene is a part.
+//  A measurement view replaces it with flat black.
+// ---------------------------------------------------------------------------
+function backdrop() {
+  const c = document.createElement('canvas');
+  c.width = 4; c.height = 256;
+  const g = c.getContext('2d').createLinearGradient(0, 0, 0, 256);
+  g.addColorStop(0.00, '#1d2126');
+  g.addColorStop(0.55, '#121519');
+  g.addColorStop(1.00, '#07080a');
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 4, 256);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
 }
 
 // ---------------------------------------------------------------------------
@@ -158,7 +185,12 @@ async function boot() {
   //  aluminium and a transmissive slab will clip in sRGB and the clipped
   //  highlight is what makes a render look like a screenshot.
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  //  [ARTISTIC] 0.62. At 1.05 the first run came out milky: the carrier is
+  //  specified as "matte black or very dark grey" (v2/parts/stack.md 5.6) and
+  //  it rendered mid-grey, which destroyed the contrast the brief is actually
+  //  asking for -- "a dark matte plane reads as a void, and the coloured
+  //  wires and nickel nuts become the only things with brightness".
+  renderer.toneMappingExposure = 0.78;
 
   const scene = new THREE.Scene();
 
@@ -169,7 +201,8 @@ async function boot() {
   state.radius = radius;
   state.centre = centre.toArray();
 
-  const disposeEnv = buildLights(scene, renderer, radius);
+  const ibl = buildLights(scene, renderer, radius);
+  const sweep = backdrop();
 
   const materials = {};
   for (const [name, spec] of Object.entries(manifest.materials)) {
@@ -181,6 +214,10 @@ async function boot() {
   const groups = {};
   for (const l of manifest.layers) {
     groups[l] = new THREE.Group();
+    //  The one reserved layer name. render.py's --break blank moves every
+    //  body into it, which is how the degeneracy check gets something to
+    //  fail against; nothing else ever uses it.
+    if (l === '__hidden__') groups[l].visible = false;
     scene.add(groups[l]);
   }
 
@@ -216,9 +253,15 @@ async function boot() {
     canvas.style.height = h + 'px';
 
     //  materials
-    const mask = view.materials === 'mask';
-    scene.background = new THREE.Color(mask ? 0x000000 : 0x101216);
-    scene.environmentIntensity = mask ? 0 : 1;
+      const mask = view.materials === 'mask';
+    scene.background = mask ? new THREE.Color(0x000000) : sweep;
+    //  A measurement view must be BINARY. MeshBasicMaterial is unlit, so the
+    //  environment is irrelevant to it, but ACES filmic would map pure white
+    //  to about 0.86 and put a gradient on an edge that has to be a step --
+    //  so tone mapping comes off and the IBL goes with it.
+    scene.environment = mask ? null : ibl.texture;
+    renderer.toneMapping = mask ? THREE.NoToneMapping
+                                : THREE.ACESFilmicToneMapping;
     for (const { body, mesh } of loaded) {
       mesh.material = mask ? MASK_MATERIAL
                            : (materials[body.material]
@@ -278,7 +321,7 @@ async function boot() {
     return state.camera;
   };
 
-  state.dispose = () => { disposeEnv(); renderer.dispose(); };
+  state.dispose = () => { ibl.dispose(); renderer.dispose(); };
   state.ready = true;
 }
 
