@@ -1015,7 +1015,11 @@ def check_part(part, env, export, fails, lines):
         rings, void, taken = label_slab(rings, env, fails)
         nominals.append(env["kbd_void_r"] * 2)
     else:
-        clear_d, slot_l = env["screw_m3_clear_back"], env["screw_slot_l_back"]
+        #  NOT screw_m3_clear_back. The back panel's screw is M2.5 -- it
+        #  threads into carrier.scad's M2.5 inserts -- and this line read the
+        #  M3 datum while backpanel.scad drilled the M3 hole.
+        #  parameters.scad 6b.
+        clear_d, slot_l = env["screw_m25_clear_d"], env["screw_slot_l_back"]
         pattern = back_screw_pts(env)
         rings = sorted(rings, key=lambda r: -r.area)
         rings[0].label = "outline"
@@ -1032,7 +1036,18 @@ def check_part(part, env, export, fails, lines):
         fails.append(f"{part} outline height {rings[0].h:.3f}, "
                      f"want {env['body_h']:.3f}")
 
-    fast = check_datum_and_slots(rings, pattern, int(env["screw_datum_i"]),
+    #  ONLY THE RINGS NOTHING ELSE HAS CLAIMED, and the line that set clear_d
+    #  is what forces it. The back panel's fasteners are now O2.900, which is
+    #  also the cowl's four screw holes, so "fastener-sized" no longer
+    #  distinguishes them and this call used to scan every ring: unfiltered it
+    #  reports 5 round datums where there is 1, picks a cowl hole as the datum,
+    #  and then fails all nine slot bearings off it -- 15 FAILs for a panel
+    #  that is right. It cannot hide a missing fastener either, because a ring
+    #  reaches `taken` only by being matched to some other declared feature by
+    #  POSITION. No change for the slab, whose claimed rings are the outline,
+    #  the keyboard void, the six bores and the fader slot.
+    fast = check_datum_and_slots([r for r in rings if id(r) not in taken],
+                                 pattern, int(env["screw_datum_i"]),
                                  clear_d, slot_l, fails, lines) or []
     for r in fast:
         taken.add(id(r))

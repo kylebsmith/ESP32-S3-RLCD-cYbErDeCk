@@ -126,8 +126,45 @@ part = "envelope";
 // footprint at 287.000 x 97.500 [CAD-EXACT] and the field at 285.000 x 95.000
 // on the measured lattice, so the bezel is exact arithmetic on two exact
 // numbers. It grew by 0.375 in x and 0.125 in y when the pitch was corrected.
-bezel_x = (kb_w - field_w) / 2;   // = (287    - 285.000) / 2 = 1.000
-bezel_y = (kb_d - field_d) / 2;   // = ( 97.5  -  95.000) / 2 = 1.250
+//
+// AND IT IS NOT SYMMETRIC IN DEPTH. This file used to write ONE bezel_y and
+// compute it as (kb_d - field_d)/2 = 1.250, which assumed the field is
+// concentric. It is not, and the asymmetry is not a tolerance - it is in the
+// measured positions. Both axes, from primary data:
+//
+//   frame, outer   X -10.500 .. 276.500     Z  8.000 .. 105.500  [CAD-EXACT]
+//                  v2/parts/keyboard-strip.md 1.4, four R4.400 Y-axis
+//                  cylinders, and low Z is the REAR
+//   switch field   X  -9.500 .. 275.500     Z  9.500 .. 104.500  [derived]
+//                  1.6's own mapping, model_x = (u_centre - 0.5) x 19.000 and
+//                  model_z = 19.000 x (row + 1), over u 0..15 and rows 0..4.
+//                  The five row centres ARE 19 / 38 / 57 / 76 / 95 and the
+//                  unit IS 19.000, both [CAD-EXACT]; the EXTENT is centre
+//                  +/- 19.000/2, which is the definition of a 1 u field and
+//                  not a measured edge, so it is [derived] on exact operands
+//
+//   X:  1.000 both sides. CONCENTRIC, and exactly - centre 133.000 against the
+//       frame's 133.000, to 0.000. The +0.0625 that cad/parameters.scad
+//       carries as kbd_cap_field_d[0] is the CAP field's offset, which is set
+//       by the wide caps' outer edges and is a different measurement from the
+//       switch lattice this file uses. It does not apply to bezel_x.
+//   Z:  1.500 at the REAR, 1.000 at the FRONT. The field's centre is 57.000
+//       against the frame's 56.750, so it sits 0.250 toward the front.
+//
+// Named rather than computed, because a single arithmetic result is exactly
+// how the asymmetry hid: (97.5 - 95.000)/2 looks like a derivation and is an
+// assumption. The assert below is what keeps the three numbers consistent.
+bezel_x     = (kb_w - field_w) / 2;   // = (287 - 285.000) / 2 = 1.000, and the
+                                      //   X axis really is symmetric
+bezel_front = 1.000;   // [derived] 105.500 - 104.500, the frame's front edge
+                       //   to the front row's own front edge: exact arithmetic
+                       //   on [CAD-EXACT] operands, as bezel_x already was
+bezel_rear  = 1.500;   // [derived]   9.500 -   8.000, the same at the rear.
+                       //   The band moved 0.250 FORWARD when these replaced
+                       //   the single 1.250; it had been drawn 0.250 too far
+                       //   rearward since the 19.000 lattice was adopted.
+assert(abs(bezel_front + field_d + bezel_rear - kb_d) < 1e-9,
+       "bezel_front + field_d + bezel_rear must equal kb_d");
 
 // The blank's wedge angle. Comes out at 3.35 deg, which is what Keychron
 // publishes as the no-feet typing angle (3.4 deg) - an independent check that
@@ -139,7 +176,7 @@ wedge_deg = atan((kb_h_rear - kb_h_front) / kb_d);
 
 // The same slope as a rise per mm of depth, which is what the keycap band
 // needs. kc_top_front / kc_top_rear are the cap heights at the CASE's edges;
-// the band is inset by bezel_y, so taking those two values at the BAND's
+// the band is inset by bezel_front, so taking those two values at the BAND's
 // shorter span tilted the caps 0.0015 rad more than the case they sit on and
 // put the rear corner 0.073 mm high. The cap plane is parallel to the frame
 // top, so the band interpolates the same plane instead.
@@ -151,9 +188,14 @@ top_slope = (kb_h_rear - kb_h_front) / kb_d;   // [derived] 0.0584615 / mm
 // it is 0.0731 above anything the model contains and must not be echoed as the
 // blank's height. kc_band_rear IS the blank's tallest point, and the exported
 // envelope mesh measures 23.0689 to confirm it.
-kc_band_front = kc_top_front + bezel_y * top_slope;              // [derived]
-kc_band_rear  = kc_top_front + (bezel_y + field_d) * top_slope;  //   17.5151
-                                                                 //   23.0689
+kc_band_front = kc_top_front + bezel_front * top_slope;              // 17.5005
+kc_band_rear  = kc_top_front + (bezel_front + field_d) * top_slope; // 23.0543
+//  [derived]. BOTH MOVED DOWN BY 0.0146 when bezel_y 1.250 became
+//  bezel_front 1.000: the band is 0.250 further forward and the top slopes up
+//  toward the rear, so sampling the same plane 0.250 earlier gives
+//  0.250 x top_slope = 0.0146 less. The old pair was 17.5151 / 23.0689, and
+//  the comment above used to cite 23.0689 as the exported mesh's own height.
+//  The exported envelope now measures 23.0543.  [MEASURED]
 
 // ------------------------------------------------------------------- modules
 
@@ -189,8 +231,23 @@ module kb_shell() {
 // heights are the cap plane sampled at the BAND's own front and rear edges,
 // which keeps it parallel to the frame top by construction - the one thing
 // the measurement is unambiguous about.
+//   IT IS THE SWITCH FIELD AND NOT THE CAP FIELD, DELIBERATELY, and the
+// difference is now worth stating because the cap field has been measured.
+// cad/parameters.scad's kbd_cap_field is 284.325 x 94.200 [CAD-MESH], at model
+// X -9.100..275.225 and Z 9.900..104.100 -- so the 285.000 x 95.000 band drawn
+// here, once it is at the right place, encloses every one of the 61 caps with
+// 0.400 at -x, 0.275 at +x and 0.400 at each end of the depth. That is the
+// 0.800 inter-cap gap showing up as half a gap per side, and a band that is
+// LARGER than the thing it stands for is the right envelope - the same reason
+// corner_r defaults to 0. At the old 1.250 placement the front margin was
+// 0.150 instead of 0.400: still enclosing, which is why nothing caught it.
+//   The +x 0.275 is the smallest of the four and it inherits an open item:
+// parameters.scad declares the cap field's X envelope NOT SOURCED in its last
+// 0.100, because 275.2250 off the mesh does not reconstruct from 1.6's
+// measured 263.650 centre plus a 22.9500 1.25u cap (that gives 275.125). Treat
+// 0.275 as 0.175 until a caliper settles it; the other three are not at risk.
 module kb_keycaps() {
-    translate([bezel_x, bezel_y, 0])
+    translate([bezel_x, bezel_front, 0])
         wedge(field_w, field_d, kc_band_front, kc_band_rear, 0);
 }
 
@@ -212,7 +269,8 @@ else assert(false, "part must be envelope, shell or keycaps");
 echo(str("kb_w=", kb_w, " kb_d=", kb_d,
          " kbd_u=", kbd_u, " field=", field_w, "x", field_d,
          " wedge_deg=", wedge_deg,
-         " bezel_x=", bezel_x, " bezel_y=", bezel_y,
+         " bezel_x=", bezel_x,
+         " bezel_front=", bezel_front, " bezel_rear=", bezel_rear,
          " kc_above_frame=", kc_above_frame,
          " kc_top_front=", kc_top_front,
          " kc_top_rear=", kc_top_rear, " tallest=", kc_band_rear));

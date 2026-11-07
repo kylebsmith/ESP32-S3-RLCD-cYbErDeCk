@@ -20,20 +20,43 @@ part = "3d";
 //  back panel fights it from the other side.
 //  SAME ONE-DATUM-N-SLOTS RULE AS THE SLAB, and for the same reason: this
 //  panel bolts into bosses printed in the same part over the same 289.560 mm
-//  span, so it has to float the same way or one of the two plates binds. Its
-//  hole diameter is NOT the slab's, though -- O3.400 through 3.175 mm finishes
-//  O3.160 worst case and an M3 passes, which is the proof that the slab's
-//  O4.445 is a thickness problem and not a hole problem.
+//  span, so it has to float the same way or one of the two plates binds.
+//
+//  BUT THE SCREW IS M2.5, NOT M3, AND THIS FILE USED TO DRILL IT FOR M3.
+//  It drew all ten holes at screw_m3_clear_back -- O3.400, 6.400 slots -- and
+//  reasoned out loud about the hole "an M3 passes", while carrier.scad's
+//  back_insert_cut() presses M2.5 inserts at the SAME ten points and section 9b
+//  explains why they have to be M2.5 (an M3 pocket is 6.700 deep against a
+//  6.350 floor). The pattern is not in doubt: back_screw_pts() is one function
+//  and both files call it. An M3 does not enter an M2.5 insert; read the other
+//  way, an M2.5 in a O3.400 hole threw away half of what the round datum is
+//  for. The giveaway was in this file all along -- the cowl's four screws below
+//  go into the same inserts and are already drilled screw_m25_clear_d.
+//  parameters.scad 6b has the arithmetic, the head's bearing area over a slot
+//  narrower than itself, and the washer that follows from it.
+//    The thickness argument that used to sit here still holds and is just
+//  attached to the wrong screw: O2.900 through 3.175 finishes O2.648 at 2.0 deg
+//  of taper, which still passes an M2.5, where the SLAB's 12.700 turns the same
+//  class of hole into O2.483 and passes nothing -- which is the proof that the
+//  slab's O4.445 is a thickness problem and not a hole problem. (The old line
+//  said O3.400 "finishes O3.160" at 3.175; 3.160 is a 3.000 sheet's figure and
+//  back_t has been 3.175 since section 3 was re-derived.)
 //
 //  TEN holes, not six: the six that mirror the slab's screw line, plus four
 //  inside the keyboard's seat plinth. Six in the control band would leave the
 //  keyboard half of a 304 mm plate unfastened, and fighting the carrier's bow
-//  is this panel's whole structural job.
+//  is this panel's whole structural job. SIX of the ten take a DIN 125 A 2.5
+//  washer under the head on assembly and FOUR MUST NOT -- the four that carry
+//  the feet, because a O6.000 washer cannot enter the foot's O5.100 pocket
+//  mouth and would stand the pad 0.500 off the panel. parameters.scad 6b has
+//  which is which and why. That split is deliberately invisible in this
+//  drawing: a bought washer is not a cut feature, so nothing here changes for
+//  it, the DXF must not grow a contour, and the ten holes stay identical.
 module backpanel_2d() {
     difference() {
         rrect(body_w, body_h, corner_r);
         datum_and_slots(back_screw_pts(), screw_datum_i,
-                        screw_m3_clear_back, screw_slot_l_back);
+                        screw_m25_clear_d, screw_slot_l_back);
 
         //  THE DISPLAY'S FOUR SCREW HEADS LIVE IN THIS PANEL. The display
         //  hangs on four SMTSO-M2.5-7ET standoffs and the enclosure drives

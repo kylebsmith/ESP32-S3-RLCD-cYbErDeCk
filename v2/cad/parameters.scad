@@ -245,6 +245,17 @@ disp_18650_proud = deck_bot_z - disp_18650_z;   // [DERIVED] 1.820 below the
 foot_h_min     = cowl_h() + 1.270;      // [DERIVED] 5.090. A foot shorter
                                         //   than this and the deck rocks on
                                         //   its own battery cowl. Section 12.
+//  AND THE HEIGHT IS FORCED, NOT CHOSEN, which is the only interesting thing
+//  about it: 8 x grid is 5.080 and misses foot_h_min by 0.010, so the smallest
+//  grid multiple that clears the cowl at all is the next one up. The 0.625 it
+//  clears by sits on top of the 1.270 of air foot_h_min already carries. It
+//  lived in foot.scad as the ft_h local, reported upward because that file does
+//  not own this one.
+foot_h         = 9 * grid;      // [DERIVED] 5.715, and [MEASURED] -- the
+                                //   exported foot.stl spans z 0.000..5.715
+                                //   exactly, which export.py prints on every
+                                //   run. Also the deck's front edge stands
+                                //   deck_t + foot_h = 37.465 off the desk.
 // ---------------------------------------------------------------------------
 // 4. THE CONTROL FIELD
 // ---------------------------------------------------------------------------
@@ -319,7 +330,32 @@ knob_shaft_bore_h  = 8.000;     // [DESIGN] above the counterbore floor. The
 knob_bore_d    = 6.100;         // [DERIVED] O6.0 shaft + 0.100
 knob_bore_flat = 4.600;         // [DATASHEET] pec11 p3, flatted to 4.5 + 0.100
 knob_rib_n     = 6;             // [DESIGN] on the pot knob only
-knob_rib_h     = 0.300;         // [DESIGN] bites 0.300 into a O6.000 shaft
+//  knob_rib_h IS MEASURED FROM THE BORE WALL, NOT FROM THE SHAFT, and the
+//  comment here used to conflate the two: it read "bites 0.300 into a O6.000
+//  shaft", which is not what the part does. The bore is knob_bore_d = 6.100,
+//  so a 0.300 rib puts its crest at r 2.750 -- measured off the artefact as
+//  exactly 2.7500, as the axis-to-plane distance of the six crest faces in
+//  export/stl/knob_pot.stl over z 6.350..14.350 (the crest is a flat chord, so
+//  a vertex radius reads 2.8147 at its corners and is the wrong thing to
+//  measure). Against a nominal O6.000 shaft, r 3.000, that is 0.250 of RADIAL
+//  INTERFERENCE and 0.500 diametral -- not 0.300.
+//    THE COMMENT IS CORRECTED AND THE VALUE IS NOT, deliberately. Raising
+//  knob_rib_h to 0.350 would buy the 0.300 the old comment claimed, at 20 %
+//  more interference, and there is nothing to justify it with: the pot shaft's
+//  real form is declared NOT SOURCED in the block above knob_bore_d -- the
+//  house model shows a perfect O6.000 cylinder and the brief says non-D-shaft,
+//  which is why there are six ribs rather than a smooth press fit, so that the
+//  knob is "correct either way" on a round shaft or a T18 spline. An
+//  interference target against a shaft whose form is unknown cannot be
+//  derived, so the artefact stays the record and the prose is brought to it.
+//  If the real shaft is a T18 spline the crest engages the spline's crests and
+//  0.250-on-nominal is not the governing number anyway.
+knob_rib_h     = 0.300;         // [DESIGN] the rib's stand-off from the bore
+                                //   wall. 0.300 off knob_bore_d/2 = 3.050
+                                //   puts the crest at r 2.750 [MEASURED
+                                //   2.7500 off export/stl/knob_pot.stl], i.e.
+                                //   0.250 radial interference on a nominal
+                                //   O6.000 shaft.
 knob_rib_w     = 1.200;         // [DESIGN] 3 x 0.4 nozzle at the root, so it
                                 //   prints as solid perimeter and not as a
                                 //   single under-extruded line
@@ -475,21 +511,40 @@ boss_m25_od  = 7.620;           // [DERIVED] 4.000 + 2*1.600 = 7.200 -> 12*grid
 boss_m3_od   = 7.620;           // [DERIVED] same bore, same wall
 
 //  A CLEARANCE HOLE IS NOT ONE NUMBER, because 12.700 mm of acrylic is not
-//  3.000 mm of acrylic. The laser's kerf tapers; cut visible-face-up the hole
+//  3.175 mm of acrylic. The laser's kerf tapers; cut visible-face-up the hole
 //  is wide at the top and narrow at the bottom, and the narrow face is the one
 //  the screw has to pass:
-//      narrow = drawn + kerf 0.200 - machine 0.230 - taper 0.887   (at 2.0 deg)
+//      narrow = drawn + kerf 0.200 - machine 0.230 - 2 t tan(taper)
 //  O3.400 through 12.700 finishes O2.927 at 1.0 deg and O2.483 at 2.0. An M3
-//  does not go through the slab at all. The SAME hole through the 3.000 back
-//  panel finishes O3.160 and is fine -- which is the proof this is a thickness
-//  problem and not a hole problem. stack.md 3.2 solved it once for M4 by
-//  drawing O5.60 and the fix was lost when the design moved to M3.
+//  does not go through the slab at all. The SAME hole through the back panel
+//  finishes O3.259 at 1.0 deg and O3.148 at 2.0 and would be fine -- which is
+//  the proof this is a thickness problem and not a hole problem. stack.md 3.2
+//  solved it once for M4 by drawing O5.60 and the fix was lost when the design
+//  moved to M3.
+//    THOSE TWO FIGURES USED TO READ "O3.160 ... through the 3.000 back panel".
+//  back_t became 3.175 in section 3 and the taper term did not follow it:
+//  2 x 3.175 x tan 2 deg is 0.2217, not a 3.000 sheet's 0.2095. The conclusion
+//  did not change, which is exactly why nobody caught it.  [DERIVED]
 //  v2/docs/fabrication.md 0.1, 0.14, 1.2
 screw_m3_clear_slab = 4.445;    // [DERIVED] 7 x grid. Narrow face O3.528 worst
                                 //   case: 0.528 diametral over an M3 shank.
-screw_m3_clear_back = 3.400;    // [STANDARD] dia + 0.4, and at 3.000 mm thick
-                                //   that still works
-screw_m25_clear_d   = 2.900;
+screw_m3_clear_back = 3.400;    // [STANDARD] dia + 0.4. IT IS NO LONGER THE
+                                //   BACK PANEL'S HOLE -- section 6b. The name
+                                //   stays because knob_mould.scad reads it for
+                                //   the mould's four M3 clamp bolts, which pass
+                                //   through a PRINTED tool where no laser
+                                //   taper applies.
+screw_m25_clear_d   = 2.900;    // [STANDARD] dia + 0.4, the same column of the
+                                //   same clearance-hole table that gives M3 its
+                                //   3.400: M2.5 reads 2.7 / 2.9 / 3.1 where M3
+                                //   reads 3.2 / 3.4 / 3.6  [3P
+                                //   fastener-tables, acrylic.md 8.4; the row
+                                //   corroborated against a second table]. The
+                                //   COLUMN NAMES (fine / medium / coarse) are
+                                //   not confirmed by any table retrievable
+                                //   from here, so this cites a row and not
+                                //   "ISO 273 medium". Section 6b is what uses
+                                //   it, and the ten holes it belongs to.
 
 //  BOTH acrylic plates bolt into bosses printed in ONE part, and the two
 //  materials disagree about length. Over the 289.560 mm screw span:
@@ -510,8 +565,17 @@ screw_datum_i     = 1;          // [DESIGN] which hole is the round one. Both
                                 //   two directions instead of one.
 screw_slot_float  = 3.000;      // [DERIVED] +/-1.500 of travel, against the
                                 //   1.448 the two terms actually need
-screw_slot_l_slab = screw_m3_clear_slab + screw_slot_float;   // 7.445
-screw_slot_l_back = screw_m3_clear_back + screw_slot_float;   // 6.400
+screw_slot_l_slab = screw_m3_clear_slab + screw_slot_float;   // [DERIVED] 7.445
+screw_slot_l_back = screw_m25_clear_d   + screw_slot_float;   // [DERIVED] 5.900,
+                                //   and it was 6.400 off
+                                //   screw_m3_clear_back. Section
+                                //   6b: the back panel's screw is M2.5, so the
+                                //   slot gets narrower with the hole. THE FLOAT
+                                //   IS UNCHANGED AND THAT IS NOT LAZINESS --
+                                //   screw_slot_float is a displacement budget,
+                                //   not a clearance, and neither of the two
+                                //   terms that set it knows the screw's
+                                //   diameter.
 
 screw_x     = 144.780;          // [DERIVED] 228 x grid. The only screw line
                                 //   that is symmetric, on the grid, and leaves
@@ -532,6 +596,215 @@ screw_dy    = 31.750;           // [DESIGN] 1.25 in, three per side
 //  v2/docs/fabrication.md 0.9, 1.4
 acrylic_edge_min = 1.5 * screw_m3_clear_slab;   // [STANDARD] 6.668, and
                                                 //   body_w/2 - screw_x = 7.520
+
+// ---------------------------------------------------------------------------
+// 6b. THE BACK PANEL'S SCREW IS M2.5, AND THE PANEL WAS DRILLED FOR M3
+// ---------------------------------------------------------------------------
+//  backpanel.scad drilled all ten back_screw_pts() at screw_m3_clear_back --
+//  O3.400, 6.400 slots -- while carrier.scad's back_insert_cut() presses
+//  insert_m25_hole_d M2.5 inserts at the SAME ten points. There is no question
+//  of the patterns differing: back_screw_pts() is ONE function and both files
+//  call it. Section 9b and carrier.scad each explain in prose why the insert is
+//  M2.5 and not M3 (an M3 pocket is 6.700 deep against a 6.350 floor and would
+//  break the visible wiring plane by 0.350 at every one of them), and neither
+//  noticed that the plate above them had been drawn for the other screw.
+//    BOTH READINGS OF THAT DISAGREEMENT ARE DEFECTS, which is why it is
+//  written down rather than just corrected:
+//      the screw is M2.5 -- foot.scad: "the screws stay M2.5 x 8 at all ten
+//        holes" -- and then every hole was 0.500 diametral oversize and the
+//        head bore on less panel than it had to;
+//      the screw is M3 -- backpanel.scad's own comment reasoned out loud about
+//        the hole "an M3 passes" -- and then it does not enter an M2.5 insert
+//        at all and the deck cannot be closed.
+//    THE PANEL'S OTHER FOUR M2.5 HOLES WERE ALREADY RIGHT, which is the
+//  internal proof of which reading is the design's: backpanel.scad drills
+//  cowl_screw_pts() at screw_m25_clear_d into the same insert_m25 pockets
+//  (carrier.scad's cowl_insert_cut). Fourteen holes in one plate, one screw,
+//  and ten of them drawn for a different one.
+//
+//  THE DATUM IS THE HOLE THIS ACTUALLY COST SOMETHING. Nine of the ten are
+//  slots whose job is to let a screw through while the plate moves; ONE is
+//  round and its whole job is to locate the panel (screw_datum_i above). On a
+//  nominal O2.500 M2.5 shank, with the laser's own narrow face from the block
+//  above at t = back_t:
+//      O3.400 as drawn   0.4500 radial play    finished 0.3241 at 2.0 deg
+//      O2.900 as drawn   0.2000 radial play    finished 0.0741 at 2.0 deg
+//  So the located position tightens by 0.250 mm per side. That is the whole of
+//  what the datum was giving away, and it is not a rounding error against a
+//  carrier reveal drawn to 1.028..2.782 (carrier_inset, section 5b).
+//  Rohm's edge rule gets easier too: 1.5 x hole wants 4.350 from the sheet
+//  edge instead of 5.100, against the 7.520 there is.  [DERIVED]
+//
+//  THE HEAD. Section 6 had no M2.5 head in it at all, while back_t's comment
+//  in section 3 already leans on "a cap head is 2.500 tall" in prose and
+//  foot.scad sizes its whole retention pocket off both numbers as ft_head_d /
+//  ft_head_h locals. Three places, one fact, nowhere declared. Declared here.
+screw_m25_head_d = 4.500;       // [STANDARD] ISO 4762 M2.5, dk
+screw_m25_head_h = 2.500;       // [STANDARD] ISO 4762 M2.5, k
+                                //   acrylic.md 2.5 already records the pair as
+                                //   "an ISO 4762 socket cap (O4.5 x 2.5)" from
+                                //   [3P fastener-tables]; that table's ISO 4762
+                                //   page was re-read for this entry and gives
+                                //   ONE nominal per dimension and no max/min,
+                                //   so neither number carries a tolerance here
+                                //   and neither should be treated as a max.
+
+//  THE BEARING AREA, WHICH IS THE PART THAT CRACKS THE PANEL.
+//  At the nine SLOTS the head spans a hole narrower than itself, so it does
+//  not bear on an annulus at all -- it bears on the two pieces of its own disc
+//  that overhang the slot. Computed as the exact set difference
+//  disc(r) \ stadium(L, W), two independent ways that agree to 1e-5:
+//  Gauss-Legendre quadrature on the 1-D section, and shapely polygon algebra
+//  at 16384 segments per circle.
+//
+//      head O4.500 over the old 3.400 x 6.400 slot      2.2208 mm2
+//      head O4.500 over the new 2.900 x 5.900 slot      3.8300 mm2   1.725 x
+//      O6.000 washer over the new 2.900 x 5.900 slot   12.9691 mm2   3.386 x
+//      head O4.500 on the O2.900 round datum            9.2991 mm2
+//      O6.000 washer on the O2.900 round datum         21.6691 mm2   2.330 x
+//
+//  THE TWO-SEGMENT CLOSED FORM 2[r^2 acos(d/r) - d sqrt(r^2 - d^2)] IS ONLY
+//  SOMETIMES RIGHT, and on the first row it is right by luck. It assumes the
+//  slot's parallel sides span the whole head, i.e. sqrt(r^2 - d^2) <= (L-W)/2;
+//  past that the slot's end caps are narrower than the slot and solid material
+//  intrudes under the head there. At r 2.250, d 1.700 the test reads
+//  1.4739 <= 1.500 and the form is exact. At d 1.450 it reads 1.7205 > 1.500
+//  and the form is 0.14 % low. For a O6.000 washer, r 3.000, it is 10.73 % low
+//  (11.5778 against 12.9691). DO NOT CARRY THE CLOSED FORM TO A BIGGER
+//  WASHER; it is the one case where it is most wrong.  [DERIVED]
+//
+//  THE DECISION: SIX OF THE TEN HOLES GET A WASHER UNDER THE HEAD, AND THE
+//  OTHER FOUR MUST NOT.
+//  DIN 125 A / ISO 7089 A 2.5 -- d1 2.7, d2 6.000, 0.500 thick -- at
+//  back_screw_pts() indices 1, 2, 4, 5, 6 and 7.
+//    THE FOUR EXCLUDED ONES ARE THE FEET, indices 0, 3, 8 and 9 = foot_pts()
+//  (section 12), and a washer there is not a smaller benefit, it is a failure.
+//  foot.scad presses the foot onto the screw HEAD through a blind O4.300 pocket
+//  whose mouth opens to O5.100 across its 0.400 lead-in, and the foot's top
+//  face bears flat on the panel -- that face IS the standing load path, desk to
+//  sole to panel. A O6.000 washer cannot enter a O5.100 mouth. It would land on
+//  the foot's top face instead, stand the whole 13.970 x 34.290 pad 0.500 off
+//  the panel on one washer, and leave the deck resting on four washers. That is
+//  the residual-rock failure foot.scad's own section describes, except 0.500
+//  deep instead of a print tolerance, and it would also eat the head-to-pocket-
+//  floor air that keeps the clamp out of the TPU: 0.675 becomes 0.175.
+//    So at those four the hole correction is the whole of the fix and the slot
+//  bearing stays 3.8300 mm2 -- 1.725 x the as-drilled 2.2208, and these are
+//  the only four holes where the panel's underside is backed by anything at
+//  all: 416.6374 mm2 of TPU top face around the head [MEASURED off
+//  export/stl/foot.stl, the 196 up-facing facets at z = 5.715; the 384.6606
+//  foot.scad quotes is the SOLE, which is smaller by the sole chamfer and is
+//  not the face that touches the panel].
+//    If the coupon in acrylic.md 11.3 ever says 3.8300 is not enough, the
+//  fix is in foot.scad and not here: open the pocket to clear a washer and take
+//  the washer's 0.500 back out of ft_pocket_h, which costs retention.
+//    AND THE DATUM IS NOT A FOOT, which is luck worth recording: index 1 is the
+//  round hole, so the one hole that locates the panel is also one of the six
+//  that gets the washer. Its washer's edge clears foot 0's plan by 1.4450 mm
+//  [DERIVED] -- the tightest washer-to-foot approach in the panel, and the
+//  first number to go negative if ft_toe or screw_dy moves.
+//    IT IS NOT DECIDED ON A STRESS, AND IT CANNOT BE. What 3.175 mm of
+//  laser-cut PMMA survives under a screw head is NOT SOURCED in this
+//  repository, and acrylic.md 11.3 says so in terms -- "no manufacturer
+//  publishes a bearing or torque limit for this joint" -- while 5.2 adds
+//  "nothing published says what 1.5 mm of laser-cut acrylic survives, and I
+//  will not invent a number". The preload is NOT SOURCED too (below). The only
+//  PMMA mechanical property recorded anywhere in this repo is E = 3300 MPa
+//  [ROHM xt-gs-ds]: there is no strength of any kind in it, in any file. A
+//  washer justified by a compressive strength here would be two invented
+//  numbers wearing a division sign.
+//    SO THE ARGUMENT IS A RATIO, WHICH SURVIVES BOTH UNKNOWNS. Whatever the
+//  preload is and whatever the allowable turns out to be, the washer divides
+//  the bearing stress by 3.386 at a slot and by 2.330 at the datum, on top of
+//  the 1.725 the hole correction already bought. Hole by hole, against the
+//  2.2208 mm2 the panel as drilled would have had at the same preload:
+//      index 1, datum, washered       21.6691 mm2   1/9.757
+//      indices 2, 4, 5, 6, 7 washered 12.9691 mm2   1/5.840
+//      indices 0, 3, 8, 9  the feet    3.8300 mm2   1/1.725
+//  The panel's WORST bearing is therefore 3.8300 and not 2.2208, and no factor
+//  here needs the absolute number to be worth having.
+//    AND THE DIRECTION IS THE MATERIAL MAKER'S OWN, not a preference. Rohm's
+//  list of the causes of the tensile stress that crazes PMMA includes
+//  "deformation during fastening (clamping, drilling, screw union)"
+//  [ROHM mach 8], on a cut edge the same document calls monomer-exposed;
+//  acrylic.md 5.2's conclusion for the pot nut is "a washer is necessary and
+//  not sufficient", and this is that joint with a smaller head on a thicker
+//  sheet.
+//    IT IS ALSO FREE IN THE THREAD STACK AT THOSE SIX, and buys margin there.
+//  M2.5 x 8 (foot.scad's length) through 3.175 of panel leaves 4.825 into a
+//  5.000 pocket -- the tip stands 0.175 off the pocket floor. The washer makes
+//  that 4.325 and 0.675, with the full 4.000 of insert engaged either way. So
+//  the six washered screws and the four bare ones are the same part number and
+//  neither bottoms.  [DERIVED]
+//    THE COWL'S OWN FOUR SCREWS NEED NONE, and they are not in these ten:
+//  their heads bear on the printed cowl's flange, not on PMMA, and the panel
+//  sees that flange over its whole 7.620 width.
+//    ONE HONEST LIMIT ON THE 12.9691. A 0.500 washer bridging a 2.900 slot
+//  dishes, so that figure is the washer's FOOTPRINT and not a uniform pressure
+//  distribution: the real peak sits over the slot's two long edges. It is an
+//  upper bound on area and so a lower bound on peak stress, and it is still
+//  3.386 x better than no washer. If the coupon in acrylic.md 11.3 ever says
+//  this joint needs more, a thicker washer, or an M3 washer's O7.000 on the
+//  same M2.5 screw, drops in at the six without redrawing the panel -- but
+//  O7.000 would cut the index-1 clearance above from 1.4450 to 0.9450, so
+//  check that before fitting one.
+//
+//  NOTHING DRAWS THESE TWO AND THAT IS CORRECT: a bought washer is not a cut
+//  feature and not a printed one, so no part file reads them and no checker
+//  gates them. They are here because an assembly decision with arithmetic
+//  behind it has to live somewhere a reader of this file will meet it.
+screw_m25_washer_od = 6.000;    // [VENDOR] DIN 125 A / ISO 7089 A 2.5, d2,
+screw_m25_washer_t  = 0.500;    // [VENDOR] and its nominal thickness. Tagged
+                                //   VENDOR and not STANDARD on purpose: the
+                                //   figures are a Wuerth DIN 125 A datasheet
+                                //   corroborated across four suppliers
+                                //   (d1 2.7 / d2 6.0 / 0.5), and the standard
+                                //   itself was not retrievable from here. One
+                                //   supplier publishes d2 as a 5.7..6.0 band
+                                //   and one publishes d1 2.84, so 6.000 is the
+                                //   nominal and not a minimum -- which matters
+                                //   only if the bearing ratio above is ever
+                                //   taken to three figures.
+
+//  THE PRELOAD IS NOT SOURCED, AND TWO ARGUMENTS IN THIS REPOSITORY LEAN ON
+//  IT. foot.scad's header rejects its own first draft on "a hand-tight M2.5,
+//  about 354 N", and the bearing areas above would be stresses if they had a
+//  force. There is no tightening torque anywhere in this repository and no
+//  published one to fetch: searched for a recommended torque for an M2.5 screw
+//  into a brass heat-set insert in a printed thermoplastic and found none from
+//  the insert vendor this project cites ([3P ruthex-3djake]) nor from the house
+//  library. What exists is other products -- M2.5 self-tapping insert screws
+//  at 0.9..1.5 N m, PEM moulded-in M2.5 inserts at 0.7..0.79 N m torque-out --
+//  and neither of those is this joint.
+//    AND A TORQUE ALONE WOULD NOT CLOSE IT, because torque becomes preload
+//  only through a friction coefficient, which is a second number needing its
+//  own tag:
+//      T = F [ P/(2 pi) + mu_t d2/(2 cos 30) + mu_b Dm/2 ]
+//  For M2.5, P 0.45 and d2 = 2.500 - 0.6495 P = 2.2077, the lead term is
+//  0.0716 mm against mu_t 1.2746 + mu_b 1.8500 mm (Dm = 3.700, the O4.500 head
+//  over the O2.900 hole; 3.600 once it is on the washer's d1). So friction is
+//  77.7 % of the torque at mu 0.08 and 91.6 % at mu 0.25, and F per N m runs
+//  3110 N down to 1173 N -- A FACTOR OF 2.65 ON THE ANSWER, set entirely by a
+//  number nobody here has measured. mu for a plated steel screw in a brass
+//  insert, and for a steel washer on PMMA, is NOT SOURCED as well. (For scale:
+//  foot.scad's 354 N corresponds to 0.114 N m at mu 0.08 and 0.302 N m at
+//  mu 0.25. Not absurd -- and not determined either.)
+//    THE PROCEDURE THAT CLOSES IT, cheapest step first:
+//      1. Put a ceiling on it empirically, on the coupon acrylic.md 11.3
+//         already asks for: drive an M2.5 into a pressed insert in a PETG boss
+//         with a 0..0.5 N m dial wrench and record the torque at which the
+//         insert strips. That one measurement is also the open NOT SOURCED
+//         item "M2.5 insert pull-out in PETG", and it caps the joint whatever
+//         mu is.
+//      2. Measure the preload instead of inferring it, which skips mu
+//         altogether: a load cell, or the cheap version -- clamp a PMMA coupon
+//         of known section and read its compression on a 1 um indicator
+//         against E = 3300 MPa [ROHM xt-gs-ds].
+//      3. Only with 1 and 2 is there a stress to compare against the panel's
+//         own destructive test, and only then does a figure like 354 N earn a
+//         tag.
+//  Until those exist this file states the AREAS, which are exact, and refuses
+//  the stress.  [NOT SOURCED]
 
 // ---------------------------------------------------------------------------
 // 7. BOARD FOOTPRINTS, all [MEASURED] from vendor STEP unless noted
@@ -1250,7 +1523,7 @@ corner_r    = 2.000;            // [DESIGN] just enough to kill a cutting edge
                                 //   brutal and less kind to a forearm.
 
 // ---------------------------------------------------------------------------
-// 12. THE 18650 COWL
+// 12. LAZY DATUMS: THE 18650 COWL, AND WHERE THE FOUR FEET GO
 // ---------------------------------------------------------------------------
 //  The Waveshare board's 18650 holder reaches 15.200 behind the PCB's rear
 //  face -- 6.500 deeper than anything else on it -- which puts it 1.820 BELOW
@@ -1314,3 +1587,31 @@ function cowl_screw_pts() =
      [cowl_xy()[0] - cowl_window()[0]/2 - cowl_flange()/2, cowl_xy()[1]],
      [cowl_xy()[0], cowl_xy()[1] + cowl_window()[1]/2 + cowl_flange()/2],
      [cowl_xy()[0], cowl_xy()[1] - cowl_window()[1]/2 - cowl_flange()/2]];
+
+//  WHERE THE FOUR FEET GO. A FUNCTION FOR THE SAME REASON AS EVERYTHING ELSE
+//  IN THIS SECTION: it reads slab_screw_pts() and back_screw_kbd out of
+//  section 9b, so as a variable it would have to live after them and could
+//  never be moved. It also has to be callable from a part file and from
+//  export.py's echo dump, which evaluates this file with OpenSCAD itself
+//  rather than parsing it.
+//
+//  EVERY FOOT LANDS ON A FASTENER THAT ALREADY EXISTS -- a screw up through
+//  the back panel into an M2.5 insert in the carrier's floor -- because the
+//  panel is 3.175 laser-cut acrylic, a laser cannot counterbore, and a foot
+//  bonded to the one part that is also the service access is a foot that
+//  peels off. So back_screw_pts() is the whole menu and these are four of its
+//  ten. foot.scad's header has the tipping arithmetic that picks these four
+//  and not four corners; in one line, the front pair are the furthest forward
+//  holes that exist, because the heels of the hands land forward of any of
+//  them.
+//      [ 144.780,  80.7125]   slab_screw_pts()[0]   the rear pair, on the
+//      [-144.780,  80.7125]   slab_screw_pts()[3]     slab's own screw line
+//      [ -82.550, -63.500]    back_screw_kbd[2]     the front pair
+//      [  82.550, -63.500]    back_screw_kbd[3]
+//  [DERIVED, and echoed: OpenSCAD returns exactly those four pairs from the
+//  expression below.] Placing a foot is translate([x, y, deck_bot_z - foot_h])
+//  with NO rotation -- foot.scad is drawn in the orientation it is fitted in,
+//  sole on z = 0 and screw axis on the origin, and all four go on the same way
+//  round with the toe toward -Y.
+function foot_pts() = [slab_screw_pts()[0], slab_screw_pts()[3],
+                       back_screw_kbd[2],   back_screw_kbd[3]];
