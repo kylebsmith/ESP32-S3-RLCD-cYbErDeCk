@@ -27,6 +27,13 @@
 // ===========================================================================
 
 include <../../cad/parameters.scad>
+//  `use`, not `include`: ws_active_area() is wanted and nothing in that file's
+//  scope is. The active area is the one feature of the display that has to be
+//  in this dump -- it is where the screen image goes, and it is NOT the PCB
+//  centre and NOT the TFT module (waveshare_rlcd42.scad says so in those
+//  words, having measured a 2.248 margin at U = 0 against 5.450 at the USB-C
+//  edge).
+use <../../cad/parts/waveshare_rlcd42.scad>
 
 //  One echo per datum, "K <name>=<value>". render.py parses that and nothing
 //  else, so adding a line here is all it takes to expose a new parameter.
@@ -105,6 +112,26 @@ K("kbd_tilt_deg",  kbd_tilt_deg);
 K("screw_x",   screw_x);
 K("screw_dy",  screw_dy);
 K("foot_h_min", foot_h_min);
+//  How many of each there are, counted off the point lists rather than
+//  asserted: the ABSENT list quotes these and a count that is retyped is a
+//  count that goes stale. back_screw_pts() is 10 and slab_screw_pts() is 6.
+K("n_slab_screw", len(slab_screw_pts()));
+K("n_back_screw", len(back_screw_pts()));
+
+// ------------------------------------------------- the parts fitted LAST
+//  Heights, so render.py can check each fitted mesh against the datum that
+//  declares it instead of trusting the translate. foot_h and cowl_h() are the
+//  two that exist; the fader cap's proud height lives in fader_cap.scad as a
+//  file-local and is deliberately NOT echoed here -- see render.py FITTED.
+K("foot_h",  foot_h);
+K("cowl_h",  cowl_h());
+
+// ------------------------------------------------------------- the DISPLAY
+//  The LCD active area in the display body's own frame, [u0, v0, u1, v1, w],
+//  straight out of waveshare_rlcd42.scad's ws_active_area(). The screen image
+//  is projected onto exactly this rectangle, so the panel's 400 x 300 pixels
+//  land where the STEP says the glass's active area is and nowhere else.
+K("disp_aa", ws_active_area());
 
 // ===========================================================================
 //  PLACEMENTS -- where each reference body goes in the deck frame.
@@ -208,3 +235,61 @@ for (i = [0 : len(cols) - 1])
 //  the encoder. carrier.scad places it with rotate(90) at [slide_x, band_mid],
 //  so the composition is Rz(90) . Rx(180) -- determinant +1, no mirror.
 P("neoslider", [slide_x, band_mid, pcb_front_z], [180, 0, 90]);
+
+// ===========================================================================
+//  THE PARTS FITTED LAST -- six knobs, the fader cap, the cowl, four feet
+// ===========================================================================
+//  These are EXPORTED parts, not reference bodies: v2/tools/export.py cuts
+//  each of them from its own .scad, and the render loads that STL. What they
+//  need from here is where to stand.
+//
+//  Every one of them is drawn at its own origin and placed by a PURE
+//  TRANSLATION -- no rotation, no flip. That is the whole risk in this block:
+//  a part put in upside down renders perfectly and is wrong, and nothing in
+//  the picture says so. So render.py does not take the translation on trust;
+//  each row in its FITTED table also declares the Z SPAN the part must end up
+//  occupying, out of the datums echoed above, and the mesh is measured
+//  against it. A foot flipped on its back fails that before it is drawn.
+//
+//  The authors of these parts stated each part's own frame, and each line
+//  below is that statement turned into a placement:
+//
+//    foot.scad      sole on z = 0, screw axis on the origin, toe toward -Y
+//    cowl.scad      centred in XY, z 0 .. cowl_h(), and the face at
+//                   z = cowl_h() is the one against the BACK PANEL
+//    knob.scad      axis on the origin, z 0 .. knob_h, plug 0 .. acrylic_t,
+//                   brim acrylic_t .. knob_h. z = 0 is the acrylic's
+//                   UNDERSIDE, which is what knob_h - knob_proud == acrylic_t
+//                   means
+//    fader_cap.scad centred in XY, z 0 .. (acrylic_t + its own proud)
+
+// --------------------------------------------------------------- the knobs
+//  Two rows of three on the same columns the bores are drilled on. They are
+//  different PARTS, not two copies of one: the encoder's has a D-bore for a
+//  flatted shaft and the pot's has six ribs, so they are two meshes.
+for (i = [0 : len(cols) - 1])
+    P(str("knob_encoder", i), [cols[i], enc_y, acrylic_z0], [0, 0, 0]);
+for (i = [0 : len(cols) - 1])
+    P(str("knob_pot", i), [cols[i], pot_y, acrylic_z0], [0, 0, 0]);
+
+// ----------------------------------------------------------- the fader cap
+//  slide_x is the slot's axis. The position ALONG the travel is free -- the
+//  cap is a control and can be anywhere in slider_travel -- so it is drawn at
+//  mid-travel, which is band_mid: the same y the NeoSlider itself is placed
+//  on above. [DESIGN] the choice of mid-travel; every number is a datum.
+P("fader_cap", [slide_x, band_mid, acrylic_z0], [0, 0, 0]);
+
+// ---------------------------------------------------------------- the cowl
+//  Its upper face closes against the back panel's underside, i.e. against
+//  deck_bot_z, so it hangs below by its own height.
+P("cowl", [cowl_xy()[0], cowl_xy()[1], deck_bot_z - cowl_h()], [0, 0, 0]);
+
+// ---------------------------------------------------------------- the feet
+//  foot_pts() is four of back_screw_pts() -- indices 0, 3, 8, 9 -- and those
+//  four are the ones that must NOT get a washer, because a O6.000 DIN 125
+//  cannot enter the foot's O4.300 pocket mouth (parameters.scad 6b). The feet
+//  stand ON the back panel's underside and reach foot_h below it.
+for (i = [0 : len(foot_pts()) - 1])
+    P(str("foot", i),
+      [foot_pts()[i][0], foot_pts()[i][1], deck_bot_z - foot_h],
+      [0, 0, 0]);

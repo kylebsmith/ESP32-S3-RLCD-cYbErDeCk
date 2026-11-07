@@ -805,17 +805,17 @@
 <line data-kind="switch-row" x1="25.8" y1="124.25" x2="310.8" y2="124.25" stroke="#e8eaee" stroke-width="0.2"/>
 <text x="168.3" y="154.15" fill="#8d93a0" font-size="3.4" text-anchor="middle">K9 PRO BAY 288.35 × 98.45</text>
 <rect data-kind="plate" data-label="PLATE" data-role="touch" x="25.425" y="24.125" width="285.75" height="76.2" fill="#f3f4f6" stroke="#111318" stroke-width="0.45"/>
-<rect data-kind="bay" data-label="_display board" data-role="touch" x="31.22" y="27.075" width="93.9" height="70.3" rx="2.54" fill="none" stroke="#8d93a0" stroke-width="0.3" stroke-dasharray="2 1"/>
-<circle cx="36.17" cy="92.225" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
-<circle cx="36.17" cy="32.225" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
-<circle cx="120.17" cy="92.225" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
-<circle cx="120.17" cy="32.225" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
-<rect data-kind="bay" data-label="2x8" data-role="touch" x="114.96" y="52.065" width="5.08" height="20.32" rx="2.54" fill="none" stroke="#8d93a0" stroke-width="0.3" stroke-dasharray="2 1"/>
-<circle cx="116.23" cy="71.115" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
-<circle cx="116.23" cy="53.335" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
-<circle cx="118.77" cy="71.115" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
-<circle cx="118.77" cy="53.335" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
-<text x="117.5" y="75.78500000000001" fill="#8d93a0" font-size="2.2" text-anchor="middle">2x8</text>
+<rect data-kind="bay" data-label="_display board" data-role="touch" x="31.35" y="27.04" width="93.77" height="70.36999999999999" rx="2.54" fill="none" stroke="#8d93a0" stroke-width="0.3" stroke-dasharray="2 1"/>
+<circle cx="36.235" cy="92.225" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<circle cx="36.235" cy="32.225" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<circle cx="120.235" cy="92.225" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<circle cx="120.235" cy="32.225" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<rect data-kind="bay" data-label="2x8" data-role="touch" x="67.974" y="60.383" width="20.32" height="5.08" rx="2.54" fill="none" stroke="#8d93a0" stroke-width="0.3" stroke-dasharray="2 1"/>
+<circle cx="69.244" cy="64.193" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<circle cx="69.244" cy="61.653" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<circle cx="87.024" cy="64.193" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<circle cx="87.024" cy="61.653" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
+<text x="78.134" y="68.863" fill="#8d93a0" font-size="2.2" text-anchor="middle">2x8</text>
 <rect data-kind="bay" data-label="_enc board 1" data-role="touch" x="153.695" y="30.475" width="25.4" height="25.4" rx="2.54" fill="none" stroke="#8d93a0" stroke-width="0.3" stroke-dasharray="2 1"/>
 <circle cx="156.235" cy="53.335" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>
 <circle cx="156.235" cy="33.015" r="1.25" fill="none" stroke="#8d93a0" stroke-width="0.25"/>

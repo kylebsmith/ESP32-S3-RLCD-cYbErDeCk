@@ -9,6 +9,7 @@ the spec untouched, and requires the audit to notice.
 
 Usage:  python3 v2/tools/test_layout.py
 """
+import os
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -43,7 +44,41 @@ CTRL_PITCH = 19.050             # [VENDOR] 0.75 in, the MX unit, Adafruit's grid
 KBD_COLS, KBD_ROWS = 15, 5      # [CAD-EXACT] v2/parts/keyboard-strip.md 1.6
 # px()/py() round to 4 decimals, and the two pitches are 0.050 apart, so a
 # tolerance three orders of magnitude inside that gap still separates them.
-PITCH_TOL = 0.002
+PITCH_TOL = 0.002               # [DERIVED] 20x layout.py's px()/py() rounding
+                                #   (1e-4) and 25x inside the 0.050 gap between
+                                #   KBD_PITCH and CTRL_PITCH
+
+
+def field_left(text, what):
+    """The switch field's own left edge, read back out of the SVG TEXT.
+
+    A helper and not an inline re.search because the inline one was
+    `re.search(...).group(1)` and raised AttributeError on None. That is not a
+    hypothetical: the regex depends on the drawing tagging its field
+    data-kind="switch-field" AND writing x= as the next attribute
+    (layout.py:338), so either change to the emitter turns the pitch tests into
+    an uncaught traceback. Exit was still 1, so it was loud rather than blind,
+    but it aborted main() BEFORE the per-spec render loop -- so one untagged
+    rect in one drawing hid every spec-level result there is, which is the
+    reporting failure this suite exists to prevent.
+
+    Returns (value, []) or (None, [one FAIL line saying exactly what is
+    missing]), so the caller can skip the two cases that need the edge and keep
+    going.
+    """
+    m = re.search(r'<rect data-kind="switch-field" x="([-0-9.]+)"', text)
+    if m:
+        return float(m.group(1)), []
+    tagged = 'data-kind="switch-field"' in text
+    return None, [
+        f'  FAIL  {what}: the drawing '
+        + ("tags a switch field but does not write x= as the attribute after "
+           "the tag" if tagged else
+           'draws no rect tagged data-kind="switch-field"')
+        + ", so the field's own left edge cannot be read back out of the SVG "
+          "and the lattice tests that re-lattice from it cannot run. "
+          "layout.py:338 is the emitter. Every other check in this file still "
+          "ran; this one did not."]
 
 
 def switch_field(name, svg_text, require_bay=False):
@@ -142,6 +177,94 @@ def switch_field(name, svg_text, require_bay=False):
                             f"({KBD_COLS * KBD_PITCH:.3f} x "
                             f"{KBD_ROWS * KBD_PITCH:.3f})")
     return fail
+
+
+_GEO = ("x", "y", "width", "height", "cx", "cy", "r", "x1", "y1", "x2", "y2",
+        "points", "d", "rx")
+
+
+def _elements(text):
+    """Every drawn element of an SVG, as a comparable signature.
+
+    Tag, the two data- attributes a reader identifies an item by, and every
+    geometric attribute present. Nothing is filtered: the hole marks the bays
+    draw carry no data-kind at all and they are exactly the elements that moved
+    when the display board's size changed, so a signature that skipped them
+    would have missed 8 of the 22 lines.
+    """
+    out = []
+    for e in ET.fromstring(text).iter():
+        g = tuple(f"{a}={e.get(a)}" for a in _GEO if e.get(a) is not None)
+        if not g:
+            continue
+        out.append((e.tag.rsplit("}", 1)[-1], e.get("data-kind") or "-",
+                    e.get("data-label") or "-", g))
+    return out
+
+
+def _show(sig):
+    tag, kind, label, geo = sig
+    return f"{tag} {kind}/{label} {' '.join(geo)}"
+
+
+def committed_svg(name, panel, fresh, path):
+    """The file in v2/layouts/out/ IS the artefact, so measure THAT too.
+
+    This hole was demonstrated, not theorised: a verifier rewrote the committed
+    v2/layouts/out/slab.svg to a 19.050 lattice -- the one regression the whole
+    grid correction exists to prevent -- and this suite printed ALL PASS at
+    exit 0, because every check above renders the spec afresh and never opens
+    the file a reader would open. The committed file could say anything.
+
+    Three gates, in order of how specific the message is:
+
+      1. audit() and switch_field() on the COMMITTED TEXT. A hand-edited
+         lattice reads back as "drawn lattice step 0 in x measures 19.0500 --
+         that is the CONTROL pitch, not the keyboard's", which says what is
+         wrong rather than that something is.
+      2. byte equality against a fresh render. layout.py is byte-deterministic
+         (two runs of each spec give identical sha256), so this is a real gate
+         and not a flake, and it is what catches a committed file that has gone
+         stale against its own spec -- which carrier.svg had, by 22 lines.
+      3. an element-by-element diff, used only to say WHAT differs. A byte diff
+         alone reports a line number; this reports
+         "rect bay/_display board width=93.9 ... -> width=93.77".
+    """
+    if not os.path.exists(path):
+        print(f"  FAIL  {name}: no committed render at "
+              f"{os.path.relpath(path)} -- the spec renders but the file a "
+              f"reader opens does not exist")
+        return False
+    have = open(path, encoding="utf-8").read()
+    f = panel.audit(have) + switch_field(name + " (committed)", have,
+                                         require_bay=True)
+    if f:
+        print(f"  FAIL  {os.path.basename(path)} is COMMITTED and does not "
+              f"pass its own audit: {f[:2]}")
+        return False
+    if have == fresh:
+        print(f"  ok    {os.path.basename(path)} is byte-identical to a "
+              f"fresh render")
+        return True
+    a, b = _elements(have), _elements(fresh)
+    only_c = [s for s in a if a.count(s) > b.count(s)]
+    only_f = [s for s in b if b.count(s) > a.count(s)]
+    print(f"  FAIL  {os.path.basename(path)} is STALE: it differs from a fresh "
+          f"render of {name} in {len(only_c)} element(s) and is missing "
+          f"{len(only_f)}. Re-render it:")
+    print(f"          /usr/bin/python3.11 -I v2/tools/layout.py "
+          f"v2/layouts/{name} {os.path.relpath(path)}")
+    if not only_c and not only_f:
+        print(f"          no element differs, so the difference is formatting "
+              f"only ({len(have)} bytes committed, {len(fresh)} fresh) -- "
+              f"re-render anyway, the committed file is the deliverable")
+    for s in only_c[:4]:
+        print(f"          committed: {_show(s)}")
+    for s in only_f[:4]:
+        print(f"          fresh    : {_show(s)}")
+    if len(only_c) > 4 or len(only_f) > 4:
+        print(f"          ... and {max(len(only_c), len(only_f)) - 4} more")
+    return False
 
 
 def keyed(pitch=KBD_PITCH, field=None):
@@ -358,21 +481,27 @@ def main():
     # drawing code gets no say in where the lines land.
     q = keyed()
     text = q.svg()
-    left = float(re.search(r'<rect data-kind="switch-field" x="([-0-9.]+)"',
-                           text).group(1))
-    seen = []
-
-    def relattice(m):
-        seen.append(m)
-        return m.group(1) + f"{left + len(seen) * CTRL_PITCH:.4f}"
-
-    wrong = re.sub(r'(data-kind="switch-col" x1=")([-0-9.]+)', relattice, text)
-    if len(seen) != 14:
-        print(f"  FAIL  expected 14 lattice lines to rewrite, found {len(seen)}")
+    left, why = field_left(text, "relattice")
+    if left is None:
+        for line in why:
+            print(line)
         bad += 1
     else:
-        bad += not expect("a 19.050 lattice inside a 285.000 field",
-                          switch_field("relattice", wrong), "PITCH")
+        seen = []
+
+        def relattice(m):
+            seen.append(m)
+            return m.group(1) + f"{left + len(seen) * CTRL_PITCH:.4f}"
+
+        wrong = re.sub(r'(data-kind="switch-col" x1=")([-0-9.]+)', relattice,
+                       text)
+        if len(seen) != 14:
+            print(f"  FAIL  expected 14 lattice lines to rewrite, "
+                  f"found {len(seen)}")
+            bad += 1
+        else:
+            bad += not expect("a 19.050 lattice inside a 285.000 field",
+                              switch_field("relattice", wrong), "PITCH")
 
     # one line nudged in the SVG text alone: proof the check reads the drawing
     q = keyed()
@@ -448,6 +577,9 @@ def main():
                 bad += 1
             else:
                 print(f"  ok    {name} renders and passes")
+            out = os.path.join(here, "..", "layouts", "out",
+                              name[:-3] + ".svg")
+            bad += not committed_svg(name, panel, text, out)
         except Exception as e:
             print(f"  FAIL  {name} does not render: {type(e).__name__}: {e}")
             bad += 1

@@ -71,15 +71,28 @@ C5  NOT DEGENERATE. Every emitted PNG: not one flat colour, and enough
 
 C6  THE RENDER USED THE FABRICATOR'S PART. Each view's sidecar names, for
     every EXPORTED body, the SHA-256 of the mesh file the renderer loaded and
-    a hash of that mesh's GEOMETRY. Equal bytes pass outright. Differing bytes
-    are then judged on the geometry, because export.py's carrier is not
-    byte-reproducible -- three consecutive exports of an unchanged
-    carrier.scad gave three sha256 and one geometry [MEASURED 2026-11-07] --
-    so a byte comparison alone fails a render that is a perfectly accurate
-    picture of the part, and a check that cries wolf gets switched off.
-    What still fails is the thing C6 is for: a picture of a part the
-    fabricator never receives, which is the quietest way for a picture to be
-    of last week's part.
+    a hash of that mesh's GEOMETRY. One row per PART, not per body: six knobs
+    are two parts and eight placements, four feet are one part and four, and
+    every instance is staged from the same file. Equal bytes pass outright;
+    differing bytes are judged on the geometry.
+
+    THIS FILE USED TO SAY that the fallback existed because export.py's
+    carrier was not byte-reproducible. It is reproducible now -- export.py
+    canonicalises the facet order and two consecutive full exports give ten
+    identical STLs -- so what a byte difference MEANS has changed: it means
+    THE PICTURE PREDATES A RE-EXPORT. v2/export/stl is a live directory that
+    another author's export.py rewrites, and failing a picture because the
+    part was re-exported without changing is crying wolf. What still fails is
+    the thing C6 is for: a picture of a part the fabricator never receives,
+    which is the quietest way for a picture to be of last week's part.
+
+C7  THE PANEL IS SHOWING SOMETHING. The display is a reflective LCD and a
+    reflective LCD with nothing on it is a grey rectangle -- which is what
+    this render drew for a long time with every other material correct, the
+    kind of failure that survives review because nothing about it looks
+    broken. Go to the rectangle the sidecar says the active area occupies and
+    ask the PNG whether there is an image in it: ink, transitions per row, and
+    level count.
 
 --prove RUNS EVERY ONE OF THEM AGAINST A DELIBERATELY BROKEN RENDER
 -------------------------------------------------------------------
@@ -139,29 +152,105 @@ C3_EDGE_PX = 3.0               # [DESIGN] three stacked parts, one edge each
 #  are taken on what is left. An opaque slab has no detail at all, so both
 #  numbers collapse, which is what makes the check bite.
 #  Every one of these is a [DESIGN] threshold -- a line this project draws,
-#  not a quantity anyone measured off a part -- except C4_MAX_SHIFT_MM, which
-#  is bounded by physics. They are stated here, once, so that a render that
+#  not a quantity anyone measured off a part. They are stated here, once, so
+#  that a render that
 #  drifts is argued with rather than quietly re-tuned. The observed values on
 #  a good render are in the README and printed on every run, which is what
 #  says how much headroom each one has.
+#  ===================================================================
+#  CALIBRATION. The nine numbers below were nine lines drawn once, from a
+#  single known-good render, every one tagged [DESIGN] because that is what
+#  they were. They are now MEASURED, by v2/tools/render/calibrate.py, which
+#  renders six known-good variants -- frame size, device pixel ratio,
+#  tone-mapping exposure, reference-body faceting, all of them correct
+#  pictures of the same deck -- against seven known-bad ones: four of
+#  render.py's own --break modes and three mutations of the emitted PNGs.
+#  Each threshold is then placed in the gap between the two distributions by
+#  one stated rule: the GEOMETRIC mean of the worst good and the best bad for
+#  a floor, because these are ratios and the midpoint of a ratio is geometric;
+#  the arithmetic midpoint for a ceiling; and a quarter of the worst good
+#  where the bad side is exactly zero and any positive floor would divide them.
+#
+#  EACH TERM DIVIDES THE FAILURES IT IS THE RIGHT TERM FOR, and that is not a
+#  convenience. C4 is a conjunction, so a term only has to catch its own
+#  failures; what guarantees nothing slips through is --prove, which watches
+#  every break fire. Asking one term to divide a failure another term catches
+#  by a factor of four makes it tighter than it has any reason to be -- and
+#  twice here it would have made it WRONG, which is the thing a single sample
+#  could never have shown:
+#
+#    * a 0x3 Gaussian blur -- a FROSTED slab -- correlates at 0.7145, which is
+#      INSIDE the good set's 0.6585..0.8743. The worst good there is a
+#      1000 x 700 render, whose coarser search quantum costs it match quality.
+#      No correlation floor separates a light blur. The detail ratio does, at
+#      0.3224 against a worst good of 0.7935.
+#    * an OPAQUE slab keeps 0.7163 of its high-frequency energy, because a
+#      mirror-finish opaque plate still has bright edges round its own holes.
+#      No detail-ratio floor separates it either. The tile count does, at 12
+#      against a worst good of 52.
+#
+#  Every bad variant is printed against every threshold by calibrate.py, with
+#  the ones in its dividing set marked, so an exclusion is on the page rather
+#  than quiet. [MEASURED 2026-11-07, 13 renders.]
+#  ===================================================================
 C4_HIGHPASS_MM = 1.500         # [DESIGN] local-mean box in mm, so scale-free
-C4_MIN_DETAIL_RATIO = 0.35     # [DESIGN] detail through the acrylic / without
-C4_MIN_CORRELATION = 0.60      # [DESIGN] median per-block r, shift-tolerant
-#  [DESIGN] how far refraction may move a feature before the match is not a
-#  match. NOT a physical bound, and it must not be read as one. Snell through
-#  a parallel slab gives t*sin(i)*(1 - cos(i)/sqrt(n^2 - sin^2 i)), which for
-#  t = acrylic_t = 12.700 and n = 1.491 [RÖHM gsxt, v2/parts/stack.md 4.1] is
-#  0.739 mm at i = 10 deg but 6.468 mm at 60 -- so the physical ceiling
-#  depends entirely on the incidence angles this camera actually produces,
-#  and C4's view is the ORTHOGRAPHIC plan, whose rays are parallel to -Z and
-#  whose flat faces therefore refract by ~0. The 0.922 mm the render measures
-#  is a property of three.js's transmission approximation, not a Snell
-#  prediction, and nothing here derives it. See NOT SOURCED in the README.
-C4_MAX_SHIFT_MM = 3.000
-C4_MIN_TILES = 8               # [DESIGN] below this there is nothing to see
+#  good 0.7935..0.8767 over 6 renders; bad 0.1411..0.3224 (frosted3, frosted6)
+C4_MIN_DETAIL_RATIO = 0.5058   # [MEASURED] geometric mean of the two
+#  good 0.6585..0.8743 over 6; bad 0.3173..0.4795 (opaque, frosted6)
+C4_MIN_CORRELATION = 0.5619    # [MEASURED] geometric mean of the two
+#  THE REFRACTION CEILING IS NOW DERIVED AND IS NO LONGER A NUMBER.
+#  It used to be C4_MAX_SHIFT_MM = 3.000, tagged [DESIGN] and listed NOT
+#  SOURCED, with the honest admission that an ORTHOGRAPHIC camera's rays are
+#  parallel to -Z, that flat faces at normal incidence refract by ~0, and that
+#  the 0.922 mm observed could therefore not be a Snell prediction. Both
+#  halves of that were right and the conclusion drawn from them was wrong,
+#  because it asked what the CAMERA does and the displacement is set by what
+#  the SHADER does. Those are not the same thing under an orthographic camera.
+#
+#  three.js r160's getIBLVolumeRefraction() builds the refracted ray from
+#  `cameraPosition - vWorldPosition` -- the camera as a POINT -- whatever the
+#  projection is. It then walks `thickness` along that refracted direction and
+#  projects the EXIT point to screen space to sample the backdrop. So:
+#
+#      i    = atan(rho / D)      rho = the point's radius from the camera
+#                                axis in the slab's plane, D = the camera's
+#                                distance to its target
+#      sin r = sin i / n         Snell
+#      displacement = t * sin r  the LATERAL part of a walk of length t
+#                              = t * sin(i) / n
+#
+#  and that is a bound this file can compute from things it measures: t is the
+#  z-extent of the SLAB'S OWN EXPORTED STL, rho_max comes off the slab's mask
+#  in millimetres, D comes from the camera the sidecar records, and n is the
+#  one optical constant taken from the renderer's claim ([VENDOR roehm-gsxt],
+#  1.491, and the ceiling moves only +-10 % between n = 1.4 and n = 1.6).
+#
+#  NOTE WHICH FORMULA IS NOT USED. The parallel-slab OFFSET,
+#  t*sin i*(1 - cos i/sqrt(n^2 - sin^2 i)), is what a real sheet of PMMA does
+#  to a ray that goes in one face and out the other; at i = 9.407 deg it is
+#  0.6939 mm, which is LESS than the 0.922 this render measures. That
+#  disagreement is how the right model was found: three.js does not refract
+#  out of the second surface at all, it samples at the end of a single walk,
+#  so the lateral term is the whole of it -- 1.3920 mm at the same angle.
+#  An honest ceiling has to be a ceiling on what the renderer does.
+#
+#  The tolerance added to it is ONE SEARCH STEP, which is not a fudge: the
+#  per-tile offset is found by an integer search on a 4x downsampled image, so
+#  the reported magnitude can overstate the true one by up to half a step per
+#  axis, i.e. 0.707 of a step, and one step is the next value up that is also
+#  a quantity this file already has.
+#  good 52..59 over 6; bad 12 (opaque). The term that catches an opaque slab.
+C4_MIN_TILES = 24              # [MEASURED] geometric mean of the two
 C4_BLOCK_MM = 13.0             # [DESIGN] the correlation tile
-C4_SEARCH_MM = 4.0             # [DESIGN] > C4_MAX_SHIFT_MM, so the search
-                               #   cannot clip the displacement it reports
+#  [DESIGN], and calibrate.py does NOT set it -- it is a measurement
+#  parameter, not a gate, and tagging it [MEASURED] because it sat next to
+#  measured things would be a tag nobody earned. What bounds it is stated
+#  instead: it must exceed the DERIVED refraction ceiling (1.391 mm on the
+#  shipped plan view) with room over, or the search clips the displacement it
+#  is meant to report. The evidence that it does is printed on every run as
+#  the percentage of tiles whose best offset sits on the edge of the window:
+#  4 % on the shipped render, 7 % with the thickness tripled.
+C4_SEARCH_MM = 4.0
 
 #  AND IT HAS TO BE SHIFT-TOLERANT, which is the thing a naive version of this
 #  check gets wrong. 12.700 mm of PMMA at n = 1.491 REFRACTS: the image of a
@@ -176,15 +265,41 @@ C4_SEARCH_MM = 4.0             # [DESIGN] > C4_MAX_SHIFT_MM, so the search
 #  footprint, find the offset that best matches the un-occluded frame, and
 #  report the MEDIAN of those correlations and the median displacement. The
 #  displacement is then a result in its own right.#  C5, on a PICTURE.
-C5_MAX_MODAL_FRACTION = 0.97   # [DESIGN] a picture is not 97 % one colour
-C5_MIN_LEVELS = 24             # [DESIGN] levels holding >1e-5 of the pixels
+#  good 0.3377..0.3836 over 6; bad 1.0000 (every picture flattened to one
+#  colour). Arithmetic midpoint, because this one is a ceiling.
+C5_MAX_MODAL_FRACTION = 0.6918  # [MEASURED]
+#  good 73..178 over 6; bad 1 (flat). Note what is NOT here: --break blank
+#  leaves 26 levels, because the backdrop and the annotation layer are still
+#  drawn. C5's PICTURE branch does not catch a blank render and never did;
+#  its MASK branch does, at 0.00 % lit.
+C5_MIN_LEVELS = 8              # [MEASURED] geometric mean of the two
 #  C5, on a MEASUREMENT MASK, which is a different question. A mask is
 #  SUPPOSED to be nearly binary -- flat white on black, tone mapping off -- so
 #  counting distinct levels on one asks it to fail for doing its job
 #  correctly, which it duly did on the first run. What a mask must not be is
 #  all one thing: the right test is that it has both a part and a background.
-C5_MASK_LIT_MIN = 0.02         # [DESIGN] a mask must have a part ...
-C5_MASK_LIT_MAX = 0.98         # [DESIGN] ... and a background
+#  good 0.1259..0.1411 over 6; bad 0.0000 (--break blank). The two
+#  distributions are infinitely separated, so this is not a discrimination
+#  threshold at all -- any positive floor divides them -- and the number is a
+#  quarter of the worst good, chosen as headroom for a mask view nobody has
+#  rendered yet. calibrate.py says so in those words rather than dressing it
+#  up as a measurement.
+C5_MASK_LIT_MIN = 0.0315       # [MEASURED] a mask must have a part ...
+#  good 0.7629..0.8518 over 6; bad 1.0000 (the masks painted fully lit)
+C5_MASK_LIT_MAX = 0.9259       # [MEASURED] ... and a background
+
+#  C7, on the DISPLAY, and calibrated the same way against a panel
+#  deliberately blanked -- to PAPER for the floor and to INK for the ceiling,
+#  because a screen stuck on is as dead as a screen stuck off.
+#  good 0.1545..0.1890 over 6; bad 0.0238 (--break screen)
+C7_INK_MIN = 0.0606            # [MEASURED] geometric mean of the two
+#  good as above; bad 0.9762 (the same break, inverted)
+C7_INK_MAX = 0.5826            # [MEASURED] arithmetic midpoint
+#  good 4.9948..17.2753 over 6; bad 1.0000 (--break screen). This one also
+#  separates both blurs, 1.92 and 1.39, which it was not asked to.
+C7_RUNS_MIN = 2.2349           # [MEASURED] geometric mean of the two
+#  good 123..127 over 6; bad 27 (--break screen)
+C7_LEVELS_MIN = 57             # [MEASURED] geometric mean of the two
 
 
 class Result:
@@ -422,7 +537,8 @@ def _downsample(a, k):
 def detail_match(a_path, b_path, mask_path, mm_per_px, thresh=96):
     """How much of b survives in a, and how far refraction moves it.
 
-    Returns (detail_ratio, median_r, median_shift_mm, n_tiles, hp_px).
+    Returns (detail_ratio, median_r, median_shift_mm, n_tiles, hp_px,
+    search_step_mm, pinned_fraction).
     `a` is the frame WITH the acrylic, `b` the same frame without it.
     """
     import numpy as np
@@ -458,7 +574,7 @@ def detail_match(a_path, b_path, mask_path, mm_per_px, thresh=96):
     blk = max(8, int(round(C4_BLOCK_MM / mmpp)))
     srch = max(2, int(round(C4_SEARCH_MM / mmpp)))
     H, W = da.shape
-    rs, shifts = [], []
+    rs, shifts, pinned = [], [], 0
     for y in range(srch, H - blk - srch, blk):
         for x in range(srch, W - blk - srch, blk):
             if dm[y:y + blk, x:x + blk].min() < 0.999:
@@ -483,11 +599,31 @@ def detail_match(a_path, b_path, mask_path, mm_per_px, thresh=96):
             if best > -2.0:
                 rs.append(best)
                 shifts.append(math.hypot(bdx, bdy) * mmpp)
+                #  A tile whose best offset sits ON the edge of the search
+                #  window has not been measured, it has been clipped: the true
+                #  offset is somewhere beyond. Counting them is what tells a
+                #  displacement that has been measured from one that has only
+                #  been bounded by the window.
+                if max(abs(bdx), abs(bdy)) >= srch:
+                    pinned += 1
     if not rs:
-        return (ratio, 0.0, 0.0, 0, r)
+        return (ratio, 0.0, 0.0, 0, r, mmpp, 0.0)
+    #  THE DISPLACEMENT IS READ OFF THE TILES THAT MATCHED, and only those.
+    #  A tile whose best correlation is 0.2 has not found the same piece of
+    #  board in the other frame; the offset it reports is wherever the noise
+    #  happened to peak, which is uniformly distributed over the search window
+    #  and therefore BIG. Including those pulls the median displacement up in
+    #  exactly the renders where it means least -- measured: blanking the
+    #  display's own content, which is not a transmission failure at all, put
+    #  the median at 1.50x its derived ceiling and tripped C4 for a reason
+    #  that had nothing to do with the acrylic.
+    good = [s for s, c in zip(shifts, rs) if c >= C4_MIN_CORRELATION]
+    if not good:
+        good = shifts
     rs.sort()
-    shifts.sort()
-    return (ratio, rs[len(rs) // 2], shifts[len(shifts) // 2], len(rs), r)
+    good.sort()
+    return (ratio, rs[len(rs) // 2], good[len(good) // 2], len(rs), r,
+            mmpp, pinned / len(rs))
 
 
 def masked_values(path, mask_path, thresh=96, step=2):
@@ -564,6 +700,109 @@ def sha(path):
         for chunk in iter(lambda: fh.read(1 << 20), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def panel_content(path, deck_box, mmpp):
+    """Is the panel in this picture showing anything?
+
+    `deck_box` is where the renderer says the active area is, in millimetres
+    of the deck frame; the mapping from there to pixels is the same one C1
+    uses for a silhouette, and the only renderer claim involved is mm_per_px.
+    Inside that rectangle, three numbers off the PNG:
+
+        ink     the share of pixels below the midpoint of the region's own
+                range. A panel with nothing on it is one tone and has none.
+        runs    dark/light transitions per row, which is what distinguishes
+                TEXT from a rectangle of flat grey or a smooth gradient: a
+                blank panel has 0, a panel with glyphs on it has one pair of
+                transitions per stroke.
+        levels  distinct luma levels. A bi-level panel seen through 12.700 mm
+                of acrylic is not literally two levels -- the slab shades it
+                -- but it is not a photograph either.
+
+    Returns (ink_fraction, runs_per_row, levels, (w_mm, h_mm)) or None.
+    """
+    import numpy as np
+    g, (W, H) = load_gray(path)
+    x0, y0, x1, y1 = deck_box
+    #  +X right, and the image's +y runs DOWN while the plan view's up is the
+    #  deck's +Y, so y flips -- exactly as in C1.
+    px0 = int(round((W - 1) / 2.0 + x0 / mmpp))
+    px1 = int(round((W - 1) / 2.0 + x1 / mmpp))
+    py0 = int(round((H - 1) / 2.0 - y1 / mmpp))
+    py1 = int(round((H - 1) / 2.0 - y0 / mmpp))
+    px0, px1 = max(0, px0), min(W - 1, px1)
+    py0, py1 = max(0, py0), min(H - 1, py1)
+    if px1 - px0 < 8 or py1 - py0 < 8:
+        return None
+    a = g[py0:py1 + 1, px0:px1 + 1]
+    lo, hi = float(a.min()), float(a.max())
+    if hi - lo < 1e-9:
+        return (0.0, 0.0, 1, ((px1 - px0 + 1) * mmpp, (py1 - py0 + 1) * mmpp))
+    mid = (lo + hi) / 2.0
+    dark = a < mid
+    ink = float(dark.mean())
+    #  transitions per row, counted on the row's own binarisation
+    runs = float(np.abs(np.diff(dark.astype(np.int8), axis=1)).sum()
+                 / dark.shape[0])
+    h = np.bincount(np.clip(a, 0, 255).astype(np.uint8).ravel(), minlength=256)
+    levels = int((h > a.size * 1e-4).sum())
+    return (ink, runs, levels,
+            ((px1 - px0 + 1) * mmpp, (py1 - py0 + 1) * mmpp))
+
+
+def refraction_ceiling(sc, footprint_png, stl_dir,
+                       footprint_sidecar=None):
+    """How far three.js's transmission pass CAN move a feature in this frame.
+
+    Every term is measured off an artefact or read from the one camera claim
+    this file accepts, and the formula is the renderer's own, not a textbook's
+    (see the note above C4_HIGHPASS_MM):
+
+        t        the SLAB'S OWN exported STL, z extent. Not the material's
+                 declared `thickness` -- that is the number a break moves, and
+                 a ceiling computed from it would rise to meet any lie told
+                 about it.
+        rho_max  the slab's silhouette in THIS frame, measured off mask_slab
+                 in millimetres at the stated mm_per_px: the furthest any
+                 transmitting pixel is from the camera's axis.
+        D        |camera position - camera target|, from the sidecar.
+        n        the renderer's claimed ior. The only term taken on trust, and
+                 the ceiling moves by about +-10 % over n = 1.4 .. 1.6.
+
+    Returns (ceiling_mm, explanation) or (None, why not).
+    """
+    cam = sc.get("camera")
+    if not cam or not cam.get("position") or not cam.get("target"):
+        return None, ("the sidecar records no camera position, so the "
+                      "incidence angles cannot be derived -- re-run render.py")
+    mat = (sc.get("materials") or {}).get("acrylic_clear") or {}
+    n = mat.get("ior")
+    if not n:
+        return None, "the sidecar states no ior for acrylic_clear"
+    stl = os.path.join(stl_dir, "slab.stl")
+    if not os.path.exists(stl):
+        return None, f"{os.path.relpath(stl, REPO)} does not exist"
+    t = stl_facts(stl)["t"]
+    #  THE MASK'S OWN SCALE, NOT THE PLAN'S. mask_slab is rendered at device
+    #  pixel ratio 1 and plan at 2, so they are the same frame in millimetres
+    #  and a factor of two apart in pixels. Measuring the mask's silhouette at
+    #  the plan's mm_per_px halved rho and halved the ceiling with it, which
+    #  is the kind of error that makes a gate quietly tighter than it should
+    #  be [MEASURED: rho read 89.88 where the slab's half-diagonal is 179.76].
+    msc = footprint_sidecar or sc
+    mmpp = msc["view"].get("mm_per_px") or sc["view"]["mm_per_px"]
+    ex = mask_extents(footprint_png)
+    if ex is None:
+        return None, "the slab's mask is empty"
+    x0, y0, x1, y1, _cx, _cy, _n = ex
+    rho = 0.5 * math.hypot((x1 - x0 + 1) * mmpp, (y1 - y0 + 1) * mmpp)
+    D = math.dist(cam["position"], cam["target"])
+    i = math.atan2(rho, D)
+    ceil = t * math.sin(i) / n
+    return ceil, (f"t {t:.3f} off slab.stl, rho {rho:.2f} off the mask, "
+                  f"D {D:.1f} from the sidecar's camera, so i_max "
+                  f"{math.degrees(i):.3f} deg and t*sin(i)/n = {ceil:.3f}")
 
 
 # ===========================================================================
@@ -683,10 +922,13 @@ def run_checks(outdir, stl_dir=EXPORT_STL, verbose=True):
             R.add("C4", "acrylic transmission", False,
                   "empty probe region after eroding the slab's footprint")
         else:
-            ratio, rho, shift, n, hp = got
+            ratio, rho, shift, n, hp, step, pinned = got
+            ceil, why = refraction_ceiling(
+                sc, footprint, stl_dir, sidecar(outdir, "mask_slab"))
+            lim = None if ceil is None else ceil + step
             ok = (ratio >= C4_MIN_DETAIL_RATIO
                   and rho >= C4_MIN_CORRELATION
-                  and shift <= C4_MAX_SHIFT_MM
+                  and (lim is None or shift <= lim)
                   and n >= C4_MIN_TILES)
             #  An opaque slab has NO detail-bearing tiles, and that -- not the
             #  energy ratio -- is the term that catches it. A mirror-finish
@@ -700,10 +942,17 @@ def run_checks(outdir, stl_dir=EXPORT_STL, verbose=True):
                   f"inside the slab's footprint, high-passed at "
                   f"{C4_HIGHPASS_MM:.3f} mm ({hp} px): {n} detail-bearing "
                   f"tiles (need >= {C4_MIN_TILES}){note}, median match "
-                  f"r = {rho:5.3f} (need >= {C4_MIN_CORRELATION}), median "
-                  f"refraction displacement {shift:5.3f} mm (max "
-                  f"{C4_MAX_SHIFT_MM}), high-frequency energy {ratio:5.3f} x "
-                  f"the un-occluded frame (need >= {C4_MIN_DETAIL_RATIO})")
+                  f"r = {rho:5.3f} (need >= {C4_MIN_CORRELATION}), "
+                  f"high-frequency energy {ratio:5.3f} x the un-occluded "
+                  f"frame (need >= {C4_MIN_DETAIL_RATIO}); refraction "
+                  f"displacement median {shift:5.3f} mm, "
+                  f"over the tiles that matched; "
+                  f"{pinned * 100:.0f} % of all tiles clipped by the "
+                  f"{C4_SEARCH_MM:.1f} mm search window, "
+                  + (f"against a DERIVED ceiling of {ceil:5.3f} + one "
+                     f"{step:.4f} mm search step = {lim:5.3f} -- {why}"
+                     if ceil is not None else
+                     "and no ceiling could be derived: " + why))
 
     # ---- C5 --------------------------------------------------------------
     pngs = sorted(f for f in os.listdir(outdir) if f.endswith(".png"))
@@ -763,12 +1012,31 @@ def run_checks(outdir, stl_dir=EXPORT_STL, verbose=True):
         sc = sidecar(outdir, f[:-4])
         if not sc:
             continue
+        #  ONE ROW PER PART, NOT PER BODY. Six knobs are two parts and eight
+        #  placements; four feet are one part and four. Every instance of a
+        #  part is staged from the same file and so carries the same hash, so
+        #  fifteen rows would be eight answers and seven echoes. The instance
+        #  count is printed instead, because "knob_encoder, 3 placements" is
+        #  the thing a reader can check against the drawing.
+        seen = {}
         for b in sc.get("bodies", []):
             if b["provenance"] != "EXPORTED":
                 continue
-            stl = os.path.join(stl_dir, f"{b['id']}.stl")
+            part = b.get("part", b["id"])
+            seen.setdefault(part, []).append(b)
+        for part, insts in seen.items():
+            b = insts[0]
+            many = (f" ({len(insts)} placements)" if len(insts) > 1 else "")
+            shas = {i["sha256"] for i in insts}
+            if len(shas) > 1:
+                R.add("C6", f"{f[:-4]}/{part} provenance", False,
+                      f"the {len(insts)} placements of {part} name "
+                      f"{len(shas)} different meshes: {sorted(shas)}. They "
+                      f"are staged from one file and must be one mesh.")
+                continue
+            stl = os.path.join(stl_dir, f"{part}.stl")
             if not os.path.exists(stl):
-                R.add("C6", f"{f[:-4]}/{b['id']} provenance", False,
+                R.add("C6", f"{f[:-4]}/{part} provenance", False,
                       f"the sidecar claims an exported body but "
                       f"{os.path.relpath(stl, REPO)} does not exist")
                 continue
@@ -776,9 +1044,9 @@ def run_checks(outdir, stl_dir=EXPORT_STL, verbose=True):
             checked += 1
             if want == b["sha256"]:
                 #  identical bytes: identical geometry, nothing more to ask
-                R.add("C6", f"{f[:-4]}/{b['id']} provenance", True,
+                R.add("C6", f"{f[:-4]}/{part} provenance", True,
                       f"rendered mesh sha256 {b['sha256']} vs "
-                      f"{os.path.relpath(stl, REPO)} {want}")
+                      f"{os.path.relpath(stl, REPO)} {want}{many}")
                 continue
             #  The bytes differ. That is NOT yet a failure, because
             #  export.py's carrier is not byte-reproducible: three consecutive
@@ -788,7 +1056,7 @@ def run_checks(outdir, stl_dir=EXPORT_STL, verbose=True):
             #  the same PART as the mesh on disk? A render.py old enough not
             #  to have recorded a geom_sha cannot answer, and fails as before.
             if not b.get("geom_sha"):
-                R.add("C6", f"{f[:-4]}/{b['id']} provenance", False,
+                R.add("C6", f"{f[:-4]}/{part} provenance", False,
                       f"rendered mesh sha256 {b['sha256']} vs "
                       f"{os.path.relpath(stl, REPO)} {want}, and the sidecar "
                       f"records no geom_sha, so whether the geometry changed "
@@ -798,7 +1066,7 @@ def run_checks(outdir, stl_dir=EXPORT_STL, verbose=True):
             import render as _r
             got_geom = _r.geom_sha(stl)
             same = got_geom == b["geom_sha"]
-            R.add("C6", f"{f[:-4]}/{b['id']} provenance", same,
+            R.add("C6", f"{f[:-4]}/{part} provenance", same,
                   (f"bytes differ (rendered {b['sha256']}, on disk {want}) "
                    f"but the GEOMETRY is identical ({got_geom}): "
                    f"{os.path.relpath(stl, REPO)} was re-exported, not "
@@ -811,6 +1079,46 @@ def run_checks(outdir, stl_dir=EXPORT_STL, verbose=True):
     if checked == 0:
         R.add("C6", "provenance", False,
               "no sidecar named an EXPORTED body", skipped=True)
+
+    # ---- C7 --------------------------------------------------------------
+    #  THE PANEL IS SHOWING SOMETHING. A reflective LCD with nothing on it is
+    #  a grey rectangle, and a grey rectangle is what this render drew for a
+    #  long time while every other material was correct -- which is exactly
+    #  the kind of failure that survives review, because nothing about it
+    #  looks broken. So: go to the rectangle the renderer says the active area
+    #  occupies and ask the PNG whether there is an image in it.
+    #
+    #  What this check does NOT do is verify that the panel is the right size
+    #  or in the right place. It cannot: the display is a REFERENCE body,
+    #  there is no exported artefact of it to measure against, and this file
+    #  will not test a CAD number against itself. Its size is printed so a
+    #  reader can see it, and its provenance is in the sidecar.
+    sc = sidecar(outdir, "plan")
+    png = os.path.join(outdir, "plan.png")
+    screen = (sc or {}).get("screen") or {}
+    if not (sc and os.path.exists(png) and screen.get("deck_box")
+            and sc["view"].get("mm_per_px")):
+        R.add("C7", "the panel is lit", False,
+              "need plan.png and a sidecar whose screen names a deck_box",
+              skipped=True)
+    else:
+        got = panel_content(png, screen["deck_box"], sc["view"]["mm_per_px"])
+        if got is None:
+            R.add("C7", "the panel is lit", False,
+                  "the active area falls outside the frame")
+        else:
+            ink, runs, levels, (wmm, hmm) = got
+            ok = (C7_INK_MIN <= ink <= C7_INK_MAX
+                  and runs >= C7_RUNS_MIN
+                  and levels >= C7_LEVELS_MIN)
+            R.add("C7", "the panel is lit", ok,
+                  f"the {wmm:.2f} x {hmm:.2f} mm active area carries "
+                  f"{ink * 100:5.2f} % ink (want "
+                  f"{C7_INK_MIN * 100:.0f}..{C7_INK_MAX * 100:.0f}), "
+                  f"{runs:6.2f} dark/light transitions per row (need >= "
+                  f"{C7_RUNS_MIN}) and {levels} levels (need >= "
+                  f"{C7_LEVELS_MIN}) -- a panel with nothing on it has one "
+                  f"tone, no transitions and no ink")
     return R
 
 
@@ -840,6 +1148,17 @@ BREAKS = [
     ("stl", "C6",
      "the staged mesh mutated after export, so the picture is of a part the "
      "fabricator never receives."),
+    ("screen", "C7",
+     "the panel's framebuffer blanked to one tone. Every material is still "
+     "correct, the display is still in the picture, and the instrument is "
+     "dead -- which is what this render drew before anything was put on the "
+     "screen, and what nothing noticed."),
+    ("thick", "C4",
+     "the acrylic's refraction thickness tripled. It still transmits, the "
+     "picture still looks plausible, and everything seen through it has "
+     "moved further than a 12.700 mm slab can move it. This is the break "
+     "the old C4_MAX_SHIFT_MM = 3.000 could not catch, because 3.000 was a "
+     "round number and the thing it was bounding is 1.392."),
 ]
 
 

@@ -95,6 +95,14 @@ function serve() {
   //  thing that catches it rather than a person noticing.
   const browser = await chromium.launch();
   let bad = 0;
+  //  THE CAMERA EACH VIEW ACTUALLY USED, as scene.js computed it, written next
+  //  to the manifest for render.py to fold into the sidecars. It is the same
+  //  class of claim as mm_per_px -- the renderer's statement about its own
+  //  camera -- and check_render.py's C4 tests it against physics: the
+  //  distance from this position to the target is what sets the incidence
+  //  angles the transmission shader sees, and therefore how far refraction
+  //  can move anything.
+  const cameras = {};
 
   //  One context per device pixel ratio: deviceScaleFactor is a context
   //  property in Playwright, not a page one, so a 1x measurement view and a
@@ -143,6 +151,7 @@ function serve() {
       //  it, and screenshotting too early gives a blank or half-drawn canvas.
       await page.evaluate(() => new Promise(r =>
         requestAnimationFrame(() => requestAnimationFrame(r))));
+      cameras[v.name] = cam;
       const dest = path.join(OUT, v.name + '.png');
       await page.screenshot({ path: dest, type: 'png' });
       const kb = (fs.statSync(dest).size / 1024).toFixed(1);
@@ -164,5 +173,7 @@ function serve() {
 
   await browser.close();
   srv.close();
+  fs.writeFileSync(path.join(WORK, 'cameras.json'),
+                   JSON.stringify(cameras, null, 1));
   process.exit(bad ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

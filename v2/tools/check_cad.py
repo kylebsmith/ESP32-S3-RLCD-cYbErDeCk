@@ -77,6 +77,17 @@ TOL_DXF = 0.010         # mm. The DXF is ASCII decimal at 6 significant
                         #   10x the artefact's own resolution.  [DERIVED]
 CIRC_TOL = 0.003        # mm. Vertex-radius spread that still reads as a
                         #   circle: 3x the DXF's quantisation.  [DERIVED]
+CORNER_TOL = 0.003      # mm. Two things, on the same basis as CIRC_TOL -- 3x
+                        #   the DXF's 0.001 quantisation: the SPREAD between a
+                        #   rounded rectangle's four independently fitted
+                        #   corner radii, and each arc's own fit residual.
+                        #   MEASURED on the shipped files: the outline's spread
+                        #   is 4.7e-08 and the void's 6.6e-06, residuals
+                        #   2.6e-04 and 4.7e-04 (the Kasa fit on 25 points
+                        #   quantised to 0.001). So this is 450x the worst
+                        #   spread and 6.4x the worst residual, and still 6.7x
+                        #   inside the 0.020 single-corner error it exists to
+                        #   name.  [DERIVED]
 SHAPE_TOL = 0.006       # mm. How far a vertex may sit off the boundary of the
                         #   shape we claim it is. Two quantised coordinates
                         #   plus a quantised fitted axis.  [DERIVED]
@@ -127,9 +138,47 @@ WEB_BASELINE = {
                             #   18650 window <-> a cowl screw
 }
 
-PART_LAYERS = ("CUT_OUTER", "CUT_INNER")    # dxf_post.py's own convention; the
-                                            # FIDUCIAL is a token in the waste
-                                            # and is not part geometry.
+def part_layers():
+    """dxf_post.py's own layer names, IMPORTED and not copied.
+
+    This was a hardcoded ("CUT_OUTER", "CUT_INNER"), and the stale-copy failure
+    mode is a WRONG ANSWER rather than an error. Rename both part layers in
+    dxf_post and nothing in this file matches them, dxf_part_loops() falls
+    through to dxf_loops(), and the FIDUCIAL -- an orientation token in the
+    sheet's waste, not part geometry -- joins the part inventory. Measured on
+    the slab with the two layers renamed PROFILE / INTERNAL in a scratch copy
+    of dxf_post:
+
+        16 cut contours where there are 15
+        120 web pairs where there are 105
+        the "F" at -170.080,-112.968 in the edge-distance table
+        "? corner 0: faceting sagitta 5.8301" against the F's square corner
+
+    LAZY, and that is forced rather than stylistic. dxf_post.py does
+    `from check_cad import stitch` at its own module level, so a module-level
+    `from dxf_post import PART_LAYERS` here breaks whichever of the two is
+    loaded second: PART_LAYERS is declared below that import in dxf_post, so
+    running dxf_post.py first would hit a half-built module. Inside a function
+    the cycle resolves either way round.
+    """
+    global _PART_LAYERS
+    if _PART_LAYERS is None:
+        here = os.path.dirname(os.path.abspath(__file__))
+        if here not in sys.path:
+            sys.path.insert(0, here)
+        import dxf_post
+        got = tuple(dxf_post.PART_LAYERS)
+        if dxf_post.FID_LAYER in got:
+            raise RuntimeError(
+                f"dxf_post.PART_LAYERS contains its own FID_LAYER "
+                f"{dxf_post.FID_LAYER!r}: the fiducial would be counted as "
+                f"part geometry and every inventory in this file would be off "
+                f"by one.")
+        _PART_LAYERS = got
+    return _PART_LAYERS
+
+
+_PART_LAYERS = None
 
 
 # ---- the datums, parsed from the one file that owns them ------------------
@@ -224,12 +273,21 @@ def dxf_part_loops(path):
     so it can be told apart from the part; counting it as a cut contour would
     make every inventory off by one. A raw OpenSCAD export has no layers at
     all, so that case falls back to everything.
+
+    THE FALLBACK IS NARROWED TO THE CASE IT WAS WRITTEN FOR. A raw export puts
+    every entity on layer "0"; a post-processed file puts them on named layers.
+    If the file has named layers and NONE of them is a part layer, the fallback
+    would hand back the fiducial as part geometry and every count downstream
+    would be quietly wrong -- so that case raises instead. It is the only
+    reading under which this function cannot return a wrong answer.
     """
     import ezdxf
     doc = ezdxf.readfile(path)
-    loops = []
+    want = part_layers()
+    loops, seen = [], set()
     for e in doc.modelspace():
-        if e.dxf.layer not in PART_LAYERS:
+        seen.add(e.dxf.layer)
+        if e.dxf.layer not in want:
             continue
         if e.dxftype() == "LWPOLYLINE":
             pts = [(p[0], p[1]) for p in e.get_points()]
@@ -239,7 +297,18 @@ def dxf_part_loops(path):
             pts = [(v.dxf.location.x, v.dxf.location.y) for v in e.vertices]
             if len(pts) > 2:
                 loops.append(pts)
-    return loops or dxf_loops(path)
+    if loops:
+        return loops
+    if seen - {"0", "Defpoints"}:
+        raise RuntimeError(
+            f"{os.path.basename(path)} carries named layers "
+            f"{sorted(seen)} and not one of them is a PART layer "
+            f"{list(want)} as dxf_post.py declares them. Falling back to every "
+            f"contour in the file would count the fiducial as part geometry: "
+            f"on the slab that reads 16 cut contours where there are 15. "
+            f"Either dxf_post.LAYERS was renamed without re-posting the export "
+            f"or the file was written by something else.")
+    return dxf_loops(path)
 
 
 def stitch(segs, tol=1e-6):
@@ -420,13 +489,13 @@ class Ring:
                     bearing=math.degrees(math.atan2(uy, ux)) % 180.0,
                     caps=caps, facet=f)
 
-    def _rrect(self):
-        """An axis-aligned rounded rectangle, with its corner radius FITTED.
+    def corner_arcs(self):
+        """Fit the four corner arcs of this contour INDEPENDENTLY.
 
-        The outline and the keyboard void. The radius is not read off a datum:
-        it is recovered from each of the four corner arcs independently, and
-        the four are required to agree -- which is how a void whose corners
-        were drawn at the wrong radius gets caught.
+        Separated from _rrect() because it is useful on a contour _rrect() has
+        just REFUSED: that is the case where something is wrong with a corner
+        and the only thing a reader needs is which corner and by how much.
+        Returns None only if a corner has too few vertices to fit at all.
         """
         from shapely.geometry import Point
         if self.w <= 0 or self.h <= 0:
@@ -450,6 +519,30 @@ class Ring:
             cx, cy, r, res = fit
             arcs.append(dict(sx=sx, sy=sy, r=r, resid=res, n=len(sel),
                              cx=cx, cy=cy))
+        return arcs
+
+    def _rrect(self):
+        """An axis-aligned rounded rectangle, with its corner radius FITTED.
+
+        The outline and the keyboard void. The radius is not read off a datum:
+        it is recovered from each of the four corner arcs independently.
+
+        WHAT THIS FUNCTION DOES AND DOES NOT DECIDE. It returns the four fits
+        and the spread between them; it does NOT gate the spread. That gate is
+        check_corner_radii(), which has the datums and can name the corner. The
+        docstring used to claim the four "are required to agree -- which is how
+        a void whose corners were drawn at the wrong radius gets caught", and
+        the agreement was computed, printed and never tested: a single corner at
+        R3.195 instead of R3.175 does get caught, but only indirectly, by the
+        per-vertex boundary test below refusing the whole contour, so the
+        operator reads "no rounded-rectangular keyboard void in the DXF" and an
+        unaccounted contour and is told nothing about a corner. Both paths now
+        exist: the indirect refusal stays, and the named gate is explicit.
+        """
+        from shapely.geometry import Point
+        arcs = self.corner_arcs()
+        if arcs is None:
+            return None
         rs = [a["r"] for a in arcs]
         r = sum(rs) / 4.0
         # every vertex must lie on the boundary of the rounded rect we fitted
@@ -509,6 +602,11 @@ def _farthest_pair(pts):
             if d > best[2]:
                 best = (pts[i], pts[j], d)
     return best
+
+
+def _pt_dist(x, y, ring):
+    from shapely.geometry import Point
+    return Point(x, y).distance(ring.lr)
 
 
 def _bearing(ax, ay, bx, by):
@@ -699,6 +797,103 @@ def check_datum_and_slots(rings, pattern, datum_i, clear_d, slot_l,
 
 
 # ===========================================================================
+#  CHECK 2b -- EVERY ROUNDED CORNER, GATED AND NAMED
+# ===========================================================================
+def _corner_name(a):
+    return f"{'+x' if a['sx'] > 0 else '-x'}/{'+y' if a['sy'] > 0 else '-y'}"
+
+
+def check_corner_radii(rings, env, fails, lines):
+    """Gate the four corner radii of every rounded rectangle, by NAME.
+
+    The gate _rrect's docstring used to claim and never applied. Three things
+    are tested and they catch different mistakes:
+
+      SPREAD     the four fitted radii against each other. This is the one that
+                 names a single corner drawn at the wrong radius. It does not
+                 need a datum, so it works on any rounded rectangle in the file.
+      RESIDUAL   each arc's own circle-fit residual. A corner that is a chamfer,
+                 an ellipse or a different radius part-way round fits a circle
+                 badly, and the mean radius alone cannot see it.
+      NOMINAL    the mean against the datum, where this file knows which datum
+                 governs. That one already existed for the void; it is here too
+                 so the outline's corner_r is no longer unchecked.
+
+    THE MEAN IS NOT ENOUGH AND THAT IS THE WHOLE POINT. One corner at R3.195
+    with three at R3.175 has a mean of R3.180, which is inside TOL_DXF, so the
+    nominal gate passes it. The spread is 0.020 and this fires.
+    """
+    want = {"outline": "corner_r", "keyboard void": "kbd_void_r"}
+    rr = [r for r in rings if r.kind == "rrect"]
+    if not rr:
+        return
+    lines.append("    corners -- the four arcs of every rounded rectangle, "
+                 "fitted one at a time")
+    lines.append(f"      {'contour':20s} {'datum':>8s} {'mean r':>9s} "
+                 f"{'spread':>10s} {'resid':>10s}   per-corner r")
+    for r in rr:
+        s = r.shape
+        nm = want.get(r.label)
+        nom = env.get(nm) if nm else None
+        per = "  ".join(f"{_corner_name(a)} {a['r']:.4f}" for a in s["arcs"])
+        lines.append(f"      {r.label:20s} "
+                     f"{(('%.3f' % nom) if nom is not None else '-'):>8s} "
+                     f"{s['r']:9.4f} {s['r_spread']:10.2e} "
+                     f"{s['arc_resid']:10.2e}   {per}")
+        if s["r_spread"] > CORNER_TOL:
+            lo = min(s["arcs"], key=lambda a: a["r"])
+            hi = max(s["arcs"], key=lambda a: a["r"])
+            fails.append(
+                f"{r.label}: the four corner radii DISAGREE by "
+                f"{s['r_spread']:.4f} -- {_corner_name(hi)} fits "
+                f"R{hi['r']:.4f} and {_corner_name(lo)} fits R{lo['r']:.4f}"
+                + (f", against {nm} = {nom:.3f}" if nom is not None else "")
+                + f". The mean is R{s['r']:.4f}, which is why a check on the "
+                f"mean alone passes this. Tolerance {CORNER_TOL:.3f} = 3x the "
+                f"DXF's quantisation; the shipped files read 7e-06.")
+        for a in s["arcs"]:
+            if a["resid"] > CORNER_TOL:
+                fails.append(
+                    f"{r.label}: the {_corner_name(a)} corner's {a['n']} "
+                    f"vertices do not lie on one circle -- best fit R"
+                    f"{a['r']:.4f} centred {a['cx']:+.3f},{a['cy']:+.3f} with "
+                    f"a {a['resid']:.4f} residual, against the "
+                    f"{CORNER_TOL:.3f} budget. A chamfer, an ellipse or a "
+                    f"radius that changes part-way round the arc all read like "
+                    f"this and all pass a mean-radius check.")
+        if nom is not None and abs(s["r"] - nom) > TOL_DXF:
+            fails.append(f"{r.label}: mean corner radius R{s['r']:.4f}, "
+                         f"want {nm} = {nom:.3f}")
+
+
+def diagnose_rrect(ring, nom_r, what):
+    """Say WHICH corner is wrong on a contour that _rrect() has refused.
+
+    _rrect()'s per-vertex boundary test assumes one radius, so a contour with
+    one corner drawn at the wrong radius is classified "other" and surfaces as
+    "no rounded-rectangular keyboard void in the DXF" plus an unaccounted
+    contour. True, loud, and silent about the cause. This turns it into the
+    corner's name and its measured radius.
+    """
+    arcs = ring.corner_arcs()
+    if arcs is None:
+        return []
+    rs = [a["r"] for a in arcs]
+    out = [f"{what}: the contour at {ring.bx:+.3f},{ring.by:+.3f} is "
+           f"{ring.w:.4f} x {ring.h:.4f} and its four corners fit "
+           + ", ".join(f"{_corner_name(a)} R{a['r']:.4f}" for a in arcs)
+           + f" (spread {max(rs)-min(rs):.4f}"
+           + (f", want R{nom_r:.3f}" if nom_r is not None else "") + ")."]
+    if nom_r is not None:
+        bad = [a for a in arcs if abs(a["r"] - nom_r) > CORNER_TOL]
+        if bad:
+            out.append(f"{what}: " + "; ".join(
+                f"the {_corner_name(a)} corner is R{a['r']:.4f} and should be "
+                f"R{nom_r:.3f}, out by {a['r']-nom_r:+.4f}" for a in bad))
+    return out
+
+
+# ===========================================================================
 #  CHECK 3 -- THE MINIMUM WEB INVENTORY
 # ===========================================================================
 def check_webs(part, rings, t, fails, lines):
@@ -786,13 +981,41 @@ def check_keyboard_branch(env, void, fails, lines):
                      f"{env['kbd_void_y']:+.4f}")
 
     ov_x, ov_y = (fw - W)/2, (fh - H)/2
-    cl_x, cl_y = (W - cw)/2, (H - ch)/2
+    #  FOUR CLEARANCES, NOT TWO, AND THE CAP FIELD IS NOT CONCENTRIC.
+    #  This read (W - cw)/2 and (H - ch)/2, which is the clearance you get if
+    #  the keycap field sits on the void's centre. It does not:
+    #  kbd_cap_field_d is the field's centre in DECK axes relative to the
+    #  frame's, and the void is concentric with the frame, so the gap is
+    #  (W - cw)/2 -/+ d[0] across x and (H - ch)/2 +/- d[1] through the depth.
+    #  Concentric arithmetic gave 0.7125 and 0.8425 per side and hid both the
+    #  tightest gap (+x 0.650) and the loosest (rear 1.0925). Measured here off
+    #  the DXF's own void and gated against parameters.scad's kbd_cap_clear,
+    #  which is the same four numbers computed from the datums -- so the void
+    #  as DRAWN and the clearance as DECLARED cannot drift apart.
+    dxc, dyc = env["kbd_cap_field_d"]
+    cl = ((W - cw)/2 - dxc, (W - cw)/2 + dxc,
+          (H - ch)/2 + dyc, (H - ch)/2 - dyc)
+    cl_x, cl_y = min(cl[0], cl[1]), min(cl[2], cl[3])
     lines.append(f"      frame {fw:.3f} x {fh:.3f}   "
-                 f"keycap field {cw:.3f} x {ch:.3f}")
+                 f"keycap field {cw:.3f} x {ch:.3f}, centre "
+                 f"{dxc:+.4f},{dyc:+.4f} off the frame's (kbd_cap_field_d)")
     lines.append(f"      slab-over-frame overlap   X {ov_x:+.4f}  "
                  f"Y {ov_y:+.4f}   per side")
-    lines.append(f"      void-over-keycap clearance X {cl_x:+.4f}  "
-                 f"Y {cl_y:+.4f}   per side")
+    lines.append(f"      void-over-keycap clearance, measured per SIDE and not "
+                 f"per axis: +x {cl[0]:+.4f}  -x {cl[1]:+.4f}  "
+                 f"front {cl[2]:+.4f}  rear {cl[3]:+.4f}")
+    decl = env.get("kbd_cap_clear")
+    if decl and len(decl) == 4:
+        for nm, got, nom in zip(("+x", "-x", "front", "rear"), cl, decl):
+            if abs(got - nom) > TOL_DXF:
+                fails.append(
+                    f"void-over-keycap clearance at {nm} measures {got:.4f} "
+                    f"off the DXF and parameters.scad's kbd_cap_clear declares "
+                    f"{nom:.4f}. The void as drawn and the clearance as "
+                    f"declared have drifted apart by {got-nom:+.4f}.")
+    else:
+        lines.append("        kbd_cap_clear did not parse as four numbers, so "
+                     "the declared clearance is unchecked")
 
     if mount == "recessed":
         for nm, v, pair in (("X", ov_x, (W, fw)), ("Y", ov_y, (H, fh))):
@@ -826,51 +1049,75 @@ def check_keyboard_branch(env, void, fails, lines):
 
     # -- the corner, which is the tight one -------------------------------
     #  Measured against the ARTEFACT's own corner arc, so the faceting is in
-    #  the answer: the inscribed 96-gon sits inside the nominal R3.175 and the
-    #  corner is 0.0013 tighter than the nominal arithmetic says.
-    #  parameters.scad 8a states the keycap's own corner radius is NOT SOURCED
-    #  and asks this file to report the square-cap figure "so the assumption
-    #  cannot hide". It is reported and it is NOT gated -- a perfectly square
-    #  keycap is a fiction, and gating on a fiction fails a good part.
+    #  the answer: the inscribed 96-gon sits inside the nominal R3.175.
+    #
+    #  WHAT THIS FIGURE IS AND WHAT IT IS NOT, because the file used to claim
+    #  more than it could. It is the clearance for a cap with a PERFECTLY
+    #  SQUARE plan corner, and it is reported, not gated, because that cap does
+    #  not exist. It used to say parameters.scad "asks this file to report the
+    #  square-cap figure so the assumption cannot hide", and also that "the
+    #  keycap's own corner radius is NOT SOURCED". parameters.scad says neither
+    #  any more, and the reason is a finding rather than an omission: the 1u
+    #  cap's B-rep has 77 faces of which six are cylindrical and NONE has a
+    #  vertical axis, so the plan corner is a swept blend on a tapered shell.
+    #  There is no feature radius to source, so there is no number waiting to
+    #  be looked up and no assumption hiding -- and _min_cap_radius below
+    #  answers the only well-posed version of the question, which is how much
+    #  corner the void could tolerate.
+    #
+    #  THE CORNER IS ALSO NOT CONCENTRIC, for the same reason the sides are
+    #  not: the cap field's corner sits at the void's centre displaced by
+    #  kbd_cap_field_d. Taken concentrically this read -0.2185; the governing
+    #  corner is the front +x one and it reads -0.4376.
     best = None
     for sx in (1, -1):
         for sy in (1, -1):
-            p = Point(void.bx + sx*cw/2, void.by + sy*ch/2)
+            p = Point(void.bx + dxc + sx*cw/2, void.by + dyc + sy*ch/2)
             d = p.distance(void.lr)
             sd = d if void.poly.contains(p) else -d
             if best is None or sd < best[0]:
                 best = (sd, sx, sy)
-    rc = _min_cap_radius(void, cw, ch)
+    rc = _min_cap_radius(void, cw, ch, dxc, dyc)
     lines.append(f"      CORNER clearance -- a perfectly SQUARE keycap whose "
-                 f"outer corner sits on the keycap field's corner: "
-                 f"{best[0]:+.4f} (corner {best[1]:+d},{best[2]:+d}), against "
-                 f"the straight edges' {min(cl_x, cl_y):+.4f}")
+                 f"outer corner sits on the keycap field's corner, the field "
+                 f"displaced by kbd_cap_field_d: {best[0]:+.4f} (corner "
+                 f"{best[1]:+d},{best[2]:+d}), against the tightest straight "
+                 f"edge's {min(cl):+.4f}")
     if rc is None:
         lines.append("        NO cap corner radius clears this void")
     else:
-        lines.append(f"        a square cap is a fiction and the keycap's own "
-                     f"corner radius is NOT SOURCED; the smallest cap corner "
-                     f"radius that clears this void is {rc:.3f}. Reported, "
-                     f"not gated -- parameters.scad 8a asks for exactly this "
-                     f"figure \"so the assumption cannot hide\".")
-    #  parameters.scad 8a quotes +0.139 here and solves the radius window as
-    #  r <= 3.512. Both come from a Y gap of 1.1925, which is 0.9425 + 0.250:
-    #  the keycap field offset by the switch field's 0.250 and taken on the
-    #  LOOSE side. With the gap the datums actually give -- kbd_cap_clear's own
-    #  0.9425, the cap field concentric with the void -- the window closes at
-    #  r <= 3.102 and R3.175 is 0.030 outside it. Measured against the DXF's
-    #  own 96-gon arc it is 0.0316, because the inscribed arc sits inside the
-    #  nominal one; that extra 0.0013 is check 1's whole point, arriving here.
-    #  Either way the sign is negative and the figure in 8a is positive.
+        lines.append(f"        a square cap is a fiction: the 1u cap's B-rep "
+                     f"has 77 faces, six cylindrical, NONE with a vertical "
+                     f"axis, so its plan corner is a swept blend on a tapered "
+                     f"shell and there is no feature radius to source. The "
+                     f"well-posed figure is the other way round -- the "
+                     f"smallest cap corner radius that WOULD clear this void "
+                     f"is {rc:.3f}. Reported, not gated.")
+    #  parameters.scad 8a's old +0.139 and its r <= 3.512 window both rested on
+    #  a Y gap of 1.1925 taken on the LOOSE side of the depth offset. The
+    #  arithmetic this file printed for it -- "1.1925 = 0.8425 + 0.250" -- does
+    #  not close: those sum to 1.0925. 1.0925 is the REAR gap and it is
+    #  kbd_cap_clear[3], which the datums now carry directly, so the figure is
+    #  read off the datum instead of being rebuilt from a concentric gap plus a
+    #  remembered 0.250. The tight corner is the FRONT one, kbd_cap_clear[2] =
+    #  0.5925, and that is where the sign comes from.
     if abs(best[0] - 0.139) > 0.010:
+        wl = _rwindow(max(cl[0], cl[1]), max(cl[2], cl[3]))
+        wt = _rwindow(min(cl[0], cl[1]), min(cl[2], cl[3]))
         lines.append(
             f"        NOTE: parameters.scad 8a quotes +0.139 for this and "
-            f"solves the radius window as r <= 3.512. Both follow from a Y gap "
-            f"of 1.1925 = {cl_y:.4f} + 0.250, i.e. the keycap field displaced "
-            f"by the switch field's 0.250 and then read on the LOOSE corner. "
-            f"At the gaps the datums give here the window closes at "
-            f"r <= {(cl_x + cl_y) + math.sqrt(2*cl_x*cl_y):.3f} and "
-            f"kbd_void_r = {env['kbd_void_r']:.3f} is outside it.")
+            f"solves the radius window as r <= 3.512. Both are the LOOSE "
+            f"corner: kbd_cap_clear's own rear {cl[3]:.4f} with the wide side "
+            f"{max(cl[0], cl[1]):.4f}, which closes at "
+            + (f"r <= {wl:.3f}" if wl else "no window at all") + ". "
+            f"The corner that governs is the front one, {cl[2]:.4f} against "
+            f"{min(cl[0], cl[1]):.4f}, and kbd_void_r = "
+            f"{env['kbd_void_r']:.3f} is outside its window of "
+            + (f"r <= {wt:.3f}" if wt else
+               "-- there is none: a side clearance is negative, so no corner "
+               "radius clears these caps and the branch gate above says so")
+            + ". check_real_cap_clearance below settles whether that matters, "
+            f"against the caps themselves rather than a rectangle.")
 
     # -- the Z chain -------------------------------------------------------
     #  There is no artefact to measure this against: no export in this repo
@@ -921,13 +1168,28 @@ def check_keyboard_branch(env, void, fails, lines):
                  f"is out by 2 x kbd_plate_gap = {2*gap:.3f}.")
 
 
-def _min_cap_radius(void, cw, ch):
+def _rwindow(a, b):
+    """The largest void corner radius a square cap with side gaps (a, b) clears.
+
+    r <= (a + b) + sqrt(2ab), and it only means anything while both gaps are
+    positive -- with a negative gap the cap is outside the void on that side
+    and no radius helps. The old code called math.sqrt on the product
+    unguarded, so a void shrunk 0.400 per side crashed this check with a
+    ValueError instead of diagnosing it. Returns None where there is no window.
+    """
+    if a <= 0 or b <= 0:
+        return None
+    return (a + b) + math.sqrt(2 * a * b)
+
+
+def _min_cap_radius(void, cw, ch, dx=0.0, dy=0.0):
     """The smallest keycap corner radius that clears the measured void.
 
     Bisected against the artefact's own ring: for a cap corner radius rc the
     critical feature is the cap's corner arc, whose centre sits rc inboard of
     the field corner, and it clears when that centre is at least rc from the
-    void's boundary.
+    void's boundary. (dx, dy) is kbd_cap_field_d -- the field is not concentric
+    with the void and taking it so moves this answer.
     """
     from shapely.geometry import Point
 
@@ -935,7 +1197,8 @@ def _min_cap_radius(void, cw, ch):
         worst = None
         for sx in (1, -1):
             for sy in (1, -1):
-                p = Point(void.bx + sx*(cw/2 - rc), void.by + sy*(ch/2 - rc))
+                p = Point(void.bx + dx + sx*(cw/2 - rc),
+                          void.by + dy + sy*(ch/2 - rc))
                 d = p.distance(void.lr)
                 sd = (d if void.poly.contains(p) else -d) - rc
                 worst = sd if worst is None else min(worst, sd)
@@ -986,6 +1249,18 @@ def label_slab(rings, env, fails):
         fails.append(f"{len(bores)} knob bores in the DXF, want 6")
     if void is None:
         fails.append("no rounded-rectangular keyboard void in the DXF")
+        #  ...and WHY. The void is still the largest contour after the outline
+        #  whatever is wrong with it, so the candidate is never in doubt; what
+        #  is in doubt is which corner, and a reader who is only told the void
+        #  is absent has to go and fit the arcs by hand. This is the indirect
+        #  catch check_corner_radii's docstring keeps, with its diagnosis
+        #  attached.
+        cand = next((r for r in rings[1:]
+                     if id(r) not in taken and r.kind not in ("circle",
+                                                              "slot")), None)
+        if cand is not None:
+            fails.extend(diagnose_rrect(cand, env.get("kbd_void_r"),
+                                        "keyboard void"))
     if fader is None:
         fails.append(f"no fader slot {env['slider_slot_l']:.3f} x "
                      f"{env['slider_slot_w']:.3f} in the DXF")
@@ -1003,7 +1278,11 @@ def check_part(part, env, export, fails, lines):
         if part == "slab":
             fails.append(f"missing {dxf} -- run the export first")
         return
-    rings = [Ring(l) for l in dxf_part_loops(dxf)]
+    try:
+        rings = [Ring(l) for l in dxf_part_loops(dxf)]
+    except RuntimeError as e:
+        fails.append(f"{part}: {e}")
+        return
     if not rings:
         fails.append(f"{dxf}: no closed contour recovered")
         return
@@ -1086,11 +1365,13 @@ def check_part(part, env, export, fails, lines):
                  + ("complete" if not verdict else "; ".join(verdict)))
 
     check_faceting(rings, nominals, fails, lines)
+    check_corner_radii(rings, env, fails, lines)
     t = env["acrylic_t"] if part == "slab" else env["back_t"]
     check_webs(part, rings, t, fails, lines)
     check_edge_distance(rings, fast, env, fails, lines)
     if part == "slab" and void is not None:
         check_keyboard_branch(env, void, fails, lines)
+        check_real_cap_clearance(env, void, fails, lines)
     if part == "backpanel":
         check_insert_clash(env, fast, fails, lines)
 
@@ -1278,16 +1559,59 @@ def check_edge_distance(rings, fast, env, fails, lines):
     ungated = [s for s in short if s[0] not in fast]
     if ungated:
         w = min(ungated, key=lambda s: s[3] - s[2])
+        #  WHAT EACH ROW IS ACTUALLY NEAREST TO, measured, because the two rows
+        #  are not short against the same thing and the message used to say
+        #  "the sheet edge or the keyboard void" for both. Named off the ring
+        #  the distance was taken from rather than asserted.
+        by_row = {}
+        for (r, d, need, got) in ungated:
+            #  EVERY ring at the minimum, not whichever min() reached first.
+            #  The knob pitch is 38.100 in BOTH axes, so an upper-row bore is
+            #  exactly 27.100 from its side neighbour AND from the bore below
+            #  it, and naming one of them would be the same sort artefact this
+            #  block exists to point out.
+            ds = sorted(((_pt_dist(r.cx, r.cy, o), o) for o in rings
+                         if o is not r), key=lambda t: t[0])
+            near = [o.label for dd, o in ds if dd <= ds[0][0] + TOL_DXF]
+            by_row.setdefault(round(got, 3), []).append((r, near, need, got))
         lines.append(
             f"      ROEHM SHORTFALL on {len(ungated)} hole(s), reported not "
             f"gated. Worst: {w[0].label} stands {w[3]:.3f} from the nearest "
             f"cut against 1.5 x O{w[1]:.3f} = {w[2]:.3f}, short by "
             f"{w[2]-w[3]:.3f}. fabrication.md 1.4's applied block checks the "
             f"O{env['bore_d']:.3f} bore against the {env['pitch']:.3f} knob "
-            f"PITCH only and never against the sheet edge or the keyboard "
-            f"void, which are both nearer. Closing it means moving the "
-            f"control band or the void -- parameters.scad's call, not this "
-            f"file's.")
+            f"PITCH only, and never against what each row is really nearest "
+            f"to:")
+        for got in sorted(by_row, reverse=True):
+            grp = by_row[got]
+            tied = sorted({n for g in grp for n in g[1]})
+            what = ("an adjacent bore's wall"
+                    if all(n.startswith("bore") for n in tied)
+                    else "/".join(tied) if len(tied) < 4
+                    else f"{len(tied)} contours, {tied[0]} among them")
+            #  `out`, not rings[0]. They are the same ring today because both
+            #  label paths sort by area and name the largest "outline", but
+            #  this line is about the SHEET EDGE and the only thing that says
+            #  which ring that is, is the label.
+            sheet = min(_pt_dist(g[0].cx, g[0].cy, out) for g in grp)
+            lines.append(
+                f"        {len(grp)} hole(s) at {got:.3f} -- NOT the sheet "
+                f"edge, which is {sheet:.3f} away -- against {what}. All "
+                f"{len(grp)} read the same distance, so the \"worst\" above is "
+                f"whichever the sort reached first: "
+                + ", ".join(sorted(g[0].label for g in grp)))
+        #  parameters.scad section 5 has now MADE this call in writing: the
+        #  measurement, the primary-source quote, the 88.8075-against-104.100
+        #  corridor, five costed moves that all refuse, and an acceptance
+        #  resting on the load path. The rule's own BASIS is recorded there as
+        #  NOT SOURCED, because the source states it and gives no rationale.
+        #  So this is no longer an open question handed back to that file.
+        lines.append(
+            f"        parameters.scad section 5 has made this call in writing "
+            f"and ACCEPTED it, with five costed alternatives that all refuse "
+            f"and an acceptance resting on the load path; the rule's own basis "
+            f"is recorded there as NOT SOURCED. Reported here so the "
+            f"acceptance stays visible in the artefact's own numbers.")
 
 
 def check_insert_clash(env, fast, fails, lines):
@@ -1318,6 +1642,987 @@ def check_insert_clash(env, fast, fails, lines):
             f"inside the rim. parameters.scad 6, 9")
 
 
+# ===========================================================================
+#  CHECK 4b -- THE KEYCAPS THEMSELVES AGAINST THE VOID AS EXPORTED
+#
+#  Every other keyboard-void check in this file compares one rectangle with
+#  another. The caps are not a rectangle and the void is not a rectangle: it is
+#  a 96-gon whose corners sit inside their nominal arc. So this is the direct
+#  measurement, with no idealised shape anywhere in the chain -- every vertex
+#  of all 61 caps in the vendor assembly, above the cap's widest section,
+#  mapped into deck axes by parameters.scad's OWN kbd_dx/kbd_dy, against the
+#  DXF's own polygon.
+#
+#  It is what settled the question the rectangle arithmetic could only make
+#  worrying: the square-cap corner reads -0.4376 and the real worst clearance
+#  is +0.3691, so there is no clash and kbd_void_r stays at 3.175.
+#
+#  THE VENDOR MESH IS NOT IN THE REPOSITORY and cannot be: v2/parts/models/ is
+#  gitignored because Keychron's licence covers study and compatible
+#  accessories, not redistribution. So its absence is reported as a SKIP with
+#  the path, and it is not a pass -- every rectangle gate above still runs.
+# ===========================================================================
+CAP_WIDEST_Y = 5.200        # mm, in the MODEL's own y (height above the
+                            #   plate). The cap's widest section: below it the
+                            #   skirt flares and those vertices are inside the
+                            #   plate, not in the void.  [MEASURED, the same
+                            #   section parameters.scad's kbd_cap_field was
+                            #   taken above]
+CAP_STAGE2_N = 4000         # how many of the worst stage-1 candidates get
+                            #   re-measured against the DXF polygon. The
+                            #   analytic screen is exact for a true rounded
+                            #   box, so it can only misrank by the faceting,
+                            #   which is bounded by one sagitta (0.0025 on the
+                            #   void's corner); 4000 vertices spans 0.03 mm of
+                            #   clearance here, 12x that.  [DERIVED]
+
+
+def check_real_cap_clearance(env, void, fails, lines):
+    import struct
+    import numpy as np
+    from shapely.geometry import Point
+    stl = os.path.join(ROOT, "parts", "models", "k9pro-internals",
+                       "k9pro-stripped-assembly.stl")
+    if not os.path.exists(stl):
+        lines.append(f"      REAL cap clearance SKIPPED, not passed: "
+                     f"{os.path.relpath(stl, REPO)} is not present. It is "
+                     f"vendor CAD and v2/parts/models/ is gitignored, so a "
+                     f"clone does not carry it. Every rectangle gate above "
+                     f"still ran.")
+        return
+    b = open(stl, "rb").read()
+    n = struct.unpack("<I", b[80:84])[0]
+    rec = np.frombuffer(b[84:84 + 50*n],
+                        dtype=np.dtype([("nr", "<3f4"), ("v", "<3,3f4"),
+                                        ("a", "<u2")]))
+    V = rec["v"].reshape(-1, 3)
+    P = V[V[:, 1] > CAP_WIDEST_Y - 1e-4].astype(np.float64)
+    if len(P) == 0:
+        fails.append(f"no vertex of {os.path.basename(stl)} is above model "
+                     f"y = {CAP_WIDEST_Y:.3f}; the mesh is not the stripped "
+                     f"assembly this check was written against")
+        return
+    #  parameters.scad's own map, transcribed because kbd_dx/kbd_dy are
+    #  FUNCTIONS and datums() evaluates assignments. kbd_dy's literal 8.000 is
+    #  the frame's model-Z front edge, so it is derived here instead of copied.
+    mz0 = env["kbd_frame_cz"] - env["kbd_frame"][1]/2
+    dx = P[:, 0] - env["kbd_frame_cx"]
+    dy = env["kbd_frame_rear_y"] - (P[:, 2] - mz0)
+    #  stage 1: the analytic rounded-box SDF at the void's MEASURED datums,
+    #  which screens 3.9 M vertices in one vectorised pass
+    A, B, R = void.w/2, void.h/2, void.shape["r"]
+    u, v = np.abs(dx - void.bx), np.abs(dy - void.by)
+    qx, qy = u - (A - R), v - (B - R)
+    sdf = (np.hypot(np.maximum(qx, 0), np.maximum(qy, 0))
+           + np.minimum(np.maximum(qx, qy), 0) - R)
+    order = np.argsort(-sdf)[:CAP_STAGE2_N]
+    #  stage 2: the worst of them against the DXF polygon itself, so the
+    #  faceting is in the answer rather than idealised away
+    worst, wi = None, None
+    for i in order:
+        p = Point(dx[i], dy[i])
+        d = p.distance(void.lr)
+        sd = d if void.poly.contains(p) else -d
+        if worst is None or sd < worst:
+            worst, wi = sd, i
+    lines.append(
+        f"      REAL cap clearance -- {len(P)} cap vertices above model "
+        f"y = {CAP_WIDEST_Y:.3f}, mapped by kbd_dx/kbd_dy, against the DXF's "
+        f"own {void.n}-vertex ring: WORST {worst:+.4f} at deck "
+        f"({dx[wi]:+.4f},{dy[wi]:+.4f}) = model X {P[wi][0]:.3f} Z "
+        f"{P[wi][2]:.3f}. No rectangle anywhere in this one.")
+    if worst <= 0:
+        fails.append(
+            f"THE KEYCAPS FOUL THE SLAB. The worst of {len(P)} measured cap "
+            f"vertices is {worst:.4f} INSIDE the void's boundary, at deck "
+            f"({dx[wi]:+.4f},{dy[wi]:+.4f}) = model X {P[wi][0]:.3f} "
+            f"Z {P[wi][2]:.3f}. This is the caps as the vendor models them "
+            f"against the void as exported, with no idealised shape in "
+            f"between, so it is not an arithmetic disagreement: the part would "
+            f"not assemble.")
+    elif worst < 0.100:
+        lines.append(
+            f"        the margin is under 0.100 and the laser's kerf "
+            f"allowance is +0.230 diametral, so this is the number to watch "
+            f"if the void or the frame position moves")
+
+
+# ===========================================================================
+#  CHECK 5 -- THE MESHES: ONE BODY, AND THE CARRIER'S PLANE AUDIT
+#
+#  Nothing measured the carrier at all. It is the keystone part -- every other
+#  part bolts to it -- and the one defect class it has already suffered is
+#  invisible in a picture and invisible in a bounding box: a pocket that eats
+#  the bottom out of a boss and leaves the boss hanging in mid-air. The first
+#  render of kbd_socket_cut() did exactly that to all eleven plate bosses and
+#  the ONLY thing that caught it was the mesh coming back as twelve separate
+#  bodies instead of one (carrier.scad's own comment above kbd_island_d).
+#
+#  So: body count, and then the plane audit. Every designed feature of a part
+#  built by extruding and differencing 2D profiles terminates in a HORIZONTAL
+#  PLANE at a known height with a known area -- a pocket floor, a boss top, an
+#  insert pocket's end. Extract them from the STL, group by z, and the result
+#  is a complete census of the part's Z structure in 25 rows. A feature that
+#  vanishes loses its plane. A feature that moves changes its z. A feature that
+#  grows changes its area. A feature nobody declared adds a row.
+# ===========================================================================
+PLANE_Z_TOL = 0.0005        # mm. How close two facets must be in z to be the
+                            #   same plane, and how close a measured plane must
+                            #   be to its declared height. Binary STL is
+                            #   float32, which quantises to 1.1e-06 at
+                            #   |z| ~ 9.5; the narrowest real gap between two
+                            #   distinct planes in this part is 0.080
+                            #   (-1.270 feather seat to -1.350 insert ceiling).
+                            #   This is 450x the quantisation and 160x inside
+                            #   that gap.  [DERIVED]
+PLANE_AREA_TOL = 0.050      # mm2. float32's quantum at |x| = 150.395 is
+                            #   8.96e-06 mm, and the largest plane here is the
+                            #   floor underside, whose boundary MEASURES
+                            #   1444.4 mm, so its area carries 0.0129 mm2.
+                            #   This is 3.9x that. For scale: the smallest
+                            #   thing it has to see is one M2 insert floor,
+                            #   8.0367. The observed variation is in fact
+                            #   ZERO -- the export is byte-reproducible, so
+                            #   this budget is for a float32 round-trip on
+                            #   another machine and nothing else.  [DERIVED]
+
+#  THE CARRIER'S PLANE INVENTORY.
+#
+#  MEASURED off v2/export/stl/carrier.stl on 2026-11-07, every row of it, with
+#  the heights written as the expression over parameters.scad's datums that
+#  produces them -- so a datum change moves the expectation and the check
+#  follows it, instead of going red and being "fixed" by retyping a number.
+#  Where carrier.scad states a height as a LOCAL literal rather than a datum
+#  (feather_seat_d, brk_seat_d, the HDMI window, and the `+ 1` overshoot that
+#  chan() and the keyboard cuts both use) the literal is named with its line,
+#  because there is no datum to read and pretending otherwise would be worse.
+#
+#  Re-record ONLY from the artefact, and only after a deliberate change:
+#      /usr/bin/python3.11 v2/tools/export.py
+#      /usr/bin/python3.11 v2/tools/check_cad.py    # prints every difference
+CARRIER_PLANES = (
+    # z, from the datums                              dir     area   regions
+    (lambda e: e["carrier_rim_h"],
+     "UP",   5396.1272,  1, "rim top, the face the acrylic sits on"),
+    (lambda e: e["pot_web_z"] + e["pot_web_t"],
+     "UP",   2165.9942,  3, "the three pot towers' tops"),
+    (lambda e: 8.289,
+     "DOWN",  105.8206,  1, "HDMI window ceiling [REPO carrier.scad:344-347, "
+                            "a literal: the shell's 7.789 + 0.500]"),
+    (lambda e: e["kbd_boss_top_z"],
+     "UP",    138.1314, 11, "the 11 plate bosses' tops, 7 screwed + 4 props. "
+                            "THIS IS THE ROW THAT CATCHES THE FLOATING-BOSS "
+                            "BUG: 11 x the O4.000 96-gon's 12.5574"),
+    (lambda e: e["kbd_seat_plane_z"] + 1.000,
+     "DOWN",   15.2628,  3, "cut-overshoot ceilings: kbd_cell_cut and "
+                            "kbd_toggle_cut both extrude seat - z + 1, so "
+                            "they undercut the spine and two bosses"),
+    (lambda e: e["kbd_seat_plane_z"],
+     "UP",   2062.8909,  9, "the keyboard's seat plane"),
+    (lambda e: e["pot_web_z"],
+     "DOWN", 1391.8028,  3, "the pot pockets' ceilings -- the face the pot's "
+                            "shoulder bears on"),
+    (lambda e: e["kbd_socket_z"],
+     "UP",  20227.4603,  2, "socket-field pocket floor"),
+    (lambda e: e["carrier_rim_h"] - e["insert_m3_depth"],
+     "UP",     75.3444,  6, "the 6 M3 slab-insert pocket floors"),
+    (lambda e: e["kbd_cell_z"],
+     "UP",   4322.9998,  1, "cell bay floor"),
+    (lambda e: 1.000,
+     "DOWN",  193.5615,  4, "channel ceilings [REPO carrier.scad:382-387: "
+                            "chan() extrudes chan_qt_d + 1, so a channel "
+                            "running under a solid tops out 1.000 above the "
+                            "wiring plane]"),
+    (lambda e: e["kbd_seat_z"] - e["kbd_toggle_below"],
+     "UP",    282.7404,  2, "toggle-slider relief floor"),
+    (lambda e: 0.0,
+     "UP",   7659.2572,  6, "THE WIRING PLANE"),
+    (lambda e: 0.0,
+     "DOWN",   33.5507,  4, "where the breakout and Feather seats undercut "
+                            "the rim and the spine by exactly pocket_fit"),
+    (lambda e: -1.136,
+     "UP",     95.0176,  1, "HDMI window sill [REPO carrier.scad:344-347, a "
+                            "literal: the shell's -0.636 - 0.500]"),
+    (lambda e: -1.270,
+     "UP",   1139.1707,  3, "Feather seat [REPO carrier.scad:332 "
+                            "feather_seat_d, a local in the part file]"),
+    (lambda e: -e["carrier_t"] + e["insert_m25_depth"],
+     "DOWN",  139.4939, 13, "M2.5 insert ceilings, back panel and cowl. 10 "
+                            "whole + 3 fragments; see CARRIER_INSERT_OPEN"),
+    (lambda e: -e["chan_qt_d"],
+     "UP",   1401.0427,  6, "wiring channel floors"),
+    (lambda e: e["disp_mount_z"],
+     "UP",   4407.3789,  1, "display pocket floor, where the four "
+                            "SMTSO-M2.5-7ET standoffs land"),
+    (lambda e: -3.460,
+     "UP",   3261.3483, 16, "the 4 breakout seats + 12 island scallops "
+                            "[REPO carrier.scad:300 brk_seat_d = 2.960 + "
+                            "0.500, a local in the part file]"),
+    (lambda e: e["kbd_annulus_z"],
+     "UP",   1352.4278,  1, "the annulus the frame's skirt hangs in"),
+    (lambda e: -e["insert_m2_depth"],
+     "UP",    128.5878, 16, "the 16 M2 breakout-insert pocket floors"),
+    (lambda e: e["pot_z_bottom"],
+     "UP",   1513.8607,  3, "the three pot body pockets' floors"),
+    (lambda e: -e["insert_m25_depth"],
+     "UP",     25.1148,  2, "the 2 Feather M2.5 insert pocket floors"),
+    (lambda e: -e["carrier_t"],
+     "DOWN",53775.4026,  1, "floor underside, the print's bed face"),
+)
+
+#  AN OPEN DEFECT IN carrier.scad, RECORDED SO IT CANNOT SPREAD OR BE FORGOTTEN
+#
+#  Three of the four cowl M2.5 insert pockets DO NOT EXIST in the part. They are
+#  drawn -- cowl_insert_cut() loops over cowl_screw_pts() like back_insert_cut()
+#  loops over back_screw_pts() -- and then other cavities swallow them, so there
+#  is nothing for an insert to be pressed into. MEASURED on carrier.stl by
+#  probing every horizontal facet containing each declared axis:
+#
+#    (-138.012, +29.5645)   -1.350 ceiling, 0.000 floor above it  -- CORRECT
+#    ( -42.122, +29.5645)   no horizontal facet at all: a wiring channel
+#                           (floor -chan_qt_d, ceiling +1.000) crosses the
+#                           pocket, so the two merge and the bore opens
+#                           straight into the visible wiring plane
+#    ( -90.067, +44.561)    no horizontal facet at all: inside the display
+#    ( -90.067, +14.568)    pocket (x -136.950..-43.180, y +13.778..+84.148,
+#                           floor disp_mount_z = -3.175). The floor there is
+#                           3.175 thick and the pocket wants 5.000, so it
+#                           punches a O4.000 through-hole in the display's own
+#                           seating floor instead
+#
+#  back_insert_cut()'s comment is the diagnosis, one size up: "an M3 pocket is
+#  6.700 deep and the floor is 6.350, so pressing M3 from below would break the
+#  visible wiring plane". The same arithmetic applies to M2.5 in a 3.175 floor.
+#  So the cowl's fastener stack has ONE insert of four, and this file is not the
+#  place to fix it -- carrier.scad is.
+#
+#  Gated as a floor, not accepted as a target: if a fourth goes, this fires; if
+#  someone fixes carrier.scad, the row reads STALE in the good direction and
+#  says so.
+CARRIER_INSERT_OPEN = {
+    # family                               present as a whole pocket
+    "M2.5, back panel + cowl": 10,  # [MEASURED 2026-11-07] of 14 declared
+}
+
+
+def mesh_bodies(m):
+    """How many separate connected solids are in this mesh.
+
+    NOT trimesh.body_count: this trimesh has no scipy and body_count raises.
+    Union-find over faces that share a vertex INDEX, which is exact on a mesh
+    trimesh has already merged the coincident vertices of -- and it is the only
+    thing that has ever caught a floating boss in this project.
+    """
+    F = m.faces
+    par = list(range(len(F)))
+
+    def find(x):
+        while par[x] != x:
+            par[x] = par[par[x]]
+            x = par[x]
+        return x
+
+    byv = {}
+    for i, tri in enumerate(F):
+        for v in tri:
+            byv.setdefault(int(v), []).append(i)
+    for fl in byv.values():
+        a = find(fl[0])
+        for j in fl[1:]:
+            b = find(j)
+            if a != b:
+                par[b] = a
+                a = find(a)
+    return len({find(i) for i in range(len(F))})
+
+
+def _plane_groups(m):
+    """Every horizontal planar facet, grouped by (z, up/down)."""
+    n = m.face_normals
+    z = m.vertices[m.faces[:, 0]][:, 2]
+    out = {}
+    for i in range(len(m.faces)):
+        if abs(n[i, 2]) > 1.0 - 1e-6:
+            key = (round(float(z[i]) / PLANE_Z_TOL) * PLANE_Z_TOL,
+                   "UP" if n[i, 2] > 0 else "DOWN")
+            out.setdefault(key, []).append(i)
+    return out
+
+
+def _components(m, faces):
+    """The connected regions of one plane, as lists of face indices."""
+    par = {i: i for i in faces}
+
+    def find(x):
+        while par[x] != x:
+            par[x] = par[par[x]]
+            x = par[x]
+        return x
+
+    byv = {}
+    for i in faces:
+        for v in m.faces[i]:
+            byv.setdefault(int(v), []).append(i)
+    for fl in byv.values():
+        a = find(fl[0])
+        for j in fl[1:]:
+            b = find(j)
+            if a != b:
+                par[b] = a
+                a = find(a)
+    groups = {}
+    for i in faces:
+        groups.setdefault(find(i), []).append(i)
+    return list(groups.values())
+
+
+def _tri_has(m, i, x, y):
+    """Is (x, y) inside facet i's triangle, in plan? Barycentric signs."""
+    (ax, ay), (bx, by), (cx, cy) = m.vertices[m.faces[i]][:, :2]
+    d = (by - cy)*(ax - cx) + (cx - bx)*(ay - cy)
+    if abs(d) < 1e-12:
+        return False
+    u = ((by - cy)*(x - cx) + (cx - bx)*(y - cy)) / d
+    v = ((cy - ay)*(x - cx) + (ax - cx)*(y - cy)) / d
+    return u >= -1e-9 and v >= -1e-9 and u + v <= 1 + 1e-9
+
+
+def ngon_area(d, fn):
+    """The area a drawn circle of diameter d actually has at $fn facets.
+
+    Not pi*r^2. The vertices sit ON the nominal circle and the material is the
+    inscribed polygon, which is check 1's whole subject arriving in the mesh.
+    """
+    r = d / 2.0
+    return 0.5 * fn * r * r * math.sin(math.tau / fn)
+
+
+def insert_families(env):
+    """Every heat-set insert pocket in the carrier: plane, count, and source.
+
+    The counts come from the same transcribed point functions the DXF checks
+    use, so a change to parameters.scad's screw pattern moves this too. The
+    breakout count is 4 per bay over len(cols) encoder bays plus the fader's,
+    which is carrier_3d()'s own loop.
+    """
+    return (
+        ("M3, slab -> rim", env["insert_m3_hole_d"], env["insert_m3_depth"],
+         env["carrier_rim_h"] - env["insert_m3_depth"], "UP",
+         slab_screw_pts(env), "slab_screw_pts()"),
+        ("M2.5, back panel + cowl", env["insert_m25_hole_d"],
+         env["insert_m25_depth"],
+         -env["carrier_t"] + env["insert_m25_depth"], "DOWN",
+         back_screw_pts(env) + cowl_screw_pts(env),
+         "back_screw_pts() + cowl_screw_pts()"),
+        ("M2.5, Feather", env["insert_m25_hole_d"], env["insert_m25_depth"],
+         -env["insert_m25_depth"], "UP",
+         [(env["feather_x"] + sx * env["feather_holes_usb"] / 2,
+           env["interior_y1"] - env["feather"][1] / 2
+           - env["feather_holes_span"] / 2) for sx in (1, -1)],
+         "feather_inserts(), two at the USB end"),
+        ("M2, breakouts", env["insert_m2_hole_d"], env["insert_m2_depth"],
+         -env["insert_m2_depth"], "UP",
+         [(cx + sx * env["pat_a_holes"] / 2, env["enc_y"] + sy
+           * env["pat_a_holes"] / 2)
+          for cx in env["cols"] for sx in (1, -1) for sy in (1, -1)]
+         + [(env["slide_x"] + sx * env["pat_b_holes"][1] / 2,
+             env["band_mid"] + sy * env["pat_b_holes"][0] / 2)
+            for sx in (1, -1) for sy in (1, -1)],
+         "four per bay: three encoder bays and the fader's"),
+    )
+
+
+def check_carrier_inserts(m, env, groups, fails, lines):
+    """Every declared insert pocket, found AT ITS OWN AXIS or named missing.
+
+    A count would say "10 of 14" and leave the reader to work out which four.
+    This probes each declared (x, y) against the facets of the family's own
+    plane, so the answer is a list of positions -- and the area of the region
+    it landed in says whether the pocket is whole or has been eaten into.
+    """
+    fn = env.get("$fn", 96)
+    lines.append("    inserts -- every heat-set pocket, probed at its own axis")
+    lines.append(f"      {'family':26s} {'O':>6s} {'deep':>6s} {'floor z':>8s} "
+                 f"{'whole':>7s} {'part':>5s} {'gone':>5s} {'want':>5s}")
+    for (nm, d, depth, z, dr, pts, src) in insert_families(env):
+        want = ngon_area(d, fn)
+        faces = next((f for (zz, dd), f in groups.items()
+                      if dd == dr and abs(zz - z) <= PLANE_Z_TOL), [])
+        comps = _components(m, faces)
+        areas = [sum(float(m.area_faces[i]) for i in c) for c in comps]
+        whole, part, gone = [], [], []
+        for (px, py) in pts:
+            hit = next((k for k, c in enumerate(comps)
+                        if any(_tri_has(m, i, px, py) for i in c)), None)
+            if hit is None:
+                gone.append((px, py))
+            elif abs(areas[hit] - want) <= PLANE_AREA_TOL:
+                whole.append((px, py))
+            else:
+                part.append((px, py, areas[hit]))
+        lines.append(f"      {nm:26s} {d:6.3f} {depth:6.3f} {z:+8.3f} "
+                     f"{len(whole):7d} {len(part):5d} {len(gone):5d} "
+                     f"{len(pts):5d}")
+        base = CARRIER_INSERT_OPEN.get(nm)
+        if base is None:
+            for (px, py) in gone:
+                fails.append(
+                    f"carrier: the {nm} insert pocket at {px:+.3f},{py:+.3f} "
+                    f"({src}) IS NOT IN THE MESH -- no facet of the {z:+.3f} "
+                    f"{dr} plane covers its axis, so the O{d:.3f} x "
+                    f"{depth:.3f} bore has been swallowed by another cavity "
+                    f"and there is nothing to press an insert into.")
+            for (px, py, a) in part:
+                fails.append(
+                    f"carrier: the {nm} insert pocket at {px:+.3f},{py:+.3f} "
+                    f"has only {a:.4f} mm2 of its {want:.4f} mm2 end face "
+                    f"left -- another cavity has cut into the bore.")
+        elif len(whole) < base:
+            fails.append(
+                f"carrier: {len(whole)} whole {nm} insert pocket(s) against "
+                f"the recorded {base} of {len(pts)} declared. One more has "
+                f"gone: " + ", ".join(f"{x:+.3f},{y:+.3f}" for x, y in gone)
+                + f". {src}; CARRIER_INSERT_OPEN in this file records which "
+                f"were already missing and why.")
+        elif len(whole) > base:
+            lines.append(
+                f"        CARRIER_INSERT_OPEN is STALE in the good direction: "
+                f"{len(whole)} whole pockets against the recorded {base}. If "
+                f"carrier.scad has been fixed, set "
+                f"CARRIER_INSERT_OPEN[\"{nm}\"] = {len(whole)} -- and delete "
+                f"the entry once it reaches {len(pts)}.")
+        if len(whole) < len(pts) and base is not None:
+            lines.append(
+                f"        OPEN DEFECT IN carrier.scad, not in this file: of "
+                f"{len(pts)} declared {nm} pockets, {len(gone)} have no "
+                f"material on their axis at all and {len(part)} is eroded. "
+                + "; ".join(f"{x:+.3f},{y:+.3f} ABSENT" for x, y in gone)
+                + "".join(f"; {x:+.3f},{y:+.3f} has {a:.4f} of its "
+                          f"{want:.4f} mm2 end face left, so its bore is open "
+                          f"over the rest" for x, y, a in part)
+                + ". The cowl's fastener stack clamps cowl, back panel and "
+                "carrier together through these four, so it has one sound "
+                "thread. CARRIER_INSERT_OPEN above carries the diagnosis.")
+
+
+def check_carrier_planes(m, env, groups, fails, lines):
+    """The whole Z structure of the carrier, measured, against the declaration.
+
+    Two gates and they catch opposite mistakes. A DECLARED plane that is absent
+    means a feature stopped being drawn -- and a vanished feature leaves no
+    unaccounted anything, so nothing else in this file can see it. An
+    UNDECLARED plane means a feature arrived that nobody wrote down.
+    """
+    want = [(fn(env), dr, a, n, what) for fn, dr, a, n, what in CARRIER_PLANES]
+    lines.append(f"    planes -- {len(groups)} horizontal planes in the mesh, "
+                 f"{len(want)} declared")
+    lines.append(f"      {'z':>9s} {'dir':5s} {'area':>12s} {'d-area':>8s} "
+                 f"{'reg':>4s} {'want':>4s}  what it is")
+    claimed = set()
+    for (z, dr, area, nreg, what) in want:
+        key = next((k for k in groups
+                    if k[1] == dr and abs(k[0] - z) <= PLANE_Z_TOL), None)
+        if key is None:
+            fails.append(
+                f"carrier: NO {dr}-facing plane at z = {z:+.4f} -- "
+                f"{what.splitlines()[0]}. A declared plane that is not in the "
+                f"mesh means the feature that terminates there stopped being "
+                f"drawn, and a vanished feature leaves nothing unaccounted for "
+                f"anything else here to notice.")
+            continue
+        claimed.add(key)
+        faces = groups[key]
+        got = sum(float(m.area_faces[i]) for i in faces)
+        reg = len(_components(m, faces))
+        lines.append(f"      {key[0]:+9.4f} {dr:5s} {got:12.4f} "
+                     f"{got-area:+8.4f} {reg:4d} {nreg:4d}  {what[:52]}")
+        if abs(got - area) > PLANE_AREA_TOL:
+            fails.append(
+                f"carrier: the {dr} plane at z = {z:+.4f} ({what[:60]}) "
+                f"measures {got:.4f} mm2 against the recorded {area:.4f} -- "
+                f"out by {got-area:+.4f}, more than the {PLANE_AREA_TOL:.3f} "
+                f"float32 budget. Re-record from the artefact only if the "
+                f"change was deliberate.")
+        if reg != nreg:
+            fails.append(
+                f"carrier: the {dr} plane at z = {z:+.4f} ({what[:60]}) is "
+                f"{reg} connected region(s) against the recorded {nreg}. The "
+                f"area can be right while the count is wrong: two features "
+                f"merging into one, or one splitting in two, is a change of "
+                f"shape at constant area.")
+    for key in sorted(set(groups) - claimed, key=lambda k: -k[0]):
+        faces = groups[key]
+        got = sum(float(m.area_faces[i]) for i in faces)
+        fails.append(
+            f"carrier: an UNDECLARED {key[1]}-facing plane at z = "
+            f"{key[0]:+.4f}, {got:.4f} mm2 over {len(faces)} facet(s) in "
+            f"{len(_components(m, faces))} region(s). Every designed feature "
+            f"of this part terminates in a plane CARRIER_PLANES names; this "
+            f"one is not named, so either a feature arrived undocumented or a "
+            f"cut stopped at the wrong height.")
+
+
+#  THE EXPORTED MESHES, and what is known about each independently of the mesh.
+#  `t` names the datum that gives the part's Z extent where one exists; the
+#  plan extents and the volume are MEASURED baselines, because nothing in
+#  parameters.scad declares the cowl's or the fader cap's outline.
+#
+#  THE Z FACTS ARE THE ONES THAT MATTER TO A READER, because four of these
+#  parts are drawn at their own origin and are placed by a pure translate: get
+#  one upside down and the picture is silently wrong. v2/tools/render owns the
+#  placement; this records which face is which so the claim can be checked.
+MESHES = (
+    # name              z datum     plan w      plan d    volume      euler
+    ("slab",            "acrylic_t", 304.600, 190.375, 350042.7559, -26),
+    ("backpanel",       "back_t",    304.600, 190.375, 177036.5845, -32),
+    ("carrier",         "carrier_h", 300.790, 186.565, 444256.5134, -20),
+    ("cowl",            None,        107.510,  41.613,  12143.2409,  -6),
+    ("foot",            "foot_h",     13.970,  34.290,   2433.7571,   2),
+    ("knob_encoder",    "knob_h",     25.247,  25.247,   5400.8707,   2),
+    ("knob_pot",        "knob_h",     25.247,  25.247,   5372.3497,   2),
+    ("fader_cap",       None,         16.000,  25.400,   2402.9466,   2),
+    ("knob_mould_brim", None,         50.800,  50.800,  21069.3280,  -6),
+    ("knob_mould_plug", None,         50.800,  50.800,  38474.3493,  -8),
+)
+#  z0 .. z1 as the part is DRAWN, and the face a reader has to get the right way
+#  up. Measured; the expression beside each is where the number comes from.
+MESH_Z = {
+    "slab":            (0.0, "acrylic_t", None),
+    "backpanel":       (0.0, "back_t", None),
+    "carrier":         (None, None, None),      # -carrier_t .. carrier_rim_h
+    "cowl":            (0.0, None,
+                        "the face at z1 is the one against the BACK PANEL"),
+    "foot":            (0.0, "foot_h",
+                        "the sole is z = 0; the screw axis is the origin and "
+                        "the toe runs to -y"),
+    "knob_encoder":    (0.0, "knob_h",
+                        "z = acrylic_t is the brim's shoulder, which lands on "
+                        "the acrylic's TOP face"),
+    "knob_pot":        (0.0, "knob_h",
+                        "z = acrylic_t is the brim's shoulder, which lands on "
+                        "the acrylic's TOP face"),
+    "fader_cap":       (0.0, None, None),
+    "knob_mould_brim": (None, None, "TOOLING, not part of the instrument"),
+    "knob_mould_plug": (None, None, "TOOLING, not part of the instrument"),
+}
+
+
+#  WHICH OF THE TEN BACK-PANEL SCREWS CARRY A FOOT.
+#  parameters.scad 6b is the source and it is an ASSEMBLY fact: no file's
+#  geometry carries it, because the panel drills ten identical apertures and
+#  the foot is a separate printed part. foot_pts() is a vector-returning
+#  OpenSCAD function, so datums() cannot evaluate it -- but it is exactly these
+#  four of back_screw_pts(), which this file already transcribes, so there is
+#  nothing new to restate. 6b also records that these four are the holes that
+#  must NOT take a washer: a O6.000 DIN 125 A2.5 cannot enter the foot's
+#  O4.300 pocket mouth and would stand all four pads 0.500 off the panel.
+FOOT_AT = (0, 3, 8, 9)
+
+
+def check_foot_cowl_plan(env, export, fails, lines):
+    """Do the feet clear the cowl in PLAN? Nothing in this repo measured it.
+
+    The two rear feet sit at the panel's +/-x rear screws and the cowl's tray
+    hangs off the 18650 window, which is well toward -x. The -x rear foot
+    OVERLAPS THE COWL IN X and clears it only in Y. A foot standing on the
+    cowl's flange lifts the whole deck on three points plus a rock, and both
+    parts are drawn in different files from different datums, so nothing makes
+    the two agree. Measured here from the two exported meshes' real plan
+    outlines at their declared positions -- not from bounding boxes, which
+    would both overstate the overlap and understate the gap.
+    """
+    import trimesh
+    from shapely.geometry import MultiPolygon, Polygon
+    from shapely.ops import unary_union
+
+    def plan(name):
+        p = os.path.join(export, "stl", f"{name}.stl")
+        if not os.path.exists(p):
+            return None
+        m = trimesh.load(p)
+        tri = [Polygon(m.vertices[f][:, :2]) for f in m.faces]
+        u = unary_union([t for t in tri if t.area > 1e-12]).buffer(0)
+        return u if isinstance(u, (Polygon, MultiPolygon)) else None
+
+    foot, cowl = plan("foot"), plan("cowl")
+    if foot is None or cowl is None:
+        return
+    from shapely.affinity import translate as _tr
+    cx, cy = cowl_xy(env)
+    cowl = _tr(cowl, cx, cy)
+    pts = back_screw_pts(env)
+    lines.append(f"    plan clearance -- the four feet against the cowl, both "
+                 f"from their exported meshes at their declared positions "
+                 f"(cowl_xy {cx:+.3f},{cy:+.3f})")
+    cb = cowl.bounds
+    lines.append(f"      cowl plan x {cb[0]:+.3f}..{cb[2]:+.3f}  "
+                 f"y {cb[1]:+.3f}..{cb[3]:+.3f}")
+    worst = None
+    for k in FOOT_AT:
+        fx, fy = pts[k]
+        f = _tr(foot, fx, fy)
+        fb = f.bounds
+        d = f.distance(cowl)
+        ox = min(fb[2], cb[2]) - max(fb[0], cb[0])
+        oy = min(fb[3], cb[3]) - max(fb[1], cb[1])
+        lines.append(f"      foot at back screw {k} ({fx:+8.3f},{fy:+8.3f})  "
+                     f"x {fb[0]:+9.3f}..{fb[2]:+8.3f}  "
+                     f"y {fb[1]:+8.3f}..{fb[3]:+8.3f}  gap {d:8.4f}  "
+                     f"x-overlap {ox:+8.3f}  y-overlap {oy:+8.3f}")
+        if worst is None or d < worst[0]:
+            worst = (d, k, fx, fy, ox, oy)
+        if d <= 0:
+            fails.append(
+                f"THE FOOT AT BACK SCREW {k} ({fx:+.3f},{fy:+.3f}) STANDS ON "
+                f"THE COWL. Their plan outlines overlap by {ox:+.3f} in x and "
+                f"{oy:+.3f} in y. The foot is {env['foot_h']:.3f} tall and the "
+                f"cowl's flange is between it and the back panel, so the deck "
+                f"rests on three feet and a rock. foot_pts() and cowl_xy() are "
+                f"derived from different datums in different files and nothing "
+                f"else makes them agree.")
+    if worst and worst[0] > 0:
+        lines.append(
+            f"      tightest {worst[0]:.4f} at back screw {worst[1]}, which "
+            f"overlaps the cowl by {worst[4]:+.3f} in x and clears it by "
+            f"{worst[0]:.4f} in y. This is the first number to go negative if "
+            f"the cowl's window, disp_x or band_mid move.")
+
+
+def check_meshes(env, export, names, fails, lines):
+    import trimesh
+    tab = {r[0]: r for r in MESHES}
+    for name in names:
+        if name not in tab:
+            continue
+        _, zname, pw, pd, vol, euler = tab[name]
+        stl = os.path.join(export, "stl", f"{name}.stl")
+        if not os.path.exists(stl):
+            fails.append(f"missing {stl} -- run the export first")
+            continue
+        m = trimesh.load(stl)
+        if len(m.faces) == 0:
+            fails.append(f"{name}.stl is empty")
+            continue
+        nb = mesh_bodies(m)
+        ext, b = m.extents, m.bounds
+        lines.append(f"  {name}.stl: {len(m.faces)} facets, {nb} body, "
+                     f"{ext[0]:.3f} x {ext[1]:.3f} x {ext[2]:.3f}, "
+                     f"z {b[0][2]:+.3f}..{b[1][2]:+.3f}, "
+                     f"vol {m.volume:.4f}, euler {m.euler_number}, "
+                     f"watertight={m.is_watertight}")
+        if nb != 1:
+            fails.append(
+                f"{name}.stl is {nb} SEPARATE BODIES. Something in it is "
+                f"floating in mid-air: a boss whose bottom a pocket removed, "
+                f"or an island a difference() cut free. This is how "
+                f"kbd_socket_cut() was caught deleting the bottom of all "
+                f"eleven plate bosses -- the picture was identical. "
+                f"carrier.scad, above kbd_island_d")
+        if not m.is_watertight:
+            fails.append(f"{name}.stl is not watertight -- a slicer will "
+                         f"guess at what you meant")
+        if not m.is_volume:
+            fails.append(f"{name}.stl is not a valid volume")
+        if m.euler_number != euler:
+            fails.append(
+                f"{name}.stl has Euler characteristic {m.euler_number}, "
+                f"recorded {euler}. V - E + F counts the part's HOLES and "
+                f"nothing else: a through-hole that closed, or a new one, "
+                f"moves it by 2 and moves nothing in the bounding box.")
+        if abs(m.volume - vol) > 0.05:
+            fails.append(f"{name}.stl displaces {m.volume:.4f} mm3 against the "
+                         f"recorded {vol:.4f}, out by {m.volume-vol:+.4f}")
+        for i, (nom, what) in enumerate(((pw, "width"), (pd, "depth"))):
+            if abs(ext[i] - nom) > TOL:
+                fails.append(f"{name}.stl is {ext[i]:.3f} in {what}, "
+                             f"recorded {nom:.3f}")
+        if zname:
+            if abs(ext[2] - env[zname]) > TOL:
+                fails.append(f"{name}.stl is {ext[2]:.3f} thick, want "
+                             f"{zname} = {env[zname]:.3f}")
+        z0, z1name, note = MESH_Z.get(name, (None, None, None))
+        if z0 is not None and abs(b[0][2] - z0) > TOL:
+            fails.append(
+                f"{name}.stl starts at z = {b[0][2]:+.4f} and is drawn to "
+                f"start at {z0:+.3f}. It is placed by a pure translate with no "
+                f"rotation, so a Z origin that moves puts the part through the "
+                f"face it is supposed to sit on and nothing says so.")
+        if z1name and abs(b[1][2] - (z0 or 0.0) - env[z1name]) > TOL:
+            fails.append(f"{name}.stl ends at z = {b[1][2]:+.4f}, want "
+                         f"{z1name} = {env[z1name]:.3f} above {z0:+.3f}")
+        if note:
+            lines.append(f"      {note}")
+        if name == "knob_encoder" or name == "knob_pot":
+            groups = _plane_groups(m)
+            key = next((k for k in groups if k[1] == "DOWN"
+                        and abs(k[0] - env["acrylic_t"]) <= PLANE_Z_TOL), None)
+            if key is None:
+                fails.append(
+                    f"{name}.stl has no DOWN-facing plane at z = acrylic_t = "
+                    f"{env['acrylic_t']:.3f}. That plane IS the brim's "
+                    f"shoulder and it is what makes knob_h - knob_proud == "
+                    f"acrylic_t true of the part rather than of the datums; "
+                    f"without it the knob has no seat and the only thing "
+                    f"locating it in Z is the shaft.")
+            else:
+                lines.append(
+                    f"      brim shoulder at z = {key[0]:+.4f} = acrylic_t, "
+                    f"{sum(float(m.area_faces[i]) for i in groups[key]):.4f} "
+                    f"mm2 bearing on the acrylic's top face")
+        if name == "carrier":
+            groups = _plane_groups(m)
+            check_carrier_planes(m, env, groups, fails, lines)
+            check_carrier_inserts(m, env, groups, fails, lines)
+
+
+# ===========================================================================
+#  CHECK 6 -- keyboard_blank.scad, WHICH SHIPS NO ARTEFACT
+#
+#  It has had zero check coverage and its switch-field placement has now been
+#  corrected twice by hand. The obstacle is real: it is NOT in export.py's
+#  PARTS table, so there is no file on disk to measure. So this exports two of
+#  its three parts to a scratch directory and measures those.
+#
+#  WHAT MAKES THIS WORTH THE OPENSCAD CALL. keyboard_blank.scad has no
+#  `include` at all -- every number in it is its own literal. So it and
+#  parameters.scad describe the same keyboard with two independent sets of
+#  numbers and nothing has ever compared them. Every gate below is
+#  parameters.scad's datum against keyboard_blank's exported mesh.
+#
+#  THE CONTRADICTION THIS WAS WARNED ABOUT IS RESOLVED, and the resolution is
+#  what is gated. The question was whether the 1.000/1.250 concentric bezel
+#  could stand beside parameters.scad's statement that the field's centre is
+#  0.250 off the frame's. It cannot, and parameters.scad has settled it:
+#  kbd_cap_field_d = [0.0625, -0.250] in DECK axes, and kbd_dy()'s d/dmz = -1
+#  puts the 0.250 FRONTWARD. keyboard_blank.scad now carries bezel_front =
+#  1.000 and bezel_rear = 1.500. In X there is no offset to apply: the +0.0625
+#  is the CAP field's, set by the wide caps' outer edges, and the switch
+#  LATTICE is concentric. Both halves are gated separately below so neither can
+#  be "fixed" into the other.
+# ===========================================================================
+MESH_XY_TOL = 0.001        # mm. float32 carries 1.7e-05 mm of error at
+                           #   |x| ~ 287, and these parts are 12-facet wedges
+                           #   whose coordinates OpenSCAD computes exactly, so
+                           #   this is 58x the only error there is.  [DERIVED]
+KB_NORMAL_TOL = 1e-5       # the cap plane against the frame's top plane,
+                           #   componentwise on the unit normal. The two are
+                           #   parallel BY CONSTRUCTION (the band's two heights
+                           #   are the same plane sampled at its own edges), so
+                           #   the measurement reads 5.2e-08 and this is 190x
+                           #   that -- tight enough that a band built from two
+                           #   independently typed heights would fail. [DESIGN]
+KB_SHELL_H = (7.600, 13.300)   # [REPO keyboard_blank.scad:55-56] the frame's
+                               #   front and rear heights. parameters.scad
+                               #   declares no frame height at all, so there is
+                               #   no datum to read and this is the part file's
+                               #   own [vendor] literal, recorded as a baseline.
+
+
+def _up_plane(m):
+    """The plane of a mesh's largest up-facing face: (normal, point)."""
+    i = max((i for i in range(len(m.faces)) if m.face_normals[i][2] > 1e-9),
+            key=lambda i: m.area_faces[i])
+    return m.face_normals[i], m.vertices[m.faces[i][0]]
+
+
+def _plane_z(plane, x, y):
+    n, p = plane
+    return float(p[2] - (n[0]*(x - p[0]) + n[1]*(y - p[1])) / n[2])
+
+
+def check_keyboard_blank(env, fails, lines):
+    import shutil
+    import subprocess
+    import tempfile
+    import trimesh
+    scad = os.path.join(ROOT, "cad", "keyboard_blank.scad")
+    if not os.path.exists(scad):
+        fails.append(f"missing {scad}")
+        return
+    if shutil.which("openscad") is None:
+        fails.append("keyboard_blank.scad is not in export.py's PARTS table, "
+                     "so it has to be exported here to be measured, and "
+                     "openscad is not on PATH. The check is BLIND, not "
+                     "passing.")
+        return
+    tmp = tempfile.mkdtemp(prefix="kbblank.")
+    try:
+        mesh = {}
+        for p in ("shell", "keycaps"):
+            dest = os.path.join(tmp, f"{p}.stl")
+            #  The include trap does not bite here and that is worth saying:
+            #  OpenSCAD resolves `include` against the MAIN FILE's directory,
+            #  and keyboard_blank.scad has no include at all. The main file
+            #  stays where it lives; only the output goes to the scratch dir.
+            r = subprocess.run(
+                ["openscad", "-D", f'part="{p}"', "--export-format=binstl",
+                 "-o", dest, scad],
+                capture_output=True, text=True)
+            bad = [ln for ln in r.stderr.splitlines()
+                   if "unknown variable" in ln or "undefined operation" in ln
+                   or "ERROR" in ln or "Assertion" in ln]
+            if bad or not os.path.exists(dest) or os.path.getsize(dest) == 0:
+                fails.append(f"keyboard_blank.scad part=\"{p}\" did not "
+                             f"export: {(bad or [r.stderr.strip()[-200:]])[0]}")
+                return
+            mesh[p] = trimesh.load(dest)
+        sh, kc = mesh["shell"], mesh["keycaps"]
+        sb, kb = sh.bounds, kc.bounds
+        fw, fd = env["kbd_frame"]
+        sw, sd = env["kbd_switch_field"]
+        lines.append(f"  keyboard_blank.scad (exported to measure it; it is "
+                     f"not in export.py's PARTS table)")
+        lines.append(f"    shell   {len(sh.faces)} facets, "
+                     f"x {sb[0][0]:.4f}..{sb[1][0]:.4f}  "
+                     f"y {sb[0][1]:.4f}..{sb[1][1]:.4f}  "
+                     f"z {sb[0][2]:.4f}..{sb[1][2]:.4f}, "
+                     f"watertight={sh.is_watertight}")
+        lines.append(f"    keycaps {len(kc.faces)} facets, "
+                     f"x {kb[0][0]:.4f}..{kb[1][0]:.4f}  "
+                     f"y {kb[0][1]:.4f}..{kb[1][1]:.4f}  "
+                     f"z {kb[0][2]:.4f}..{kb[1][2]:.4f}, "
+                     f"watertight={kc.is_watertight}")
+        for nm, m in (("shell", sh), ("keycaps", kc)):
+            if not m.is_watertight or mesh_bodies(m) != 1:
+                fails.append(f"keyboard_blank {nm}: watertight="
+                             f"{m.is_watertight}, {mesh_bodies(m)} bodies")
+
+        # -- the shell IS the frame, in parameters.scad's own numbers --------
+        for i, (lo, hi, nom, ax) in enumerate(
+                ((sb[0][0], sb[1][0], fw, "width"),
+                 (sb[0][1], sb[1][1], fd, "depth"))):
+            if abs(lo) > MESH_XY_TOL or abs(hi - nom) > MESH_XY_TOL:
+                fails.append(
+                    f"keyboard_blank shell: {ax} runs {lo:.4f}..{hi:.4f}, want "
+                    f"0..{nom:.3f} -- parameters.scad's kbd_frame. The two "
+                    f"files share no numbers, so this is the only thing that "
+                    f"makes them the same keyboard.")
+        for lo, hi, nom in ((sb[0][2], sb[1][2], KB_SHELL_H[1]),):
+            if abs(lo) > MESH_XY_TOL or abs(hi - nom) > MESH_XY_TOL:
+                fails.append(f"keyboard_blank shell: z runs {lo:.4f}..{hi:.4f},"
+                             f" recorded 0..{nom:.3f} "
+                             f"[REPO keyboard_blank.scad:55-56]")
+
+        # -- X IS CONCENTRIC. kbd_cap_field_d[0] DOES NOT APPLY HERE ---------
+        bx0, bx1 = kb[0][0] - sb[0][0], sb[1][0] - kb[1][0]
+        want_bx = (fw - sw) / 2
+        lines.append(f"    bezels  x {bx0:.4f} / {bx1:.4f} (concentric, want "
+                     f"{want_bx:.4f} both)   "
+                     f"depth front {kb[0][1]-sb[0][1]:.4f} rear "
+                     f"{sb[1][1]-kb[1][1]:.4f} (UNEQUAL by design)")
+        if abs(bx0 - bx1) > MESH_XY_TOL:
+            fails.append(
+                f"keyboard_blank: the switch field is NOT concentric in X -- "
+                f"{bx0:.4f} at -x against {bx1:.4f} at +x. The cap field's "
+                f"kbd_cap_field_d[0] = {env['kbd_cap_field_d'][0]:+.4f} is the "
+                f"offset of the CAPS, set by the wide keys' outer edges, and "
+                f"it does not apply to the switch LATTICE. parameters.scad's "
+                f"kbd_cap_field block.")
+        for nm, v in (("-x", bx0), ("+x", bx1)):
+            if abs(v - want_bx) > MESH_XY_TOL:
+                fails.append(f"keyboard_blank: the {nm} bezel is {v:.4f}, want "
+                             f"(kbd_frame[0] - kbd_switch_field[0])/2 = "
+                             f"{want_bx:.4f}")
+
+        # -- DEPTH IS NOT CONCENTRIC, and the asymmetry is the whole point ---
+        #  The switch lattice's model Z centre is 57.000, which is
+        #  kbd_frame_cz - kbd_cap_field_d[1]: the sign flip is kbd_dy()'s
+        #  d/dmz = -1, so -0.250 in deck y is +0.250 in model Z.
+        #  keyboard-strip.md 1.6's row axes 19/38/57/76/95 give the same 57.000
+        #  independently, which is parameters.scad's own corroboration.
+        mzc = env["kbd_frame_cz"] - env["kbd_cap_field_d"][1]
+        oy = env["kbd_frame_cz"] + fd / 2
+        want_front = oy - (mzc + sd / 2)
+        want_rear = fd - sd - want_front
+        gf, gr = kb[0][1] - sb[0][1], sb[1][1] - kb[1][1]
+        if abs(gf - gr) <= MESH_XY_TOL:
+            fails.append(
+                f"keyboard_blank: the depth bezels are EQUAL at {gf:.4f} -- a "
+                f"concentric switch field. parameters.scad's kbd_cap_field_d "
+                f"is {env['kbd_cap_field_d'][1]:+.4f} in deck y and kbd_dy() "
+                f"has d/dmz = -1, so the field sits "
+                f"{abs(want_front-want_rear)/2:.4f} FRONTWARD of the frame's "
+                f"centre and the two bezels are {want_front:.4f} front and "
+                f"{want_rear:.4f} rear.")
+        for nm, got, nom in (("front", gf, want_front),
+                             ("rear", gr, want_rear)):
+            if abs(got - nom) > MESH_XY_TOL:
+                fails.append(
+                    f"keyboard_blank: the {nm} depth bezel is {got:.4f}, want "
+                    f"{nom:.4f} from parameters.scad (switch lattice centred "
+                    f"on model Z {mzc:.3f} = kbd_frame_cz - "
+                    f"kbd_cap_field_d[1], in a {fd:.3f} frame)")
+        for i, (nom, ax) in enumerate(((sw, "width"), (sd, "depth"))):
+            got = kb[1][i] - kb[0][i]
+            if abs(got - nom) > MESH_XY_TOL:
+                fails.append(f"keyboard_blank: the switch band's {ax} is "
+                             f"{got:.4f}, want kbd_switch_field = {nom:.3f}")
+
+        # -- THE BAND MUST ENCLOSE THE MEASURED CAP FIELD --------------------
+        #  The strongest gate here, and it is a pure cross-file one: the box is
+        #  built from kbd_frame, kbd_frame_cx/cz, kbd_cap_field and
+        #  kbd_cap_field_d, mapped into the blank's own axes, and compared with
+        #  the band this file exported. A band SMALLER than the caps it stands
+        #  for is a worst-case envelope that is not one.
+        ox = env["kbd_frame_cx"] - fw / 2
+        cw, cd = env["kbd_cap_field"]
+        mxc = env["kbd_frame_cx"] + env["kbd_cap_field_d"][0]
+        cap = ((mxc - cw/2) - ox, (mxc + cw/2) - ox,
+               oy - (mzc + cd/2), oy - (mzc - cd/2))
+        marg = (cap[0] - kb[0][0], kb[1][0] - cap[1],
+                cap[2] - kb[0][1], kb[1][1] - cap[3])
+        lines.append(f"    encloses the MEASURED cap field: blank x "
+                     f"{cap[0]:.4f}..{cap[1]:.4f}  y {cap[2]:.4f}..{cap[3]:.4f}"
+                     f"  margins -x {marg[0]:+.4f} +x {marg[1]:+.4f} front "
+                     f"{marg[2]:+.4f} rear {marg[3]:+.4f}")
+        for nm, v in zip(("-x", "+x", "front", "rear"), marg):
+            if v < -MESH_XY_TOL:
+                fails.append(
+                    f"keyboard_blank: the {sw:.3f} x {sd:.3f} switch band does "
+                    f"NOT enclose the measured keycap field at {nm} -- it is "
+                    f"inside it by {-v:.4f}. kbd_cap_field is 61 real caps "
+                    f"measured off the vendor mesh (parameters.scad), mapped "
+                    f"here by blank_x = mx {-ox:+.3f}, blank_y = {oy:.3f} - mz."
+                    f" An envelope smaller than the thing it stands for is not "
+                    f"an envelope.")
+        if min(marg) < 0.100:
+            tight = min(zip(marg, ("-x", "+x", "front", "rear")))
+            lines.append(f"      tightest margin {tight[0]:.4f} at "
+                         f"{tight[1]} -- parameters.scad declares the cap "
+                         f"field's X envelope NOT SOURCED in its last 0.100")
+
+        # -- THE CAP PLANE IS PARALLEL TO THE FRAME'S TOP --------------------
+        ps, pk = _up_plane(sh), _up_plane(kc)
+        dn = max(abs(float(a) - float(b)) for a, b in zip(ps[0], pk[0]))
+        xm = (kb[0][0] + kb[1][0]) / 2
+        rise = [_plane_z(pk, xm, y) - _plane_z(ps, xm, y)
+                for y in (kb[0][1], kb[1][1])]
+        lines.append(f"    cap plane || frame top to {dn:.2e} on the unit "
+                     f"normal; cap top stands {rise[0]:.4f} / {rise[1]:.4f} "
+                     f"above the frame's at the band's own two edges "
+                     f"(kbd_cap_h = {env['kbd_cap_h']:.3f})")
+        if dn > KB_NORMAL_TOL:
+            fails.append(
+                f"keyboard_blank: the cap band's top plane is NOT parallel to "
+                f"the frame's -- the unit normals differ by {dn:.3e} against a "
+                f"{KB_NORMAL_TOL:.0e} budget. The band's two heights are meant "
+                f"to be the SAME plane sampled at the band's own front and "
+                f"rear edges; two independently typed heights give exactly "
+                f"this failure. keyboard_blank.scad:191-192")
+        for y, v in zip((kb[0][1], kb[1][1]), rise):
+            if abs(v - env["kbd_cap_h"]) > MESH_XY_TOL:
+                fails.append(
+                    f"keyboard_blank: at the band's y = {y:.3f} the cap top "
+                    f"stands {v:.4f} above the frame's top face, and "
+                    f"parameters.scad's kbd_cap_h is "
+                    f"{env['kbd_cap_h']:.3f}. These are two files' independent "
+                    f"literals for one measurement (keyboard_blank's "
+                    f"kc_above_frame against kbd_cap_h) and nothing else "
+                    f"compares them.")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--params", default=None,
@@ -1340,29 +2645,12 @@ def main(argv=None):
         check_part(part, env, export, fails, lines)
 
     # ---------------- the meshes ------------------------------------------
-    import trimesh
-    for name in parts:
-        stl = os.path.join(export, "stl", f"{name}.stl")
-        if not os.path.exists(stl):
-            fails.append(f"missing {stl}")
-            continue
-        m = trimesh.load(stl)
-        if len(m.faces) == 0:
-            fails.append(f"{name}.stl is empty")
-        if not m.is_watertight:
-            fails.append(f"{name}.stl is not watertight -- a slicer will "
-                         f"guess at what you meant")
-        if not m.is_volume:
-            fails.append(f"{name}.stl is not a valid volume")
-        ext = m.extents
-        want_t = {"slab": env["acrylic_t"], "backpanel": env["back_t"],
-                  "carrier": env["carrier_h"]}.get(name)
-        if want_t is not None and abs(ext[2] - want_t) > TOL:
-            fails.append(f"{name}.stl is {ext[2]:.3f} thick, "
-                         f"want {want_t:.3f}")
-        lines.append(f"  {name}.stl: {len(m.faces)} facets, "
-                     f"{ext[0]:.2f} x {ext[1]:.2f} x {ext[2]:.2f}, "
-                     f"watertight={m.is_watertight}")
+    check_meshes(env, export, args.only or [r[0] for r in MESHES],
+                 fails, lines)
+    if args.only is None or {"foot", "cowl"} & set(args.only):
+        check_foot_cowl_plan(env, export, fails, lines)
+    if args.only is None or "keyboard_blank" in args.only:
+        check_keyboard_blank(env, fails, lines)
 
     # ---------------- provisional datums ----------------------------------
     prov_list = sorted(k for k, v in prov.items() if v == "PROVISIONAL")
@@ -1377,6 +2665,21 @@ def main(argv=None):
               f"final cut:")
         for k in prov_list:
             print(f"    {k} = {env.get(k, '?')}")
+    #  DATUMS THIS FILE CANNOT SEE, named rather than silently absent.
+    #  datums() evaluates scalars, list literals and indexing; an assignment
+    #  whose right-hand side calls an OpenSCAD function does not evaluate, so
+    #  the name never enters `env` -- and env.get() then hands back None, which
+    #  reads exactly like a datum that is there and happens to be zero. The
+    #  provenance tag is still picked up, so the two sets differ and the
+    #  difference is printable. foot_h_min is the live example: its RHS is
+    #  cowl_h() + 1.270.
+    unseen = sorted(k for k in prov if k not in env)
+    if unseen:
+        print(f"\n  {len(unseen)} tagged datum(s) that datums() could NOT "
+              f"evaluate, so nothing here checks them -- the right-hand side "
+              f"calls a function:")
+        for k in unseen:
+            print(f"    {k}  [{prov[k]}]")
     print()
     for f in fails:
         print(f"  FAIL  {f}")

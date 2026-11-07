@@ -40,6 +40,11 @@
   #ann ul { margin: 0 0 9px; padding: 0; list-style: none; }
   #ann ul:last-child { margin-bottom: 0; }
   #ann li { white-space: pre; }
+  /* The absent rows carry a size now, and a size that runs off the edge of
+     the scrim states nothing. Only that list wraps; the exported list is
+     column-aligned and must not. */
+  #ann .legend li { white-space: pre-wrap; text-indent: -1.1ch;
+                    padding-left: 1.1ch; }
   #ann .k { display: inline-block; width: 1.1ch; margin-right: 6px; }
   #ann .exported  { color: #7fd6a3; }
   #ann .reference { color: #8ab6e8; }
@@ -47,6 +52,29 @@
   #ann .absent    { color: #e8897f; }
   #ann .legend { position: absolute; right: 22px; bottom: 20px;
                  text-align: left; max-width: 46ch; }
+  /* The panel's provenance, under the caption, because the screen is the one
+     surface here that could have been made to say anything at all. */
+  #ann .screen { position: absolute; right: 22px; top: 58px; max-width: 48ch;
+                 background: rgba(8, 9, 11, 0.82);
+                 border: 1px solid rgba(255, 255, 255, 0.07);
+                 border-radius: 3px; padding: 8px 12px;
+                 font-size: 11px; color: #c6ccd2; }
+  #ann .screen .src { color: #8a9096; margin-top: 3px; }
+  /* THE SWISS GRID. It is drawn UNDER every text block (the scrims are later
+     in the DOM and both are positioned), and it is deliberately faint: it is
+     an argument about proportion, not a drawing layer, and a grid you have to
+     look for is a grid that does not fight the part. */
+  #ann .grid { position: absolute; left: 0; top: 0; pointer-events: none; }
+  #ann .grid .g  { stroke: rgba(255,255,255,0.10); stroke-width: 1; }
+  #ann .grid .ge { stroke: rgba(255,255,255,0.22); stroke-width: 1; }
+  #ann .grid .gc { stroke: rgba(127,214,163,0.30); stroke-width: 1;
+                   stroke-dasharray: 7 5; }
+  #ann .gridlab { position: absolute; right: 22px; top: 18px;
+                  font-size: 11px; letter-spacing: .04em; color: #9aa0a6;
+                  background: rgba(8, 9, 11, 0.82);
+                  border: 1px solid rgba(255, 255, 255, 0.07);
+                  border-radius: 3px; padding: 6px 10px; }
+  #ann .gridlab.bad { color: #e8897f; border-color: rgba(232,137,127,0.5); }
 </style>
 </head>
 <body>
