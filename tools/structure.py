@@ -337,20 +337,36 @@ def main():
                       [1, 0, 0, 0],
                       [0, 1, 0, 0],
                       [0, 0, 0, 1]], float)
+        #  CHECKED BEFORE LOADING, for the reason audit_reference.py's main()
+        #  sets out at length: tools/build.sh passes --reference whenever the
+        #  clone DIRECTORY exists, which is not the same as the clone holding
+        #  these two files, and a third-party repository may rename a path at
+        #  any time. A missing file drops the reference COLUMN and keeps this
+        #  design's own numbers, rather than failing the gate.
         rp = []
-        for nm in ("Caseback.stl", "Bezel.stl"):
-            m = trimesh.load(os.path.join(a.reference, "stl/ata", nm), force="mesh")
-            m.apply_transform(M)
-            rp.append(m)
-        rlo = min(m.bounds[0][1] for m in rp); rhi = max(m.bounds[1][1] for m in rp)
-        rZ = []
-        for y in np.linspace(rlo + 0.6, rhi - 0.6, a.stations):
-            polys = []
-            for m in rp:
-                polys += section(m, 1, y)
-            pr = section_props(polys) if polys else None
-            if pr:
-                rZ.append((float(y), pr))
+        gone = [nm for nm in ("Caseback.stl", "Bezel.stl")
+                if not os.path.exists(os.path.join(a.reference, "stl/ata", nm))]
+        if gone:
+            for nm in gone:
+                print(f"  !! missing stl/ata/{nm}")
+            print("  reference comparison SKIPPED -- this design's own "
+                  "sections above stand unchanged")
+            rZ = []
+        else:
+            for nm in ("Caseback.stl", "Bezel.stl"):
+                m = trimesh.load(os.path.join(a.reference, "stl/ata", nm),
+                                 force="mesh")
+                m.apply_transform(M)
+                rp.append(m)
+            rlo = min(m.bounds[0][1] for m in rp); rhi = max(m.bounds[1][1] for m in rp)
+            rZ = []
+            for y in np.linspace(rlo + 0.6, rhi - 0.6, a.stations):
+                polys = []
+                for m in rp:
+                    polys += section(m, 1, y)
+                pr = section_props(polys) if polys else None
+                if pr:
+                    rZ.append((float(y), pr))
         if rZ:
             rzz = np.array([r[1]["Z"] for r in rZ])
             rii = np.array([r[1]["I"] for r in rZ])
