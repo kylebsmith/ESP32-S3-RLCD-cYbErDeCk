@@ -750,5 +750,14 @@ else if (part == "backplate") backplate();
 else if (part == "buttons")   buttons();
 else if (part == "cover")     cover();
 else if (part == "plate")     plate();
-else if (part == "exploded")  assembly(explode = 22);
-else                          assembly();
+//  THERE IS NO assembly() HERE ANY MORE, AND THERE MUST NOT BE. Commit 24e2b08
+//  deleted module assembly() and cad/render_assembly.scad replaced it: the
+//  published views are built from the EXPORTED STLs because rendering the
+//  assembly from this file's CSG tree stripes in OpenSCAD's preview, which
+//  that file's header explains at length. These two lines were left behind
+//  pointing at the deleted module, and tools/build.sh went on asking for the
+//  part, so every CI run rendered nothing and failed on the warning.
+else assert(false, str("cyberdeck.scad: unknown part \"", part, "\". The ",
+                       "assembly view is NOT a part of this file -- it is ",
+                       "cad/render_assembly.scad, assembled from the exported ",
+                       "STLs. See tools/build.sh's PARTS line."));
