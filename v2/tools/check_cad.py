@@ -125,20 +125,44 @@ WEB_BASELINE = {
     # part          min web   what it is between
     "slab":         3.798,  # [MEASURED 2026-11-07, v2/export/dxf/slab.dxf]
                             #   outline <-> the -x middle fastener SLOT
-    "backpanel":    2.675,  # [MEASURED 2026-11-07, v2/export/dxf/backpanel.dxf]
-                            # Was 4.320, then 2.360, now 2.6748 -- and the
-                            # binding PAIR has moved twice. At 4.320 it was the
-                            # outline. At 2.360 it was the 18650 window against
-                            # one of the cowl's four screws, which stood at the
-                            # window's edge midpoints. Those four moved to the
-                            # flange's corners (parameters.scad 12 has why: three
-                            # of the four had no thread in the carrier at all),
-                            # so they are 4.860 and 4.9315 further out and the
-                            # window is no longer the nearest thing to them.
-                            # What is, is a back-panel fastener SLOT.
-                            #   fastener 4 <-> cowl screw
-                            # ABOVE THE 2.000 HARD FLOOR BY 0.6748, where the
-                            # old pair cleared it by 0.3600.
+    "backpanel":    2.248,  # [MEASURED 2026-11-07, v2/export/dxf/backpanel.dxf]
+                            # Was 4.320, then 2.360, then 2.6748, now 2.2484 --
+                            # and the binding PAIR has moved three times. At
+                            # 4.320 it was the outline. At 2.360 it was the
+                            # 18650 window against one of the cowl's four
+                            # screws, which stood at the window's edge
+                            # midpoints. At 2.6748 those four had moved to the
+                            # flange's corners (parameters.scad 12 has why:
+                            # three of the four had no thread in the carrier at
+                            # all) and the nearest thing to them was a
+                            # back-panel fastener SLOT.
+                            #   IT MOVED AGAIN AND THE LOSS IS DELIBERATE.
+                            # cowl_screw_dx() went 48.895 -> 47.625 because at
+                            # 48.895 the cowl's own O4.900 counterbore stood
+                            # 0.8542 from a washer scallop -- the thinnest wall
+                            # in that part, under the 1.500 it is drawn to.
+                            # Moving the four screws 1.270 inboard takes them
+                            # AWAY from the fastener slot (2.6748 -> 3.7067) and
+                            # TOWARD the 18650 window, and parameters.scad 12
+                            # shows the two brackets leave no dx that holds both
+                            # 1.500 in the cowl and 2.6748 here -- the window is
+                            # empty by 0.0265 mm. So this baseline is
+                            # re-recorded, measured, rather than held.
+                            #   18650 window <-> cowl screw
+                            # ABOVE THE 2.000 HARD FLOOR BY 0.2484, which is
+                            # asserted separately from this baseline, where the
+                            # 2.6748 pair cleared it by 0.6748 and the 2.360
+                            # pair by 0.3600.
+                            #   AND THE PAIR IS NOT TWO CONTOURS BUT ONE. The
+                            # thing the cowl screw approaches is the display's
+                            # O5.500 head clearance hole at (-47.315, +17.9125),
+                            # which has MERGED into the window -- backpanel.scad
+                            # draws it knowing it does, because the 18650
+                            # holder's edge runs through the display's two lower
+                            # mounting holes. The merged contour measures
+                            # 91.000 x 25.588 against cowl_window()'s 88.270 x
+                            # 22.373, so no check may treat the window's
+                            # nominal rectangle as its boundary.
                             #   AND THE REFUTATION THAT USED TO CLOSE THIS NOTE
                             # WAS STALE. It said the corner layout "landed them
                             # 5.306 from the display's own screw-head clearance
@@ -150,8 +174,11 @@ WEB_BASELINE = {
                             # hole is (-47.315, +17.9125), the centres are
                             # 6.1768 apart and the web is 1.9768: refused by
                             # 0.0232, not by 0.896. The 2 x 2 recorded now is
-                            # NOT that layout and its own web to the same head
-                            # hole is 2.0496.
+                            # NOT that layout, and the "2.0496" that used to
+                            # close this sentence is NOT REPRODUCIBLE off any
+                            # artefact here: the figure it was reaching for is
+                            # the measured 2.2484 above, against the merged
+                            # contour the head hole is part of.
 }
 
 def part_layers():
@@ -1446,7 +1473,7 @@ def cowl_screw_pts(env):
     #  dx and dy are a TRANSCRIPTION of cowl_screw_dx()/cowl_screw_dy(), for
     #  the same reason the flange was: datums() cannot evaluate a function.
     cx, cy = cowl_xy(env)
-    dx, dy = 48.895, 15.875             # cowl_screw_dx(), cowl_screw_dy()
+    dx, dy = 47.625, 15.875             # cowl_screw_dx(), cowl_screw_dy()
     return [(cx + sx * dx, cy + sy * dy)
             for sx in (-1, 1) for sy in (-1, 1)]
 
@@ -2203,6 +2230,163 @@ def check_carrier_inserts(m, env, groups, fails, lines):
                 "thread. CARRIER_INSERT_OPEN above carries the diagnosis.")
 
 
+#  ---------------------------------------------------------------------------
+#  THE CARRIER'S NUT-POCKET WEB, AND WHY THIS CHECK HAD TO BE WRITTEN
+#
+#  Of the three parts that carry a web, the carrier was the only one with no
+#  web gate of any kind -- and the change that moved cowl_screw_dx() to 47.625
+#  put the carrier's governing web there. check_carrier_inserts measures each
+#  pocket's end-face AREA, which says whether a pocket is whole, not how far
+#  it stands from anything. check_insert_clash is about z. check_webs reads the
+#  laser DXFs and the carrier is not one. So the number that governed was
+#  hand-recorded in a comment in parameters.scad, quoted second after a more
+#  comfortable one, with nothing measuring it -- which is the same shape of
+#  defect as the three insert pockets that did not exist, and it cost a phase.
+#
+#  WHAT IS MEASURED, AND WHAT IS NOT. This sections the carrier through the
+#  nut-pocket band ONLY -- its two ends and its midpoint, by the same rule as
+#  the cowl -- and gates the least wall in that section. The rest of the
+#  carrier is still ungated: 37k facets over the whole z range is a different
+#  job and a slow one. TO EXTEND IT: drop the band restriction below and give
+#  it the same cuts-from-the-mesh's-own-vertices treatment the cowl check
+#  uses; expect it to want a list of features that are legitimately thinner
+#  than WEB_HARD_FLOOR before it is green.
+#
+#  WHICH FIGURE IS THE WEB. Polygon to polygon, off the artefact, the same
+#  convention check_webs uses on the back panel -- the part's real geometry.
+#  The ACROSS-CORNERS proxy is reported beside it but is NOT gated, because it
+#  is not a distance: it replaces the hexagon with its circumscribed circle,
+#  which the hexagon does not occupy. On this part the two readings differ by
+#  0.4022 and they disagree about the floor, so the choice is load-bearing and
+#  is made here, in code, instead of in a comment. The honest conservatism is
+#  not the circumscribed circle, it is the PRINT tolerance, and that is
+#  sourced: FDM bore +/-0.500 proto / +/-0.250 industrial, DIAMETRAL
+#  [SVC protolabs, v2/docs/fabrication.md rows 3, 8, 9 -- row 8's own
+#  arithmetic, 0.600 of interference becoming 0.100 at "+0.500 bore", is what
+#  fixes it as diametral and not radial]. Both are reported against the floor.
+def check_carrier_nut_web(env, export, fails, lines):
+    """The least wall in the carrier's nut-pocket band, measured, not typed."""
+    import numpy as np
+    import trimesh
+    from shapely.geometry import Point
+    from shapely.ops import nearest_points
+
+    stl = os.path.join(export, "stl", "carrier.stl")
+    if not os.path.exists(stl):
+        return
+    m = trimesh.load(stl, process=False)
+    m.merge_vertices()
+    t = env.get("carrier_t")
+    pd = env.get("nut_m25_pocket_d")
+    af = env.get("nut_m25_pocket_af")
+    if t is None or pd is None or af is None:
+        fails.append(
+            "check_carrier_nut_web could not read carrier_t, "
+            "nut_m25_pocket_d and nut_m25_pocket_af out of parameters.scad, "
+            "so the carrier's web was NOT measured.")
+        return
+    lo, hi = -t, -t + pd
+    rc = af / (2.0 * math.cos(math.radians(30.0)))      # across-corners radius
+    hexa = 3.0 * rc * rc * math.sin(math.radians(60.0))  # a regular hexagon's
+    lines.append(f"    carrier nut-pocket web -- sectioned at z {lo:+.3f}, "
+                 f"{0.5 * (lo + hi):+.3f} and {hi:+.3f} (the band's ends and "
+                 f"its midpoint), polygon to polygon off the mesh")
+    worst = None
+    nhex = 0
+    for z in (lo + 1e-6, 0.5 * (lo + hi), hi - 1e-6):
+        rings, degs = _plane_rings(m, z)
+        mat, polys, maxdepth = _section_polys(rings)
+        if mat is None:
+            continue
+        if degs and set(degs) != {2}:
+            fails.append(
+                f"THE CARRIER'S SECTION AT z {z:+.4f} IS NOT A SET OF CLOSED "
+                f"CURVES: vertex degrees {degs}, so the carrier's web was NOT "
+                f"measured at this height.")
+            continue
+        hexes = [i for i, p in enumerate(polys) if abs(p.area - hexa) < 0.01]
+        nhex = max(nhex, len(hexes))
+        for i, j in itertools.combinations(range(len(polys)), 2):
+            d = polys[i].exterior.distance(polys[j].exterior)
+            if worst is not None and d >= worst[0]:
+                continue
+            p, q = nearest_points(polys[i].exterior, polys[j].exterior)
+            mid = Point(0.5 * (p.x + q.x), 0.5 * (p.y + q.y))
+            if not mat.contains(mid):
+                continue                     # across a void, not a wall
+            worst = (d, z, polys[i], polys[j], i in hexes or j in hexes)
+        for i, poly in enumerate(polys):
+            nk = _ring_neck(poly)
+            if nk is None or (worst is not None and nk[0] >= worst[0]):
+                continue
+            mid = Point(0.5 * (nk[1][0] + nk[2][0]), 0.5 * (nk[1][1] + nk[2][1]))
+            if not mat.contains(mid):
+                continue
+            worst = (nk[0], z, poly, poly, i in hexes)
+    if nhex != 4:
+        fails.append(
+            f"THE CARRIER'S NUT-POCKET BAND HOLDS {nhex} HEXAGONAL POCKET(S) "
+            f"OF AREA {hexa:.4f} mm2, want 4. The four cowl screws thread "
+            f"into captive nuts and a pocket that is not there is a screw "
+            f"with nothing to pull against. Measured off carrier.stl, so a "
+            f"pocket that parameters.scad declares and the mesh does not have "
+            f"is caught here and not at assembly.")
+    if worst is None:
+        fails.append(
+            "THE CARRIER'S NUT-POCKET BAND HAS NO MEASURABLE WALL: no pair of "
+            "rings and no ring self-approach put its shortest segment in "
+            "material, so nothing here was measured.")
+        return
+    d, z, pa, pb, touches_hex = worst
+
+    def lab(p):
+        c, b = p.centroid, p.bounds
+        return (f"eq-O{2 * math.sqrt(p.area / math.pi):8.4f} "
+                f"[{b[2] - b[0]:7.3f} x{b[3] - b[1]:7.3f}] at "
+                f"({c.x:+9.3f},{c.y:+9.3f})")
+
+    same = "  -- a NECK INSIDE ONE RING" if pa is pb else ""
+    lines.append(f"      LEAST WALL IN THE BAND {d:.4f} at z {z:+.4f}, "
+                 f"{lab(pa)} <-> {lab(pb)}{same}")
+    #  the ungated proxy and the sourced one, both reported against the floor
+    for nm, give in (("industrial +/-0.250 diametral", 0.125),
+                     ("prototype  +/-0.500 diametral", 0.250)):
+        w = d - give
+        lines.append(f"        at FDM bore {nm}: {w:.4f} "
+                     f"({'OVER' if w >= WEB_HARD_FLOOR else 'UNDER'} the "
+                     f"{WEB_HARD_FLOOR:.3f} floor)")
+    if touches_hex:
+        cen = pa.centroid if pa.area < pb.area else pb.centroid
+        other = pb if pa.area < pb.area else pa
+        cc = other.exterior.distance(Point(cen.x, cen.y))
+        lines.append(f"        across-corners proxy {cc - rc:.4f} (centre to "
+                     f"contour {cc:.4f} less the {rc:.4f} circumscribed "
+                     f"radius) -- NOT gated: it is not a distance, the "
+                     f"hexagon does not occupy that circle, and the two "
+                     f"readings differ by {rc - af / 2.0:.4f}")
+    if d < WEB_HARD_FLOOR:
+        fails.append(
+            f"THE CARRIER'S LEAST WALL IN THE NUT-POCKET BAND IS {d:.4f}, "
+            f"BELOW THE {WEB_HARD_FLOOR:.3f} HARD FLOOR: at z {z:+.4f}, "
+            f"between {lab(pa)} and {lab(pb)}. Measured polygon to polygon "
+            f"off carrier.stl, so it is the artefact and not the datums. The "
+            f"carrier had no web gate at all until this one, and the change "
+            f"that moved cowl_screw_dx() put the part's governing web here, "
+            f"so a hand-recorded figure in a comment was all that stood "
+            f"between this and a print.")
+    elif d < CARRIER_NUT_WEB_BASELINE - WEB_BASELINE_TOL:
+        fails.append(
+            f"the carrier's nut-pocket web got WORSE -- {d:.4f} at z {z:+.4f} "
+            f"against the recorded baseline {CARRIER_NUT_WEB_BASELINE:.3f}. "
+            f"It is accepted at the baseline and not below it. If the loss is "
+            f"deliberate, re-export and update CARRIER_NUT_WEB_BASELINE to "
+            f"{d:.3f} in this file.")
+    elif d > CARRIER_NUT_WEB_BASELINE + WEB_BASELINE_TOL:
+        lines.append(f"      baseline is STALE and in the good direction: "
+                     f"{d:.4f} vs {CARRIER_NUT_WEB_BASELINE:.3f} -- update "
+                     f"CARRIER_NUT_WEB_BASELINE to {d:.3f}")
+
+
 def check_carrier_planes(m, env, groups, fails, lines):
     """The whole Z structure of the carrier, measured, against the declaration.
 
@@ -2400,6 +2584,557 @@ def check_foot_cowl_plan(env, export, fails, lines):
             f"the cowl's window, disp_x or band_mid move.")
 
 
+# ===========================================================================
+#  CHECK -- THE COWL'S PLANE SECTIONS: ITS OWN THINNEST WALL, AND THE BOUGHT
+#  METAL ITS RIM LANDS ON
+# ===========================================================================
+#  WHY NOT A SILHOUETTE, which is what check_foot_cowl_plan builds and the
+#  obvious thing to copy. That function unions every triangle's 2D projection,
+#  so it sees the part's OUTLINE and nothing inside it. The cowl's four head
+#  counterbores are BLIND: each is a O4.900 void opening at the bed face with
+#  1.280 of PETG over it, so in projection the ceiling covers the void
+#  completely and the silhouette is byte-identical whether the counterbore is
+#  there or not. A silhouette gate would have passed the defect this check
+#  exists to catch -- a counterbore standing 0.854 from a washer scallop -- and
+#  would equally pass a counterbore that broke clean out through the cavity
+#  wall. So this check SECTIONS the mesh, at a z inside every band the part
+#  actually has.
+#
+#  WHERE THE SECTIONS GO, AND NOTHING HERE IS TYPED. The breakpoints are the
+#  distinct z of the MESH'S OWN vertices -- so every change of cross-section is
+#  a band boundary -- union the depths at which the panel's bought metal starts
+#  and stops obstructing. The part is sectioned at the MIDPOINT of every
+#  resulting band, so each band is visited exactly once and a band that a later
+#  change introduces is visited without editing this file. The cowl today has
+#  three bands of its own (floor, cavity, over-the-counterbore) and the washer
+#  adds a fourth boundary 0.500 under the rim; sectioning only at the mesh's
+#  own levels would never put a plane inside the washer's 0.500 and would miss
+#  half of (B).
+#
+#  mesh.section() and mesh.split() RAISE here -- this trimesh has no scipy --
+#  so the plane cut is done by hand: every triangle is intersected with the
+#  plane, the crossing points are snapped onto a 1e-7 mm lattice (the two
+#  triangles sharing an edge compute the same point from the same two vertices,
+#  so the snap is exact in intent and not a tolerance), and the rings are
+#  walked off the degree-2 adjacency. A section whose vertex degrees are not
+#  all 2 is reported and not trusted rather than silently measured.
+#
+#  (A) THE PART AGAINST ITSELF. Boundary-to-boundary distance between every
+#  distinct pair of rings in each section -- the same measure check_webs takes
+#  on the flat parts, which covers every hole-to-outline land as a special
+#  case. A pair whose shortest segment does not lie in MATERIAL is reported and
+#  NOT gated: that gap is across a void and is not a wall. It cannot hide a
+#  real web, because if a third ring intervenes then that ring is nearer still
+#  and is caught on a pair of its own.
+#
+#  (B) THE PART AGAINST THE PANEL'S BOUGHT METAL. parameters.scad 6b ends
+#  "NOTHING DRAWS THESE TWO AND THAT IS CORRECT: a bought washer is not a cut
+#  feature and not a printed one, so no part file reads them and no checker
+#  gates them." THIS is that checker. Six of the ten back_screw_pts() carry a
+#  DIN 125 A 2.5 washer under an ISO 4762 cap head and four carry a bare head,
+#  all on the panel's UNDERSIDE -- the same face the cowl's rim lands on.
+#  Measured DOWN from that face a washered hole obstructs O6.000 for
+#  screw_m25_washer_t and then O4.500 for screw_m25_head_h; a bare hole
+#  obstructs O4.500 from the face. Cowl material that shares a z with one of
+#  those discs and overlaps it in plan is a joint that cannot close, and the
+#  flange overlapped two of them by 6.1013 and 8.4883 mm2 before the scallops
+#  existed. These two diameters are the ONE thing here that is transcribed
+#  rather than measured, for the reason 6b gives: there is no artefact to
+#  measure, because nothing draws a bought washer.
+#
+#  THE FLOOR IS THE PART'S OWN DECLARED MINIMUM, NOT A STRENGTH. This
+#  repository carries no PETG strength figure of any kind, in any file -- the
+#  only mechanical properties in it are PMMA's E = 3300 MPa and TPU 95A's creep
+#  and modulus -- and parameters.scad 6b's "I will not invent a number" is on
+#  the record for exactly this situation. So the floor is not an allowable:
+#  cowl.scad justifies cowl_wall()'s 1.500 of material and cowl_floor()'s 1.500
+#  on one figure, "3.54 extrusion lines at a 0.4 nozzle", and 1.500 is
+#  therefore what this part has already declared its own thinnest feature may
+#  be. A web below it is not weak-by-calculation; it is thinner than the part
+#  says it is drawn to.  [REPO cowl.scad, parameters.scad 12]
+COWL_WEB_FLOOR = 1.500
+
+#  THE RECORDED SECTION BASELINE, and like WEB_BASELINE it is a MEASUREMENT.
+#  Re-record ONLY with a deliberate geometry change, and only from the artefact:
+#      /usr/bin/python3.11 v2/tools/export.py
+#      /usr/bin/python3.11 v2/tools/check_cad.py    # prints the new value
+#  THE RIM'S TIGHTEST APPROACH TO THE PANEL'S BOUGHT METAL. This number was
+#  printed and never gated, and the check's own text called it "the first
+#  number to go negative if cowl_flange(), cowl_xy() or cowl_washer_relief_d()
+#  moves" -- but nothing fired until it HAD gone negative AND produced an
+#  overlap area, so the whole 0.498 could be spent in silence. That band is
+#  exactly where this repository's sourced tolerances live: FDM bore +/-0.500
+#  proto / +/-0.250 industrial, diametral [SVC protolabs, v2/docs/
+#  fabrication.md rows 3, 8, 9], and DIN 125 d1 up to 2.84 [parameters.scad
+#  825], which together can consume it without any geometry moving at all.
+COWL_METAL_CLEAR_BASELINE = 0.498  # [MEASURED 2026-11-08,
+                                   # v2/export/stl/cowl.stl] the rim's
+                                   # tightest approach to the panel's bought
+                                   # metal, at the O6.000 washer on back screw
+                                   # 5. Re-record ONLY from the artefact.
+
+CARRIER_NUT_WEB_BASELINE = 2.281  # [MEASURED 2026-11-08,
+                                  # v2/export/stl/carrier.stl] The least wall
+                                  # in the carrier's nut-pocket band, polygon
+                                  # to polygon: the +x nut pocket against the
+                                  # merged 18650 window, 2.2816. Re-record
+                                  # ONLY from the artefact.
+
+COWL_SECTION_BASELINE = 1.965   # [MEASURED 2026-11-07, v2/export/stl/cowl.stl]
+                                # Was 0.8542 at cowl_screw_dx() 48.895, between
+                                # a O4.900 counterbore and a washer scallop, and
+                                # that is the defect this check was written for:
+                                # under the 1.500 the part declares and under
+                                # insert_m25_wall's 1.600, about 2.1 extrusion
+                                # lines at a 0.4 nozzle. 47.625 moves the two
+                                # left counterbores 1.270 off the scallops and
+                                # the governing pair is still the same one, at
+                                # 1.9654 measured here and 1.9653 derived --
+                                # over the 1.500 by 0.4654 and over 1.600 by
+                                # 0.3654. Reproduced off the same mesh a second,
+                                # independent way at 1.9657 by casting 7200
+                                # radial rays per bore and taking the first two
+                                # surface crossings, which is why the baseline
+                                # is carried to three decimals and not four.
+                                # See parameters.scad 12 cowl_screw_dx() for why
+                                # 75 x grid is the ONLY grid value that satisfies
+                                # both this and the back panel's 2.000 floor.
+
+
+def _ring_neck(poly, k=4.0, halo=4):
+    """The narrowest NECK inside one ring: the least distance between two
+    stretches of the SAME boundary that are far apart ALONG it.
+
+    WHY THIS IS NOT "the least distance between non-adjacent edges". That is
+    the obvious rule and it is wrong, because a ring's own curvature beats
+    any index-based skip: on this repository's bores -- 96-gons, and the
+    section splits their edges further -- a skip of two steps reported 0.0000
+    across a O2.900 bore, which is not a neck at all but the hole it is meant
+    to ignore. The criterion has to be scale-free, so it is ARC LENGTH:
+
+        report a distance d only if the two points are more than k*d apart
+        ALONG the ring.
+
+    On a circle of radius R two points subtending theta have d = 2R sin(theta/2)
+    and arc R*theta, and theta <= 8 sin(theta/2) for every theta in (0, pi].
+    So NO pair on a convex ring EVER passes at k = 4, whatever its radius or
+    its tessellation -- convex bores are excluded by geometry and not by a
+    special case. A real neck is the opposite shape: to get from one of its
+    faces to the other you walk around the feature that made it, so a 0.4642
+    rib between two O7.000 scallops has an arc separation near 11 mm. Ratio
+    24, not 4.
+
+    Vertex pairs first, which is O(n^2) in numpy and lands within one vertex
+    spacing; then exact segment-to-segment over a halo of edges around the
+    best pair, so the number returned is a true distance and not a sample.
+    Returns (distance, point_a, point_b), or None when the ring has no neck.
+    """
+    import numpy as np
+    from shapely.geometry import LineString
+    from shapely.ops import nearest_points
+    co = np.asarray(poly.exterior.coords[:-1], dtype=float)
+    n = len(co)
+    if n < 8:
+        return None
+    seg = np.linalg.norm(np.roll(co, -1, axis=0) - co, axis=1)
+    per = float(seg.sum())
+    arcpos = np.concatenate([[0.0], np.cumsum(seg)[:-1]])
+    D = np.linalg.norm(co[:, None, :] - co[None, :, :], axis=2)
+    A = np.abs(arcpos[:, None] - arcpos[None, :])
+    A = np.minimum(A, per - A)
+    ok = A > k * D
+    if not ok.any():
+        return None
+    D = np.where(ok, D, np.inf)
+    ia, ib = np.unravel_index(int(np.argmin(D)), D.shape)
+    best = None
+    for u in range(int(ia) - halo, int(ia) + halo + 1):
+        su = LineString([co[u % n], co[(u + 1) % n]])
+        for v in range(int(ib) - halo, int(ib) + halo + 1):
+            sv = LineString([co[v % n], co[(v + 1) % n]])
+            av = abs(arcpos[u % n] - arcpos[v % n])
+            av = min(av, per - av)
+            d = su.distance(sv)
+            if av <= k * d:
+                continue
+            if best is None or d < best[0]:
+                p0, p1 = nearest_points(su, sv)
+                best = (d, (p0.x, p0.y), (p1.x, p1.y))
+    if best is None:
+        return (float(D[ia, ib]), tuple(co[ia]), tuple(co[ib]))
+    return best
+
+
+def _plane_rings(m, z, snap=1e7):
+    """Closed rings of the section z = const, walked off the raw triangles.
+
+    Generic: the cowl section check and the carrier nut-web check both use it.
+    """
+    import numpy as np
+    from collections import defaultdict
+    V = np.asarray(m.vertices, float)
+
+    def key(p):
+        return (int(round(p[0] * snap)), int(round(p[1] * snap)))
+
+    adj, coord = defaultdict(set), {}
+    for tri in np.asarray(m.faces, int):
+        p = V[tri]
+        d = p[:, 2] - z
+        if (d > 0).all() or (d < 0).all():
+            continue
+        pts = []
+        for i in range(3):
+            a, b = i, (i + 1) % 3
+            da, db = d[a], d[b]
+            if da == 0.0:
+                pts.append(p[a][:2])
+            elif (da < 0 < db) or (db < 0 < da):
+                t = da / (da - db)
+                pts.append((p[a] + t * (p[b] - p[a]))[:2])
+        seen, uniq = set(), []
+        for q in pts:
+            k = key(q)
+            if k not in seen:
+                seen.add(k)
+                uniq.append((k, q))
+        if len(uniq) != 2:
+            continue                    # a vertex-grazing triangle: no segment
+        (ka, qa), (kb, qb) = uniq
+        coord[ka], coord[kb] = qa, qb
+        adj[ka].add(kb)
+        adj[kb].add(ka)
+    degs = {}
+    for k, nb in adj.items():
+        degs[len(nb)] = degs.get(len(nb), 0) + 1
+    rings, done = [], set()
+    for start in list(adj):
+        if start in done:
+            continue
+        walk, prev, cur = [start], None, start
+        done.add(start)
+        while True:
+            nxt = [n for n in adj[cur] if n != prev and n not in done]
+            if not nxt:
+                if start in adj[cur] and len(walk) > 2:
+                    rings.append([coord[k] for k in walk])
+                break
+            prev, cur = cur, nxt[0]
+            walk.append(cur)
+            done.add(cur)
+    return rings, degs
+
+
+def _section_polys(rings):
+    """(material polygon, rings as polygons, max nesting depth) for a section."""
+    from shapely.geometry import Point, Polygon
+    from shapely.ops import unary_union
+    polys = [Polygon(r) for r in rings if len(r) > 2]
+    polys = [p for p in polys if p.area > 1e-9]
+    #  NESTING DEPTH MUST BE TESTED WITH A POINT ON THE RING. A centroid does
+    #  not work and fails silently in the worst direction: the OUTER ring's
+    #  centroid lies inside the cavity ring, which classifies the outer
+    #  boundary as a hole and leaves the section with no shell at all.
+    depth = []
+    for i, p in enumerate(polys):
+        probe = Point(p.exterior.coords[0])
+        depth.append(sum(1 for j, q in enumerate(polys)
+                         if j != i and q.contains(probe)))
+    shells = [p for p, d in zip(polys, depth) if d % 2 == 0]
+    holes = [p for p, d in zip(polys, depth) if d % 2 == 1]
+    mat = unary_union([
+        Polygon(s.exterior.coords,
+                [h.exterior.coords for h in holes
+                 if s.contains(Point(h.exterior.coords[0]))])
+        for s in shells]) if shells else None
+    return mat, polys, (max(depth) if depth else 0)
+
+
+def check_section_polys_clearance(env, export, fails, lines):
+    """The cowl's own thinnest wall, and the panel's bought metal under its rim.
+
+    Measured by SECTIONING the exported mesh -- not from a silhouette, which
+    cannot see a blind counterbore at all, and not from the parameters the part
+    was drawn from, which would pass while the artefact was wrong. The block
+    above this function has the whole argument.
+    """
+    import numpy as np
+    import trimesh
+    from shapely.geometry import Point, LineString
+    from shapely.affinity import translate as _tr
+    from shapely.ops import nearest_points
+
+    stl = os.path.join(export, "stl", "cowl.stl")
+    if not os.path.exists(stl):
+        return
+    m = trimesh.load(stl, process=False)
+    #  a binary STL loaded with process=False reports is_watertight False on
+    #  EVERY part in this repo -- unmerged vertices in the file format, not a
+    #  defect -- so merge before anything reads the topology
+    m.merge_vertices()
+    V = np.asarray(m.vertices, float)
+    zlo, zhi = float(V[:, 2].min()), float(V[:, 2].max())
+    cx, cy = cowl_xy(env)
+
+    #  THE BOUGHT METAL, as discs measured DOWN from the rim plane. The rim
+    #  plane is the MESH's own zmax, not a datum: MESH_Z records that the face
+    #  at z1 is the one against the back panel.
+    wo, wt = env["screw_m25_washer_od"], env["screw_m25_washer_t"]
+    hd, hh = env["screw_m25_head_d"], env["screw_m25_head_h"]
+    obstr = []
+    for k, (px, py) in enumerate(back_screw_pts(env)):
+        top = zhi
+        stack = ([] if k in FOOT_AT else [("DIN 125 washer", wo, wt)])
+        stack.append(("ISO 4762 head", hd, hh))
+        for nm, dia, th in stack:
+            obstr.append((k, px, py, nm, dia, top - th, top))
+            top -= th
+
+    cuts = sorted({round(float(v), 6) for v in V[:, 2]}
+                  | {round(o[5], 6) for o in obstr if zlo < o[5] < zhi}
+                  | {round(o[6], 6) for o in obstr if zlo < o[6] < zhi})
+    bands = [(a, b) for a, b in zip(cuts, cuts[1:]) if b - a > 1e-6]
+
+    lines.append(f"    cowl section clearance -- {len(bands)} band(s) from the "
+                 f"mesh's own z levels {cuts} plus the bought metal's steps; "
+                 f"each sectioned at BOTH ENDS and its midpoint and the "
+                 f"worst of the three kept (a silhouette cannot see "
+                 f"a blind counterbore -- see this check's header)")
+    worst_web = None
+    worst_clear = None
+    #  COLLISIONS ARE AGGREGATED PER FASTENER, not per band. One washer sitting
+    #  on this rim is ONE defect; it shows up in every band its stack spans, and
+    #  reporting it once per band buried the two real collisions under ten rows.
+    hits = {}
+    #  EVERY BAND IS SECTIONED AT THREE HEIGHTS, not one: its two ends and
+    #  its midpoint, and the band's figure is the WORST of the three. A
+    #  midpoint alone is exact only for a PRISM. The cowl is a prism today --
+    #  all three heights give the same wall to 4 dp, which is how this change
+    #  was shown to move no number -- but a lead-in chamfer of t per side
+    #  (foot.scad already has one, so this is not hypothetical) has vertices
+    #  only at its ends, so its taper is ONE band and a midpoint hides t/2 of
+    #  its own worst section. Measured: a 0.520/side lead-in puts the true
+    #  wall at 1.4455, under the floor, and the midpoint read 1.5294 and the
+    #  floor rule stayed silent.
+    for a, b in bands:
+        samples = []
+        for z in (a + 1e-6, 0.5 * (a + b), b - 1e-6):
+            rings, degs = _plane_rings(m, z)
+            mat, polys, maxdepth = _section_polys(rings)
+            if degs and set(degs) != {2}:
+                fails.append(
+                    f"THE COWL'S SECTION AT z {z:.4f} IS NOT A SET OF CLOSED "
+                    f"CURVES: vertex degrees {degs}, so this check could not "
+                    f"measure it. A manifold solid cuts a plane in closed "
+                    f"rings; this one did not.")
+                continue
+            if mat is None:
+                continue
+            if maxdepth > 1:
+                #  THIS WAS A NOTE AND A NOTE WAS NOT ENOUGH. The material
+                #  polygon is what (A) decides a wall from -- mat.contains()
+                #  is what sorts a wall from a void -- and what (B) measures
+                #  the bought metal against. If it is not trusted then this
+                #  height was not measured, and a wall wrongly sorted into
+                #  the ungated ACROSS A VOID bucket goes silent. Fail, the
+                #  same way the degree check above already does.
+                fails.append(
+                    f"THE COWL'S SECTION AT z {z:+.4f} HAS RINGS NESTING "
+                    f"{maxdepth} DEEP, which this check does not model: the "
+                    f"material polygon it would gate (A) with and measure "
+                    f"(B) against is not trustworthy, so THIS HEIGHT WAS NOT "
+                    f"MEASURED. Nothing below is a reading of it.")
+                continue
+            samples.append((z, mat, polys))
+        if not samples:
+            lines.append(f"      z {0.5 * (a + b):+7.4f}  no material")
+            continue
+
+        def lab(polys, i):
+            #  eq-O, not O: a ring is only a circle if it is one, and the
+            #  outer boundary is a 107.510 x 41.613 rounded rectangle. The
+            #  span is printed beside it so a ring is identifiable either way.
+            p = polys[i]
+            c = p.centroid
+            bb = p.bounds
+            return (f"eq-O{2 * math.sqrt(p.area / math.pi):8.4f} "
+                    f"[{bb[2] - bb[0]:7.3f} x{bb[3] - bb[1]:7.3f}] at "
+                    f"({c.x + cx:+9.3f},{c.y + cy:+9.3f})")
+
+        # ---- (A) the part against itself ------------------------------------
+        #  TWO measurements, and the second one is the whole reason this block
+        #  was rewritten:
+        #
+        #  DISTINCT RINGS -- a bore against a bore, a bore against the
+        #  boundary. This is all the first version of this check did.
+        #
+        #  EACH RING AGAINST ITSELF -- a neck inside ONE ring. Two washer
+        #  scallops bitten into the same outer boundary leave a rib between
+        #  them that belongs to no PAIR of rings, so a pairwise loop cannot
+        #  see it AT ANY WIDTH. Demonstrated on this very part: one extra
+        #  back_screw_pts() entry, which cowl.scad's derived-not-typed scallop
+        #  loop picks up by itself, leaves a 0.4642 mm rib between two O7.000
+        #  bites -- thinner than the 0.8542 this check exists to catch -- and
+        #  the pairwise-only version printed "THINNEST WALL IN THE PART
+        #  1.9654" and the run came back PASS. Edges within two steps along a
+        #  ring are skipped so a facet is not measured against its own
+        #  neighbours; at $fn 96 that is 7.5 degrees of arc and cannot hide a
+        #  real neck.
+        best = None
+        for z, mat, polys in samples:
+            pairs = []
+            for i, j in itertools.combinations(range(len(polys)), 2):
+                d = polys[i].exterior.distance(polys[j].exterior)
+                p, q = nearest_points(polys[i].exterior, polys[j].exterior)
+                mid = Point(0.5 * (p.x + q.x), 0.5 * (p.y + q.y))
+                pairs.append((d, i, j, mat.contains(mid)))
+            for i, poly in enumerate(polys):
+                sb = _ring_neck(poly)
+                if sb is None:
+                    continue
+                d, pa, pb = sb
+                mid = Point(0.5 * (pa[0] + pb[0]), 0.5 * (pa[1] + pb[1]))
+                pairs.append((d, i, i, mat.contains(mid)))
+            pairs.sort(key=lambda r: r[0])
+            sol = [r for r in pairs if r[3]]
+            voi = [r for r in pairs if not r[3]]
+            key = sol[0][0] if sol else 1e9
+            if best is None or key < best[0]:
+                best = (key, z, polys, sol, voi)
+
+        _, z, polys, solid, voidp = best
+        if solid:
+            d, i, j, _x = solid[0]
+            same = " (a neck inside ONE ring)" if i == j else ""
+            lines.append(f"      z {z:+7.4f}  {len(polys)} ring(s), thinnest "
+                         f"wall {d:.4f}{same}  {lab(polys, i)} <-> "
+                         f"{lab(polys, j)}")
+            if worst_web is None or d < worst_web[0]:
+                worst_web = (d, z, lab(polys, i), lab(polys, j), i == j)
+        else:
+            lines.append(f"      z {z:+7.4f}  {len(polys)} ring(s), no pair "
+                         f"whose shortest segment lies in material")
+        if voidp and voidp[0][0] < (solid[0][0] if solid else 1e9):
+            d, i, j, _x = voidp[0]
+            lines.append(f"                 ({d:.4f} {lab(polys, i)} <-> "
+                         f"{lab(polys, j)} is ACROSS A VOID, not a wall -- "
+                         f"not gated)")
+
+        # ---- (B) the part against the panel's bought metal ------------------
+        #  Run at every sampled height, but AGGREGATED PER FASTENER and
+        #  counted per BAND. One washer sitting on this rim is ONE defect; it
+        #  shows up in every band its stack spans, and reporting it once per
+        #  band buried the two real collisions under ten rows. Counting
+        #  samples instead of bands would now treble that count.
+        for z, mat, polys in samples:
+            gmat = _tr(mat, cx, cy)
+            for (k, px, py, nm, dia, olo, ohi) in obstr:
+                if not (olo < z < ohi):
+                    continue
+                disc = Point(px, py).buffer(dia / 2.0, quad_segs=512)
+                inter = gmat.intersection(disc)
+                if not inter.is_empty and inter.area > 1e-9:
+                    rec = hits.setdefault(k, {"px": px, "py": py,
+                                              "bands": set(),
+                                              "worst": None, "parts": set()})
+                    rec["bands"].add((a, b))
+                    rec["parts"].add(nm)
+                    if rec["worst"] is None or inter.area > rec["worst"][0]:
+                        rec["worst"] = (inter.area, nm, dia, z, inter.bounds)
+                else:
+                    d = gmat.distance(disc)
+                    if worst_clear is None or d < worst_clear[0]:
+                        worst_clear = (d, z, k, px, py, nm, dia)
+
+    if worst_web:
+        d, z, li, lj, same = worst_web
+        lines.append(f"      THINNEST WALL IN THE PART {d:.4f} at z {z:+.4f}, "
+                     f"{li} <-> {lj}"
+                     f"{'  -- a NECK INSIDE ONE RING' if same else ''}")
+        if d < COWL_WEB_FLOOR:
+            fails.append(
+                f"THE COWL'S THINNEST WALL IS {d:.4f}, BELOW THE "
+                f"{COWL_WEB_FLOOR:.3f} THIS PART DECLARES: at z {z:+.4f}, "
+                f"between {li} and {lj}. cowl.scad justifies cowl_wall()'s "
+                f"1.500 of material and cowl_floor()'s 1.500 on \"3.54 "
+                f"extrusion lines at a 0.4 nozzle\"; {d:.4f} is "
+                f"{d / (1.500 / 3.54):.2f} lines on the SAME line width that "
+                f"sentence implies, 1.500/3.54 = 0.4237 (a literal 0.400 "
+                f"would make its own 1.500 come to 3.75 lines, not 3.54). "
+                f"This is NOT a strength claim and cannot "
+                f"be -- there is no PETG strength figure anywhere in this "
+                f"repository -- it is the part measuring thinner than it is "
+                f"drawn to. Measured off the exported mesh by plane section, "
+                f"so it is the artefact and not the parameters.")
+        elif d < COWL_SECTION_BASELINE - WEB_BASELINE_TOL:
+            fails.append(
+                f"the cowl's thinnest wall got WORSE -- {d:.4f} at z {z:+.4f} "
+                f"against the recorded baseline {COWL_SECTION_BASELINE:.3f} "
+                f"({li} <-> {lj}). It is accepted at the baseline and not "
+                f"below it. If the loss is deliberate, re-export and "
+                f"update COWL_SECTION_BASELINE to {d:.3f} in this file -- but "
+                f"NOT below "
+                f"{COWL_WEB_FLOOR + 2 * (COWL_SECTION_BASELINE - COWL_WEB_FLOOR):.3f} "
+                f"without first checking that the governing feature is a "
+                f"PRISM: {d:.3f} is the worst of three samples per band, and "
+                f"a taper steeper than twice the baseline's own headroom over "
+                f"the floor can still be walked under the floor through this "
+                f"door, one accepted re-record at a time.")
+        elif d > COWL_SECTION_BASELINE + WEB_BASELINE_TOL:
+            lines.append(f"      baseline is STALE and in the good direction: "
+                         f"{d:.4f} vs {COWL_SECTION_BASELINE:.3f} -- update "
+                         f"COWL_SECTION_BASELINE to {d:.3f}")
+    for k in sorted(hits):
+        rec = hits[k]
+        area, nm, dia, z, bb = rec["worst"]
+        parts = ", ".join(sorted(rec["parts"]))
+        fails.append(
+            f"THE COWL'S RIM LANDS ON THE BOUGHT METAL AT BACK SCREW {k} "
+            f"({rec['px']:+.3f},{rec['py']:+.3f}). Worst overlap "
+            f"{area:.4f} mm2 in plan, against the O{dia:.3f} {nm} at "
+            f"z {z:.4f}, over x {bb[0]:+.3f}..{bb[2]:+.3f} "
+            f"y {bb[1]:+.3f}..{bb[3]:+.3f}; it fouls {parts} across "
+            f"{len(rec['bands'])} of the sectioned bands. That metal is on the panel's "
+            f"UNDERSIDE, which is the same face this rim lands on, so the "
+            f"joint cannot close: the cowl would stand off the panel on a "
+            f"washer and the four cowl screws would pull against it. "
+            f"parameters.scad 6b records that nothing draws a bought washer "
+            f"and that no part file reads it, which is why only a check can "
+            f"see this -- a boundary notch moves neither the plan, the genus "
+            f"nor the height, so ALL FIVE of export.py's cowl rules pass on "
+            f"the collision unchanged.")
+    if worst_clear:
+        d, z, k, px, py, nm, dia = worst_clear
+        lines.append(f"      tightest approach to the panel's bought metal "
+                     f"{d:.4f} at z {z:+.4f} -- the O{dia:.3f} {nm} at back "
+                     f"screw {k} ({px:+.3f},{py:+.3f})"
+                     f"{', among those that CLEAR it' if hits else ''}. This "
+                     f"is the first number to go negative if cowl_flange(), "
+                     f"cowl_xy() or cowl_washer_relief_d() moves, and it is "
+                     f"GATED against {COWL_METAL_CLEAR_BASELINE:.3f} -- it "
+                     f"used to be printed and nothing more, so the whole of "
+                     f"it could be spent before the overlap rule above fired.")
+        if d < COWL_METAL_CLEAR_BASELINE - WEB_BASELINE_TOL:
+            fails.append(
+                f"THE COWL'S RIM CAME CLOSER TO THE PANEL'S BOUGHT METAL -- "
+                f"{d:.4f} at z {z:+.4f} against the recorded "
+                f"{COWL_METAL_CLEAR_BASELINE:.3f}, at the O{dia:.3f} {nm} on "
+                f"back screw {k} ({px:+.3f},{py:+.3f}). This is not yet a "
+                f"collision and that is the point: the rule above fires only "
+                f"once the rim and the metal OVERLAP, so without this gate "
+                f"the clearance can be spent to nil in silence and the first "
+                f"report of it is a deck that will not close. The sourced "
+                f"tolerances that eat this band -- FDM bore +/-0.250 "
+                f"industrial, DIN 125 d1 up to 2.84 -- are bigger than what "
+                f"is left. If the loss is deliberate, re-export and update "
+                f"COWL_METAL_CLEAR_BASELINE to {d:.3f} in this file.")
+        elif d > COWL_METAL_CLEAR_BASELINE + WEB_BASELINE_TOL:
+            lines.append(f"      metal-clearance baseline is STALE and in the "
+                         f"good direction: {d:.4f} vs "
+                         f"{COWL_METAL_CLEAR_BASELINE:.3f} -- update "
+                         f"COWL_METAL_CLEAR_BASELINE to {d:.3f}")
+
+
 def check_meshes(env, export, names, fails, lines):
     import trimesh
     tab = {r[0]: r for r in MESHES}
@@ -2485,6 +3220,7 @@ def check_meshes(env, export, names, fails, lines):
             groups = _plane_groups(m)
             check_carrier_planes(m, env, groups, fails, lines)
             check_carrier_inserts(m, env, groups, fails, lines)
+            check_carrier_nut_web(env, export, fails, lines)
 
 
 # ===========================================================================
@@ -2540,6 +3276,124 @@ def _up_plane(m):
 def _plane_z(plane, x, y):
     n, p = plane
     return float(p[2] - (n[0]*(x - p[0]) + n[1]*(y - p[1])) / n[2])
+
+
+#  ---------------------------------------------------------------------------
+#  THE KEYCAP ENVELOPE, AND WHY NOTHING COULD FIRE ON IT
+#
+#  cad/parts/k9pro_internals.scad is a REFERENCE file: no part includes it and
+#  until this check nothing in v2/cad or v2/tools read it. So its cap table
+#  could be broken to a flat 13.2753, and then to 113.2753 -- every cap 106.575
+#  tall, straight through the acrylic, the cowl and the lid -- and OpenSCAD
+#  exported it at exit 0 with "Simple: yes", export.py's FATAL list saw
+#  nothing, check_render returned 28 passed / 0 FAILED because it sha-checks
+#  only provenance == EXPORTED bodies and the keycaps are REFERENCE, and
+#  check_cad never opened the file. Three green checkers on a 106 mm keycap.
+#
+#  WHAT THIS MEASURES. The render's own exported keycap body, against this
+#  file's datums -- which is check_cad's normal direction and the one thing
+#  check_render cannot do, because it is written never to read parameters.scad
+#  (its own header says so). The frame offset is not typed either: it comes off
+#  ref_kbd_frame.stl's top face, so the comparison is mesh-to-datum and
+#  mesh-to-mesh and nothing in it is a datum against itself.
+#
+#  IT SKIPS WHEN THE RENDER HAS NOT RUN, and says so rather than passing
+#  quietly: v2/export/render/.bodies is a render output, not a build product of
+#  export.py, so a bare checkout does not have it.
+def check_keycap_envelope(env, export, fails, lines):
+    """The exported keycap body against kbd_cap_field and kbd_cap_h."""
+    import trimesh
+
+    bodies = os.path.join(export, "render", ".bodies")
+    caps = os.path.join(bodies, "ref_kbd_keycaps.stl")
+    frame = os.path.join(bodies, "ref_kbd_frame.stl")
+    if not (os.path.exists(caps) and os.path.exists(frame)):
+        lines.append(f"    keycap envelope -- SKIPPED, no render bodies at "
+                     f"{bodies} (run v2/tools/render/render.py); nothing "
+                     f"here was measured")
+        return
+    mc = trimesh.load(caps, force="mesh")
+    mf = trimesh.load(frame, force="mesh")
+    clo, chi = mc.bounds
+    plate = float(mf.bounds[1][2])
+    lines.append(f"    keycap envelope -- ref_kbd_keycaps.stl, "
+                 f"{len(mc.faces)} facets, against ref_kbd_frame.stl's top "
+                 f"face at z {plate:+.4f}")
+
+    #  -- the plan, against the MEASURED cap field -------------------------
+    want = env.get("kbd_cap_field")
+    if want:
+        for i, ax in enumerate("xy"):
+            got = float(chi[i] - clo[i])
+            lines.append(f"      {ax} span {got:.4f}, kbd_cap_field "
+                         f"{want[i]:.3f}")
+            if abs(got - want[i]) > MESH_XY_TOL:
+                fails.append(
+                    f"THE EXPORTED KEYCAP FIELD IS {got:.4f} IN {ax.upper()} "
+                    f"AND kbd_cap_field SAYS {want[i]:.3f}, out by "
+                    f"{got - want[i]:+.4f}. kbd_cap_field is [CAD-MESH] -- a "
+                    f"measurement of all 61 caps in the vendor assembly -- so "
+                    f"the two are independent and this is the envelope "
+                    f"disagreeing with the thing it is an envelope of. The "
+                    f"width formula reached exactly this way before: it gave "
+                    f"every cap u*pitch - cap_gap, which is right for 59 of "
+                    f"the 61 and under-states enter by 0.100 and the spacebar "
+                    f"by 0.050, because those two take a different inset -- "
+                    f"and enter is the rightmost key of its row, so half its "
+                    f"error landed on the field's +x edge.")
+
+    #  -- the top, against kbd_cap_h, through the frame's own face ---------
+    caph = env.get("kbd_cap_h")
+    if caph is not None:
+        got = float(chi[2]) - plate
+        lines.append(f"      tallest cap stands {got:.4f} above that face, "
+                     f"kbd_cap_h {caph:.4f}")
+        if abs(got - caph) > MESH_XY_TOL:
+            fails.append(
+                f"THE EXPORTED KEYCAPS STAND {got:.4f} ABOVE THE FRAME'S TOP "
+                f"FACE AND kbd_cap_h SAYS {caph:.4f}, out by {got - caph:+.4f}"
+                f". kbd_cap_h sets kbd_cap_top_z and therefore kbd_recess, so "
+                f"this is how deep the keyboard sits in the carrier. The "
+                f"offset is NOT typed here -- it is ref_kbd_frame.stl's own "
+                f"top face at z {plate:+.4f} -- so a disagreement is between "
+                f"two files and not between a number and itself. Until this "
+                f"check existed, k9pro_internals.scad's cap table could be "
+                f"set to any value at all and every checker stayed green.")
+
+    #  -- and the envelope must ENCLOSE the vendor cap it stands for -------
+    #  Artefact against artefact, no datum in it at all: the vendor's own
+    #  single 1u cap. An envelope shorter than the thing it encloses is the
+    #  defect a flat 13.2753 was rejected for, and the table that replaced it
+    #  was still 0.0006..0.0087 short at every width because it took
+    #  tessellation maxima off a dished top.
+    one = os.path.join(ROOT, "parts", "models", "k9pro-internals",
+                       "k9pro-keycap-1u-one.stl")
+    if os.path.exists(one):
+        m1 = trimesh.load(one, force="mesh")
+        l1, h1 = m1.bounds
+        #  the vendor cap's own axes: y is up, the plan is x by z
+        vh = float(h1[1] - l1[1])
+        eh = float(chi[2] - clo[2])
+        lines.append(f"      vendor 1u cap is {vh:.4f} tall "
+                     f"(k9pro-keycap-1u-one.stl, its own y span); the "
+                     f"envelope's z span is {eh:.4f}")
+        if eh < vh - TOL:
+            fails.append(
+                f"THE KEYCAP ENVELOPE IS {eh:.4f} TALL AND THE VENDOR'S OWN "
+                f"1u CAP IS {vh:.4f}: it does not enclose. Both figures are "
+                f"meshes and neither is a datum.")
+        base = float(clo[2]) - plate
+        vbase = float(l1[1])
+        if abs(base - vbase) > TOL:
+            fails.append(
+                f"THE KEYCAP ENVELOPE'S UNDERSIDE SITS {base:.4f} ABOVE THE "
+                f"FRAME'S TOP FACE AND THE VENDOR 1u CAP'S OWN BOTTOM IS AT "
+                f"{vbase:.4f} IN ITS FRAME, out by {base - vbase:+.4f}. Both "
+                f"are meshes. All 61 cap bodies in the vendor assembly share "
+                f"this bottom, so it is one plane and not an average.")
+    else:
+        lines.append("      vendor 1u cap STL absent, so the "
+                     "artefact-to-artefact enclosure test was NOT run")
 
 
 def check_keyboard_blank(env, fails, lines):
@@ -2761,8 +3615,11 @@ def main(argv=None):
                  fails, lines)
     if args.only is None or {"foot", "cowl"} & set(args.only):
         check_foot_cowl_plan(env, export, fails, lines)
+    if args.only is None or "cowl" in (args.only or []):
+        check_section_polys_clearance(env, export, fails, lines)
     if args.only is None or "keyboard_blank" in args.only:
         check_keyboard_blank(env, fails, lines)
+        check_keycap_envelope(env, export, fails, lines)
 
     # ---------------- provisional datums ----------------------------------
     prov_list = sorted(k for k, v in prov.items() if v == "PROVISIONAL")

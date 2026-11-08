@@ -94,6 +94,28 @@ THREE_FILES = {
 }
 
 
+def _commit_stamp():
+    """The commit this render was made from, with -dirty when the tree is not
+    clean. Replaces a wall clock: see the note at its call site. Falls back to
+    "unknown" rather than to a timestamp, because a timestamp here is exactly
+    the thing being removed."""
+    import subprocess
+    try:
+        h = subprocess.run(["git", "rev-parse", "--short", "HEAD"],
+                           cwd=os.path.dirname(os.path.abspath(__file__)),
+                           capture_output=True, text=True, timeout=10)
+        if h.returncode != 0:
+            return "unknown"
+        rev = h.stdout.strip()
+        st = subprocess.run(["git", "status", "--porcelain"],
+                            cwd=os.path.dirname(os.path.abspath(__file__)),
+                            capture_output=True, text=True, timeout=10)
+        return rev + ("-dirty" if st.returncode == 0 and st.stdout.strip()
+                      else "")
+    except Exception:
+        return "unknown"
+
+
 def die(msg):
     print(f"  FATAL  {msg}", file=sys.stderr)
     sys.exit(1)
@@ -400,18 +422,32 @@ def absent_bodies(K):
         #  NEW, and it is the honest half of "the keycaps are grey rectangles".
         #  k9pro_internals.scad says what it models in its own words -- "the
         #  keycaps as a correct envelope: each cap's own plan size from its
-        #  width in key units ... one flat top plane" -- so the cap is a
-        #  prism, the profile is not in it, and no file in this repository
-        #  records what is printed on the tops. Drawing a legend would be
-        #  inventing the one thing about the keyboard a photograph would show.
+        #  width in key units ... one flat top plane PER WIDTH" -- so the cap
+        #  is a prism, the dish's curvature is not in it, and no file in this
+        #  repository records what is printed on the tops. Drawing a legend
+        #  would be inventing the one thing about the keyboard a photograph
+        #  would show.
+        #    NOT "the sculpted row profile", which this list used to call
+        #  absent. The caps are LSA -- a UNIFORM profile -- and that is
+        #  recorded, at keyboard-strip.md 345/396/828 and
+        #  k9pro_internals.scad 192. The vendor model's 46 1u caps being one
+        #  solid translated is therefore faithful and not a gap, and the rise
+        #  with width is the DISH plus a bounding box catching the cap's own
+        #  left and right edges. Whether the real hardware varies by row is
+        #  NOT SOURCED; keyboard-strip.md measurement 11 is where that gets
+        #  settled with a height gauge.
         {"id": "keycap legend", "count": 61,
-         "size": "flat-topped envelopes, 18.731 square at 1u",
-         "what": "the printed legends and the sculpted row profile of the "
+         "size": "envelopes 18.200 square and 6.5753 tall at 1u, one flat "
+                 "top plane per cap WIDTH",
+         "what": "the printed legends and the dish's own curvature on the "
                  "K9 Pro's caps. The caps in this render are "
                  "k9pro_internals.scad's stated ENVELOPE -- one flat top "
-                 "plane per cap -- and they are drawn as what they are",
+                 "plane per cap width, from the measured table -- and they "
+                 "are drawn as what they are",
          "why": "nothing in this repository records the K9 Pro's legends or "
-                "its cap profile; both are properties of the bought part"},
+                "the dish's curvature; both are properties of the bought "
+                "part. The PROFILE is not on this list: it is LSA, uniform "
+                "by designation, so there is no row sculpting to be missing"},
     ]
 
 # ===========================================================================
@@ -705,8 +741,10 @@ MATERIALS = {
     #
     #  WHAT THE GEOMETRY IS, because the material must not be asked to cover
     #  for it: k9pro_internals.scad draws each cap as "a correct envelope ...
-    #  one flat top plane". There is no row profile and there are no legends,
-    #  and both are in the ABSENT list rather than painted on here.
+    #  one flat top plane PER WIDTH". The dish's curvature is not in it and
+    #  there are no legends, and both are in the ABSENT list rather than
+    #  painted on here. There is no ROW profile to miss -- the caps are LSA,
+    #  which is uniform.
     "keycap": {"kind": "artistic", "color": "#2a2d33",
                "roughness": 0.72, "metalness": 0.0,
                "clearcoat": 0.08, "clearcoatRoughness": 0.55,
@@ -1502,7 +1540,15 @@ def build_manifest(args, workdir):
         print(f"  BROKEN ON PURPOSE  {broken}")
 
     return dict(
-        generated=time.strftime("%Y-%m-%dT%H:%M:%S"),
+        #  THE COMMIT, NOT THE CLOCK. This was time.strftime(), which made
+        #  every sidecar and the manifest differ between two runs of identical
+        #  inputs -- the one source of nondeterminism in the whole render, and
+        #  the same defect dxf_post.py's DXF_EPOCH exists to pin. A wall clock
+        #  records when the file was written, which nothing needs; the commit
+        #  records what it was written FROM, which is the only honest answer
+        #  to "where did this picture come from", and it is what a reader
+        #  would have to recover by hand otherwise.
+        generated=_commit_stamp(),
         three=THREE_VERSION, params=K, placements=P,
         #  ACES filmic, and the exposure it is given. [ARTISTIC], and it lives
         #  here rather than in scene.js so that it is (a) in every sidecar

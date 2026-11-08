@@ -66,11 +66,15 @@ cw_cav   = [cowl_window()[0] + 2*cowl_clear(),
 //  so the cowl's own face governs the desk clearance again at the full
 //  foot_h - cowl_h() = 1.895, and foot_h_min's derivation becomes true of the
 //  part instead of nearly true. It leaves 1.280 of PETG over the head: a
-//  12.2522 mm2 annulus in pure COMPRESSION between the head and the panel, not
+//  12.2435 mm2 annulus in pure COMPRESSION between the head and the panel, not
 //  a wall and not a floor spanning a cavity, which is what cowl_floor()'s 1.500
-//  is justified as. The shallowest counterbore that still satisfies the 1.270
-//  rule is 1.875; 2.540 was taken instead because it costs 0.595 of a membrane
-//  that carries nothing and buys the whole 0.625 of air back.
+//  is justified as. [MEASURED off export/stl/cowl.stl: the four horizontal
+//  facet groups at z = 2.540 are 4 x 12.2435 = 48.9738 mm2. This line used to
+//  read 12.2522, which is pi/4 (4.900^2 - 2.900^2) on ideal circles; the part
+//  is drawn at $fn = 96 and the 96-gon annulus is 0.0087 mm2 smaller.]
+//    The shallowest counterbore that still satisfies the 1.270 rule is 1.875;
+//  2.540 was taken instead because it costs 0.595 of a membrane that carries
+//  nothing and buys the whole 0.625 of air back.
 cw_head_cb = 2.540;     // [DESIGN] 4 x grid, 0.040 over screw_m25_head_h
 
 module cowl_3d() {
@@ -103,6 +107,39 @@ module cowl_3d() {
                 rrect(cw_cav[0], cw_cav[1], corner_r);
         //  four clearance holes, on the same centres as the carrier's nut
         //  pockets, each with its head SUNK -- see cw_head_cb
+        //    THE COUNTERBORE'S +0.400 IS NOT THE +0.200 CONVENTION AND MUST
+        //  NOT BE "CORRECTED" TO IT. nut_m25_pocket_af and pot_bore_d both add
+        //  0.200 to bought metal, but each of those bores LOCATES the metal in
+        //  it: the nut is captive in its pocket and the bushing is a press in
+        //  its bore, so 0.200 is assembly slop and nothing else. This
+        //  counterbore locates nothing. The screw is located by the O2.900
+        //  clearance hole above it, which is screw_m25_clear_d = 2.500 + 0.400,
+        //  so the shank -- and with it the concentric O4.500 head -- may sit
+        //  0.200 off this bore's axis in any direction. The head's edge then
+        //  reaches 2.250 + 0.200 = 2.450, which is exactly this bore's radius:
+        //  +0.400 here is the SAME 0.400 the clearance hole carries, and it is
+        //  the condition for the head to seat on the counterbore's ceiling
+        //  wherever the nut puts the screw. At +0.200 the bore is r 2.350 and
+        //  the head can bind on its wall 0.100 before bearing, which is a
+        //  screw that never develops preload. It would also cut the ceiling
+        //  annulus from 12.2435 to 10.7366 mm2 -- 12.3 % less bearing, both
+        //  figures as the 96-gons the part is actually drawn with -- and buy
+        //  only 0.100 of web. At the cowl_screw_dx() of 48.895 this paragraph
+        //  was first written against, that would have left 0.9542 against the
+        //  1.500 this part is drawn to and so would not even have solved the
+        //  problem it was proposed for. THAT dx IS GONE: at 47.625 the web is
+        //  1.9654 as drawn and +0.200 measures 2.0653, so the door buys
+        //  0.0999 of a web that no longer needs it.
+        //    AND IT IS SHUT FOR A REASON THAT HAS NOTHING TO DO WITH THE WEB,
+        //  which is why it stays shut if dx ever moves back: the shank is
+        //  O2.500 in a screw_m25_clear_d of 2.900, so it can sit 0.200 off
+        //  the bore's axis, and the O4.500 head's edge then reaches 2.450.
+        //  head_d + 0.400 gives a bore radius of 2.450 and the head passes at
+        //  exactly nil; head_d + 0.200 gives 2.350 and the head BINDS on the
+        //  counterbore by 0.100. A counterbore a cap head does not enter is
+        //  not a counterbore.
+        //    [0.9542 DERIVED at the abandoned dx; 1.9654 and 2.0653 MEASURED
+        //  off exports of this file, the second with +0.200 substituted]
         for (p = cowl_screw_pts())
             translate([p[0] - cowl_xy()[0], p[1] - cowl_xy()[1], -1]) {
                 cylinder(d = screw_m25_clear_d, h = cowl_h() + 2);

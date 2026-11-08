@@ -342,11 +342,11 @@ upward.** Z in brackets where the surface is inclined.
 
 | | y top | y bottom | thickness | tag |
 |---|---|---|---|---|
-| **keycap top** (1 u, LSA) | **+9.842** | | | `[CAD]` |
-| keycap outer shell | +9.842 | +4.934 | 4.908 | `[CAD]` |
-| keycap stem / skirt | +8.590 | **+2.943** | 5.647 | `[CAD]` |
-| switch stem top | +6.022 | | | `[CAD]` |
-| switch upper housing | +3.303 | −2.202 | | `[CAD]` |
+| **keycap top** (1 u, LSA) | **+9.5753** mesh / **+9.5759** analytic | | | `[CAD-EXACT]` / `[CAD]` |
+| keycap outer shell | +9.5759 | **+5.2000** | — | `[CAD]`, and no longer unsourced |
+| keycap stem / skirt | +8.5335 `?` | **+3.0000** | — | `[CAD]` / `[CAD-EXACT]` |
+| switch stem top | +6.0000 | | | `[CAD-EXACT]` |
+| switch upper housing | +3.303 `?` | −2.2000 | | `[CAD]` / `[CAD-EXACT]` |
 | **plate top** = frame top | **0.000** | | | `[CAD-EXACT]` |
 | **plate bottom** | | **−1.200** | **1.200** | `[CAD-EXACT]` |
 | air gap, plate to PCB | −1.200 | −2.500 | **1.300** | `[DERIVED]` |
@@ -354,7 +354,7 @@ upward.** Z in brackets where the surface is inclined.
 | **PCB bottom — the seat** | | **−3.700** | **1.200** | `[CAD-EXACT]` |
 | plate-seat boss tops | −1.209 | | | `[CAD-EXACT]` |
 | PCB-seat pad tops | −3.709 | | | `[CAD-EXACT]` |
-| switch pin tips | | −5.652 | | `[CAD]` |
+| switch pin tips | | −5.6500 | | `[CAD-EXACT]` |
 | **hot-swap sockets ×61** | −2.763 | **−5.791** | | `[CAD]` |
 | toggle bodies (2P / 3P) | −3.094 | −5.106 | | `[CAD]` |
 | **USB-C receptacle** | −2.492 | **−6.868** | | `[CAD]` |
@@ -390,26 +390,71 @@ identically, as the normal of the steel shield's two faces, the tray's inner
 floor, and the frame skirt's rim — one plane family, four parts.
 
 **With keycaps, Keychron's front figure does not reconcile and should not be
-used.** The keycap plane is flat. The 1 u cap's own shell solid tops out at
-**+9.842**, and the per-row maxima over all 61 caps run **+9.867 … +10.012**
-`[CAD]` — a spread of **0.145** across the whole 285 × 95 field, the high value
-being the 6.25 u spacebar, whose bounding box catches more of its own dish.
+used.** The 1 u cap's own shell solid tops out at **+9.5753** `[CAD-EXACT]`.
+**The keycap plane is NOT flat**, and the figures that said it was were padded.
+All 61 cap solids isolated out of `k9pro-stripped-assembly.stl` give a maximum
+that rises monotonically with cap **width**, because an LSA top is dished and
+the bounding box catches a point on the cap's REAR RIM. *This read "the
+cap's own left and right edges".* Measured on `k9pro-keycap-1u-one.stl`, the
+single highest vertex is at x **+5.2563** and z **+25.7049** — **3.844 mm
+inside** the left/right edge (57.8 % of the half-width) and **+6.705 rear** of
+the cap's centre. The rise with width is a measured fact and is not in doubt;
+the account of *where* on the cap it happens was wrong, and it was repeated in
+three files. The location was checked on the 1 u cap only — isolating the other
+eight out of the assembly to confirm it is not done here — so the mechanism
+behind the monotonicity is stated as unresolved rather than re-explained:
+
+| u | plan span | model y max |
+|---|---|---|
+| 1.00 | 18.2000 | **+9.5753** ×46 |
+| 1.25 | 22.9500 | +9.6062 ×7 |
+| 1.50 | 27.7000 | +9.6327 ×2 |
+| 1.75 | 32.4500 | +9.6515 |
+| 2.00 | 37.2000 | +9.6659 |
+| 2.25 | 41.9500 | +9.6768 (left shift) |
+| 2.25 | 42.0500 | +9.6770 (enter) |
+| 2.75 | 51.4500 | +9.6871 |
+| 6.25 | 118.0000 | **+9.7571** (spacebar) |
+
+A spread of **0.1818** across the whole 285 × 95 field `[CAD-EXACT]`, the high
+value being the 6.25 u spacebar. *This read "+9.842, and the per-row maxima run
++9.867 … +10.012, a spread of 0.145". Those were `manifest.json` bbox figures,
+inflated by a per-shape pad of +0.2657 for this cap family; the spread was
+understated as well as the heights.*
+
+**THE COLUMN ABOVE IS THE MESH, AND IT IS NOT WHAT THE BODY IS DRAWN FROM.**
+Every value in it is the bounding-box maximum of a *triangulation* of a dished
+top, so each one sits just under the surface it samples. `cap_top_u()` carried
+exactly this column, tagged `[CAD-EXACT]` — a tag that file defines as "read
+off an analytic surface … No tessellation, no sampling, no tolerance" — and it
+therefore under-stated **every** cap, by +0.0006 at 1 u rising to **+0.0087**
+at 2.75 u. The envelope still did not enclose, which is the one defect a single
+flat top had just been rejected for. The analytic column —
+**9.5759 / 9.6130 / 9.6386 / 9.6579 / 9.6730 / 9.6844 / 9.6846 / 9.6958 /
+9.7572**, spread **0.1813** — is `measured.json`'s nine named cap shapes
+de-padded by each one's *own* solved pad, confirmed on three other faces of
+each (x span, z span, y min, every one exact to ≤ 7e-6), and
+`k9pro_internals.scad` 225-275 carries it with the procedure that would close
+the remaining inference. Both columns are kept because they measure different
+things and the difference is the point.
 
 ```
-rear  13.274 +  9.842 = 23.116   |  13.274 + 10.012 = 23.286   Keychron 23.5
-front  7.573 +  9.842 = 17.415   |   7.573 + 10.012 = 17.585   Keychron 19.8
+rear  13.274 +  9.5753 = 22.849   |  13.274 + 9.7571 = 23.031   Keychron 23.5
+front  7.573 +  9.5753 = 17.148   |   7.573 + 9.7571 = 17.330   Keychron 19.8
 19.8 - 7.6 = 12.2 = Gateron's published switch height
 ```
 
-The rear figure lands within **0.214** of Keychron's on the tallest cap. The
-front figure is **2.2 out** whichever cap you take.
+The rear figure lands within **0.469** of Keychron's on the tallest cap. The
+front figure is **2.5 out** whichever cap you take. *Both gaps were quoted
+0.255 smaller when the cap top carried the padded +9.842.*
 
 The published "19.8 front with keycaps" looks like front height **plus switch
 height** rather than a measurement — the same class of error
 `research/keyboard-k9pro.md` §2.1 already found in two other rows of that
 table. `cad/keyboard_blank.scad` currently carries 19.8 as `kc_top_front` with
-a comment calling it the weakest number in the file. **It is wrong: the keycap
-plane is flat at +9.842 above the frame, and the frame top is flat.**
+a comment calling it the weakest number in the file. **It is wrong: the frame
+top is flat, and the keycap tops stand +9.5753 … +9.7571 above it — a 0.1818
+band, not the 2.2 mm the published figure needs.**
 
 ### 2.2 The stripped stack, in one block
 
@@ -417,25 +462,70 @@ Retaining frame + switches + sockets + PCB + keycaps + ports + cell:
 
 ```
                                               y        relative to the seat
-  keycap top                               +9.842            +13.542
-  switch stem top                          +6.022             +9.722
-  keycap underside                         +2.943             +6.643
+  keycap top, 6.25u spacebar  (highest)    +9.7571           +13.4571
+  keycap top, 1u                           +9.5753           +13.2753
+  switch stem top                          +6.0000            +9.7000
+  keycap underside  (all 61)               +3.0000            +6.7000
   PLATE TOP (the aluminium face)            0.000             +3.700
   plate underside                          -1.200             +2.500
   PCB top                                  -2.500             +1.200
   PCB UNDERSIDE  == THE SEAT               -3.700              0.000
-  switch pin tips                          -5.652             -1.952
+  switch pin tips                          -5.6500            -1.9500
   hot-swap socket floor                    -5.791             -2.091
   USB-C shell floor                        -6.868             -3.168
   toggle slider cap floor                  -8.260             -4.560
   frame skirt rim, front                   -6.538             -2.838
-  frame skirt rim, rear                   -12.295             -8.595
+  frame skirt rim, rear                   -12.2945            -8.5945
+    (k9pro-topcase-switchplate.stl's mesh y min is -12.294510, so the rear
+     rim is -8.594510; k9pro_internals.scad's rim_z_rear says -8.595, which
+     is the same number to 3 dp. Both are right at their own precision and
+     neither is a second measurement of the other.)
 ```
 
-**Total retained height: 9.842 + 12.295 = 22.137 mm** at the rear, against the
-stock keyboard's 23.116. Stripping the tray saves **0.979 mm** of overall
-height and nothing more — because the frame's skirt, not the tray, is what
-reaches down. What stripping actually buys is listed in §3.5; height is not on
+**THE TWO `?` ROWS WERE NOT UNSOURCED, AND THE `?` COMES OFF ONE OF THEM.** Both
+figures are in `k9pro-internals/measured.json`, as the 1 u cap's two B-rep
+solids — `[793]` `MANIFOLD_SOLID_BREP_421223_1_1`, vol **210.6842**, y
+**2.9434 … 8.5901**, and `[794]` `MANIFOLD_SOLID_BREP_166287_1_1`, vol
+**465.7881**, y **4.9343 … 9.8416**, whose volumes sum to the `1-KEY_ASM`
+entry. `[794]` is the outer shell (de-padded span 18.2000, the full cap);
+`[793]` is the narrower stem/skirt. So **+4.934 and +8.590 were the raw padded
+bboxes all along**, and the table carried them with a `?` rather than naming
+where they came from.
+
+De-padded by the 1 u cap's own solved pad **+0.2657**, `[794]` gives y
+**5.2000 … 9.5759** — and 5.2000 is independently `check_cad.py`'s
+`CAP_WIDEST_Y`, while 9.5759 sits 0.0006 above the mesh's 9.5753, which is the
+right side for an analytic surface over a tessellated dome. Two confirmations,
+so that row's `?` is gone.
+
+**`[793]` KEEPS ITS `?`, AND THE REASON IS A REAL INCONSISTENCY.** The same
++0.2657 would put the stem's bottom at **3.2091**, but the mesh bottoms the
+whole cap at exactly **3.000000**, so the shell's pad is 0.209 too big for the
+stem. Solving the stem's own pad from that 3.000000 instead gives **+0.0566**
+and a top of **8.5335**, which is the figure now in the table — but it is one
+equation in one unknown with nothing to check it against, where the shell's pad
+had two. **The pad is per SOLID, not merely per shape:** two solids of one cap
+want 0.2657 and 0.0566. That is a sharper statement of the same fact the
+`cap_gap` note rests on, and it is why no pad in this file may be reused on
+another shape.
+
+**AND `+2.943` IS NOT UNRECORDED EITHER.** `k9pro_internals.scad` retired it as
+a figure whose "provenance is unrecorded ... in neither the manifest (2.7343)
+nor the mesh (3.000000)". It is `[793]`'s own padded y min, **2.9434**. Retiring
+it was still right — it is a padded sub-solid bbox and the cap's bottom is
+3.000000 — but it was never provenance-less. *The row also no longer claims the
+manifest's two-solids count is wrong: the cap genuinely has two B-rep solids
+that touch, which is exactly why mesh union-find welds them into one body, the
+same B-rep-versus-mesh distinction that explains 617 shapes against 573 bodies.*
+
+*The four keycap and switch rows read +9.842/+13.542, +6.022/+9.722,
++2.943/+6.643 and -5.652/-1.952. Every one was `manifest.json` bbox padding.
+The cap row is now TWO rows because the cap plane is not flat.*
+
+**Total retained height: 9.5753 + 12.2945 = 21.870 mm** at the rear on a 1 u
+cap, **22.052 mm** under the spacebar, against the stock keyboard's 22.849.
+Stripping the tray saves **0.979 mm** of overall height and nothing more —
+because the frame's skirt, not the tray, is what reaches down. What stripping actually buys is listed in §3.5; height is not on
 the list.
 
 ---
@@ -798,11 +888,19 @@ Nothing here asks for a measurement the CAD already settles.
    cell, live board.
 2. **Photograph the underside** with a ruler in frame, before any screw comes
    out. The foot-pad protrusion (§7) is settled by this photo plus one caliper.
-3. Pull **all 61 keycaps** with a wire puller, straight up. They are LSA,
-   18.731 square and 6.899 tall (+2.943 … +9.842), and the stem socket swallows
-   9.722 − 6.643 = **3.079** of switch stem `[DERIVED]` — they come off with
+3. Pull **all 61 keycaps** with a wire puller, straight up. They are LSA. A 1u
+   cap is **18.200 square and 6.575 tall** (+3.000 … +9.575) `[CAD-EXACT]`,
+   measured off `k9pro-keycap-1u-one.stl` and confirmed on all 46 1u bodies
+   isolated out of `k9pro-stripped-assembly.stl`. The stem socket swallows
+   9.700 − 6.700 = **3.000** of switch stem `[CAD-EXACT]` — they come off with
    less force than MX caps and the thin walls
    (1.4–1.6 `[VENDOR]`) split if levered.
+   *The figures here were `18.731 square and 6.899 tall (+2.943 … +9.842)` and
+   a 3.079 swallow. All four were `manifest.json` bbox padding, not cap: that
+   manifest inflates every face of every shape by a per-shape amount, +0.2657
+   for this cap. 18.731 is 0.531 too wide and 6.899 is 0.324 too tall. The
+   caps are not all the same height either — the top is dished, so the bbox
+   maximum rises with width, from 6.575 at 1u to 6.757 at the 6.25u spacebar.*
 
 ### 5.2 The disassembly
 
@@ -850,7 +948,7 @@ Nothing here asks for a measurement the CAD already settles.
 | 8 | **skirt wall thickness and rim depth** | caliper on the frame's rim, rear and front | **1.000** wall; rim 8.595 / 2.838 below the seat | the groove, §3.5 — this is the number the whole carrier section depends on |
 | 9 | **foot-pad protrusion** | pad bottom to tray floor, before removal | the model's pads sit 1.8–2.5 below the tray's outer plane, which does not reconcile with 7.6/13.3 | cross-check only, since the pads are discarded. If it reconciles, the model's pad placement is wrong; if not, the published heights are |
 | 10 | **stabiliser swing depth below the board** | with a 2 u key fitted, depth below the board at a stabiliser hole | **NOT SOURCED** | §3.4 item 4 — a seat under a stabiliser jams a key |
-| 11 | **keycap top above the frame** | height gauge on a 1 u cap, frame top as datum | **+9.842**, flat across all 5 rows | confirms the acrylic void's depth, and kills the 19.8 front figure for good |
+| 11 | **keycap top above the frame** | height gauge on a 1 u cap in EACH of the five rows AND on the spacebar, frame top as datum | **+9.5753** at 1 u and **+9.7571** on the 6.25 u spacebar (mesh; analytic +9.5759 / +9.7572) `[CAD-EXACT]` / `[CAD]`; NOT flat — it rises with cap **width**, §2.1, and the vendor model has NO row variation at all (the 46 1 u bodies are one solid translated across four rows, which is what LSA means), so a gauge difference between rows would be a fact about the hardware that this repository does not contain | confirms the acrylic void's depth, and kills the 19.8 front figure for good. *This row said "+9.842, flat across all 5 rows"; both halves were wrong — the figure was padded and the plane is not flat. Gauge the spacebar too: it is the cap that governs the void.* |
 
 Measurements 1, 5, 7, 8 and 10 are the ones that will change geometry. The rest
 are confirmations, and if any of 2, 3, 4 or 11 disagrees with the CAD by more
@@ -874,7 +972,8 @@ z = 0 at the PCB UNDERSIDE, the seat         z = model_y + 3.700
 ```
 
 so `z = 0` is the plane the carrier presents, `z = +3.700` is the aluminium
-face, `z = +13.542` is the keycap top and `z = −8.595` is the skirt's rear rim.
+face, `z = +13.2753` is a 1 u keycap top, `z = +13.4571` is the spacebar's —
+the highest cap in the assembly — and `z = −8.595` is the skirt's rear rim.
 
 Parts: `all`, `plate`, `frame`, `pcb`, `sockets`, `switches`, `keycaps`,
 `battery`, `ports`, `seat` (the 33 pads as the stock tray offered them),
@@ -893,7 +992,7 @@ produced a non-empty mesh, exit code 0, no warnings and no errors.
 
 ```
 ECHO: "k9pro_internals: footprint 287 x 97.5  seat z=0  plate top z=3.7"
-ECHO: "  keycap top z=13.542  skirt rim rear z=-8.595 front z=-2.838"
+ECHO: "  keycap top z=13.4571  skirt rim rear z=-8.595 front z=-2.838"
 ECHO: "  switch field 285 x 95 at 19 pitch ; 61 keys ; 7 screws"
 ECHO: "  socket floor z=-2.091  USB-C floor z=-3.168  slider cap floor z=-4.56"
 ```

@@ -1079,10 +1079,50 @@ kbd_cap_field_d  = [0.0625, -0.250];    // [CAD-MESH] the cap field's centre in
                                         //   8.000) and 1.000 at the front
                                         //   (105.500 - 104.500), which is the
                                         //   same fact read off the extents.
-kbd_cap_h        =  9.842;              // [CAD-EXACT] keycap top above the
-                                        //   plate top, and the cap plane is
-                                        //   FLAT (per-row maxima spread
-                                        //   0.145 over the whole field).
+//  THIS WAS 9.842 [CAD-EXACT] AND BOTH THE FIGURE AND THE CLAIM BESIDE IT WERE
+//  WRONG. 9.842 is manifest.json's padded 9.841 rounded up -- the same
+//  per-shape bbox inflation that put 18.731 on a cap that is 18.200, and
+//  cad/parts/k9pro_internals.scad 192-206 has the proof with its control. And
+//  the comment read "the cap plane is FLAT (per-row maxima spread 0.145 over
+//  the whole field)": the plane is NOT flat and the spread is not per ROW. All
+//  61 cap bodies isolated out of k9pro-stripped-assembly.stl give a maximum
+//  that rises with cap WIDTH -- an LSA top is dished, so a bounding box catches
+//  a point on the cap's REAR RIM -- NOT, as this note first said, "the cap's
+//  own left and right edges". The highest vertex of k9pro-keycap-1u-one.stl is
+//  at x +5.2563, z +25.7049: 3.844 INSIDE the left/right edge and 6.705 rear
+//  of centre. The monotonic rise with width is measured and stands; the
+//  account of where on the cap it happens did not, and it was repeated in
+//  three files. Why the rise follows width is therefore left OPEN here rather
+//  than re-explained with a second guess. By ROW the caps are identical: the 46 1u bodies are
+//  one solid translated, same facet count, same y max, across four rows, which
+//  is what LSA means.
+//    THE TWO FILES DISAGREED BY 0.0848 ABOUT ONE PHYSICAL QUANTITY. This datum
+//  said the cap stands 9.842 above the plate top; k9pro_internals.scad's
+//  cap_top_z says 13.4572 in a frame whose plate top is 3.700, i.e. 9.7572.
+//  Nothing noticed, because nothing in v2/cad or v2/tools reads
+//  k9pro_internals.scad at all -- it is a reference file that no part
+//  includes, so no check could reach the figure that disagreed.
+//    WHAT DID WORK, and it is worth saying because it was nearly mis-blamed:
+//  check_cad compares keyboard_blank.scad's kc_above_frame against this datum
+//  as two INDEPENDENT literals for one measurement, and it fired on the first
+//  run after this line moved -- 9.8420 against 9.757, twice, at both band
+//  edges. That check is not the self-referential kind; it is exactly the kind
+//  this repository wants, and it is how keyboard_blank's own stale 9.842 was
+//  found. What was missing is a gate on the EXPORTED keycap mesh, which is
+//  the thing drawn from k9pro_internals' table, and check_render.py now
+//  carries one.
+kbd_cap_h        =  9.7572;             // [CAD] the TALLEST cap's top above
+                                        //   the plate top -- the 6.25u
+                                        //   spacebar. An envelope has to
+                                        //   enclose, so it is the maximum of
+                                        //   the nine measured widths and not
+                                        //   the 1u cap's 9.5759. Mesh gives
+                                        //   9.757071; 9.7572 is the analytic
+                                        //   value, measured.json[969]
+                                        //   de-padded by its own solved pad,
+                                        //   and k9pro_internals.scad 225-275
+                                        //   has the whole table and why the
+                                        //   tag is CAD and not CAD-EXACT.
                                         //   Keychron's published 19.8 mm
                                         //   front-with-keycaps is front height
                                         //   + switch height, not a
@@ -1131,7 +1171,8 @@ kbd_socket_field_cz =  57.955;          //   NOT the frame's
 //
 //    FLUSH     plate top level with the deck's top face. The void must then be
 //              BIGGER than the frame so the frame passes up into it, the
-//              keycaps stand 9.842 proud, and there is no lip anywhere -- the
+//              keycaps stand 9.7572 proud (9.5759 on a 1u cap), and there is
+//              no lip anywhere -- the
 //              typing plane is perfect, and the aluminium frame reads as a
 //              flush inlay in clear acrylic. It is the prettier part.
 //              BUT the frame's four rear apertures sit 3.650..7.510 below the
@@ -1154,12 +1195,12 @@ kbd_socket_field_cz =  57.955;          //   NOT the frame's
 //    2. "all parts recessed ... it allows things to sink back into the
 //       enclosure and therefore is more robust" is the brief's own rule, and
 //       the keyboard is a part;
-//    3. the recess is acrylic_t + kbd_plate_gap - kbd_cap_h = 3.493, so it is
+//    3. the recess is acrylic_t + kbd_plate_gap - kbd_cap_h = 3.578, so it is
 //       FORCED by half-inch acrylic against a low-profile keycap, not chosen.
 //       The gap ADDS and does not subtract: the plate top sits kbd_plate_gap
 //       BELOW the acrylic's underside, so the cap top drops by the gap as well
 //       and the acrylic above it gets thicker. Written the other way round --
-//       acrylic_t - kbd_cap_h - gap -- it gives 2.223, and it is wrong by
+//       acrylic_t - kbd_cap_h - gap -- it gives 2.308, and it is wrong by
 //       2 * kbd_plate_gap. ("gap" is also this file's own 28.575 mm board
 //       clearance, which is why the operand is named in full here.)
 //       The derived kbd_recess below has always been right;
@@ -1190,8 +1231,8 @@ kbd_plate_gap    = 0.635;               // [DESIGN] one grid of air between the
 
 kbd_plate_top_z  = acrylic_z0 - kbd_plate_gap;              //  8.890
 kbd_seat_z       = kbd_plate_top_z - kbd_seat_below;        //  5.190
-kbd_cap_top_z    = kbd_plate_top_z + kbd_cap_h;             // 18.732
-kbd_recess       = acrylic_z0 + acrylic_t - kbd_cap_top_z;  //  3.493
+kbd_cap_top_z    = kbd_plate_top_z + kbd_cap_h;             // 18.6472
+kbd_recess       = acrylic_z0 + acrylic_t - kbd_cap_top_z;  //  3.5778
 
 // ---------------------------------------------------------------------------
 // 8b. THE TYPING ANGLE IS NOW OURS, AND IT IS ZERO
@@ -1644,6 +1685,18 @@ function cowl_flange() = 7.620;         // [DERIVED] 12 x grid. It was 6.350
 //  (it would have to stand at -141.280 or further right, and then no hole on it
 //  reaches sound floor) and it cannot pass them (10.657), so cowl.scad scallops
 //  it, locally, at exactly those two centres.
+//  THE RELIEF'S 0.500 PER SIDE IS NOT ALL CLEARANCE, and the bound is in this
+//  file already -- 824-825: one supplier publishes the DIN 125 A 2.5's d2 as a
+//  5.700..6.000 band and one publishes d1 2.84. d2 bounded ABOVE at 6.000 is
+//  what makes the 0.500 safe from that side; d1 2.84 on a O2.500 screw lets
+//  the washer sit 0.170 eccentric, so the real worst-case clearance is 0.330.
+//  Then the printed bore's own tolerance -- FDM +/-0.500 proto / +/-0.250
+//  industrial, DIAMETRAL [SVC protolabs, docs/fabrication.md rows 3, 8, 9] --
+//  can consume all of it, or come out O6.500 and refuse the washer. That is
+//  why the relief is not shrunk to buy web: a relief the washer does not
+//  enter puts the flange back on the washer, which is the defect the scallops
+//  exist to fix. Both figures are SOURCED in this repository and an earlier
+//  pass recorded them as unsourced; they are cited, not re-opened.
 function cowl_washer_relief_d() = screw_m25_washer_od + 2*cowl_clear();  // 7.000
 function cowl_h()      = disp_18650_proud + cowl_clear() + cowl_floor();  // 3.820
 function disp_pcb_sz() = [92.500, 69.100];      // [MEASURED]
@@ -1718,18 +1771,131 @@ function cowl_xy() = [disp_x   + 46.248 - disp_pcb_sz()[0]/2,
 //  nut_m25 family: a 2.200 nut pocket's ceiling is -4.150, under the display
 //  pocket's floor and under every channel's, so the floor's thickness stops
 //  being a constraint and the points go where the OTHER constraints want them.
-//  77 x grid and 25 x grid, symmetric about both of the window's own axes,
+//  75 x grid and 25 x grid, symmetric about both of the window's own axes,
 //  where the edge midpoints were on the grid in neither axis (47.945, 14.9965).
-//  [DERIVED, every margin MEASURED off the export]
-//      land in the cowl's flange      4.860 in x, 4.9315 in y   (want 3.050)
-//      hex to the 18650 window        3.6791  -- the hex clears the window's
-//                                     CORNER diagonally, not an edge
+//
+//  IT WAS 77 x grid = 48.895, AND THIS LIST RECORDED THE WRONG GOVERNING WEB.
+//  Every row of it used to be computed on the O2.900 CLEARANCE hole, r 1.450;
+//  its opening row read "land in the cowl's flange 4.860 in x, 4.9315 in y
+//  (want 3.050)" and 3.050 is 1.450 + insert_m25_wall. But the SAME change
+//  that put the screws here also sank each head in cowl.scad's cw_head_cb
+//  counterbore -- O4.900, r 2.450, through z 0.000..2.540, which is two thirds
+//  of this part's height. The counterbore is the WIDER feature, so it governs
+//  every approach in this list and the want is 2.450 + 1.600 = 4.050.
+//    AND THE BINDING APPROACH IS ON NEITHER AXIS THE LIST NAMED. It is
+//  DIAGONAL, to back_screw_pts()[4] and [5]'s washer scallops at local
+//  (-54.713, +19.398) and (-54.713, -12.352), and no x row or y row can see a
+//  diagonal. At 48.895 that web measured 0.8542 -- under the 1.500 that
+//  cowl_wall() and cowl_floor() are both justified on, under insert_m25_wall's
+//  1.600, and about 2.1 extrusion lines at a 0.4 nozzle. It was the thinnest
+//  wall in the part and nothing gated it.
+//
+//  dy IS NOT FREE AT ALL, which is why only dx moved. The two scallops are
+//  ASYMMETRIC in y -- local +19.398 and -12.352, because back_screw_pts()[4]
+//  and [5] have midpoint y 33.0875 against cowl_xy()'s 29.5645 -- and 15.875
+//  is EXACTLY their midpoint, (19.398 + 12.352)/2. So dy is already the
+//  minimax: both approaches carry the same 3.523 of y offset, and every
+//  symmetric dy off 15.875 makes one of the two worse (11.430 gives -0.0594 on
+//  the lower pair, 19.050 gives -0.1216 on the upper). An asymmetric dy is not
+//  available -- "I am a slave to symmetry and the swiss grid".
+//
+//  SO dx IS ONE-DIMENSIONAL, AND IT IS PINNED FROM BOTH SIDES. With dy fixed
+//  the two constraints are in direct opposition:
+//      this part's own web     sqrt((54.713 - dx)^2 + 3.523^2) - 5.950 >= 1.500
+//                              ->  dx <= 48.1486
+//      the back panel's web    sqrt((dx - 42.750)^2 + 4.223^2) - 4.200 >= 2.000
+//                              ->  dx >= 47.2894
+//  5.950 is the counterbore's 2.450 plus the scallop's 3.500. 4.200 is the
+//  panel's O2.900 cowl screw at 1.450 plus the display's O5.500 head clearance
+//  at 2.750, which the 18650 window has MERGED with (backpanel.scad says why,
+//  and the merged contour measures 91.000 x 25.588 in the DXF). 42.750 is
+//  disp_x + 85.500/2 and carries disp_x's own 0.002 offset from cowl_xy(), so
+//  the +x and -x pairs differ by 0.0029 of web. 2.000 is check_cad.py's
+//  WEB_HARD_FLOOR, which is asserted SEPARATELY from WEB_BASELINE.
+//    76 x grid = 48.260 is outside the first bracket and gives 1.4021. 75 x
+//  grid = 47.625 is the ONLY grid value inside both. Holding the panel's
+//  RECORDED 2.6748 instead of its 2.000 floor wants dx >= 48.1751, and the
+//  window is then EMPTY BY 0.0265 mm -- there is no dx that keeps the cowl's
+//  1.500 and the panel's recorded baseline at once, so check_cad.py
+//  re-records the panel's baseline at the measured 2.2484 rather than holding
+//  it. That is the price of this move and it is the whole price.
+//  [DERIVED; every margin below MEASURED off the exports -- cowl.stl by plane
+//  section at six band midpoints and carrier.stl at z -5.250, neither from a
+//  silhouette nor from a bounding box. check_cad.py's
+//  check_cowl_section_clearance gates the first row on every run, and its
+//  header has why a silhouette cannot see a blind counterbore at all.]
+//      counterbore to washer
+//        scallop                      1.9653 derived, 1.9654 MEASURED two
+//                                     independent ways -- THE THINNEST WALL IN
+//                                     THE PART, and the whole reason dx is
+//                                     75 x grid. Was 0.8542.
+//      counterbore in the flange      6.130 in x, 4.9315 in y  (want 4.050, and
+//                                     the y figure now governs the +x pair,
+//                                     whose web is 2.4815)
+//      counterbore to the cavity      3.5018
+//      hex to the 18650 window,       2.2816 POLYGON TO POLYGON and GATED --
+//        ONE contour with the         check_cad.py's check_carrier_nut_web
+//        display's two lower          measures it off carrier.stl on every
+//        O2.900 bores                 run and fails it under WEB_HARD_FLOOR.
+//                                     Nothing measured it before: the carrier
+//                                     was the only one of the three parts
+//                                     with no web gate at all, and this
+//                                     change put its governing web here.
+//                                     2.2851 at the -x pair, so 2.2816 is
+//                                     the governing one of the two.
+//                                       THE ACROSS-CORNERS PROXY IS 1.9961,
+//                                     not the 1.9991 this row used to quote:
+//                                     1.9991 is the -x hexagon's and 1.9961
+//                                     the +x one's, so the row quoted the
+//                                     more comfortable half of a pair. Both
+//                                     are centre-to-contour (5.0013, 4.9983)
+//                                     less the 3.0022 circumscribed radius.
+//                                     It is NOT gated and the check says why:
+//                                     it is not a distance, the hexagon does
+//                                     not occupy that circle, and the two
+//                                     readings disagree about the floor by
+//                                     0.4022. The conservatism that IS real
+//                                     is the print tolerance, and it is
+//                                     sourced -- FDM bore +/-0.500 proto /
+//                                     +/-0.250 industrial, DIAMETRAL
+//                                     [SVC protolabs, docs/fabrication.md
+//                                     rows 3, 8, 9] -- which leaves 2.0316
+//                                     and 2.1566, both over the floor. The
+//                                     check prints both.
+//                                       ROTATING THE HEXAGON DOES NOT HELP,
+//                                     and that door is worth closing because
+//                                     it looks free: a nut pocket's angle is
+//                                     arbitrary, so putting a FLAT at the
+//                                     window instead of a corner appears to
+//                                     buy the 0.4022. MEASURED over the whole
+//                                     0..60 deg sweep against every near
+//                                     neighbour, the shipped 0 deg is the
+//                                     OPTIMUM at 2.2816 and 30 deg is WORSE
+//                                     at 2.0968, because the approach is to a
+//                                     CORNER of the window and not to an edge,
+//                                     so a flat already faces it. Worst over
+//                                     the sweep is 1.9968 at 20 deg.
+//                                       The window in the mesh is 88.400 x
+//        display's two lower          24.288, not cowl_window()'s 88.270 x
+//        O2.900 bores                 22.373, because those two bores merge
+//                                     into it -- so "hex to the window" and
+//                                     "hex to the display's bores" are one
+//                                     approach and not two. This list split
+//                                     them, at 3.6791 against the NOMINAL
+//                                     window's corner and 3.0056 / 3.0023
+//                                     against the bores.
 //      hex to back_screw_pts()[5]'s
-//        own insert bore              1.7993  -- the tightest, and it is taken
-//                                     on the across-corners, so the hexagon's
-//                                     print phase cannot spend it
-//      hex to the display's O2.900
-//        through-bores                3.0056 and 3.0023
+//        own insert bore              2.9130 on the across-corners, 3.2999
+//                                     polygon to polygon; was 1.7993 and the
+//                                     tightest in the list. It moved AWAY.
+//                                     Quote the polygon-to-polygon figure and
+//                                     take the print phase off the SOURCED
+//                                     bore tolerance above, not off the
+//                                     circumscribed circle: this row used to
+//                                     say the across-corners figure was the
+//                                     one to quote, and on the window row
+//                                     that convention put a number under
+//                                     WEB_HARD_FLOOR that was not a distance.
 //      cover over the pocket          0.975 where it is under the display
 //                                     pocket, 2.150 under a channel, 4.150
 //                                     elsewhere. It carries nothing: the screw
@@ -1745,12 +1911,41 @@ function cowl_xy() = [disp_x   + 46.248 - disp_pcb_sz()[0]/2,
 //  distance is sqrt(5.193^2 + 3.3445^2) = 6.1768 and the web is
 //  6.1768 - 1.450 - 2.750 = 1.9768. So the corner layout was refused by 0.0232
 //  and not by 0.896, which nobody could have known from the number as written.
-//  The 2 x 2 below is NOT that layout: it is on the flange's corners, 4.860 and
-//  4.9315 further out, and its own web to the same head hole is 2.0496.
+//  The 2 x 2 below is NOT that layout: it is on the flange's corners. The
+//  "2.0496" that used to close this sentence as its own web to the same head
+//  hole is NOT REPRODUCIBLE off any artefact here -- and that head hole is not
+//  a separate contour at all, having merged into the window. The figure it was
+//  reaching for is the measured 2.2484 that is now the panel's governing web.
 //  The "nearest approach to anything is 13.07" that closed the old paragraph is
 //  not reproducible from any artefact in this repository and is not carried
 //  forward; check_cad.py measures the panel's narrowest contour pair every run.
-function cowl_screw_dx() = 48.895;      // [DERIVED] 77 x grid
+//  THE WINDOW dx LIVES IN, MEASURED OFF ARTEFACTS AND NOT OFF IDEAL CIRCLES.
+//  dx is pinned from BOTH sides, so this is not a free choice among grid
+//  values; it is the only one that fits. Each bracket below is two exports and
+//  an interpolation, not a formula on nominal diameters:
+//
+//    UPPER, from the COWL's own web (floor 1.500): MEASURED 1.9654 at 47.625
+//      and 1.4050 at 48.260, so d(web)/d(dx) = -0.8827/mm and the web reaches
+//      1.500 at dx = 48.1523.
+//    LOWER, from the CARRIER's nut-pocket web (WEB_HARD_FLOOR 2.000):
+//      MEASURED 2.2816 at 47.625 and 1.9959 at 47.295, so +0.8658/mm and it
+//      reaches 2.000 at dx = 47.2997.
+//
+//  WINDOW [47.2997, 48.1523], width 0.8526, and 75 x grid = 47.625 is THE ONLY
+//  grid value in it -- 74 x grid is 46.990 and 76 x is 48.260, both outside.
+//
+//  AND THE LOWER BOUND IS THE CARRIER'S, NOT THE BACK PANEL'S. An earlier pass
+//  put it at 47.2894 from the back panel's web and did not look at the
+//  carrier, which has no web of its own in any of this file's older lists and
+//  until check_cad.py's check_carrier_nut_web had no gate either. The carrier
+//  binds 0.0103 tighter. Holding the back panel's own previously recorded
+//  2.6748 instead would want dx >= 48.1749 and the window is then EMPTY, by
+//  0.0226 on the artefact figures -- which is why that baseline was re-recorded
+//  to 2.248 rather than defended: no dx keeps both, and 2.2484 is still 0.2484
+//  over the hard floor while 0.8542 was 0.6458 under the cowl's.
+function cowl_screw_dx() = 47.625;      // [DERIVED] 75 x grid, and it was
+                                        //   77 x grid = 48.895. The row above
+                                        //   has why it moved 1.270 inboard.
 function cowl_screw_dy() = 15.875;      // [DERIVED] 25 x grid = 0.625 in
 function cowl_screw_pts() =
     [for (sx = [-1, 1], sy = [-1, 1])

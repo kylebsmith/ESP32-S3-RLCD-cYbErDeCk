@@ -153,11 +153,56 @@ pcb_boss_clear = 5.000;// [cad-exact] clearance for the frame's bosses, 9 off
 // cutout; above it the housing flange is wider but it is always inside the
 // keycap's own footprint, so it never reaches the enclosure.
 sw_body     = 14.000;  // [derived] it passes the 14.000 cutout
-sw_flange   = 15.052;  // [cad] GATERON-A_ASM plan extent
-sw_pin_z    = -1.952;  // [derived] model y -5.652 + 3.700, pin tips
-sw_housing_z=  7.003;  // [derived] model y  3.303 + 3.700, top housing top
+//  15.052 WAS 0.0521 PROUD OF EVERY ARTEFACT ON THIS DISK and its provenance
+//  is not reproducible from any of the three extractions. tree.json carries
+//  GATERON-A_ASM at x -7.5017668..+7.5017668, span 15.0035336, and that entry
+//  is inflated by a UNIFORM gap of +0.0018354 per face -- solved below against
+//  the switch mesh's own exact -5.650000 / +6.000000, and holding on all six
+//  faces to 3e-7. De-gapped the span is 14.9998628, which is the switch
+//  mesh's own 14.999863 to seven decimals. Two artefacts agreeing, so 15.052
+//  is not a plan extent; it is 0.052 of width this file was drawing that the
+//  switch does not have.
+sw_flange   = 14.9999; // [cad] GATERON-A_ASM plan extent, tree.json de-gapped
+                       //   and confirmed by k9pro-switch-gateron-one.stl
+// THE TWO Z EXTREMES ARE NOW EXACT, not +/-0.020. They read "model y -5.652"
+// and "model y 6.022", which are a 0.020-deflection triangulation and carry
+// the [cad] tolerance this file declares. k9pro-switch-gateron-one.stl's own
+// mesh is EXACTLY y -5.650000..+6.000000, and the de-pad is confirmed on all
+// six faces against manifest.json, which records that shape as
+// [-7.6598, -5.8099, 11.3402, 7.6598, 6.1599, 26.6598] where the mesh is
+// x -7.4999..+7.4999, y -5.650000..+6.000000, z +11.5001..+26.4999 -- a
+// uniform +0.1599 per face, a THIRD per-shape pad (the 1u cap's is +0.2657,
+// the frame's +0.1502). y max de-pads to exactly 6.000000, so the stem top is
+// a plane at a round number and the old 6.022 was the deflection, not a datum.
+sw_pin_z    = -1.950;  // [cad-exact] model y -5.650000 + 3.700, pin tips
+sw_housing_z=  7.0015; // [cad] model y 3.3015367 + 3.700, top housing top.
+                       //   THE FLAG IS CLOSED, AND WITHOUT THE STEP FILE.
+                       //   This read 7.003 and was FLAGGED "left alone on
+                       //   purpose": the upper housing is its own connected
+                       //   solid in the mesh (3078 facets, plan
+                       //   x -7.4761..+7.1375) with y max +3.250251, 0.053
+                       //   BELOW the old line and more than the +/-0.020
+                       //   deflection explains -- but 3.250251 is not a round
+                       //   number, so it is the triangulation of a crowned or
+                       //   filleted top, and an analytic B-rep plane can
+                       //   legitimately sit above a tessellation of a dome.
+                       //   That reasoning was right and the note said it
+                       //   closes by reading the plane off the STEP file.
+                       //   IT DOES NOT NEED THE STEP FILE. tree.json carries
+                       //   that solid -- MANIFOLD_SOLID_BREP_209_1, y
+                       //   -2.2018203..+3.3033721 -- and the same uniform gap
+                       //   that de-gaps GATERON-A_ASM, +0.0018354, de-gaps
+                       //   this solid's BOTTOM to -2.2000, which is the
+                       //   [cad-exact] figure keyboard-strip.md's stack table
+                       //   already carries for the upper housing. One gap,
+                       //   two faces, independently confirmed; solving it off
+                       //   that -2.2000 instead gives +0.0018203 and moves
+                       //   the answer by 1.5e-5. So the analytic top is
+                       //   3.30154 either way and this line is 7.0015, not
+                       //   7.003. The old 7.003 is the same figure rounded
+                       //   from a 3-dp quotation of the padded tree value.
 sw_stem     = [10.602, 7.026];  // [cad] MANIFOLD_SOLID_BREP_204
-sw_stem_z   =  9.722;  // [derived] model y  6.022 + 3.700
+sw_stem_z   =  9.700;  // [cad-exact] model y  6.000000 + 3.700, stem top
 
 // The hot-swap socket. THIS IS THE DEEPEST THING UNDER THE SWITCH FIELD and it
 // is what sets the carrier's pocket depth. Envelope and offset are relative to
@@ -181,27 +226,155 @@ sock_z    = -2.091;            // [derived] model y -5.791 + 3.700
 // 18.7310 -- 0.531 too wide, with 0.269 of air between neighbours instead of
 // 0.800, 61 times over.
 cap_gap   =  0.800;   // [cad-exact] 19.000 - 18.200, parameters.scad 965-986
-cap_bot_z =  6.643;   // [cad] model y +2.943 + 3.700
-cap_top_z = 13.542;   // [cad] model y +9.842 + 3.700
-// THE SPACEBAR LINE, AND IT IS FLAGGED RATHER THAN RECONCILED. It read
-// "Measured spacebar plan is 118.511; the formula gives 118.481. 0.030 apart."
-// The formula is 6.25 x 19.000 - cap_gap, which is identically
-// 5.25 x 19.000 + cap_width, so at 18.200 it gives 117.950 and the residual
-// against 118.511 is 0.561 and not 0.030.
-//   WHAT WOULD RESCUE THE 0.030, exactly: the residual is measured - 99.750 -
-// cap_width, so a bbox pad present in BOTH terms cancels and the residual is
-// invariant to it. If 118.511 is itself a manifest-convention figure carrying
-// this cap family's own +0.5314 on the span, its true plan is 117.9796 and the
-// residual is 0.0296 -- the line's own 0.030, arriving back.
-//   IT CANNOT BE DECIDED HERE AND IT IS NOT GUESSED. 118.511 appears in NONE of
-// the extraction's seven files -- manifest.json, detail.json, measured.json,
-// parts.json, tree.json, cylinders.json, wires.json (the only near match is
-// 118.525, a PCB wire's bbox) -- and the extraction carries no 6.25u cap solid
-// to measure, so its provenance is unrecorded and the pad is per shape and so
-// not transferable from the 1u cap. CLOSES BY isolating the 6.25u cap out of
-// k9pro-stripped-assembly.stl (617 solids; union-find over faces sharing a
-// vertex, which check_cad.mesh_bodies already does) and taking its plan: a mesh
-// bbox carries no pad, so that one number decides between 117.950 and 118.511.
+
+// CAP Z, AND BOTH FIGURES WERE THE SAME MANIFEST INFLATION cap_gap WAS. These
+// lines read "model y +2.943 + 3.700" and "model y +9.842 + 3.700", giving
+// 6.643 and 13.542 for a cap 6.899 tall. The mesh's own y span is
+// 3.000000..9.575284, so the bottom was 0.057 LOW, the top 0.267 HIGH and the
+// 1u cap 0.3237 too TALL. Measured directly, this run:
+//     k9pro-keycap-1u-one.stl        y 3.000000 .. 9.575284   span 6.575284
+//     k9pro-topcase-switchplate.stl  y          .. 0.000000   plate top, so
+//                                    the + 3.700 frame offset is confirmed
+// 9.842 is manifest.json's padded 9.841 rounded up. 2.943 is in neither the
+// manifest (2.7343) nor the mesh (3.000000) and its provenance is unrecorded;
+// it is retired rather than explained, because the mesh settles the question.
+cap_bot_z =  6.700;   // [cad-exact] model y 3.000000 + 3.700. EXACT and
+                      //   UNIFORM: all 61 cap bodies in
+                      //   k9pro-stripped-assembly.stl have y min 3.000000.
+
+// THE TOP IS NOT ONE PLANE AND THE MESH SAYS SO. Isolating all 61 cap bodies
+// out of k9pro-stripped-assembly.stl (union-find over faces sharing a vertex)
+// gives a y max that rises monotonically with cap WIDTH. THE MECHANISM THIS
+// NOTE GAVE FOR THAT WAS WRONG: it said the bbox maximum is "at the cap's own
+// left and right edges -- the wider the cap, the further that edge rides up
+// the dish". It is not at the edges. k9pro-keycap-1u-one.stl has exactly ONE
+// vertex at its y max, at x +5.2563 and z +25.7049 -- 3.844 INSIDE the
+// left/right edge, 57.8 % of the half-width, and 6.705 REAR of the cap's
+// centre. So the high point is on the rear rim. The monotonic rise with width
+// is measured, on all 61 bodies, and it stands; why it follows width is left
+// OPEN rather than re-explained, because the location was checked on the 1u
+// cap only and isolating the other eight to settle it is not done here:
+//     u     plan span   MESH y max   ANALYTIC y max   this frame
+//     1.00    18.2000      9.5753         9.5759         13.2759   x46
+//     1.25    22.9500      9.6062         9.6130         13.3130   x 7
+//     1.50    27.7000      9.6327         9.6386         13.3386   x 2
+//     1.75    32.4500      9.6515         9.6579         13.3579   x 1
+//     2.00    37.2000      9.6659         9.6730         13.3730   x 1
+//     2.25    41.9500      9.6768         9.6844         13.3844   x 1  l shift
+//     2.25    42.0500      9.6770         9.6846         13.3846   x 1  enter
+//     2.75    51.4500      9.6871         9.6958         13.3958   x 1
+//     6.25   118.0000      9.7571         9.7572         13.4572   x 1  space
+// Spread 0.1813 over the field. So ONE flat top cannot be both an envelope and
+// exact: 13.2759 is the 1u cap's own top and under-states the spacebar by
+// 0.1813, which would be an envelope that does not enclose. The body takes
+// the table per width and no cap is stated wrong.
+//
+// WHY THE ANALYTIC COLUMN IS THE ONE THE BODY TAKES, AND WHY THE TAG CAME OFF.
+// The MESH column is the bbox maximum of a TRIANGULATION of a dished top, and
+// this file's own standard refuses that: it is the identical case in which
+// sw_housing_z keeps its CAD value because "an analytic B-rep plane can
+// legitimately sit above a tessellation of a dome". A table of mesh maxima
+// tagged [cad-exact] -- defined in this file as "read off an analytic surface
+// ... No tessellation, no sampling, no tolerance" -- applied two incompatible
+// standards to two identically-shaped features in one change, and it
+// under-stated every cap, worst +0.0087 at 2.75u. So the envelope STILL did
+// not enclose, which is the defect a flat 13.2753 was rejected for.
+//   WHERE THE ANALYTIC COLUMN COMES FROM, and it is an inference, stated as
+// one. k9pro-internals/measured.json carries all nine caps BY NAME --
+// 1-KEY_ASM, 1_25KEY_ASM, TAB_ASM, CAPS_ASM, BACKSPACE_ASM, SHIFT_L_ASM,
+// ENTER_ASM, R_SHIFT_ASM, KT21005 -- as B-rep bboxes that the extraction
+// inflated by a uniform per-shape pad, the same pad cap_gap's note above is
+// about. Solving each shape's pad from its y MIN alone (every cap bottoms at
+// model y 3.000000 exactly, which the mesh settles independently) gives nine
+// pads: 0.2657, 0.2687, 0.2719, 0.1937, 0.1939, 0.1941, 0.1941, 0.2524,
+// 0.2553 -- non-monotone, so no two transfer, which is the whole reason a
+// single pad convention cannot be used on this file. De-padded by its OWN pad,
+// each cap's x span comes out at exactly the plan span in the column above and
+// its z span at exactly 18.200000, to <= 7e-6, on all nine. That is two
+// independent confirmations per cap of a quantity solved from a third face,
+// nine times over. It is still an inference about the extraction's bbox gap
+// rather than a plane queried off a surface, so it is [CAD] and not
+// [CAD-EXACT].
+//   THE PROCEDURE THAT WOULD CLOSE IT: read each dish's analytic maximum
+// directly off K9-Pro-US-Full-Model_3d_20241128.stp with OCP 8.0.1.1 in
+// /usr/bin/python3.11 (BRepAdaptor_Surface, no tessellation); measured.json
+// gives every shape's full path and name. THAT STEP FILE IS NOT ON THIS DISK
+// -- v2/parts/models/ holds the STLs and the three JSON extractions of it and
+// no .stp for the keyboard -- so the procedure needs the vendor download
+// again and cannot be run from the repository as it stands.
+function cap_top_u(u) =          // [CAD] see the block above
+      u <= 1.00 ? 13.2759
+    : u <= 1.25 ? 13.3130
+    : u <= 1.50 ? 13.3386
+    : u <= 1.75 ? 13.3579
+    : u <= 2.00 ? 13.3730
+    : u <= 2.25 ? 13.3846   // the two 2.25u caps differ by 0.0002; the taller
+                            //   one is ALSO the wider one (enter), so the
+                            //   envelope encloses both
+    : u <= 2.75 ? 13.3958
+    :             13.4572;  // any width above 2.75u, which here is only 6.25u
+// NOT A LITERAL, AND IT USED TO BE ONE. This line read "cap_top_z = 13.4571"
+// with a comment calling it "the MAXIMUM of the table above" -- but nothing
+// made that true, and breaking cap_top_u() to a flat 13.2753, and then to
+// 113.2753, left this echoing 13.4571 unchanged in both. It now IS the table's
+// maximum because it is the table's own widest entry.
+cap_top_z = cap_top_u(6.25); // [CAD] 13.4572, the tallest cap in the
+                     //   assembly, which is the spacebar. This is the single
+                     //   number for anything that needs the field's top
+                     //   plane; the bodies are drawn from cap_top_u() per cap.
+
+// THE SPACEBAR LINE, SETTLED BY MEASUREMENT. It read "Measured spacebar plan
+// is 118.511; the formula gives 118.481. 0.030 apart." The flag asked for the
+// 6.25u cap to be isolated out of k9pro-stripped-assembly.stl and its plan
+// taken, because a mesh bbox carries no pad. Done, this run:
+//     the assembly's 1317088 facets carry 653556 distinct vertices; union-find
+//     over faces sharing one gives 573 connected bodies. Exactly 61 of them
+//     have z span 18.2000 and y min 3.000000 -- the 61 caps, matching the 61
+//     keys row_u declares. ONE of those 61 has an x span over 52:
+//         body 244   x 62.1250..180.1250   y 3.0000..9.7571   z 85.9000..104.1000
+//     and four independent facts make it the 6.25u cap and nothing else:
+//       * its z centre 95.000 is row_y's own "row 4 bottom row model z 95.000";
+//       * its x centre 121.1250 + this file's documented x = model_x + 10.500
+//         is 131.6250, which is row_x[0][3] EXACTLY;
+//       * row_u[0][3] is 6.25;
+//       * stab_xy's "6.25u space, +/-50.000" pair centres on 131.625 too.
+//     PLAN = 118.0000 x 18.2000.
+//   SO THE PLAN IS 118.0000 -- AND 118.511 IS THAT SAME NUMBER, PADDED. This
+// block first concluded "118.511 IS REFUTED, by 0.511 ... its provenance stays
+// unrecorded AND it is now contradicted by the artefact", on the grounds that
+// the 1u cap's +0.2657 pad would give 118.5314 and 118.511 misses it by
+// 0.0204. That test was the wrong one, and it was defeated by this file's own
+// load-bearing fact: THE PAD IS PER SHAPE, so the 1u cap's pad was never the
+// spacebar's to use. measured.json[969], name KT21005_1_1, bbox
+// [61.8697, 2.7447, 85.6447, 180.3803, 10.0125, 104.3553]: x span 118.5106.
+// Its OWN pad, solved from y min alone -- 3.000000 - 2.7447 = 0.2553 -- takes
+// that to exactly 118.0000000, and its z span to exactly 18.2000000. So
+// 118.511 was RECORDED all along, it is the padded form of precisely the
+// 118.0000 the mesh gives, and the artefact confirms it rather than
+// contradicting it. Nothing about the plan changes; the claim about it does.
+//   The 0.030 does not come back: against the formula 6.25 x 19.000 - cap_gap
+// = 117.950 the residual is +0.0500.
+//   WHERE THE 0.050 LIVES, measured: every cap is inset from its own nominal
+// cell by a per-cap amount, not by cap_gap/2. 59 of the 61 are inset 0.400 a
+// side, so cap_gap = 0.800 is right for them. The spacebar is inset 0.375 a
+// side (gap 0.750) and enter 0.350 (gap 0.700). The width formula therefore
+// under-states exactly two caps -- the spacebar by 0.050 and enter by 0.100 --
+// and closing that needs a per-KEY inset table, not a per-u one, because the
+// two 2.25u caps take different insets. CLOSED, below, by cap_gap_key(): the
+// gap is 0.800 for 59 of the 61 and the two exceptions are named by POSITION,
+// because width cannot name them -- left shift and enter are both 2.25u and
+// take different insets, which is exactly why a per-u table could not do it.
+//   WHAT IT WAS COSTING. The field's x span came out 284.274988 against
+// parameters.scad 1008's measured kbd_cap_field = [284.325, 94.200]
+// [CAD-MESH], short by 0.050018 at +x -- enter is the rightmost key of its
+// row, so its missing 0.100 showed up as half of itself on the envelope. A
+// 0.100 error on enter is the same order as the 0.1818 of cap-top spread this
+// file calls fatal two blocks up, and it was live in the same change.
+function cap_gap_key(r, i) =
+      (r == 0 && i == 3)  ? 0.750     // the 6.25u spacebar, inset 0.375/side
+    : (r == 2 && i == 12) ? 0.700     // enter, inset 0.350/side
+    :                       cap_gap;  // 0.800, the other 59
+function cap_w(r, i) = key_u(r, i) * key_pitch - cap_gap_key(r, i);
 
 // ====================================================== bosses and the screws
 
@@ -423,14 +596,18 @@ module k9_switches() {
 }
 
 // The keycaps as a correct envelope: each cap's own plan size from its width in
-// key units, 0.269 of air between neighbours, one flat top plane.
+// key units, 0.800 of air between neighbours, one flat top plane PER WIDTH --
+// not one across the field, because the measured tops spread 0.1818 and a
+// single plane would have to either under-state the spacebar or over-state the
+// 46 1u caps. cap_top_u() carries the measured table.
 module k9_keycaps() {
     for (r = [0 : len(row_y)-1])
         for (i = [0 : len(row_x[r])-1]) {
-            w = key_u(r, i) * key_pitch - cap_gap;
+            w = cap_w(r, i);
             translate([row_x[r][i] - w/2, row_y[r] - (key_pitch - cap_gap)/2,
                        cap_bot_z])
-                cube([w, key_pitch - cap_gap, cap_top_z - cap_bot_z]);
+                cube([w, key_pitch - cap_gap,
+                      cap_top_u(key_u(r, i)) - cap_bot_z]);
         }
 }
 

@@ -58,7 +58,7 @@ kb_h_rear  = 13.3;    // [vendor] 13.274 [CAD-EXACT]
 // How far the keycap tops stand above the resting plane, at each edge.
 //
 // THERE IS ONLY ONE NUMBER HERE, AND IT IS MEASURED. The keycap plane is FLAT
-// and parallel to the frame's flat top: a 1 u cap's own shell tops out 9.842
+// and parallel to the frame's flat top: the tallest cap's shell tops out 9.7572
 // above that face, and the per-row maxima over all 61 caps spread only 0.145
 // across the whole 285 x 95 field (the high value is the 6.25 u spacebar,
 // whose bounding box catches more of its own dish). So the two edge heights
@@ -72,12 +72,18 @@ kb_h_rear  = 13.3;    // [vendor] 13.274 [CAD-EXACT]
 // weakest number in this file. It is not a measurement at all -
 // 19.8 - 7.6 = 12.2 is exactly Gateron's published switch height - so the
 // published figure is front case height PLUS switch height, and it is 2.2 mm
-// out. The rear figure survives only as a cross-check: 13.3 + 9.842 = 23.142
+// out. The rear figure survives only as a cross-check: 13.3 + 9.7572 = 23.0572
 // against Keychron's 23.5, i.e. 0.358 low, and 0.214 on the tallest cap.
 // v2/parts/keyboard-strip.md section 2.1 and cad/parameters.scad kbd_cap_h.
-kc_above_frame = 9.842;                       // [CAD] cap top above the frame
-kc_top_front = kb_h_front + kc_above_frame;   // [derived] = 17.442, at the
-kc_top_rear  = kb_h_rear  + kc_above_frame;   // [derived] = 23.142, CASE edges
+//  9.842 WAS manifest.json's PADDED FIGURE, as parameters.scad's kbd_cap_h
+//  note now records in full, and it over-stated the tallest cap by 0.0848 and
+//  the 1u cap by 0.1813. This line is deliberately an INDEPENDENT literal --
+//  check_cad.py compares it against kbd_cap_h and fails when the two files
+//  disagree, which is how the stale value here was caught the moment that one
+//  moved -- so it is restated and not derived.
+kc_above_frame = 9.7572;                      // [CAD] cap top above the frame
+kc_top_front = kb_h_front + kc_above_frame;   // [derived] = 17.3572, at the
+kc_top_rear  = kb_h_rear  + kc_above_frame;   // [derived] = 23.0572, CASE edges
 
 // Switch field (the key band that must come through an aperture).
 // 15 u x 5 u, and THE UNIT IS NOT 19.05. All 61 of the K9 Pro's switch holes
