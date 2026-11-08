@@ -382,6 +382,37 @@ def main():
         sys.exit(f"reference tree not found: {args.reference}\n"
                  f"  git clone --depth 1 https://github.com/nilseuropa/solar_term {args.reference}")
 
+    #  A DIRECTORY IS NOT A REFERENCE, and testing for one is how this file
+    #  crashed CI. The clone step in .github/workflows/ci.yml is
+    #  `continue-on-error: true` and its comment states the contract plainly --
+    #  "it is a third-party repository CI does not control, and build.sh skips
+    #  those steps without it rather than failing" -- and tools/build.sh gates
+    #  on `[ -d "$REFDIR" ]`. But the clone SUCCEEDING is not the same as the
+    #  clone containing what this file reads: the directory existed, and
+    #  measure_reference()'s first two loads went straight into
+    #  `ValueError: string is not a file: /tmp/solar_term/stl/ata/Caseback.stl`
+    #  and took the whole gate down with them. A third-party repository can
+    #  rename a path at any time and that must not be able to fail this build.
+    #    So the files are declared and checked here, in the same style
+    #  measure_reference.py already uses per file ("!! missing {rel}") and
+    #  that the poc_top read below already uses. Missing files SKIP and return
+    #  0: the audit compares this design against someone else's, which is
+    #  valuable but is not a precondition for this design being internally
+    #  sound -- that is build.sh's own stated reason for skipping.
+    need = ["stl/ata/Caseback.stl", "stl/ata/Bezel.stl"]
+    gone = [f for f in need if not os.path.exists(os.path.join(args.reference, f))]
+    if gone:
+        print(f"  reference tree at {args.reference} is missing "
+              f"{len(gone)} of the {len(need)} file(s) this audit reads:")
+        for f in gone:
+            print(f"    !! missing {f}")
+        print("  skipping the component-facing audit. The clone succeeded, so "
+              "this is a LAYOUT change")
+        print("  upstream, not a network failure -- check the paths against "
+              "nilseuropa/solar_term")
+        print("  and update `need` above if they have moved.")
+        return 0
+
     p = params.load_with_defaults()
     r = measure_reference(args.reference)
     audit(p, r)
