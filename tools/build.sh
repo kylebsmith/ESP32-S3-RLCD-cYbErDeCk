@@ -14,14 +14,30 @@ command -v xvfb-run >/dev/null 2>&1 && RUN="xvfb-run -a"
 fail=0
 # The part list, in ONE place. Adding a part is this line, and the
 # dispatch in cad/cyberdeck.scad - nothing else.
-PARTS="chassis backplate buttons cover assembly"
+#  "assembly" WAS IN THIS LIST AND IS NOT A PART. module assembly() was
+#  deleted in 24e2b08 and cad/render_assembly.scad replaced it -- the
+#  published views are assembled from the EXPORTED STLs, for the
+#  preview-striping reason that file's header gives at length. This
+#  list went on asking for it, so OpenSCAD rendered nothing, warned
+#  "Ignoring unknown module", and this script failed on every CI run
+#  from that commit onward -- 92 of them before anybody read the log.
+PARTS="chassis backplate buttons cover"
 for part in $PARTS; do
     printf '  rendering %-12s ... ' "$part"
     log=$(mktemp)
-    $RUN "$SCAD" -D "part=\"$part\"" -o "export/stl/$part.stl" cad/cyberdeck.scad 2>"$log" || true
-    if grep -qiE "unknown variable|undefined operation|WARNING: Ignoring" "$log"; then
-        printf 'FAIL\n'
-        grep -iE "unknown variable|undefined operation|WARNING: Ignoring" "$log" | sed 's/^/      /' | sort -u
+    #  BOTH STREAMS, AND THE EXIT CODE. These captured stderr alone, and
+    #  OpenSCAD 2021.01 writes these warnings to STDOUT -- so on that
+    #  version the guard this block exists to be caught NOTHING, the very
+    #  case the comment above describes included. Verified: a render that
+    #  emitted "WARNING: Ignoring unknown module" and exited 1 was reported
+    #  "ok". The `|| true` discarded the exit code as well, so a render that
+    #  produced no geometry at all still passed. Keep both.
+    rc=0
+    $RUN "$SCAD" -D "part=\"$part\"" -o "export/stl/$part.stl" \
+        cad/cyberdeck.scad >"$log" 2>&1 || rc=$?
+    if [ "$rc" -ne 0 ] || grep -qiE "unknown variable|undefined operation|WARNING: Ignoring" "$log"; then
+        printf 'FAIL (exit %d)\n' "$rc"
+        grep -iE "unknown variable|undefined operation|WARNING: Ignoring|^ERROR" "$log" | sed 's/^/      /' | sort -u
         fail=1
     else
         printf 'ok\n'
@@ -29,7 +45,7 @@ for part in $PARTS; do
     rm -f "$log"
 done
 [ "$fail" -eq 0 ] || { echo; echo "undefined identifiers in the model - refusing to continue"; exit 1; }
-rm -f export/stl/assembly.stl
+#  (nothing writes export/stl/assembly.stl any more -- see PARTS above)
 
 # The carry case is a separate model and was, until C-41, exported by hand -
 # which is how a superseded one-piece STL sat in the tree with nothing pointing
@@ -40,11 +56,19 @@ mkdir -p export/stl/case
 for part in front back; do
     printf '  rendering %-12s ... ' "case-$part"
     log=$(mktemp)
+    #  BOTH STREAMS, AND THE EXIT CODE. These captured stderr alone, and
+    #  OpenSCAD 2021.01 writes these warnings to STDOUT -- so on that
+    #  version the guard this block exists to be caught NOTHING, the very
+    #  case the comment above describes included. Verified: a render that
+    #  emitted "WARNING: Ignoring unknown module" and exited 1 was reported
+    #  "ok". The `|| true` discarded the exit code as well, so a render that
+    #  produced no geometry at all still passed. Keep both.
+    rc=0
     $RUN "$SCAD" -D "part=\"$part\"" -o "export/stl/case/carrycase-$part.stl" \
-        cad/carrycase.scad 2>"$log" || true
-    if grep -qiE "unknown variable|undefined operation|WARNING: Ignoring" "$log"; then
-        printf 'FAIL\n'
-        grep -iE "unknown variable|undefined operation|WARNING: Ignoring" "$log" | sed 's/^/      /' | sort -u
+        cad/carrycase.scad >"$log" 2>&1 || rc=$?
+    if [ "$rc" -ne 0 ] || grep -qiE "unknown variable|undefined operation|WARNING: Ignoring" "$log"; then
+        printf 'FAIL (exit %d)\n' "$rc"
+        grep -iE "unknown variable|undefined operation|WARNING: Ignoring|^ERROR" "$log" | sed 's/^/      /' | sort -u
         fail=1
     else
         printf 'ok\n'
